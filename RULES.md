@@ -19,7 +19,7 @@ no method that changes a parameter, mints PETRI after launch, or edits the board
 
 ## Two dishes
 
-The same build runs on two networks. `petri-v5.testnet` is free play: guests, a relayer and sponsored credit.
+The same build runs on two networks. `petri-v6.testnet` is free play: guests, a relayer and sponsored credit.
 `petri-dish.near` is mainnet: real NEAR, wallets only, and payment in other tokens through NEAR Intents. Their
 parameters are `contract/launch-rules.json` and `contract/launch-rules-mainnet.json`, which differ only in `house` and
 `wnear`.
@@ -389,13 +389,13 @@ the browser, also pinned to one block, with the same checks except the code hash
 Both dishes run one build, made with `cargo near build reproducible-wasm` at commit
 `ec5970f5b8315de81e022866e17da62a47be7426` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
 (pinned in `contract/Cargo.toml`). Its NEP-330 `contract_source_metadata` links that commit, so anyone can rebuild it
-and compare the hash with the account's code hash, `Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j` (hex
+and compare the hash with the account's code hash, `DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7` (hex
 `dc00659d95ca14f4202b84f96d71566298c37db1abc7230c862fefba771ee438`). Each account still has one full-access key. The
 team will delete them before judging, after which the code can never change:
 
 ```
 near account delete-keys petri-dish.near public-keys ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH network-config mainnet sign-with-legacy-keychain send
-near account delete-keys petri-v5.testnet public-keys ed25519:Gx338TCzmupYDbRw7DPPXZVsF45yCPRnazrM173h2yCZ network-config testnet sign-with-legacy-keychain send
+near account delete-keys petri-v6.testnet public-keys ed25519:Gx338TCzmupYDbRw7DPPXZVsF45yCPRnazrM173h2yCZ network-config testnet sign-with-legacy-keychain send
 ```
 
 Until then, "no full-access key" is the one failing check on `/verify` and in `scripts/verify.mjs`.

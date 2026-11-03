@@ -24,7 +24,7 @@ export default function Page() {
         <tbody>
           <tr>
             <td>
-              <C>petri-dish.near</C>, <C>petri-v5.testnet</C>
+              <C>petri-dish.near</C>, <C>petri-v6.testnet</C>
             </td>
             <td>NEAR mainnet and testnet</td>
             <td>Yes: the agar, the vault, the credit pool, every balance</td>
@@ -226,7 +226,7 @@ cd web && npm install && npm run dev                 # the site on http://localh
       <H2 id="repo">Repository map</H2>
       <Code lang="text" title="github.com/RohanGlitched/petri" copy={false}>{`core/            petri-core: the rules (lib.rs) and their tests (tests.rs)
 contract/        the NEAR contract: lib.rs (dish, economy, views), token.rs, slides.rs, intents.rs, tests.rs
-  launch-rules.json            testnet rules (petri-v5.testnet)
+  launch-rules.json            testnet rules (petri-v6.testnet)
   launch-rules-mainnet.json    mainnet rules (petri-dish.near)
 wasm/            petri-core for the browser (wasm-bindgen)
 sim/             the economy simulator; out-v5/ holds its latest results

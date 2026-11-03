@@ -211,7 +211,7 @@ Plantings you can make:
 curl -s "${SITE}/api/strains?net=testnet" | jq '[.actions[] | {strain, pattern, cells, note, decided_by, model}]'`}</Code>
       <Code lang="json" title="One logged move">{`{
   "at": "2026-11-03T21:02:05.016Z",
-  "contract": "petri-v5.testnet",
+  "contract": "petri-v6.testnet",
   "strain": "Bench C",
   "account": "petri-bench-c.testnet",
   "generation": 73,

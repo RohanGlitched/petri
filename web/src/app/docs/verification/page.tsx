@@ -81,7 +81,7 @@ export default function Page() {
       </Table>
       <Code lang="sh" title="All three at once">{`git clone ${REPO} && cd petri
 node scripts/verify.mjs --network mainnet           # petri-dish.near
-node scripts/verify.mjs --network testnet           # petri-v5.testnet (the default)
+node scripts/verify.mjs --network testnet           # petri-v6.testnet (the default)
 node scripts/verify.mjs --contract other.testnet --code-hash <base58>   # any dish, any expected hash`}</Code>
       <p>Exit status 0 means every check matched, 1 means at least one differed, 2 means the dish could not be read. It needs Node 20 or later.</p>
       <Callout kind="warn">
@@ -193,7 +193,7 @@ cargo near build reproducible-wasm`}</Code>
           <NetTabs
             mainnet={<Code lang="sh" title="mainnet">{`near account view-account-summary petri-dish.near network-config mainnet now
 node scripts/verify.mjs --network mainnet | grep "code hash"`}</Code>}
-            testnet={<Code lang="sh" title="testnet">{`near account view-account-summary petri-v5.testnet network-config testnet now
+            testnet={<Code lang="sh" title="testnet">{`near account view-account-summary petri-v6.testnet network-config testnet now
 node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
           />
         </li>
@@ -226,11 +226,11 @@ curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' -d 
   "jsonrpc": "2.0", "id": 1, "method": "query",
   "params": { "request_type": "view_access_key_list", "finality": "final", "account_id": "petri-dish.near" }
 }' | jq '.result.keys[] | {public_key, permission: .access_key.permission}'`}</Code>}
-        testnet={<Code lang="sh" title="testnet">{`near account list-keys petri-v5.testnet network-config testnet now
+        testnet={<Code lang="sh" title="testnet">{`near account list-keys petri-v6.testnet network-config testnet now
 
 curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d '{
   "jsonrpc": "2.0", "id": 1, "method": "query",
-  "params": { "request_type": "view_access_key_list", "finality": "final", "account_id": "petri-v5.testnet" }
+  "params": { "request_type": "view_access_key_list", "finality": "final", "account_id": "petri-v6.testnet" }
 }' | jq '.result.keys[] | {public_key, permission: .access_key.permission}'`}</Code>}
       />
       <Table caption="Keys on 4 November 2026">
@@ -253,7 +253,7 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
           </tr>
           <tr>
             <td>
-              <C>petri-v5.testnet</C>
+              <C>petri-v6.testnet</C>
             </td>
             <td>
               <C>ed25519:Gx338TCzmupYDbRw7DPPXZVsF45yCPRnazrM173h2yCZ</C>

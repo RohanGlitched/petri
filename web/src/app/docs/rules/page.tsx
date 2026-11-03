@@ -91,7 +91,7 @@ export default function Page() {
           <tr>
             <th>Key</th>
             <th>Mainnet (petri-dish.near)</th>
-            <th>Testnet (petri-v5.testnet)</th>
+            <th>Testnet (petri-v6.testnet)</th>
           </tr>
         </thead>
         <tbody>

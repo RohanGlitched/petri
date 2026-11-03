@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.playpetri.xyz"><img alt="Live site" src="https://img.shields.io/badge/live-playpetri.xyz-f2b45a?style=flat-square&labelColor=120a05" /></a>
   <a href="https://nearblocks.io/address/petri-dish.near"><img alt="Mainnet contract" src="https://img.shields.io/badge/mainnet-petri--dish.near-9fd8a8?style=flat-square&labelColor=120a05" /></a>
-  <a href="https://testnet.nearblocks.io/address/petri-v5.testnet"><img alt="Testnet contract" src="https://img.shields.io/badge/testnet-petri--v5.testnet-9fd8a8?style=flat-square&labelColor=120a05" /></a>
+  <a href="https://testnet.nearblocks.io/address/petri-v6.testnet"><img alt="Testnet contract" src="https://img.shields.io/badge/testnet-petri--v5.testnet-9fd8a8?style=flat-square&labelColor=120a05" /></a>
   <img alt="Tests" src="https://img.shields.io/badge/tests-104-9fd8a8?style=flat-square&labelColor=120a05" />
   <img alt="Rust" src="https://img.shields.io/badge/rust-near--sdk%205.29.1-e2d5c3?style=flat-square&labelColor=120a05" />
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/licence-MIT-e2d5c3?style=flat-square&labelColor=120a05" /></a>
@@ -35,7 +35,7 @@ The same build of the same contract runs twice. The switch in the site's navigat
 | | Free play | Real NEAR |
 |---|---|---|
 | Network | NEAR testnet | NEAR mainnet |
-| Contract | [`petri-v5.testnet`](https://testnet.nearblocks.io/address/petri-v5.testnet) | [`petri-dish.near`](https://nearblocks.io/address/petri-dish.near) |
+| Contract | [`petri-v6.testnet`](https://testnet.nearblocks.io/address/petri-v6.testnet) | [`petri-dish.near`](https://nearblocks.io/address/petri-dish.near) |
 | How you play | A guest account with no wallet: the site's relayer pays the gas and sponsors 0.05 NEAR of credit. Or your own testnet wallet. | Your own NEAR wallet, or other tokens through NEAR Intents. There are no guests. |
 | What you win | NEAR, if your colony has attached NEAR; otherwise credit, spendable in the dish and never withdrawable | NEAR (the same credit rule applies to a colony that has never attached NEAR) |
 | House strains | `petri-violet`, `petri-safranin`, `petri-methylene`, `petri-malachite`, `petri-congo` (`.testnet`), spending sponsored credit | `violet`, `safranin`, `methylene`, `malachite`, `congo` (`.petri-dish.near`), attaching their own NEAR, so what the house spends lands in the vault for the other players |
@@ -45,7 +45,7 @@ The same build of the same contract runs twice. The switch in the site's navigat
 
 ## Try it in two minutes
 
-Each step says what to do and what you should see. Everything runs against the live free-play dish, `petri-v5.testnet`, unless it says mainnet.
+Each step says what to do and what you should see. Everything runs against the live free-play dish, `petri-v6.testnet`, unless it says mainnet.
 
 1. **Watch the coin live.** Open <https://www.playpetri.xyz>. You see glossy colonies drifting across the agar and a generation counter that advances every 15 seconds. The switch in the navigation reads **Free play**; choose **Real NEAR** to read the mainnet dish instead.
 2. **Start a colony with no wallet.** Open [/dish](https://www.playpetri.xyz/dish), type a name, pick a stain and press **Start my colony**. Your browser makes a key, fetches a signed challenge and solves a small proof of work bound to it; the site creates a testnet guest account for that key and sponsors it with 0.05 NEAR, which the contract holds as credit. The panel then says your colony is on the dish and that its 0.02 NEAR stake bought PETRI from the agar, with a link to the transaction. The relayer paid the gas; no NEAR moved with the relayed call. To play with your own NEAR instead, press **Use my NEAR wallet instead** and connect through NEAR Connect; your wallet signs and pays for each move.
@@ -128,14 +128,14 @@ v4 (`petri-v4.testnet`) also made the agar release its ration for at least 1,000
 
 ```bash
 git clone https://github.com/RohanGlitched/petri && cd petri
-node scripts/verify.mjs                     # petri-v5.testnet
+node scripts/verify.mjs                     # petri-v6.testnet
 node scripts/verify.mjs --network mainnet   # petri-dish.near
 ```
 
 Node 20 or later, nothing to install: the script loads the committed WebAssembly build of petri-core from `web/src/engine/pkg`. It pins every read to one final block, replays the whole ledger and prints 30 checks, the 29 of /verify plus the deployed code hash against the reproducible build. It exits 0 when all match, 1 on any mismatch and 2 if the dish cannot be read. Today, on both dishes, every row says `match` except the last, so it ends:
 
 ```
-  match   Deployed code hash           Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j
+  match   Deployed code hash           DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7
   DIFFERS  Full-access keys             1  (expected: 0)
 …
   The contract account still has a full-access key: whoever holds it could deploy different code.
@@ -158,14 +158,14 @@ It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b9
 
 ```
      - SHA-256 checksum hex : dc00659d95ca14f4202b84f96d71566298c37db1abc7230c862fefba771ee438
-     - SHA-256 checksum bs58: Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j
+     - SHA-256 checksum bs58: DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7
 ```
  The contract's `contract_source_metadata` (NEP-330) names the same commit and image. Its `build_info.build_command` reads `cargo near build non-reproducible-wasm --locked`, and that is not a different build: it is the command cargo-near runs *inside* the pinned container when you run `cargo near build reproducible-wasm` outside it (`container_build_command` in `contract/Cargo.toml`). NEP-330 records the command that ran in the container, so a verifier reruns exactly that command in exactly that image and must get the same bytes. To read the deployed hash yourself:
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_account","finality":"final","account_id":"petri-dish.near"}}'
-# "code_hash":"Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j"; use https://rpc.testnet.fastnear.com and petri-v5.testnet for testnet
+# "code_hash":"DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
 
 near account view-account-summary petri-dish.near network-config mainnet now
 # near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": dc00659d95ca14f4202b84f96d71566298c37db1abc7230c862fefba771ee438
@@ -177,7 +177,7 @@ No method changes a parameter, mints PETRI or edits the board. Each contract acc
 
 ```bash
 near account delete-keys petri-dish.near public-keys ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH network-config mainnet sign-with-legacy-keychain send
-near account delete-keys petri-v5.testnet public-keys ed25519:Gx338TCzmupYDbRw7DPPXZVsF45yCPRnazrM173h2yCZ network-config testnet sign-with-legacy-keychain send
+near account delete-keys petri-v6.testnet public-keys ed25519:Gx338TCzmupYDbRw7DPPXZVsF45yCPRnazrM173h2yCZ network-config testnet sign-with-legacy-keychain send
 ```
 
 Until then, "no full-access key" is the one check that fails on /verify and in `scripts/verify.mjs`.
@@ -201,7 +201,7 @@ flowchart LR
     NC[NEAR Connect<br/>wallet players]
   end
   subgraph NEAR
-    T[petri-v5.testnet<br/>free play]
+    T[petri-v6.testnet<br/>free play]
     M[petri-dish.near<br/>real NEAR]
     W[wrap.near]
   end

@@ -12,7 +12,7 @@ export const tree = (path: string) => `${REPO}/tree/main/${path}`;
 export const BUILD_COMMIT = "ec5970f5b8315de81e022866e17da62a47be7426";
 export const BUILD_COMMIT_SHORT = "ec5970f";
 /** `cargo near build reproducible-wasm` at BUILD_COMMIT; the code hash of both contract accounts. */
-export const CODE_HASH = "Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j";
+export const CODE_HASH = "DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7";
 export const BUILD_IMAGE = "sourcescan/cargo-near:0.22.0-rust-1.99.1";
 export const BUILD_DIGEST = "sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb";
 export const NEAR_SDK = "5.29.1";
@@ -42,7 +42,7 @@ export const DISH: Record<Net, {
     play: `${SITE}/dish?net=mainnet`,
   },
   testnet: {
-    contract: "petri-v5.testnet",
+    contract: "petri-v6.testnet",
     label: "NEAR testnet",
     rules: "contract/launch-rules.json",
     wnear: "wrap.testnet",

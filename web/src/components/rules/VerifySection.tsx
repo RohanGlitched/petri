@@ -10,7 +10,7 @@ import s from "./rules.module.css";
 
 const CHAIN_EVERY = 16;
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit (as in scripts/verify.mjs). */
-const BUILD_HASH = "Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j";
+const BUILD_HASH = "DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7";
 /** The one full-access key each dish's account still holds, as `view_access_key_list` returns it. */
 const FULL_KEYS: Record<"testnet" | "mainnet", string> = {
   testnet: "ed25519:Gx338TCzmupYDbRw7DPPXZVsF45yCPRnazrM173h2yCZ",

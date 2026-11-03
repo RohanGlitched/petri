@@ -223,7 +223,7 @@ export function ParamsSection() {
           <h2 id="params-title" className={s.h2}>How the parameters were chosen</h2>
           <p className="lede">
             The numbers were set once, when the contract was created, and no method changes them. The dish now runs as
-            petri-v5.testnet and, with the same build, as petri-dish.near on mainnet. Earlier dishes (petri-dish.testnet, then
+            petri-v6.testnet and, with the same build, as petri-dish.near on mainnet. Earlier dishes (petri-dish.testnet, then
             petri-v2 to petri-v4) were left behind as reviews found problems; each time the rules were changed, tested in the
             simulator, and launched on a new contract that started again from an empty board.
           </p>

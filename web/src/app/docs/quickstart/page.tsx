@@ -7,10 +7,10 @@ import { CODE_HASH, REPO, SITE } from "@/components/docs/facts";
 export const metadata = docMetadata("quickstart");
 
 const view = (net: "mainnet" | "testnet", method: string, args = "{}") =>
-  `near contract call-function as-read-only ${net === "mainnet" ? "petri-dish.near" : "petri-v5.testnet"} ${method} json-args '${args}' network-config ${net} now`;
+  `near contract call-function as-read-only ${net === "mainnet" ? "petri-dish.near" : "petri-v6.testnet"} ${method} json-args '${args}' network-config ${net} now`;
 
 const rpc = (net: "mainnet" | "testnet") => (net === "mainnet" ? "https://rpc.mainnet.fastnear.com" : "https://rpc.testnet.fastnear.com");
-const dish = (net: "mainnet" | "testnet") => (net === "mainnet" ? "petri-dish.near" : "petri-v5.testnet");
+const dish = (net: "mainnet" | "testnet") => (net === "mainnet" ? "petri-dish.near" : "petri-v6.testnet");
 
 function cliViews(net: "mainnet" | "testnet") {
   return `# The clock, the agar, the vault and today's prices

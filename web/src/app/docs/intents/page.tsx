@@ -319,7 +319,7 @@ near contract call-function as-transaction petri-dish.near claim_pending json-ar
   "msg": "{\\"for\\":\\"alice.near\\",\\"do\\":\\"join\\",\\"name\\":\\"Alice\\",\\"color\\":15905882}"
 }' prepaid-gas '300.0 Tgas' attached-deposit '1 yoctoNEAR' sign-as YOU.near network-config mainnet sign-with-keychain send`}</Code>
       <p>
-        You need wNEAR first: register on <C>wrap.near</C> with its <C>storage_deposit</C>, then wrap NEAR with <C>near_deposit</C>. The dish itself is already registered there (<C>state().wnear_ready</C> is true). On testnet the same works with <C>wrap.testnet</C> and <C>petri-v5.testnet</C>, whose rules trust <C>wrap.testnet</C>. See also <Doc to="security" hash="t-intents">the security notes</Doc>.
+        You need wNEAR first: register on <C>wrap.near</C> with its <C>storage_deposit</C>, then wrap NEAR with <C>near_deposit</C>. The dish itself is already registered there (<C>state().wnear_ready</C> is true). On testnet the same works with <C>wrap.testnet</C> and <C>petri-v6.testnet</C>, whose rules trust <C>wrap.testnet</C>. See also <Doc to="security" hash="t-intents">the security notes</Doc>.
       </p>
     </DocPage>
   );

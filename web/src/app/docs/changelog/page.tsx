@@ -7,7 +7,7 @@ export const metadata = docMetadata("changelog");
 
 // `git log --oneline` on main, newest first, with each commit's date.
 const COMMITS: [string, string, string][] = [
-  ["1a5ab27", "Nov 4", "Point the verifier, agents and site at the v5 dishes (petri-v5.testnet, petri-dish.near) and the reproducible build Foo3au6a…; keeper unwraps waiting wNEAR; a log window per dish; guests can mint slides"],
+  ["1a5ab27", "Nov 4", "Point the verifier, agents and site at the v5 dishes (petri-v6.testnet, petri-dish.near) and the reproducible build Foo3au6a…; keeper unwraps waiting wNEAR; a log window per dish; guests can mint slides"],
   ["ec5970f", "Nov 4", "Pin near-sdk 5.29.1: 5.30 links host functions (gas keys, universal state init) that mainnet's protocol 86 does not have yet, so the same build runs on both networks"],
   ["9da6fbe", "Nov 4", "Specimen slides (NEP-171/177/178/181 NFTs drawn on chain, checked by both replays), pay with any token through NEAR Intents, rename, guest bounties as credit; one site for both dishes; mainnet launch rules"],
   ["57cdd4b", "Nov 4", "agents: one runner for both dishes; on mainnet the strains are <name>.petri-dish.near, attach their own NEAR, keep a gas reserve and play at half pace; no bench on mainnet"],
@@ -39,8 +39,8 @@ const commit = (h: string) => `${REPO}/commit/${h}`;
 export default function Page() {
   return (
     <DocPage slug="changelog" lede="From the first contract to v5, in two days of November 2026, from the git history. Each version was a fresh contract on a fresh account: the rules are fixed at launch, so changing them means a new dish.">
-      <H2 id="v5">v5: petri-v5.testnet and petri-dish.near</H2>
-      <p>The version both dishes run, built reproducibly at <a href={commit("ec5970f")}>ec5970f</a> with code hash <C>Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j</C>.</p>
+      <H2 id="v5">v5: petri-v6.testnet and petri-dish.near</H2>
+      <p>The version both dishes run, built reproducibly at <a href={commit("ec5970f")}>ec5970f</a> with code hash <C>DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7</C>.</p>
       <ul>
         <li>The credit pool pays out as credit; credit won is spent first and no sponsor can take it back; sponsors may reclaim credit left unused for a day.</li>
         <li>Stake decays to 87.5% at every tide, so a colony&rsquo;s pay cap is rent it renews by planting.</li>

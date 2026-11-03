@@ -16,7 +16,7 @@ export const PAGES: DocMeta[] = [
       { id: "what-it-is", title: "What Petri is" },
       { id: "different", title: "What makes it different" },
       { id: "tour", title: "A 60-second tour" },
-      { id: "dishes", title: "The two dishes", keywords: "petri-dish.near petri-v5.testnet mainnet testnet" },
+      { id: "dishes", title: "The two dishes", keywords: "petri-dish.near petri-v6.testnet mainnet testnet" },
       { id: "glossary", title: "Words used in these docs", keywords: "agar vault tide colony stake reach credit house keeper" },
       { id: "next", title: "Where to go next" },
     ],
