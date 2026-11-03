@@ -10,8 +10,32 @@ import s from "./ledger.module.css";
 
 type Sort = "live" | "earned" | "spent" | "net" | "joined";
 
+/** Where each colony lives, for the thumbnails' labels: its living cells and their centre on the wrapping dish. */
+function whereabouts(cells: Uint16Array | undefined, w: number, h: number): Map<number, { n: number; x: number; y: number }> {
+  const out = new Map<number, { n: number; x: number; y: number }>();
+  if (!cells) return out;
+  // Circular means, so a colony straddling an edge is placed on the edge rather than mid-dish.
+  const acc = new Map<number, number[]>();
+  for (let i = 0; i < cells.length; i++) {
+    const id = cells[i];
+    if (!id) continue;
+    let a = acc.get(id);
+    if (!a) acc.set(id, (a = [0, 0, 0, 0, 0]));
+    const ax = ((i % w) / w) * 2 * Math.PI;
+    const ay = (((i / w) | 0) / h) * 2 * Math.PI;
+    a[0]++;
+    a[1] += Math.cos(ax);
+    a[2] += Math.sin(ax);
+    a[3] += Math.cos(ay);
+    a[4] += Math.sin(ay);
+  }
+  const at = (c: number, s: number, size: number) => Math.round(((Math.atan2(s, c) / (2 * Math.PI) + 1) % 1) * size) % size;
+  acc.forEach((a, id) => out.set(id, { n: a[0], x: at(a[1], a[2], w), y: at(a[3], a[4], h) }));
+  return out;
+}
+
 /** A thumbnail of the dish with only one colony's cells lit, so you can see where it lives. */
-function Territory({ cells, id, color, w, h }: { cells?: Uint16Array; id: number; color: number; w: number; h: number }) {
+function Territory({ cells, id, color, w, h, label }: { cells?: Uint16Array; id: number; color: number; w: number; h: number; label: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current;
@@ -39,11 +63,17 @@ function Territory({ cells, id, color, w, h }: { cells?: Uint16Array; id: number
     }
     ctx.putImageData(img, 0, 0);
   }, [cells, id, color, w, h]);
-  return <canvas ref={ref} width={w} height={h} className={s.terr} aria-hidden="true" />;
+  return <canvas ref={ref} width={w} height={h} className={s.terr} role="img" aria-label={label} />;
 }
+
+const territoryLabel = (name: string, at?: { n: number; x: number; y: number }) =>
+  at?.n ? `${name}, ${int(at.n)} ${at.n === 1 ? "cell" : "cells"} near ${at.x}, ${at.y}` : `${name}, no living cells`;
 
 export function Ledger() {
   const { d, ready, colonies, w, h } = useLive();
+  // Until the agar has fed anyone, every Net is just what planting cost, so it is shown as neutral, not as a loss.
+  const places = useMemo(() => whereabouts(d.cells, w, h), [d.cells, w, h]);
+  const fedYet = !!d.state && (Number(d.state.fed) > 0 || d.pending.some((p) => p > 0));
   const [sort, setSort] = useState<Sort>("live");
   const [balances, setBalances] = useState<Record<string, number>>({});
 
@@ -129,11 +159,12 @@ export function Ledger() {
       <ol className={s.list}>
         {rows.map((r, i) => {
           const ai = strainOf(r.account);
+          const preFeed = !fedYet || r.earned === 0;
           return (
             <li key={r.id} className={s.row}>
               <span className={`num ${s.rank}`}>{i + 1}</span>
               <div className={s.who}>
-                <Territory cells={d.cells} id={r.id} color={r.color} w={w} h={h} />
+                <Territory cells={d.cells} id={r.id} color={r.color} w={w} h={h} label={territoryLabel(r.name, places.get(r.id))} />
                 <div>
                   <p className={s.name}>
                     <i className="swatch" style={{ background: hex(r.color) }} />
@@ -148,7 +179,11 @@ export function Ledger() {
                 <div><dt>Living</dt><dd className="num">{int(r.live)}</dd><em>{((100 * r.live) / total).toFixed(1)}%</em></div>
                 <div><dt>Earned</dt><dd className="num">{petri(r.earned, 2)}</dd></div>
                 <div><dt>Spent planting</dt><dd className="num">{petri(r.spent, 2)}</dd></div>
-                <div><dt>Net</dt><dd className={`num ${r.net >= 0 ? s.pos : s.neg}`}><span className={s.sign} aria-hidden="true">{r.net >= 0 ? "+" : "−"}</span><span className="sr">{r.net >= 0 ? "plus " : "minus "}</span>{petri(Math.abs(r.net), 2)}</dd></div>
+                <div>
+                  <dt>Net</dt>
+                  <dd className={`num ${preFeed ? s.flat : r.net >= 0 ? s.pos : s.neg}`}><span className={s.sign} aria-hidden="true">{r.net >= 0 ? "+" : "−"}</span><span className="sr">{r.net >= 0 ? "plus " : "minus "}</span>{petri(Math.abs(r.net), 2)}</dd>
+                  {preFeed && <em title="Nothing has been fed to this colony yet; its cells start earning with the next feed">pre-feed</em>}
+                </div>
                 <div><dt>Holding</dt><dd className="num">{balances[r.account] !== undefined ? petri(balances[r.account], 2) : "—"}</dd></div>
               </dl>
             </li>
@@ -156,7 +191,13 @@ export function Ledger() {
         })}
         {rows.length === 0 && (
           <li className={s.empty}>
-            No colonies yet. <Link href="/dish">Start the first one</Link>.
+            {ready ? (
+              <>
+                No colonies yet. <Link href="/dish">Start the first one</Link>.
+              </>
+            ) : (
+              "Reading the colonies from NEAR…"
+            )}
           </li>
         )}
       </ol>
@@ -164,6 +205,7 @@ export function Ledger() {
         Earned includes PETRI accrued since the dish last advanced on chain. Spent planting is the full price paid; half of it
         was burned and half went back to the agar. Holding is the live token balance, which also counts PETRI bought from the agar,
         keeper shares and transfers.
+        {ready && !fedYet ? " The agar has not fed anyone yet, so Net is only what planting cost so far; it is shown in neutral until the first feed." : ""}
       </p>
     </>
   );

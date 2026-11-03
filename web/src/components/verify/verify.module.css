@@ -59,6 +59,9 @@
 .verdict span { font-size: 15px; color: var(--text-2); }
 .good { background: rgba(159, 216, 168, 0.1); box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.4); }
 .good b { color: var(--ok); }
+/* The history matches but a step is still to come (the lock): amber, not green and not red. */
+.warnV { background: rgba(242, 180, 90, 0.1); box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.4); }
+.warnV b { color: var(--amber); }
 .badV { background: rgba(255, 143, 127, 0.1); box-shadow: inset 0 0 0 1px rgba(255, 143, 127, 0.4); }
 .badV b { color: var(--bad); }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
@@ -117,9 +120,10 @@
   to { background-position: -100% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .checks .wait i, .checks .wait dd, .checks .pass i, .checks .fail i { animation: none; }
+  .checks .wait i, .checks .wait dd, .checks .pass i, .checks .fail i, .checks .pending i { animation: none; }
 }
 .checks .fail i { background: rgba(255, 143, 127, 0.16); color: var(--bad); box-shadow: none; }
+.checks .pending i { background: rgba(242, 180, 90, 0.16); color: var(--amber); box-shadow: none; animation: flip 0.5s cubic-bezier(0.2, 0.7, 0.1, 1) both; }
 .checks b { font-weight: 600; }
 .checks dl { margin: 6px 0 0; display: grid; gap: 2px; }
 .checks dl div { display: grid; grid-template-columns: 104px 1fr; gap: 10px; font-size: 13.5px; }

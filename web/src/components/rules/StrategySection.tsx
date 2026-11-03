@@ -54,7 +54,7 @@ function useYields(w: number, h: number) {
     loadEngine().then(() => {
       const m: Partial<Record<PatternName, Yield>> = {};
       for (const p of MEASURE) {
-        const e = new Engine(w, h, 0, 0, 1_000_000, 1);
+        const e = new Engine(w, h, 0, 0, 1_000_000, 1, 10_000);
         e.set_colonies(1);
         const cells = pattern_cells(p, Math.floor(w / 3), Math.floor(h / 3), w, h, 0, false);
         e.plant(1, cells);

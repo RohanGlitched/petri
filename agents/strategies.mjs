@@ -166,7 +166,7 @@ export function candidates(world, me, balance, rng, limit = 6) {
   if (myCells === 0) {
     // A colony with nothing alive starts again in the freshest agar it can find.
     for (const s of freshSpots(cells, w, h, rng).slice(0, 12)) {
-      for (const p of ["beehive", "block", "loaf"]) tryAdd(p, s.x, s.y, 0, `${p} in fresh agar (${s.c} cells nearby)`);
+      for (const p of ["beehive", "block", "loaf"]) tryAdd(p, s.x, s.y, 0, `${p} in ${s.c ? `fresh agar (${s.c} ${s.c === 1 ? "cell" : "cells"} nearby)` : "empty agar"}`);
       if (out.length >= limit) break;
     }
     return out;
@@ -187,7 +187,7 @@ export function candidates(world, me, balance, rng, limit = 6) {
     if (myCells < cap) grow(["beehive", "loaf", "block"], [5, 12]);
   } else if (t === "wanderer") {
     for (const s of freshSpots(cells, w, h, rng).slice(0, 8)) {
-      tryAdd(["beehive", "loaf", "block"][Math.floor(rng() * 3)], s.x, s.y, Math.floor(rng() * 4), `a new outpost in fresh agar (${s.c} cells nearby)`);
+      tryAdd(["beehive", "loaf", "block"][Math.floor(rng() * 3)], s.x, s.y, Math.floor(rng() * 4), `a new outpost in ${s.c ? `fresh agar (${s.c} ${s.c === 1 ? "cell" : "cells"} nearby)` : "empty agar"}`);
       if (out.length >= limit) break;
     }
     if (myCells < cap) grow(["beehive", "block"], [4, 9]);
@@ -195,7 +195,7 @@ export function candidates(world, me, balance, rng, limit = 6) {
     // Wild seeds only while the colony is small: an R-pentomino can grow to hundreds of cells and crowd everyone out.
     const wild = myCells < cap;
     for (const s of freshSpots(cells, w, h, rng).slice(0, 6)) {
-      if (wild && rng() < 0.5) tryAdd("r-pentomino", s.x, s.y, Math.floor(rng() * 4), `an R-pentomino near ${s.c} living cells, to see what grows`);
+      if (wild && rng() < 0.5) tryAdd("r-pentomino", s.x, s.y, Math.floor(rng() * 4), `an R-pentomino ${s.c ? `near ${s.c} living ${s.c === 1 ? "cell" : "cells"}` : "in empty agar"}, to see what grows`);
       else tryAdd("blinker", s.x, s.y, Math.floor(rng() * 4), "a blinker to keep the agar restless");
       if (out.length >= limit) break;
     }

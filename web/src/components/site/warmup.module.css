@@ -1,0 +1,35 @@
+/* The young-dish note: one quiet line and a hairline of progress towards the feed floor. */
+.warm {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--dim);
+}
+.warm .line { margin: 0; color: inherit; font-size: inherit; }
+.warm b { color: var(--bone); font-weight: 600; }
+.tag {
+  margin-right: 4px;
+  font-weight: 600;
+  color: var(--amber);
+}
+.track {
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(243, 233, 218, 0.12);
+  overflow: hidden;
+}
+.track i {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+  background: var(--amber);
+  transition: width 0.6s ease;
+}
+.paper { color: var(--ink-2); }
+.paper b { color: var(--ink); }
+.paper .tag { color: #8a4c0e; }
+.paper .track { background: rgba(29, 18, 8, 0.1); }
+.paper .track i { background: #b86a18; }

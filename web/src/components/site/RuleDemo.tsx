@@ -54,7 +54,7 @@ export function RuleDemo({ width, height, seeds, loop, colors, bufferFor, refuse
 
     const reset = () => {
       engineRef.current?.free();
-      const e = new Engine(width, height, 0, 0, 1_000_000, 1);
+      const e = new Engine(width, height, 0, 0, 1_000_000, 1, 10_000);
       e.set_colonies(Math.max(...seeds.map((s) => s.colony)));
       for (const s of seeds) e.plant(s.colony, seedCells(s, width, height));
       engineRef.current = e;

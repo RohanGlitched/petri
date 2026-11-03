@@ -24,7 +24,7 @@ const DIFFICULTY = 18;
 const CHALLENGE_MS = 10 * 60_000;
 const PER_IP_PER_HOUR = 4;
 const PER_HOUR = 120;
-const METHODS = ["join", "buy", "plant", "sell", "claim", "advance"];
+const METHODS = ["join", "buy", "plant", "sell", "claim", "advance", "set_payout"];
 const hits = new Map<string, number[]>();
 let global: number[] = [];
 

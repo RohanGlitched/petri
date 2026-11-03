@@ -27,6 +27,10 @@ export class Engine {
      */
     counted(): number;
     /**
+     * Exact credit one colony won from the credit pool since this engine started (yoctoNEAR, decimal string).
+     */
+    credit_won_of(colony: number): string;
+    /**
      * PETRI units earned per colony since this engine started, approximate (f64), for display.
      */
     earned(): Float64Array;
@@ -45,7 +49,7 @@ export class Engine {
     last_deaths(): Uint32Array;
     live_counts(): Uint32Array;
     load_compact(bytes: Uint8Array | number[], generation: number, chain_hex: string): boolean;
-    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number, reach: number, live_floor: number);
+    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number, reach: number, live_floor: number, stake_keep_bps: number);
     /**
      * Plant without checks (replaying the contract's log).
      */
@@ -64,18 +68,19 @@ export class Engine {
      */
     set_house(house: Uint16Array | number[]): void;
     /**
-     * Cells each colony has planted, as the contract counts them (when the engine starts mid-history).
+     * Each colony's stake, as the contract's `stakes` view returns it (when the engine starts mid-history).
      */
-    set_planted(planted: Uint32Array | number[]): void;
+    set_stakes(stakes: BigUint64Array | bigint[]): void;
     /**
      * Advance `n` generations, tracking the chain and the agar's feed exactly as the contract does.
      */
     step(n: number): void;
     /**
-     * Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping the house, add it to each colony's winnings
+     * Run a tide: split `pay` yoctoNEAR (the vault's share) and `credit_pay` (the credit pool's) by the window's
+     * earnings, skipping the house, decay every stake, add it to each colony's winnings
      * and reset the window. Returns the total paid to colonies, as a decimal string.
      */
-    tide(pay: string): string;
+    tide(pay: string, credit_pay: string): string;
     total_live(): number;
     width(): number;
     /**
@@ -127,6 +132,7 @@ export interface InitOutput {
     readonly engine_clone_engine: (a: number) => number;
     readonly engine_compact: (a: number) => [number, number];
     readonly engine_counted: (a: number) => number;
+    readonly engine_credit_won_of: (a: number, b: number) => [number, number];
     readonly engine_earned: (a: number) => [number, number];
     readonly engine_earned_of: (a: number, b: number) => [number, number];
     readonly engine_generation: (a: number) => number;
@@ -137,15 +143,15 @@ export interface InitOutput {
     readonly engine_last_deaths: (a: number) => [number, number];
     readonly engine_live_counts: (a: number) => [number, number];
     readonly engine_load_compact: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
-    readonly engine_new: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
+    readonly engine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
     readonly engine_set_agar: (a: number, b: number, c: number) => void;
     readonly engine_set_colonies: (a: number, b: number) => void;
     readonly engine_set_counted: (a: number, b: number) => void;
     readonly engine_set_house: (a: number, b: number, c: number) => void;
-    readonly engine_set_planted: (a: number, b: number, c: number) => void;
+    readonly engine_set_stakes: (a: number, b: number, c: number) => void;
     readonly engine_step: (a: number, b: number) => void;
-    readonly engine_tide: (a: number, b: number, c: number) => [number, number];
+    readonly engine_tide: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly engine_total_live: (a: number) => number;
     readonly engine_width: (a: number) => number;
     readonly engine_window_of: (a: number, b: number) => [number, number];

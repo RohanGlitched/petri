@@ -248,6 +248,16 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   font-size: 13.5px;
   color: var(--dim);
 }
+.net-ahead {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--dim);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+@media (max-width: 1180px) {
+  .net-ahead { display: none; }
+}
 .pulse {
   width: 8px;
   height: 8px;

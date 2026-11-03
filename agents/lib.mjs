@@ -64,11 +64,13 @@ export async function nearBalance(accountId) {
 /** The dish as the contract stores it, stepped forward to the generation the clock says is due. */
 export async function liveDish() {
   const [rules, state, colonies] = await Promise.all([view("rules"), view("state"), view("colonies", { from: 0, limit: 500 })]);
-  const board = Buffer.from(await view("board"), "base64");
-  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor);
+  const [b64, stakes] = await Promise.all([view("board"), view("stakes", { from: 0, limit: 2000 })]);
+  const board = Buffer.from(b64, "base64");
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor, rules.stake_keep_bps);
   e.set_counted(state.counted);
+  e.set_house(new Uint16Array(state.house));
   e.set_colonies(colonies.length);
-  e.set_planted(new Uint32Array(colonies.map((c) => Number(c.cells_planted))));
+  e.set_stakes(new BigUint64Array(stakes.map((v) => BigInt(v))));
   e.set_agar(state.agar);
   if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("board did not load");
   const due = Math.floor((Number(state.now_ms) - Number(state.epoch_ms)) / Number(rules.generation_ms));
@@ -96,11 +98,12 @@ export function failureText(f) {
 /**
  * Call the dish as `accountId`. The strains and the keeper sign with function-call keys that may only call the dish and
  * cannot attach NEAR, so whatever a call needs (`deposit` yoctoNEAR) is paid from the account's sponsored credit in
- * the dish instead. Returns { hash } or throws with the contract's own words.
+ * the dish instead. The bench colonies (`attach`) attach their own NEAR, like a wallet player. Returns { hash } or
+ * throws with the contract's own words.
  */
-export async function callDish(accountId, methodName, args, tgas = 150, deposit = 0n) {
+export async function callDish(accountId, methodName, args, tgas = 150, deposit = 0n, attach = false) {
   const a = account(accountId);
-  if (BigInt(deposit) > 0n) {
+  if (BigInt(deposit) > 0n && !attach) {
     args = { ...args, credit: BigInt(deposit).toString() };
     deposit = 0n;
   }

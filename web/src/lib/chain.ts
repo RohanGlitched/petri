@@ -9,8 +9,10 @@ export type Rules = {
   max_supply: string;
   feed_ppm: number;
   keeper_bps: number;
-  /** A colony is paid for at most this many living cells per cell it has planted. */
+  /** A colony is paid for at most this many living cells per cell of stake. */
   reach: number;
+  /** Share of each colony's stake left after every tide. */
+  stake_keep_bps: number;
   burn_bps: number;
   payback: number;
   min_cell_price: string;
@@ -30,6 +32,8 @@ export type Rules = {
   buffer: number;
   max_plant_cells: number;
   max_catchup: number;
+  /** When the dish is this far behind the clock, the clock skips ahead. */
+  max_lag: number;
   house: string[];
 };
 
@@ -62,11 +66,20 @@ export type DishState = {
   near_tides: string;
   near_bounties: string;
   near_sold: string;
+  near_refunded: string;
+  /** NEAR tide winnings not yet claimed */
+  tides_owed: string;
   /** yoctoNEAR the agar may still pay for PETRI before the next tide */
   sell_left: string;
+  /** sponsored NEAR waiting in the credit pool, paid out as credit at tides */
+  credit_pool: string;
+  credit_in: string;
   credit_given: string;
   credit_spent: string;
+  credit_won: string;
+  credit_reclaimed: string;
   tides: string;
+  skipped: string;
   house: number[];
   /** PETRI units per cell right now */
   cell_price: string;
@@ -80,6 +93,7 @@ export type Colony = {
   name: string;
   color: number;
   house: boolean;
+  payout: string | null;
   joined_generation: string;
   last_plant_generation: string | null;
   cells_planted: string;
@@ -90,18 +104,20 @@ export type Colony = {
   near_paid: string;
   near_claimed: string;
   near_sold: string;
+  credit_won: string;
 };
 
 export type PlantRecord = { index: string; generation: string; colony: number; cells: number[]; cost: string; siege: boolean; note: string | null };
 export type Entry =
   | { Join: { generation: string; colony: number } }
-  | { Buy: { generation: string; colony: number; petri: string; near: string } }
-  | { Plant: { generation: string; colony: number; cells: number[]; cost: string; near: string; siege: boolean } }
+  | { Buy: { generation: string; colony: number; petri: string; near: string; credit: string } }
+  | { Plant: { generation: string; colony: number; cells: number[]; cost: string; near: string; credit: string; siege: boolean } }
   | { Sell: { generation: string; colony: number; petri: string; near: string; paid: string } }
-  | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string } };
+  | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string; credit_pay: string; credit_paid: string } }
+  | { Skip: { generation: string; skipped: string } }
+  | { Refund: { generation: string; colony: number; near: string } };
 
-export const entryGeneration = (e: Entry): number =>
-  Number("Join" in e ? e.Join.generation : "Buy" in e ? e.Buy.generation : "Plant" in e ? e.Plant.generation : "Sell" in e ? e.Sell.generation : e.Tide.generation);
+export const entryGeneration = (e: Entry): number => Number(Object.values(e)[0].generation);
 export type Checkpoint = { generation: string; chain: string };
 export type Claimable = { petri: string; near: string };
 
@@ -180,6 +196,7 @@ export const getPlants = (from = 0, limit = 1000) => view<PlantRecord[]>("plants
 export const getLedger = (from = 0, limit = 1000) => view<Entry[]>("ledger", { from, limit });
 export const getEarnings = (from = 0, limit = 2000) => view<string[]>("earnings", { from, limit });
 export const getTideWinnings = (from = 0, limit = 2000) => view<string[]>("tide_winnings", { from, limit });
+export const getStakes = (from = 0, limit = 2000) => view<string[]>("stakes", { from, limit });
 export const getCredit = (account_id: string) => view<string>("credit_of", { account_id });
 export const getSellQuote = (petri: string) => view<string>("sell_quote", { petri });
 export const getCheckpoints = (from = 0, limit = 2000) => view<Checkpoint[]>("checkpoints", { from, limit });
@@ -197,12 +214,12 @@ export async function getNearBalance(account_id: string): Promise<bigint> {
 }
 
 /** The contract account's deployed code hash and access keys, to show that nobody can change the code. */
-export async function getLock(account_id = CONTRACT): Promise<{ codeHash: string; fullAccessKeys: number; keys: number }> {
+export async function getLock(account_id = CONTRACT): Promise<{ codeHash: string; fullAccessKeys: number; keys: number; balance: string; storageUsage: number }> {
   const at = pinned !== null ? { block_id: pinned } : { finality: "final" };
-  const acct = await rpc<{ code_hash: string }>("query", { request_type: "view_account", account_id, ...at });
+  const acct = await rpc<{ code_hash: string; amount: string; storage_usage: number }>("query", { request_type: "view_account", account_id, ...at });
   const list = await rpc<{ keys: { access_key: { permission: unknown } }[] }>("query", { request_type: "view_access_key_list", account_id, ...at });
   const full = list.keys.filter((k) => k.access_key.permission === "FullAccess").length;
-  return { codeHash: acct.code_hash, fullAccessKeys: full, keys: list.keys.length };
+  return { codeHash: acct.code_hash, fullAccessKeys: full, keys: list.keys.length, balance: acct.amount, storageUsage: acct.storage_usage };
 }
 
 async function paged<T>(total: number, page: (from: number, limit: number) => Promise<T[]>): Promise<T[]> {

@@ -293,3 +293,4 @@
 @media (max-width: 960px) {
   .tides { grid-template-columns: 1fr; padding: 22px; }
 }
+.warm { max-width: 52ch; margin: -6px 0 22px; }

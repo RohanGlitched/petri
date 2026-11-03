@@ -134,14 +134,37 @@ impl Dish {
     /// Liveness is computed 64 cells at a time with a bit-sliced neighbour count; owners are touched only where a
     /// cell is born or dies, which keeps a generation cheap enough to run inside a NEAR transaction.
     pub fn step(&mut self, colonies: u16) -> StepStats {
+        self.step_core(colonies as usize + 1, true).0
+    }
+
+    /// Advance one generation like `step`, but count living cells sparsely: returns `(colony, live cells)` for every
+    /// colony that has any, in id order, and the total. The work grows with living cells, not with how many colonies
+    /// ever joined, which is what the contract needs to stay inside NEAR's gas limit on a crowded dish.
+    pub fn step_sparse(&mut self) -> (Vec<(ColonyId, u32)>, u32) {
+        let (stats, mut owners) = self.step_core(0, false);
+        owners.sort_unstable();
+        let mut out: Vec<(ColonyId, u32)> = Vec::new();
+        for c in owners {
+            match out.last_mut() {
+                Some(last) if last.0 == c => last.1 += 1,
+                _ => out.push((c, 1)),
+            }
+        }
+        (out, stats.total_live)
+    }
+
+    /// One generation. With `full`, per-colony live, birth and death counts are kept in vectors of length `n`; without
+    /// it, only the owners of living cells are returned (unsorted), for `step_sparse`.
+    fn step_core(&mut self, n: usize, full: bool) -> (StepStats, Vec<ColonyId>) {
         let w = self.width as usize;
         let h = self.height as usize;
         let words = self.words;
-        let n = colonies as usize + 1;
+        let mut owners: Vec<ColonyId> = Vec::new();
+        let m = if full { n } else { 0 };
         let mut stats = StepStats {
-            live: vec![0; n],
-            births: vec![0; n],
-            deaths: vec![0; n],
+            live: vec![0; m],
+            births: vec![0; m],
+            deaths: vec![0; m],
             total_live: 0,
             contested: 0,
         };
@@ -207,7 +230,7 @@ impl Dish {
                     }
                     match plurality(parents) {
                         Some(owner) => {
-                            if (owner as usize) < n {
+                            if (owner as usize) < stats.births.len() {
                                 stats.births[owner as usize] += 1;
                             }
                             born_at.push((y * w + x, owner));
@@ -229,7 +252,7 @@ impl Dish {
                     died &= died - 1;
                     let idx = y * w + k * 64 + b;
                     let c = self.cells[idx] as usize;
-                    if c < n {
+                    if c < stats.deaths.len() {
                         stats.deaths[c] += 1;
                     }
                     self.cells[idx] = EMPTY;
@@ -246,20 +269,25 @@ impl Dish {
                 while live != 0 {
                     let b = live.trailing_zeros() as usize;
                     live &= live - 1;
-                    let c = self.cells[y * w + k * 64 + b] as usize;
-                    if c < n {
-                        stats.live[c] += 1;
+                    let c = self.cells[y * w + k * 64 + b];
+                    if full {
+                        if (c as usize) < stats.live.len() {
+                            stats.live[c as usize] += 1;
+                        }
+                    } else {
+                        owners.push(c);
                     }
                     stats.total_live += 1;
                 }
             }
         }
-        stats
+        (stats, owners)
     }
 
     /// Check a planting without changing the dish. `cells` are flat indices. A planting inside a rival's buffer is
     /// legal; the result says so, because it costs more.
-    pub fn check_plant(&self, colony: ColonyId, cells: &[u32], buffer: u16, max_cells: u32) -> Result<PlantCheck, PlantError> {
+    /// Cells of `house` colonies (the dish's own players) never make a planting a siege.
+    pub fn check_plant(&self, colony: ColonyId, cells: &[u32], buffer: u16, max_cells: u32, house: &[ColonyId]) -> Result<PlantCheck, PlantError> {
         if cells.is_empty() {
             return Err(PlantError::Empty);
         }
@@ -288,7 +316,7 @@ impl Dish {
             'scan: for dy in -b..=b {
                 for dx in -b..=b {
                     let c = self.cells[self.index(x + dx, y + dy)];
-                    if c != EMPTY && c != colony {
+                    if c != EMPTY && c != colony && !house.contains(&c) {
                         rival = Some(c);
                         break 'scan;
                     }
@@ -477,11 +505,20 @@ fn plurality(p: [ColonyId; 3]) -> Option<ColonyId> {
     }
 }
 
-/// A colony's claim on the feed and the tides: its living cells, but never more than `reach` cells for every cell it
-/// has ever planted. The cap grows only with what a colony has paid for, so splitting into many colonies never raises
-/// it: the sum of capped weights is at most the capped weight of the sum.
-pub fn feed_weight(live: u32, planted: u64, reach: u32) -> u128 {
-    (live as u128).min(planted as u128 * reach as u128)
+/// Stake is counted in thousandths of a planted cell: planting adds `STAKE_UNIT` per cell, and every tide keeps only
+/// `stake_keep_bps` of it, so a colony's pay cap is rent it renews by planting.
+pub const STAKE_UNIT: u64 = 1_000;
+
+/// A colony's claim on the feed: its living cells, but never more than `reach` cells per cell of stake (cells it
+/// planted, decayed tide by tide). The cap grows only with what a colony has paid for, so splitting into many colonies
+/// never raises it: the sum of capped weights is at most the capped weight of the sum.
+pub fn feed_weight(live: u32, stake: u64, reach: u32) -> u128 {
+    (live as u128).min(stake as u128 * reach as u128 / STAKE_UNIT as u128)
+}
+
+/// Stake after a tide: `stake_keep_bps` of it remains.
+pub fn decay_stake(stake: u64, stake_keep_bps: u16) -> u64 {
+    (stake as u128 * stake_keep_bps as u128 / 10_000) as u64
 }
 
 /// One generation's feed from the agar.
@@ -504,14 +541,21 @@ pub struct Feed {
 /// the rest of the ration stays in the agar, so a cell never earns more than its price assumes. Only living colonies
 /// are visited for the arithmetic. An unpaid dish is fed nothing. The contract, the browser and the simulator all call
 /// this, so their books cannot drift apart.
-pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32, live: &[u32], planted: &[u64], house: &[ColonyId]) -> Feed {
+pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32, live: &[u32], stake: &[u64], house: &[ColonyId]) -> Feed {
+    let sparse: Vec<(ColonyId, u32)> = live.iter().enumerate().skip(1).filter(|(_, &n)| n > 0).map(|(c, &n)| (c as ColonyId, n)).collect();
+    feed_sparse(agar, feed_ppm, keeper_bps, reach, live_floor, &sparse, stake, house)
+}
+
+/// `feed` with living cells given as `(colony, cells)` pairs, as `Dish::step_sparse` returns them. `stake` is indexed by
+/// colony id. Both forms give identical results.
+pub fn feed_sparse(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32, live: &[(ColonyId, u32)], stake: &[u64], house: &[ColonyId]) -> Feed {
     let mut weights: Vec<(ColonyId, u128)> = Vec::new();
     let mut total_w = 0u128;
-    for (c, &n) in live.iter().enumerate().skip(1) {
-        if n == 0 || house.contains(&(c as ColonyId)) {
+    for &(c, n) in live {
+        if n == 0 || c == EMPTY || house.contains(&c) {
             continue;
         }
-        let w = feed_weight(n, planted.get(c).copied().unwrap_or(0), reach);
+        let w = feed_weight(n, stake.get(c as usize).copied().unwrap_or(0), reach);
         if w > 0 {
             weights.push((c as ColonyId, w));
             total_w += w;

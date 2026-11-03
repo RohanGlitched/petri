@@ -28,6 +28,14 @@ function busiest(cells: Uint16Array, w: number, h: number) {
   return at;
 }
 
+/** Placeholder for a number still being read from NEAR: a faint shimmer, never a fake zero. */
+const skel = (
+  <>
+    <span className={s.skel} aria-hidden="true" />
+    <span className="sr">Reading from NEAR</span>
+  </>
+);
+
 export function HeroScene() {
   const { d, palette, perCell, ready, colonies, supply, w, h, secs } = useLive();
   const scene = useRef<HTMLDivElement>(null);
@@ -45,7 +53,15 @@ export function HeroScene() {
     centred.current = true;
     const at = busiest(d.cells, w, h);
     const k = lens.current?.camera().zoom;
-    lens.current?.centerOn(at.x, at.y, k);
+    const v = lens.current?.view();
+    // On a phone the headline and stats cover the lower half, so the busy patch is placed in the open band above them.
+    const copy = layers.current[0];
+    if (k && v?.w && copy && window.innerWidth < 900) {
+      const H = v.h / v.dpr;
+      // Between the nav and where the scrim starts to darken above the copy.
+      const want = Math.max(110, (68 + copy.offsetTop - 100) / 2);
+      lens.current?.centerOn(at.x, at.y + ((H / 2 - want) * v.dpr) / k, k);
+    } else lens.current?.centerOn(at.x, at.y, k);
   }, [d.cells, w, h]);
 
   // Scroll drives the zoom: from a close-up of a few colonies out to the whole round dish.
@@ -98,7 +114,11 @@ export function HeroScene() {
         mask.current.style.clipPath = `circle(${r}px at 50% 50%)`;
         mask.current.style.translate = `${ox}px ${oy}px`;
       }
-      if (scrim.current) scrim.current.style.opacity = String(1 - band(p, 0.4, 0.75));
+      if (scrim.current) {
+        scrim.current.style.opacity = String(1 - band(p, 0.4, 0.75));
+        // How tall the copy stands, so the phone scrim stays solid behind it and only fades above it.
+        scrim.current.style.setProperty("--copy", `${layers.current[0]?.offsetHeight ?? 0}px`);
+      }
       if (rim.current) {
         rim.current.style.width = rim.current.style.height = `${2 * r + 18}px`;
         rim.current.style.left = `${W / 2 + ox}px`;
@@ -168,11 +188,11 @@ export function HeroScene() {
               <Link className="btn btn-ghost" href="/rules">How the coin works</Link>
             </div>
           </div>
-          <dl className={s.stats} aria-live="polite">
-            <div><dt>Living cells</dt><dd className="num">{ready ? int(d.totalLive) : "—"}</dd></div>
-            <div><dt>Each cell earns, per generation</dt><dd className="num">{ready ? petri(perCell, 4) : "—"}</dd></div>
-            <div><dt>PETRI still in the agar</dt><dd className="num">{ready ? petri(d.agar) : "—"}</dd></div>
-            <div><dt>Next generation in</dt><dd className="num">{ready ? `${secs}s` : "—"}</dd></div>
+          <dl className={s.stats} aria-live="polite" aria-busy={!ready}>
+            <div><dt>Living cells</dt><dd className="num">{ready ? int(d.totalLive) : skel}</dd></div>
+            <div><dt>Each cell earns, per generation</dt><dd className="num">{ready ? petri(perCell, 4) : skel}</dd></div>
+            <div><dt>PETRI still in the agar</dt><dd className="num">{ready ? petri(d.agar) : skel}</dd></div>
+            <div><dt>Next generation in</dt><dd className="num">{ready ? `${secs}s` : skel}</dd></div>
           </dl>
           <p className={s.cue} aria-hidden="true">Scroll to pull back</p>
         </section>

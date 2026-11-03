@@ -2,7 +2,7 @@
 //! run the dish ahead of the stored generation, replay its whole history from the plant log and check the result
 //! against the contract's history chain.
 
-use petri_core::{chain_due, chain_next, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, tide_split, Dish, PlantError};
+use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, tide_split, Dish, PlantError, STAKE_UNIT};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -17,17 +17,20 @@ pub struct Engine {
     keeper_bps: u16,
     reach: u32,
     live_floor: u32,
+    stake_keep_bps: u16,
     /// Cells the last feed counted, as the contract's `state().counted`.
     counted: u32,
     /// PETRI earned per colony during this engine's run (index = colony id).
     earned: Vec<u128>,
-    /// Cells each colony has planted (the base of its pay cap), and its earnings since the last tide.
+    /// Each colony's stake in thousandths of a planted cell (the base of its pay cap), and its earnings since the last
+    /// tide.
     planted: Vec<u64>,
     window: Vec<u64>,
     /// The dish's own colonies: never fed, no tide share.
     house: Vec<u16>,
-    /// NEAR each colony won at the tides during this engine's run.
+    /// NEAR and credit each colony won at the tides during this engine's run.
     won: Vec<u128>,
+    credit_won: Vec<u128>,
     /// PETRI set aside for keepers during this engine's run.
     keeper: u128,
     last_births: Vec<u32>,
@@ -39,7 +42,7 @@ pub struct Engine {
 #[wasm_bindgen]
 impl Engine {
     #[wasm_bindgen(constructor)]
-    pub fn new(width: u16, height: u16, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32) -> Engine {
+    pub fn new(width: u16, height: u16, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32, stake_keep_bps: u16) -> Engine {
         Engine {
             dish: Dish::new(width, height),
             generation: 0,
@@ -50,12 +53,14 @@ impl Engine {
             keeper_bps,
             reach,
             live_floor,
+            stake_keep_bps,
             counted: 0,
             earned: vec![0],
             planted: vec![0],
             window: vec![0],
             house: Vec::new(),
             won: vec![0],
+            credit_won: vec![0],
             keeper: 0,
             last_births: vec![0],
             last_deaths: vec![0],
@@ -95,6 +100,7 @@ impl Engine {
         self.planted.resize(n as usize + 1, 0);
         self.window.resize(n as usize + 1, 0);
         self.won.resize(n as usize + 1, 0);
+        self.credit_won.resize(n as usize + 1, 0);
     }
 
     /// The dish's house colonies (the contract's `state().house`): they are never fed and win no tides.
@@ -102,11 +108,11 @@ impl Engine {
         self.house = house.to_vec();
     }
 
-    /// Cells each colony has planted, as the contract counts them (when the engine starts mid-history).
-    pub fn set_planted(&mut self, planted: &[u32]) {
-        for (i, &p) in planted.iter().enumerate() {
+    /// Each colony's stake, as the contract's `stakes` view returns it (when the engine starts mid-history).
+    pub fn set_stakes(&mut self, stakes: &[u64]) {
+        for (i, &p) in stakes.iter().enumerate() {
             if i + 1 < self.planted.len() {
-                self.planted[i + 1] = p as u64;
+                self.planted[i + 1] = p;
             }
         }
     }
@@ -138,13 +144,13 @@ impl Engine {
             self.set_colonies(colony);
         }
         self.dish.plant_unchecked(colony, cells);
-        self.planted[colony as usize] += cells.len() as u64;
+        self.planted[colony as usize] += cells.len() as u64 * STAKE_UNIT;
     }
 
     /// Check a planting the way the contract will. Returns "" when it would be accepted, "siege:<rival>" when it is
     /// accepted inside a rival's buffer at the siege price, and an error code otherwise.
     pub fn check_plant(&self, colony: u16, cells: &[u32], buffer: u16, max_cells: u32) -> String {
-        match self.dish.check_plant(colony, cells, buffer, max_cells) {
+        match self.dish.check_plant(colony, cells, buffer, max_cells, &self.house) {
             Ok(c) => match c.rival {
                 Some(r) => format!("siege:{}", r),
                 None => String::new(),
@@ -203,15 +209,28 @@ impl Engine {
         self.earned.get(colony as usize).copied().unwrap_or(0).to_string()
     }
 
-    /// Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping the house, add it to each colony's winnings
+    /// Run a tide: split `pay` yoctoNEAR (the vault's share) and `credit_pay` (the credit pool's) by the window's
+    /// earnings, skipping the house, decay every stake, add it to each colony's winnings
     /// and reset the window. Returns the total paid to colonies, as a decimal string.
-    pub fn tide(&mut self, pay: &str) -> String {
+    pub fn tide(&mut self, pay: &str, credit_pay: &str) -> String {
         let (split, paid) = tide_split(pay.parse().unwrap_or(0), &self.window, &self.house);
         for (c, v) in split {
             self.won[c as usize] += v;
         }
+        let (csplit, credit_paid) = tide_split(credit_pay.parse().unwrap_or(0), &self.window, &self.house);
+        for (c, v) in csplit {
+            self.credit_won[c as usize] += v;
+        }
         self.window.iter_mut().for_each(|w| *w = 0);
-        paid.to_string()
+        for st in self.planted.iter_mut() {
+            *st = decay_stake(*st, self.stake_keep_bps);
+        }
+        format!("{},{}", paid, credit_paid)
+    }
+
+    /// Exact credit one colony won from the credit pool since this engine started (yoctoNEAR, decimal string).
+    pub fn credit_won_of(&self, colony: u16) -> String {
+        self.credit_won.get(colony as usize).copied().unwrap_or(0).to_string()
     }
 
     /// Exact NEAR one colony won at the tides since this engine started (yoctoNEAR, decimal string).
@@ -276,12 +295,14 @@ impl Engine {
             keeper_bps: self.keeper_bps,
             reach: self.reach,
             live_floor: self.live_floor,
+            stake_keep_bps: self.stake_keep_bps,
             counted: self.counted,
             earned: self.earned.clone(),
             planted: self.planted.clone(),
             window: self.window.clone(),
             house: self.house.clone(),
             won: self.won.clone(),
+            credit_won: self.credit_won.clone(),
             keeper: self.keeper,
             last_births: self.last_births.clone(),
             last_deaths: self.last_deaths.clone(),

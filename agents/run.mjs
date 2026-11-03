@@ -16,16 +16,28 @@ const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
 export const STRAINS = [
-  { account: "petri-violet.testnet", name: "Crystal Violet", color: 0x6b2fa0, temperament: "gardener", every: [60, 110],
+  { account: "petri-violet.testnet", name: "Crystal Violet", color: 0x6b2fa0, temperament: "gardener", every: [40, 80],
     voice: "You are patient and orderly. You grow tidy gardens of still lifes and wall them off from raiders." },
-  { account: "petri-safranin.testnet", name: "Safranin", color: 0xc8325a, temperament: "raider", every: [50, 90],
+  { account: "petri-safranin.testnet", name: "Safranin", color: 0xc8325a, temperament: "raider", every: [40, 70],
     voice: "You are bold and hungry. You send gliders at whoever has grown fattest, and you enjoy it." },
-  { account: "petri-methylene.testnet", name: "Methylene Blue", color: 0x2364aa, temperament: "engineer", every: [70, 120],
+  { account: "petri-methylene.testnet", name: "Methylene Blue", color: 0x2364aa, temperament: "engineer", every: [50, 90],
     voice: "You are careful and technical. You build eaters to absorb attacks and guns when you can afford them." },
-  { account: "petri-malachite.testnet", name: "Malachite Green", color: 0x1e8c6e, temperament: "wanderer", every: [60, 110],
+  { account: "petri-malachite.testnet", name: "Malachite Green", color: 0x1e8c6e, temperament: "wanderer", every: [40, 80],
     voice: "You are curious and restless. You settle fresh agar far from everyone else before it is crowded." },
-  { account: "petri-congo.testnet", name: "Congo Red", color: 0xc8431f, temperament: "chaos", every: [80, 140], cap: 220,
+  { account: "petri-congo.testnet", name: "Congo Red", color: 0xc8431f, temperament: "chaos", every: [60, 100], cap: 220,
     voice: "You are mischievous. You seed small chaos and watch what the dish does with it." },
+];
+
+// The bench: three test colonies the team runs from ordinary wallets, so that the NEAR side of the dish (the vault,
+// tides, claims and sales back to the agar) runs on chain from the first hour. They are not house colonies: they are
+// fed and win tides like any player, with their own NEAR, and the README lists them. They play by written rules only.
+export const BENCH = [
+  { account: "petri-bench-a.testnet", name: "Bench A", color: 0x8a6a2f, temperament: "gardener", every: [30, 60], bench: true,
+    voice: "A test colony that keeps a tidy garden." },
+  { account: "petri-bench-b.testnet", name: "Bench B", color: 0x3f7f9a, temperament: "wanderer", every: [30, 60], bench: true,
+    voice: "A test colony that settles empty agar." },
+  { account: "petri-bench-c.testnet", name: "Bench C", color: 0x9a3f6a, temperament: "raider", every: [40, 70], bench: true,
+    voice: "A test colony that sends the odd glider." },
 ];
 
 const KEEPER = process.env.PETRI_KEEPER ?? "petri-keeper.testnet";
@@ -69,7 +81,7 @@ async function ensureJoined(s, colonies) {
   const c = colonies.find((x) => x.account === s.account);
   if (c) return c;
   log(s.name, "joining");
-  await callDish(s.account, "join", { name: s.name, color: s.color }, 200, JOIN_NEAR);
+  await callDish(s.account, "join", { name: s.name, color: s.color }, 200, JOIN_NEAR, !!s.bench);
   return (await view("colony_of", { account_id: s.account })) ?? null;
 }
 
@@ -84,15 +96,15 @@ async function act(s) {
   // A strain that cannot afford three blocks buys a little PETRI from the agar, like anyone would.
   if (balance < Number(world.state.cell_price) * 12) {
     try {
-      const r = await callDish(s.account, "buy", {}, 150, TOP_UP_NEAR);
+      const r = await callDish(s.account, "buy", {}, 150, TOP_UP_NEAR, !!s.bench);
       log(s.name, "bought PETRI from the agar", r.hash);
       balance = Number(await view("ft_balance_of", { account_id: s.account }));
     } catch (e) {
       log(s.name, "buy refused:", e instanceof Error ? e.message : e);
     }
   }
-  // Every few hours a strain collects the NEAR it won at the tides.
-  if (Number(waiting.near) > 0 && Date.now() - (lastClaim.get(s.account) ?? 0) > 3 * 3600_000) {
+  // Every few hours a colony collects the NEAR it won at the tides (the bench every hour, so claims show up early).
+  if (Number(waiting.near) > 0 && Date.now() - (lastClaim.get(s.account) ?? 0) > (s.bench ? 3600_000 : 3 * 3600_000)) {
     try {
       await callDish(s.account, "claim", {}, 150);
       lastClaim.set(s.account, Date.now());
@@ -123,12 +135,13 @@ async function act(s) {
     rivals,
   };
   for (const c of cands) c.costText = (c.cost / 1e6).toFixed(2);
-  const pick = await choose(s, summary, cands);
+  // The bench plays by written rules only; the house strains ask the model.
+  const pick = s.bench ? null : await choose(s, summary, cands);
   const chosen = pick ? cands[pick.index] : cands[0];
   const note = cleanNote(pick?.note) || chosen.why.charAt(0).toUpperCase() + chosen.why.slice(1) + ".";
   try {
     const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
-    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 200, BigInt(deposit));
+    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 200, BigInt(deposit), !!s.bench);
     log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", note, r.hash);
     record({
       at: new Date().toISOString(),
@@ -179,7 +192,7 @@ async function keep() {
   const st = await view("state");
   const behind = Number(st.due_generation) - Number(st.generation);
   // Advance when the stored board falls behind, or when the keeper pot is worth collecting.
-  if (behind >= 20 || Number(st.keeper_pot) > 5_000_000) {
+  if (behind >= 5 || Number(st.keeper_pot) > 5_000_000) {
     try {
       const r = await callDish(KEEPER, "advance", {}, 250);
       log("keeper advanced", behind, "due generation(s)", r.hash);
@@ -191,7 +204,7 @@ async function keep() {
 
 async function health() {
   const out = {};
-  for (const a of [KEEPER, ...STRAINS.map((s) => s.account)]) {
+  for (const a of [KEEPER, ...STRAINS.map((s) => s.account), ...BENCH.map((s) => s.account)]) {
     try {
       out[a] = await nearBalance(a);
     } catch {
@@ -209,7 +222,7 @@ async function main() {
   serve();
   await health();
   if (once) {
-    for (const s of STRAINS) await act(s).catch((e) => log(s.name, "error", e.message));
+    for (const s of [...STRAINS, ...BENCH]) await act(s).catch((e) => log(s.name, "error", e.message));
     return;
   }
   let tick = 0;
@@ -218,7 +231,7 @@ async function main() {
       const st = await view("state");
       const due = Number(st.due_generation);
       await keep();
-      for (const s of STRAINS) {
+      for (const s of [...STRAINS, ...BENCH]) {
         const at = nextAt.get(s.account) ?? due + Math.floor(rng() * 6);
         if (due >= at) {
           await act(s).catch((e) => log(s.name, "error", e.message));

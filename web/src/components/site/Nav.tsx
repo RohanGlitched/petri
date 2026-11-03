@@ -46,9 +46,18 @@ export function Nav() {
           ))}
         </ul>
         <div className="nav-end">
-          <span className="net" title={`Reading the dish live from NEAR ${NETWORK}`}>
+          <span
+            className="net"
+            title={
+              d.status === "ready" && d.state
+                ? `The contract stored generation ${Number(d.state.generation).toLocaleString("en-US")}; your browser runs the same rules ${d.ahead} ${d.ahead === 1 ? "generation" : "generations"} ahead until someone advances it`
+                : `Reading the dish live from NEAR ${NETWORK}`
+            }
+          >
             <i className="pulse" aria-hidden="true" />
             {d.status === "ready" ? `Generation ${d.generation.toLocaleString("en-US")}` : `NEAR ${NETWORK}`}
+            {/* The browser steps the stored board forward to the clock; say how far, quietly. */}
+            {d.status === "ready" && d.ahead > 0 && <small className="net-ahead num">browser ahead by {d.ahead.toLocaleString("en-US")}</small>}
           </span>
           <Link className="btn btn-amber btn-small" href="/dish">
             Start a colony

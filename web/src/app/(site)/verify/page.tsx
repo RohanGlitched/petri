@@ -20,6 +20,10 @@ export default function VerifyPage() {
             contract holds. This page does it now, in your browser, with the same Rust code the contract runs, reading
             everything from one final block.
           </p>
+          <p className="muted small" style={{ maxWidth: "60ch", margin: "-12px 0 0" }}>
+            The replay stops at the generation the contract last stored. The live dish elsewhere on this site runs a few
+            generations ahead of that in your browser, by the same rules, until someone advances the contract.
+          </p>
         </header>
         <VerifyRun />
       </section>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLive, petri, int, near } from "@/lib/live";
+import { WarmUp } from "@/components/site/WarmUp";
 import s from "./bands.module.css";
 
 function useMotion() {
@@ -125,6 +126,8 @@ export function CoinBand() {
     ["Burned for good", petri(v("burned")), `The other half. PETRI in existence: ${petri(supply)}.`],
   ];
   const tideMinutes = rules ? Math.ceil((tideIn * Number(rules.generation_ms)) / 60_000) : 0;
+  // Before the first tide there is nothing paid to report, so the card counts down to it instead.
+  const firstTide = !!st && v("tides") === 0;
   return (
     <section id="coin" className="band band-paper" aria-labelledby="coin-title">
       <div className="wrap">
@@ -174,8 +177,10 @@ export function CoinBand() {
           </div>
           <dl className={s.tideNums} aria-live="polite">
             <div><dt>In the vault now</dt><dd className="num">{st ? near(vault, 4) : "—"} <small>NEAR</small></dd></div>
-            <div><dt>Next tide</dt><dd className="num">{ready ? `${int(tideIn)} gens` : "—"}</dd><p>about {tideMinutes} minutes</p></div>
-            <div><dt>Paid at {st ? `${int(v("tides"))} ${v("tides") === 1 ? "tide" : "tides"}` : "tides"} so far</dt><dd className="num">{st ? near(v("near_tides"), 4) : "—"} <small>NEAR</small></dd></div>
+            <div><dt>{firstTide ? "First tide in" : "Next tide"}</dt><dd className="num">{ready ? `${int(tideIn)} gens` : "—"}</dd><p>about {tideMinutes} minutes{firstTide ? "; nothing paid out yet" : ""}</p></div>
+            {!firstTide && (
+              <div><dt>Paid at {st ? `${int(v("tides"))} ${v("tides") === 1 ? "tide" : "tides"}` : "tides"} so far</dt><dd className="num">{st ? near(v("near_tides"), 4) : "—"} <small>NEAR</small></dd></div>
+            )}
             <div><dt>One PETRI from the agar</dt><dd className="num">{ready ? near(petriPrice, 6) : "—"} <small>NEAR</small></dd></div>
             <div><dt>The agar buys back, until the next tide</dt><dd className="num">{st ? near(Number(st.sell_left), 4) : "—"} <small>NEAR</small></dd><p>at half the curve&rsquo;s price</p></div>
           </dl>
@@ -192,6 +197,7 @@ export function CoinBand() {
               <b className="num">{ready ? petri(perCell, 4) : "—"}</b> a generation. So planting only pays if your cells live
               longer than two hours, and the dish decides that, not the price.
             </p>
+            <WarmUp tone="paper" className={s.warm} />
             <Link className="btn btn-ink btn-small" href="/rules#coin">Read the full economics</Link>
           </div>
           {rules && ready && (

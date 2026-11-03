@@ -6,9 +6,10 @@ export const LAUNCH: Rules = {
   height: 128,
   generation_ms: "15000",
   max_supply: "1000000000000",
-  feed_ppm: 10,
+  feed_ppm: 3,
   keeper_bps: 200,
-  reach: 4,
+  reach: 8,
+  stake_keep_bps: 8750,
   burn_bps: 5000,
   payback: 480,
   min_cell_price: "500000",
@@ -26,6 +27,7 @@ export const LAUNCH: Rules = {
   buffer: 3,
   max_plant_cells: 64,
   max_catchup: 120,
+  max_lag: 480,
   house: ["petri-violet.testnet", "petri-safranin.testnet", "petri-methylene.testnet", "petri-malachite.testnet", "petri-congo.testnet"],
 };
 
@@ -48,7 +50,7 @@ export function genTime(gens: number, generationMs: number): string {
 
 /**
  * A colony's claim on the feed, as the contract computes it (`feed_weight` in petri-core): its living cells, but never
- * more than `reach` cells for every cell it has ever planted. House colonies are never fed, so they weigh nothing.
+ * more than `reach` cells per cell of stake (cells planted, decayed at every tide). House colonies are never fed.
  */
 export function weightOf(live: number, planted: number, reach: number, house = false): number {
   return house ? 0 : Math.min(live, planted * reach);

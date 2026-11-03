@@ -20,7 +20,7 @@ import { CONTRACT, RPC_URLS } from "@/lib/config";
 export const runtime = "nodejs";
 
 /** The dish's methods a guest may call through the relayer. None may attach NEAR. */
-const ALLOWED = new Set(["join", "buy", "plant", "sell", "claim", "advance"]);
+const ALLOWED = new Set(["join", "buy", "plant", "sell", "claim", "advance", "set_payout"]);
 const MAX_GAS = 250n * 10n ** 12n;
 const PER_ACCOUNT_PER_MIN = 6;
 /** Nonces this instance has relayed recently, so two copies of one action sent at once are paid for only once. */
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
   if (!guest.test(da.senderId)) return bad("Only Petri guest accounts are relayed; wallet accounts pay their own gas.", 403);
   if (da.actions.length !== 1) return bad("Relay one call at a time.");
   const fc = da.actions[0].functionCall;
-  if (!fc || !ALLOWED.has(fc.methodName)) return bad("Only join, buy, plant, sell, claim and advance are relayed.");
+  if (!fc || !ALLOWED.has(fc.methodName)) return bad("Only join, buy, plant, sell, claim, advance and set_payout are relayed.");
   if (BigInt(fc.deposit) !== 0n) return bad("Relayed calls carry no NEAR; guests pay from their sponsored credit.");
   if (BigInt(fc.gas) > MAX_GAS) return bad("Too much gas requested.");
 

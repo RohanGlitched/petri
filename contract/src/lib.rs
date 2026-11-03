@@ -6,23 +6,24 @@
 //!
 //! The economy:
 //! - All PETRI is minted once into the agar (the contract's own reserve). The agar sells PETRI for NEAR at a price
-//!   that rises as it empties, feeds a share of itself to living cells every generation, and buys PETRI back at half
-//!   the curve's price, up to a tenth of the vault each tide.
-//! - Planting costs PETRI at a price that tracks what a cell earns (`siege_x` times that inside a rival's buffer); half is
-//!   burned, half goes back to the agar.
-//! - A colony is paid for at most `reach` living cells per cell it has planted, so splitting into many colonies never
-//!   earns more.
-//! - NEAR paid in (purchases and planting fees, minus the storage they use) collects in the tide vault. Every
-//!   `tide_every` generations part of the vault is paid out by what each colony earned since the last tide. The
-//!   dish's own colonies (the house) take no share, and the caller whose transaction runs the tide gets a bounty.
-//! - Every NEAR and PETRI movement that the replay needs is in one ordered ledger.
-//! - A sponsor (the site's relayer, for guests) can give an account NEAR credit that can only be spent in the dish.
+//!   that rises as it empties, feeds a share of itself to living cells every generation (releasing it for at least
+//!   `live_floor` counted cells), and buys PETRI back at half the curve's price, never above its share of the vault.
+//! - Planting costs PETRI at a price that tracks what a cell earns (`siege_x` times that inside a rival's buffer); half
+//!   is burned, half goes back to the agar. Planting also adds stake, which decays every tide.
+//! - A colony is paid for at most `reach` living cells per cell of stake, so splitting into many colonies never earns
+//!   more and holding ground means planting again now and then.
+//! - NEAR players attach collects in the tide vault; NEAR from sponsored credit collects in a separate credit pool.
+//!   Every `tide_every` generations part of each is paid out by what each colony earned since the last tide: the vault
+//!   in NEAR, the credit pool as credit, so sponsored NEAR never turns into NEAR anyone can withdraw. The dish's own
+//!   colonies (the house) are never fed and take no share; the caller whose transaction runs a tide gets a bounty.
+//! - If nobody tends the dish for `max_lag` generations, the clock skips ahead instead of piling up work.
+//! - Every NEAR and PETRI movement the replay needs is in one ordered ledger.
 
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde_json::json;
 use near_sdk::store::{LookupMap, LookupSet, Vector};
 use near_sdk::{env, log, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue};
-use petri_core::{chain_due, chain_next, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, tide_split, Dish, PlantError};
+use petri_core::{chain_due, chain_next, decay_stake, feed_per_cell, feed_sparse, petri_for_near, planting_cost, sell_back, tide_split, Dish, PlantError, STAKE_UNIT};
 
 mod token;
 
@@ -31,8 +32,8 @@ const BOARD_KEY: &[u8] = b"board";
 const EARNED_KEY: &[u8] = b"u";
 /// NEAR owed from tides by colony (u128 each).
 const TIDES_KEY: &[u8] = b"t";
-/// Cells each colony has ever planted (u64 each): the base of its pay cap.
-const PLANTED_KEY: &[u8] = b"p";
+/// Each colony's stake in thousandths of a planted cell (u64 each): the base of its pay cap.
+const STAKE_KEY: &[u8] = b"p";
 /// Earnings since the last tide by colony (u64 each): the tide's weights.
 const WINDOW_KEY: &[u8] = b"w";
 const MAX_NAME_BYTES: usize = 24;
@@ -42,10 +43,18 @@ const MAX_NOTE_CHARS: usize = 140;
 const NOTE_PREFIX: &[u8] = b"n";
 const MAX_HOUSE: usize = 16;
 /// Storage a planting is charged for beyond its cells and note: the ledger entry's fixed part and the colony update.
-const PLANT_STORAGE_BASE: u64 = 200;
-/// A catch-up stops stepping once the call has used this much gas, so no call can be pushed past NEAR's limit.
+const PLANT_STORAGE_BASE: u64 = 220;
+/// A catch-up stops stepping once the call has used this much gas (or its prepaid gas less `GAS_RESERVE`).
 const CATCHUP_GAS_LIMIT: Gas = Gas::from_tgas(180);
-const GAS_FOR_PAYOUT_CHECK: Gas = Gas::from_tgas(5);
+const GAS_RESERVE: Gas = Gas::from_tgas(40);
+const GAS_FOR_PAYOUT_CHECK: Gas = Gas::from_tgas(15);
+/// A sponsor may take back credit an account has not used for this many generations (a day at 15 s).
+const RECLAIM_AFTER: u64 = 5_760;
+
+/// What a NEAR payout was for, so a failed transfer is put back in the right place.
+const PAYOUT_CLAIM: u8 = 0;
+const PAYOUT_SALE: u8 = 1;
+const PAYOUT_BOUNTY: u8 = 2;
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
@@ -59,8 +68,10 @@ pub struct Rules {
     pub feed_ppm: u32,
     /// Share of each generation's feed set aside in the keeper pot, paid to whoever calls `advance`.
     pub keeper_bps: u16,
-    /// A colony is paid for at most this many living cells per cell it has ever planted.
+    /// A colony is paid for at most this many living cells per cell of stake.
     pub reach: u32,
+    /// Share of a colony's stake that remains after each tide.
+    pub stake_keep_bps: u16,
     /// Share of a planting's cost that is burned; the rest goes back into the agar.
     pub burn_bps: u16,
     /// A cell costs what an average cell earns in this many generations at today's feed.
@@ -74,10 +85,10 @@ pub struct Rules {
     pub petri_price: U128,
     /// The least NEAR a colony brings when it joins (it buys PETRI and pays for the colony's storage).
     pub min_join: U128,
-    /// NEAR per planted cell, on top of the storage the planting uses. It goes to the tide vault.
+    /// NEAR per planted cell, on top of the storage the planting uses. It goes to the tide vault or the credit pool.
     pub cell_fee: U128,
     pub tide_every: u32,
-    /// Share of the vault paid out at each tide.
+    /// Share of the vault and of the credit pool paid out at each tide.
     pub tide_bps: u16,
     /// Share of each tide paid in NEAR to the caller whose transaction runs it, up to `max_bounty`.
     pub tide_bounty_bps: u16,
@@ -91,6 +102,8 @@ pub struct Rules {
     pub buffer: u16,
     pub max_plant_cells: u32,
     pub max_catchup: u32,
+    /// When the stored dish is this many generations behind the clock, the clock skips ahead to `max_catchup` behind.
+    pub max_lag: u32,
     /// The dish's own players (the keeper's strains). They play like anyone, but they are never fed and take no share
     /// of the tides: every PETRI they plant with, they buy with NEAR, and that NEAR goes to the other players.
     pub house: Vec<AccountId>,
@@ -104,8 +117,10 @@ pub struct Colony {
     pub name: String,
     /// 0xRRGGBB
     pub color: u32,
-    /// One of the dish's own players: no share of the tides.
+    /// One of the dish's own players: never fed, no share of the tides.
     pub house: bool,
+    /// Where NEAR payouts go (tide winnings and sales), if not to the colony's own account.
+    pub payout: Option<AccountId>,
     pub joined_generation: U64,
     pub last_plant_generation: Option<U64>,
     pub cells_planted: U64,
@@ -122,24 +137,42 @@ pub struct Colony {
     pub near_claimed: U128,
     /// NEAR received for PETRI sold back.
     pub near_sold: U128,
+    /// Credit won at the tides from the credit pool.
+    pub credit_won: U128,
 }
 
-/// One entry of the ledger: everything that changes the dish, the agar or the vault, in order. Replaying it
-/// reproduces all three.
+/// Sponsored NEAR an account can spend only in the dish.
+#[near(serializers = [json, borsh])]
+#[derive(Clone, Debug)]
+pub struct Credit {
+    pub amount: U128,
+    /// Who sponsored it last; only they may take back credit left unused.
+    pub sponsor: AccountId,
+    /// When the credit was last given or used, in generations of the clock (stored generations plus skipped ones).
+    pub at: U64,
+}
+
+/// One entry of the ledger: everything that changes the dish, the agar, the vault or the credit pool, in order.
+/// Replaying it reproduces all four.
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
 pub enum Entry {
     Join { generation: U64, colony: u16 },
-    /// `near` is what reached the vault (after this entry's storage).
-    Buy { generation: U64, colony: u16, petri: U128, near: U128 },
-    /// `near` is what reached the vault (after the planting's storage). `siege` marks a planting inside a rival's buffer.
-    /// Cells are flat indices; a dish has at most 65,536 cells, so each fits in 16 bits.
-    Plant { generation: U64, colony: u16, cells: Vec<u16>, cost: U128, near: U128, siege: bool },
+    /// `near` reached the vault and `credit` the credit pool, after this entry's storage.
+    Buy { generation: U64, colony: u16, petri: U128, near: U128, credit: U128 },
+    /// `near` reached the vault and `credit` the credit pool, after the planting's storage. `siege` marks a planting
+    /// inside a rival's buffer. Cells are flat indices; a dish has at most 65,536 cells, so each fits in 16 bits.
+    Plant { generation: U64, colony: u16, cells: Vec<u16>, cost: U128, near: U128, credit: U128, siege: bool },
     /// `near` left the vault: `paid` to the seller and the rest for this entry's storage.
     Sell { generation: U64, colony: u16, petri: U128, near: U128, paid: U128 },
     /// Every `tide_every` generations: the history chain at that generation, and the tide. `pay` is the vault's share
     /// for this tide; `bounty` went to the caller, `storage` paid for this entry, and `paid` was split between colonies.
-    Tide { generation: U64, chain: String, pay: U128, bounty: U128, storage: U128, paid: U128 },
+    /// `credit_pay` is the credit pool's share and `credit_paid` what colonies received of it as credit.
+    Tide { generation: U64, chain: String, pay: U128, bounty: U128, storage: U128, paid: U128, credit_pay: U128, credit_paid: U128 },
+    /// Nobody tended the dish for `max_lag` generations; the clock skipped `skipped` generations at this one.
+    Skip { generation: U64, skipped: U64 },
+    /// A sale or bounty payout could not be delivered; its NEAR went back to the vault.
+    Refund { generation: U64, colony: u16, near: U128 },
 }
 
 /// A planting as the `plants` view returns it, with its index in the ledger and its lab note if it has one.
@@ -166,6 +199,19 @@ pub struct Checkpoint {
 pub struct Claimable {
     pub petri: U128,
     pub near: U128,
+}
+
+/// What the contract holds in NEAR against what it owes. `surplus` is never negative while the books are right.
+#[near(serializers = [json])]
+pub struct Solvency {
+    pub balance: U128,
+    pub storage: U128,
+    pub vault: U128,
+    pub credit_pool: U128,
+    pub credit_outstanding: U128,
+    pub tides_owed: U128,
+    pub surplus: U128,
+    pub solvent: bool,
 }
 
 #[near(serializers = [json])]
@@ -200,12 +246,20 @@ pub struct DishState {
     pub near_tides: U128,
     pub near_bounties: U128,
     pub near_sold: U128,
+    pub near_refunded: U128,
+    /// NEAR tide winnings not yet claimed.
+    pub tides_owed: U128,
     /// NEAR the agar may still pay for PETRI before the next tide.
     pub sell_left: U128,
-    /// Sponsored NEAR credit given and spent, across all accounts.
+    /// Sponsored NEAR waiting in the credit pool, and the totals that moved through credit.
+    pub credit_pool: U128,
+    pub credit_in: U128,
     pub credit_given: U128,
     pub credit_spent: U128,
+    pub credit_won: U128,
+    pub credit_reclaimed: U128,
     pub tides: U64,
+    pub skipped: U64,
     pub house: Vec<u16>,
     /// What one cell costs to plant right now, in PETRI units.
     pub cell_price: U128,
@@ -231,7 +285,7 @@ pub struct Petri {
     plant_index: Vector<u64>,
     tide_index: Vector<u64>,
     balances: LookupMap<AccountId, u128>,
-    credits: LookupMap<AccountId, u128>,
+    credits: LookupMap<AccountId, Credit>,
     house: Vec<u16>,
     /// PETRI still in the agar (held by the contract itself).
     agar: u128,
@@ -248,10 +302,17 @@ pub struct Petri {
     near_tides: u128,
     near_bounties: u128,
     near_sold: u128,
+    near_refunded: u128,
+    tides_owed: u128,
     sell_left: u128,
+    credit_pool: u128,
+    credit_in: u128,
     credit_given: u128,
     credit_spent: u128,
+    credit_won: u128,
+    credit_reclaimed: u128,
     tides: u64,
+    skipped: u64,
 }
 
 #[near]
@@ -261,16 +322,17 @@ impl Petri {
         require!(rules.width >= 16 && rules.height >= 16, "dish too small");
         require!((rules.width as u32) * (rules.height as u32) <= 65_536, "dish too large");
         require!(rules.generation_ms.0 >= 1_000, "generations must be at least a second apart");
-        for bps in [rules.keeper_bps, rules.burn_bps, rules.tide_bps, rules.tide_bounty_bps, rules.sell_bps, rules.sell_cap_bps] {
+        for bps in [rules.keeper_bps, rules.burn_bps, rules.tide_bps, rules.tide_bounty_bps, rules.sell_bps, rules.sell_cap_bps, rules.stake_keep_bps] {
             require!(bps <= 10_000, "a share is above 100%");
         }
         require!(rules.feed_ppm <= 1_000_000, "feed above 100% per generation");
         require!(rules.max_catchup >= 1 && rules.tide_every >= 1 && rules.reach >= 1 && rules.siege_x >= 1, "max_catchup, tide_every, reach and siege_x must be at least 1");
+        require!(rules.max_lag > rules.max_catchup, "max_lag must exceed max_catchup");
         require!(rules.petri_price.0 > 0, "PETRI needs a price");
         require!(rules.house.len() <= MAX_HOUSE, "too many house accounts");
         let dish = Dish::new(rules.width, rules.height);
         env::storage_write(BOARD_KEY, &dish.to_compact());
-        for key in [EARNED_KEY, TIDES_KEY, PLANTED_KEY, WINDOW_KEY] {
+        for key in [EARNED_KEY, TIDES_KEY, STAKE_KEY, WINDOW_KEY] {
             env::storage_write(key, &[]);
         }
         let this = Self {
@@ -304,10 +366,17 @@ impl Petri {
             near_tides: 0,
             near_bounties: 0,
             near_sold: 0,
+            near_refunded: 0,
+            tides_owed: 0,
             sell_left: 0,
+            credit_pool: 0,
+            credit_in: 0,
             credit_given: 0,
             credit_spent: 0,
+            credit_won: 0,
+            credit_reclaimed: 0,
             tides: 0,
+            skipped: 0,
         };
         token::emit_mint(&env::current_account_id(), this.agar, "launch: every PETRI starts in the agar");
         this
@@ -316,27 +385,44 @@ impl Petri {
     // ---------- the dish ----------
 
     /// Give `account_id` the attached NEAR as credit it can spend only in the dish (joining, buying, planting). It can
-    /// never be withdrawn. The site's relayer sponsors its guests this way, so it never has to attach deposits to
-    /// calls it relays.
+    /// never be withdrawn by the account; the sponsor may take back credit left unused for a day (`unsponsor`). The
+    /// site's relayer sponsors its guests this way, so it never has to attach deposits to calls it relays.
     #[payable]
     pub fn sponsor(&mut self, account_id: AccountId) -> U128 {
         let deposit = env::attached_deposit().as_yoctonear();
+        let sponsor = env::predecessor_account_id();
         let before = env::storage_usage();
-        let had = self.credits.get(&account_id).copied();
-        self.credits.insert(account_id.clone(), had.unwrap_or(0));
+        let had = self.credits.get(&account_id).map(|c| c.amount.0);
+        self.credits.insert(account_id.clone(), Credit { amount: U128(had.unwrap_or(0)), sponsor: sponsor.clone(), at: U64(self.clock()) });
         self.credits.flush();
         let storage = self.storage_cost_since(before);
         require!(deposit > storage, format!("sponsoring needs more than the {} NEAR its record costs", fmt_near(storage)));
-        let credit = had.unwrap_or(0) + deposit - storage;
-        self.credits.insert(account_id.clone(), credit);
+        let amount = had.unwrap_or(0) + deposit - storage;
+        self.credits.insert(account_id.clone(), Credit { amount: U128(amount), sponsor: sponsor.clone(), at: U64(self.clock()) });
         self.credit_given += deposit - storage;
-        emit("sponsor", json!({ "account": account_id, "sponsor": env::predecessor_account_id(), "near": U128(deposit - storage) }));
-        U128(credit)
+        emit("sponsor", json!({ "account": account_id, "sponsor": sponsor, "near": U128(deposit - storage) }));
+        U128(amount)
+    }
+
+    /// Take back credit `account_id` has left unused for `RECLAIM_AFTER` generations. Only its sponsor may.
+    pub fn unsponsor(&mut self, account_id: AccountId) -> U128 {
+        let caller = env::predecessor_account_id();
+        let c = self.credits.get(&account_id).cloned().unwrap_or_else(|| env::panic_str("that account has no credit"));
+        require!(c.sponsor == caller, "only the account's sponsor can take its credit back");
+        self.catch_up(self.rules.max_catchup as u64);
+        require!(self.clock() >= c.at.0 + RECLAIM_AFTER, "the credit was used in the last day");
+        self.credits.remove(&account_id);
+        self.credit_reclaimed += c.amount.0;
+        emit("unsponsor", json!({ "account": account_id, "sponsor": caller, "near": c.amount }));
+        if c.amount.0 > 0 {
+            let _ = Promise::new(caller).transfer(NearToken::from_yoctonear(c.amount.0));
+        }
+        c.amount
     }
 
     /// Join the dish as a colony, once per account. The NEAR it brings (the attached deposit plus `credit` from its
-    /// sponsored credit) pays for the colony's storage and the rest buys PETRI from the agar; that NEAR goes to the
-    /// tide vault.
+    /// sponsored credit) pays for the colony's storage and the rest buys PETRI from the agar; attached NEAR goes to the
+    /// tide vault and credit to the credit pool.
     #[payable]
     pub fn join(&mut self, name: String, color: u32, credit: Option<U128>) -> Colony {
         let account = caller();
@@ -346,7 +432,8 @@ impl Petri {
         require!(!self.names.contains(&key), "a colony with that name already exists");
         require!(color <= 0xFF_FF_FF, "color must be 0xRRGGBB");
         require!(self.colonies.len() < u16::MAX as u32 - 1, "the dish is full of colonies");
-        let deposit = self.take_near(&account, credit);
+        let (attached, from_credit) = self.take_near(&account, credit);
+        let deposit = attached + from_credit;
         require!(deposit >= self.rules.min_join.0, format!("joining needs at least {} NEAR", fmt_near(self.rules.min_join.0)));
         self.catch_up(self.rules.max_catchup as u64);
         let before = env::storage_usage();
@@ -358,6 +445,7 @@ impl Petri {
             name: name.clone(),
             color,
             house,
+            payout: None,
             joined_generation: U64(self.generation),
             last_plant_generation: None,
             cells_planted: U64(0),
@@ -368,6 +456,7 @@ impl Petri {
             near_paid: U128(deposit),
             near_claimed: U128(0),
             near_sold: U128(0),
+            credit_won: U128(0),
         };
         self.colonies.push(colony);
         self.colony_of.insert(account.clone(), id);
@@ -379,7 +468,7 @@ impl Petri {
             self.balances.insert(account.clone(), 0);
         }
         self.ledger.push(Entry::Join { generation: U64(self.generation), colony: id });
-        for key in [EARNED_KEY, PLANTED_KEY, WINDOW_KEY] {
+        for key in [EARNED_KEY, STAKE_KEY, WINDOW_KEY] {
             let mut v = self.load_u64s(key);
             v.push(0);
             self.store_u64s(key, &v);
@@ -389,41 +478,43 @@ impl Petri {
         self.store_u128s(TIDES_KEY, &tides);
         self.flush();
         // The purchase below adds one more ledger entry; charge for it up front.
-        let storage = self.storage_cost_since(before) + 110 * env::storage_byte_cost().as_yoctonear();
+        let storage = self.storage_cost_since(before) + 140 * env::storage_byte_cost().as_yoctonear();
         require!(deposit > storage, format!("joining needs more than the {} NEAR its storage costs", fmt_near(storage)));
-        let bought = self.sell_petri(id, &account, deposit - storage);
+        let (near, cred) = split_after_storage(attached, from_credit, storage);
+        let bought = self.sell_petri(id, &account, near, cred);
         emit("join", json!({ "colony": id, "account": account, "name": name, "color": color, "house": house, "generation": U64(self.generation), "petri": U128(bought) }));
         self.colony(id)
     }
 
     /// Buy PETRI from the agar with the attached NEAR plus `credit` from sponsored credit. The price rises as the agar
-    /// empties; the NEAR goes to the tide vault, less the storage of the purchase's ledger entry.
+    /// empties; the NEAR goes to the tide vault and the credit to the credit pool, less the purchase record's storage.
     #[payable]
     pub fn buy(&mut self, credit: Option<U128>) -> U128 {
         let account = caller();
         let id = self.colony_id(&account);
-        let deposit = self.take_near(&account, credit);
-        require!(deposit > 0, "attach NEAR to buy PETRI");
+        let (attached, from_credit) = self.take_near(&account, credit);
+        let deposit = attached + from_credit;
+        // The purchase's ledger entry is charged to the buyer: about 140 bytes.
+        let storage = 140 * env::storage_byte_cost().as_yoctonear();
+        require!(deposit > storage, format!("a purchase needs more than the {} NEAR its record costs", fmt_near(storage)));
         self.catch_up(self.rules.max_catchup as u64);
         let mut c = self.colony(id);
         c.near_paid = U128(c.near_paid.0 + deposit);
         self.colonies.set(id as u32 - 1, c);
-        // The purchase's ledger entry is charged to the buyer: about 100 bytes.
-        let storage = 110 * env::storage_byte_cost().as_yoctonear();
-        require!(deposit > storage, format!("a purchase needs more than the {} NEAR its record costs", fmt_near(storage)));
-        U128(self.sell_petri(id, &account, deposit - storage))
+        let (near, cred) = split_after_storage(attached, from_credit, storage);
+        U128(self.sell_petri(id, &account, near, cred))
     }
 
-    /// Sell `petri` units back to the agar for NEAR from the vault, at `sell_bps` of the curve's price. Between two
-    /// tides the agar buys back at most `sell_cap_bps` of the vault, first come first served.
+    /// Sell `petri` units back to the agar for NEAR from the vault, at `sell_bps` of the curve's price and never more
+    /// than those units' share of the vault. Between two tides the agar buys back at most `sell_cap_bps` of the vault.
     pub fn sell(&mut self, petri: U128) -> U128 {
         let account = caller();
         let id = self.colony_id(&account);
-        self.catch_up(self.rules.max_catchup as u64);
         let units = petri.0;
         require!(units > 0, "sell at least some PETRI");
         let held = self.balance(&account);
         require!(held >= units, format!("you hold {} PETRI", fmt_petri(held)));
+        self.catch_up(self.rules.max_catchup as u64);
         let near = self.sell_quote(petri).0;
         require!(near > 0, "that is too little PETRI to buy back");
         require!(near <= self.sell_left, format!("the agar buys back at most {} NEAR more before the next tide", fmt_near(self.sell_left)));
@@ -433,12 +524,12 @@ impl Petri {
         self.bought_back += units;
         token::emit_transfer_pub(&account, &env::current_account_id(), units, "sold back to the agar");
         let index = self.ledger.len() as u32;
-        self.ledger.push(Entry::Sell { generation: U64(self.generation), colony: id, petri: petri, near: U128(near), paid: U128(0) });
+        self.ledger.push(Entry::Sell { generation: U64(self.generation), colony: id, petri, near: U128(near), paid: U128(0) });
         self.flush();
         let storage = self.storage_cost_since(before);
         require!(near > storage, "that is too little PETRI to cover the sale's record");
         let paid = near - storage;
-        self.ledger.set(index, Entry::Sell { generation: U64(self.generation), colony: id, petri: petri, near: U128(near), paid: U128(paid) });
+        self.ledger.set(index, Entry::Sell { generation: U64(self.generation), colony: id, petri, near: U128(near), paid: U128(paid) });
         self.ledger.flush();
         self.vault -= near;
         self.sell_left -= near;
@@ -446,22 +537,30 @@ impl Petri {
         let mut c = self.colony(id);
         c.petri_sold = U128(c.petri_sold.0 + units);
         c.near_sold = U128(c.near_sold.0 + paid);
+        let to = c.payout.clone().unwrap_or(account.clone());
         self.colonies.set(id as u32 - 1, c);
         emit("sell", json!({ "colony": id, "petri": petri, "near": U128(paid) }));
-        self.pay_out(&account, id, paid);
+        self.pay_out(&to, id, paid, PAYOUT_SALE);
         U128(paid)
     }
 
     /// Bring cells to life. `cells` are flat indices (`y * width + x`). `note` is an optional lab note (up to 140
     /// characters) stored with the planting. Bring NEAR for the storage the planting uses plus `cell_fee` per cell
-    /// (see `plant_deposit`), attached or from sponsored `credit`; anything above the storage goes to the tide vault.
-    /// A planting with a cell inside a rival's buffer is a siege and costs `siege_x` times the price.
+    /// (see `plant_deposit`), attached or from sponsored `credit`; what is left after storage goes to the vault or the
+    /// credit pool. A planting with a cell inside a rival's buffer is a siege and costs `siege_x` times the price.
     #[payable]
     pub fn plant(&mut self, cells: Vec<u32>, note: Option<String>, credit: Option<U128>) -> U64 {
         let account = caller();
         let note = note.map(|n| clean_note(&n)).filter(|n| !n.is_empty());
         let id = self.colony_id(&account);
-        let deposit = self.take_near(&account, credit);
+        // Cheap checks first, so a planting that cannot succeed fails before it pays for any catch-up.
+        require!(!cells.is_empty() && cells.len() as u32 <= self.rules.max_plant_cells, format!("plant 1 to {} cells", self.rules.max_plant_cells));
+        let size = self.rules.width as u32 * self.rules.height as u32;
+        require!(cells.iter().all(|&c| c < size), "a cell is off the dish");
+        let fee = self.rules.cell_fee.0 * cells.len() as u128;
+        let (attached, from_credit) = self.take_near(&account, credit);
+        let deposit = attached + from_credit;
+        require!(deposit >= fee, format!("planting {} cells needs at least {} NEAR", cells.len(), fmt_near(self.plant_deposit(cells.len() as u32, note.as_ref().map(|n| n.len() as u32)).0)));
         self.catch_up(self.rules.max_catchup as u64);
         require!(self.generation == self.due_generation(), "the dish is behind the clock; call advance first");
         // Earnings waiting for this colony count towards the price.
@@ -471,12 +570,10 @@ impl Petri {
             require!(last.0 < self.generation, "one planting per generation; wait for the next one");
         }
         let mut dish = self.load_dish();
-        let check = match dish.check_plant(id, &cells, self.rules.buffer, self.rules.max_plant_cells) {
+        let check = match dish.check_plant(id, &cells, self.rules.buffer, self.rules.max_plant_cells, &self.house) {
             Ok(c) => c,
             Err(e) => env::panic_str(&plant_error_text(&dish, e)),
         };
-        let fee = self.rules.cell_fee.0 * cells.len() as u128;
-        require!(deposit >= fee, format!("planting {} cells needs at least {} NEAR", cells.len(), fmt_near(self.plant_deposit(cells.len() as u32, note.as_ref().map(|n| n.len() as u32)).0)));
         let cost = self.cell_cost(cells.len() as u32, check.siege);
         let balance = self.balance(&account);
         require!(balance >= cost, format!("planting {} cells{} costs {} PETRI; you hold {}", cells.len(), if check.siege { " inside a rival's buffer" } else { "" }, fmt_petri(cost), fmt_petri(balance)));
@@ -494,9 +591,9 @@ impl Petri {
         dish.plant_unchecked(id, &cells);
         self.store_dish(&dish);
         self.total_live += cells.len() as u32;
-        let mut planted = self.load_u64s(PLANTED_KEY);
-        planted[id as usize] += cells.len() as u64;
-        self.store_u64s(PLANTED_KEY, &planted);
+        let mut stake = self.load_u64s(STAKE_KEY);
+        stake[id as usize] += cells.len() as u64 * STAKE_UNIT;
+        self.store_u64s(STAKE_KEY, &stake);
         colony.last_plant_generation = Some(U64(self.generation));
         colony.cells_planted = U64(colony.cells_planted.0 + cells.len() as u64);
         colony.petri_spent = U128(colony.petri_spent.0 + cost);
@@ -507,19 +604,22 @@ impl Petri {
             env::storage_write(&note_key(index), n.as_bytes());
         }
         let short: Vec<u16> = cells.iter().map(|&c| c as u16).collect();
-        // The vault's share is fixed once the storage is known; the entry has the same size either way.
-        self.ledger.push(Entry::Plant { generation: U64(self.generation), colony: id, cells: short.clone(), cost: U128(cost), near: U128(0), siege: check.siege });
+        let zero = U128(0);
+        // The pools' shares are fixed once the storage is known; the entry has the same size either way.
+        self.ledger.push(Entry::Plant { generation: U64(self.generation), colony: id, cells: short.clone(), cost: U128(cost), near: zero, credit: zero, siege: check.siege });
         self.plant_index.push(index);
         self.plant_count += 1;
         self.colonies.set(id as u32 - 1, colony);
         self.flush();
         let storage = self.storage_cost_since(before);
         require!(deposit >= storage + fee, format!("this planting needs {} NEAR for its storage and fee", fmt_near(storage + fee)));
-        let to_vault = deposit - storage;
-        self.ledger.set(index as u32, Entry::Plant { generation: U64(self.generation), colony: id, cells: short, cost: U128(cost), near: U128(to_vault), siege: check.siege });
+        let (near, cred) = split_after_storage(attached, from_credit, storage);
+        self.ledger.set(index as u32, Entry::Plant { generation: U64(self.generation), colony: id, cells: short, cost: U128(cost), near: U128(near), credit: U128(cred), siege: check.siege });
         self.ledger.flush();
-        self.vault += to_vault;
-        self.near_in += to_vault;
+        self.vault += near;
+        self.near_in += near;
+        self.credit_pool += cred;
+        self.credit_in += cred;
         emit("plant", json!({ "colony": id, "generation": U64(self.generation), "cells": cells.len(), "cost": U128(cost), "siege": check.siege, "near": U128(deposit), "note": note }));
         U64(self.generation)
     }
@@ -541,7 +641,8 @@ impl Petri {
         U64(self.generation)
     }
 
-    /// Move this colony's earnings into its balance and send it the NEAR it has won at the tides.
+    /// Move this colony's earnings into its balance and send it the NEAR it has won at the tides (to its payout
+    /// account if it set one).
     pub fn claim(&mut self) -> Claimable {
         let account = caller();
         let id = self.colony_id(&account);
@@ -552,29 +653,58 @@ impl Petri {
         if near > 0 {
             tides[id as usize] = 0;
             self.store_u128s(TIDES_KEY, &tides);
+            self.tides_owed -= near;
             let mut c = self.colony(id);
             c.near_claimed = U128(c.near_claimed.0 + near);
+            let to = c.payout.clone().unwrap_or(account.clone());
             self.colonies.set(id as u32 - 1, c);
-            self.pay_out(&account, id, near);
+            self.pay_out(&to, id, near, PAYOUT_CLAIM);
         }
         emit("claim", json!({ "colony": id, "petri": U128(petri), "near": U128(near) }));
         Claimable { petri: U128(petri), near: U128(near) }
     }
 
-    /// Resolves a NEAR payout. If the transfer failed, the NEAR is owed to the colony again and can be claimed.
+    /// Send this colony's NEAR payouts (tide winnings and sales) to `account_id` from now on, or back to the colony's
+    /// own account with `None`. A guest, whose key cannot move NEAR, uses this to collect winnings in a wallet.
+    pub fn set_payout(&mut self, account_id: Option<AccountId>) {
+        let account = caller();
+        let id = self.colony_id(&account);
+        let mut c = self.colony(id);
+        c.payout = account_id.clone();
+        self.colonies.set(id as u32 - 1, c);
+        emit("payout", json!({ "colony": id, "to": account_id }));
+    }
+
+    /// Resolves a NEAR payout. A failed tide claim is owed to the colony again; a failed sale or bounty goes back to the
+    /// vault with a `Refund` entry, so the books still close.
     #[private]
-    pub fn on_payout(&mut self, colony: u16, near: U128) {
+    pub fn on_payout(&mut self, colony: u16, near: U128, kind: u8) {
         if env::promise_results_count() == 1 && env::promise_result_checked(0, 64).is_ok() {
             return;
         }
-        let mut tides = self.load_u128s(TIDES_KEY);
-        tides[colony as usize] += near.0;
-        self.store_u128s(TIDES_KEY, &tides);
-        let mut c = self.colony(colony);
-        // Counted as unclaimed again; whatever it was for, the colony can claim it.
-        c.near_claimed = U128(c.near_claimed.0.saturating_sub(near.0));
-        self.colonies.set(colony as u32 - 1, c);
-        emit("payout_failed", json!({ "colony": colony, "near": near }));
+        if kind == PAYOUT_CLAIM {
+            let mut tides = self.load_u128s(TIDES_KEY);
+            tides[colony as usize] += near.0;
+            self.store_u128s(TIDES_KEY, &tides);
+            self.tides_owed += near.0;
+            let mut c = self.colony(colony);
+            c.near_claimed = U128(c.near_claimed.0.saturating_sub(near.0));
+            self.colonies.set(colony as u32 - 1, c);
+        } else {
+            self.vault += near.0;
+            self.near_refunded += near.0;
+            if kind == PAYOUT_SALE {
+                self.near_sold -= near.0;
+                let mut c = self.colony(colony);
+                c.near_sold = U128(c.near_sold.0.saturating_sub(near.0));
+                self.colonies.set(colony as u32 - 1, c);
+            } else {
+                self.near_bounties -= near.0;
+            }
+            self.ledger.push(Entry::Refund { generation: U64(self.generation), colony, near });
+            self.ledger.flush();
+        }
+        emit("payout_failed", json!({ "colony": colony, "near": near, "kind": kind }));
     }
 
     // ---------- views ----------
@@ -604,7 +734,31 @@ impl Petri {
     }
 
     pub fn credit_of(&self, account_id: AccountId) -> U128 {
-        U128(self.credits.get(&account_id).copied().unwrap_or(0))
+        U128(self.credits.get(&account_id).map(|c| c.amount.0).unwrap_or(0))
+    }
+
+    pub fn credit_record(&self, account_id: AccountId) -> Option<Credit> {
+        self.credits.get(&account_id).cloned()
+    }
+
+    /// The contract's NEAR against what it owes: the vault, the credit pool, unspent credit and unclaimed tide winnings
+    /// must all be covered by the balance left after storage.
+    pub fn solvency(&self) -> Solvency {
+        let balance = env::account_balance().as_yoctonear();
+        let storage = env::storage_usage() as u128 * env::storage_byte_cost().as_yoctonear();
+        let outstanding = self.credit_given + self.credit_won - self.credit_spent - self.credit_reclaimed;
+        let owed = self.vault + self.credit_pool + outstanding + self.tides_owed;
+        let free = balance.saturating_sub(storage);
+        Solvency {
+            balance: U128(balance),
+            storage: U128(storage),
+            vault: U128(self.vault),
+            credit_pool: U128(self.credit_pool),
+            credit_outstanding: U128(outstanding),
+            tides_owed: U128(self.tides_owed),
+            surplus: U128(free.saturating_sub(owed)),
+            solvent: free >= owed,
+        }
     }
 
     pub fn claimable(&self, account_id: AccountId) -> Claimable {
@@ -650,10 +804,17 @@ impl Petri {
             near_tides: U128(self.near_tides),
             near_bounties: U128(self.near_bounties),
             near_sold: U128(self.near_sold),
+            near_refunded: U128(self.near_refunded),
+            tides_owed: U128(self.tides_owed),
             sell_left: U128(self.sell_left),
+            credit_pool: U128(self.credit_pool),
+            credit_in: U128(self.credit_in),
             credit_given: U128(self.credit_given),
             credit_spent: U128(self.credit_spent),
+            credit_won: U128(self.credit_won),
+            credit_reclaimed: U128(self.credit_reclaimed),
             tides: U64(self.tides),
+            skipped: U64(self.skipped),
             house: self.house.clone(),
             cell_price: U128(self.cell_cost(1, false)),
             petri_price: U128(self.price_k() / self.agar.max(1) * 1_000_000),
@@ -674,6 +835,14 @@ impl Petri {
 
     pub fn colony_of(&self, account_id: AccountId) -> Option<Colony> {
         self.colony_of.get(&account_id).and_then(|&id| self.colonies.get(id as u32 - 1).cloned())
+    }
+
+    /// Each colony's stake in thousandths of a planted cell (index = colony id - 1), for starting a replay mid-history.
+    pub fn stakes(&self, from: Option<u32>, limit: Option<u32>) -> Vec<U64> {
+        let stake = self.load_u64s(STAKE_KEY);
+        let from = from.unwrap_or(0);
+        let limit = limit.unwrap_or(500).min(2_000);
+        (from..self.colonies.len().min(from.saturating_add(limit))).map(|i| U64(stake.get(i as usize + 1).copied().unwrap_or(0))).collect()
     }
 
     /// Each colony's earnings so far, claimed or not, in PETRI units (index = colony id - 1).
@@ -702,8 +871,9 @@ impl Petri {
             .collect()
     }
 
-    /// The ledger: every join, purchase, sale, planting and tide in order. Replaying it from an empty dish with
-    /// `petri-core` reproduces every generation, the agar, the vault and every colony's earnings.
+    /// The ledger: every join, purchase, sale, planting, tide, skip and refund in order. Replaying it from an empty
+    /// dish with `petri-core` reproduces every generation, the agar, the vault, the credit pool and every colony's
+    /// earnings and winnings.
     pub fn ledger(&self, from: Option<u64>, limit: Option<u32>) -> Vec<Entry> {
         let from = from.unwrap_or(0) as u32;
         let limit = limit.unwrap_or(200).min(1_000);
@@ -755,6 +925,11 @@ impl Petri {
 
     // ---------- internals ----------
 
+    /// Generations of wall-clock time since launch: the stored generation plus every generation the clock skipped.
+    fn clock(&self) -> u64 {
+        self.generation + self.skipped
+    }
+
     fn due_generation(&self) -> u64 {
         (env::block_timestamp_ms().saturating_sub(self.epoch_ms)) / self.rules.generation_ms.0
     }
@@ -768,38 +943,42 @@ impl Petri {
         planting_cost(per_cell, self.rules.payback, self.rules.min_cell_price.0, cells, siege, self.rules.siege_x)
     }
 
-    /// The attached deposit plus `credit` taken from the caller's sponsored credit.
-    fn take_near(&mut self, account: &AccountId, credit: Option<U128>) -> u128 {
+    /// The attached deposit and `credit` taken from the caller's sponsored credit.
+    fn take_near(&mut self, account: &AccountId, credit: Option<U128>) -> (u128, u128) {
         let attached = env::attached_deposit().as_yoctonear();
         let want = credit.map(|c| c.0).unwrap_or(0);
         if want > 0 {
-            let have = self.credits.get(account).copied().unwrap_or(0);
-            require!(have >= want, format!("this account has {} NEAR of sponsored credit", fmt_near(have)));
-            self.credits.insert(account.clone(), have - want);
+            let mut c = self.credits.get(account).cloned().unwrap_or_else(|| env::panic_str("this account has no sponsored credit"));
+            require!(c.amount.0 >= want, format!("this account has {} NEAR of sponsored credit", fmt_near(c.amount.0)));
+            c.amount = U128(c.amount.0 - want);
+            c.at = U64(self.clock());
+            self.credits.insert(account.clone(), c);
             self.credit_spent += want;
         }
-        attached + want
+        (attached, want)
     }
 
-    fn sell_petri(&mut self, id: u16, account: &AccountId, near: u128) -> u128 {
-        let units = petri_for_near(near, self.agar, self.price_k());
+    fn sell_petri(&mut self, id: u16, account: &AccountId, near: u128, credit: u128) -> u128 {
+        let units = petri_for_near(near + credit, self.agar, self.price_k());
         require!(units > 0, "that is not enough NEAR to buy any PETRI");
         self.agar -= units;
         self.sold += units;
         self.credit(account, units);
         self.vault += near;
         self.near_in += near;
-        self.ledger.push(Entry::Buy { generation: U64(self.generation), colony: id, petri: U128(units), near: U128(near) });
+        self.credit_pool += credit;
+        self.credit_in += credit;
+        self.ledger.push(Entry::Buy { generation: U64(self.generation), colony: id, petri: U128(units), near: U128(near), credit: U128(credit) });
         self.ledger.flush();
         token::emit_transfer_pub(&env::current_account_id(), account, units, "bought from the agar");
         units
     }
 
-    /// Send NEAR to a player; if the transfer fails, `on_payout` owes it to the colony again.
-    fn pay_out(&self, account: &AccountId, id: u16, near: u128) {
-        let _ = Promise::new(account.clone())
+    /// Send NEAR to a player; if the transfer fails, `on_payout` puts it back where it belongs.
+    fn pay_out(&self, to: &AccountId, id: u16, near: u128, kind: u8) {
+        let _ = Promise::new(to.clone())
             .transfer(NearToken::from_yoctonear(near))
-            .then(Self::ext(env::current_account_id()).with_static_gas(GAS_FOR_PAYOUT_CHECK).on_payout(id, U128(near)));
+            .then(Self::ext(env::current_account_id()).with_static_gas(GAS_FOR_PAYOUT_CHECK).on_payout(id, U128(near), kind));
     }
 
     fn claim_petri(&mut self, id: u16, account: &AccountId) -> u128 {
@@ -882,33 +1061,45 @@ impl Petri {
     }
 
     /// Step up to `cap` due generations: Life, the history chain, the feed (into unclaimed earnings, the tide window
-    /// and the keeper pot) and the tides. Reads and writes one record of each kind however many colonies are alive,
-    /// and stops early if the call has used `CATCHUP_GAS_LIMIT`. Tide bounties go to the caller. Returns how many
-    /// generations ran.
+    /// and the keeper pot) and the tides. Living cells are counted sparsely, so a generation costs what the living
+    /// cost, not what every colony that ever joined would. Reads and writes one record of each kind however many
+    /// colonies are alive, and stops early near the gas limit. If the dish is `max_lag` behind, the clock first skips
+    /// ahead. Tide bounties go to the caller. Returns how many generations ran.
     fn catch_up(&mut self, cap: u64) -> u64 {
-        let due = self.due_generation();
+        let mut due = self.due_generation();
+        if due > self.generation + self.rules.max_lag as u64 {
+            let skip = due - self.generation - self.rules.max_catchup as u64;
+            self.epoch_ms += skip * self.rules.generation_ms.0;
+            self.skipped += skip;
+            self.ledger.push(Entry::Skip { generation: U64(self.generation), skipped: U64(skip) });
+            self.ledger.flush();
+            emit("skip", json!({ "generation": U64(self.generation), "skipped": U64(skip) }));
+            due = self.due_generation();
+        }
         if self.generation >= due || cap == 0 {
             return 0;
         }
+        let limit = CATCHUP_GAS_LIMIT.min(env::prepaid_gas().saturating_sub(GAS_RESERVE));
         let target = due.min(self.generation + cap);
         let mut dish = self.load_dish();
-        let n = self.colonies.len() as u16;
-        let planted = self.load_u64s(PLANTED_KEY);
+        let n = self.colonies.len() as usize;
+        let mut stake = self.load_u64s(STAKE_KEY);
         let mut earned = self.load_u64s(EARNED_KEY);
         let mut window = self.load_u64s(WINDOW_KEY);
-        earned.resize(n as usize + 1, 0);
-        window.resize(n as usize + 1, 0);
+        stake.resize(n + 1, 0);
+        earned.resize(n + 1, 0);
+        window.resize(n + 1, 0);
         let mut fed = 0u128;
         let mut bounty = 0u128;
         let from = self.generation;
         while self.generation < target {
-            let stats = dish.step(n);
+            let (live, total) = dish.step_sparse();
             self.generation += 1;
             if chain_due(self.generation) {
                 self.chain = chain_next(&self.chain, self.generation, &dish.hash());
             }
-            self.total_live = stats.total_live;
-            let f = feed(self.agar, self.rules.feed_ppm, self.rules.keeper_bps, self.rules.reach, self.rules.live_floor, &stats.live, &planted, &self.house);
+            self.total_live = total;
+            let f = feed_sparse(self.agar, self.rules.feed_ppm, self.rules.keeper_bps, self.rules.reach, self.rules.live_floor, &live, &stake, &self.house);
             self.counted = f.weight;
             if f.paid > 0 {
                 for &(c, s) in &f.shares {
@@ -922,33 +1113,37 @@ impl Petri {
             }
             if self.generation % self.rules.tide_every as u64 == 0 {
                 bounty += self.tide(&mut window);
+                for s in stake.iter_mut() {
+                    *s = decay_stake(*s, self.rules.stake_keep_bps);
+                }
             }
-            if env::used_gas() > CATCHUP_GAS_LIMIT {
+            if env::used_gas() > limit {
                 break;
             }
         }
         self.store_dish(&dish);
+        self.store_u64s(STAKE_KEY, &stake);
         self.store_u64s(EARNED_KEY, &earned);
         self.store_u64s(WINDOW_KEY, &window);
         self.fed += fed;
         let ran = self.generation - from;
         emit("generation", json!({ "from": U64(from), "to": U64(self.generation), "live": self.total_live, "fed": U128(fed), "keeper_pot": U128(self.keeper_pot), "bounty": U128(bounty) }));
         if bounty > 0 {
-            let _ = Promise::new(env::predecessor_account_id()).transfer(NearToken::from_yoctonear(bounty));
+            self.pay_out(&env::predecessor_account_id(), 0, bounty, PAYOUT_BOUNTY);
         }
         ran
     }
 
-    /// One tide: record the history chain, pay `tide_bps` of the vault by the window's earnings (the bounty to the
-    /// caller, this entry's storage, the rest to colonies), reset the window and reopen the buy-back allowance.
-    /// Returns the bounty.
+    /// One tide: record the history chain; pay `tide_bps` of the vault by the window's earnings (the bounty to the
+    /// caller, this entry's storage, the rest to colonies in NEAR) and `tide_bps` of the credit pool the same way as
+    /// credit; reset the window and reopen the buy-back allowance. Returns the bounty.
     fn tide(&mut self, window: &mut [u64]) -> u128 {
         let before = env::storage_usage();
         let generation = U64(self.generation);
         let chain = hex::encode(self.chain);
         let index = self.ledger.len() as u64;
         let zero = U128(0);
-        self.ledger.push(Entry::Tide { generation, chain: chain.clone(), pay: zero, bounty: zero, storage: zero, paid: zero });
+        self.ledger.push(Entry::Tide { generation, chain: chain.clone(), pay: zero, bounty: zero, storage: zero, paid: zero, credit_pay: zero, credit_paid: zero });
         self.tide_index.push(index);
         self.ledger.flush();
         self.tide_index.flush();
@@ -964,15 +1159,30 @@ impl Petri {
                 owed[c as usize] += s;
             }
             self.store_u128s(TIDES_KEY, &owed);
+            self.tides_owed += paid;
         }
-        // Without winners nothing but the bounty and the storage leaves the vault.
+        // Without winners nothing but the storage leaves the vault.
         let bounty = if paid > 0 { bounty } else { 0 };
         let storage = if paid > 0 { storage } else { storage_cost.min(self.vault) };
         self.vault -= paid + bounty + storage;
         self.near_tides += paid;
         self.near_bounties += bounty;
+        // The credit pool pays out as credit, by the same weights.
+        let credit_pay = self.credit_pool * self.rules.tide_bps as u128 / 10_000;
+        let (csplit, credit_paid) = tide_split(credit_pay, window, &self.house);
+        for &(c, s) in &csplit {
+            let mut col = self.colony(c);
+            col.credit_won = U128(col.credit_won.0 + s);
+            let account = col.account.clone();
+            self.colonies.set(c as u32 - 1, col);
+            let mut cr = self.credits.get(&account).cloned().unwrap_or(Credit { amount: U128(0), sponsor: env::current_account_id(), at: U64(self.clock()) });
+            cr.amount = U128(cr.amount.0 + s);
+            self.credits.insert(account, cr);
+        }
+        self.credit_pool -= credit_paid;
+        self.credit_won += credit_paid;
         self.tides += 1;
-        self.ledger.set(index as u32, Entry::Tide { generation, chain, pay: U128(pay), bounty: U128(bounty), storage: U128(storage), paid: U128(paid) });
+        self.ledger.set(index as u32, Entry::Tide { generation, chain, pay: U128(pay), bounty: U128(bounty), storage: U128(storage), paid: U128(paid), credit_pay: U128(credit_pay), credit_paid: U128(credit_paid) });
         self.ledger.flush();
         window.iter_mut().for_each(|w| *w = 0);
         self.sell_left = self.vault * self.rules.sell_cap_bps as u128 / 10_000;
@@ -1005,6 +1215,12 @@ impl Petri {
     pub(crate) fn held_by_dish(&self) -> u128 {
         self.agar + self.unclaimed + self.keeper_pot
     }
+}
+
+/// Storage is paid from sponsored credit first, then from attached NEAR; returns what is left of each.
+fn split_after_storage(attached: u128, credit: u128, storage: u128) -> (u128, u128) {
+    let from_credit = storage.min(credit);
+    (attached - (storage - from_credit), credit - from_credit)
 }
 
 /// The account making the call. The contract itself never acts as a player: its own balance is the agar.
@@ -1058,7 +1274,7 @@ fn note_key(index: u64) -> Vec<u8> {
 }
 
 fn emit(event: &str, data: near_sdk::serde_json::Value) {
-    log!("EVENT_JSON:{}", json!({ "standard": "petri", "version": "3.0.0", "event": event, "data": [data] }));
+    log!("EVENT_JSON:{}", json!({ "standard": "petri", "version": "5.0.0", "event": event, "data": [data] }));
 }
 
 pub(crate) fn fmt_petri(units: u128) -> String {

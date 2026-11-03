@@ -15,8 +15,11 @@ export function useLive() {
   const rules = d.rules;
   const feed = rules ? (d.agar * rules.feed_ppm) / 1e6 : 0;
   const keeperShare = rules ? rules.keeper_bps / 10000 : 0;
-  // What one counted cell earns a generation: the agar releases its ration for at least `live_floor` cells.
-  const perCell = rules && d.counted > 0 ? (feed * (1 - keeperShare)) / Math.max(d.counted, rules.live_floor) : 0;
+  // What one counted cell earns a generation: the agar releases its ration for at least `live_floor` cells and never
+  // more per cell, so on a young dish this is still the rate a new cell would earn, not zero.
+  const perCell = rules ? (feed * (1 - keeperShare)) / Math.max(d.counted, rules.live_floor) : 0;
+  /** A young dish: fewer counted cells than the floor, so part of each ration stays in the agar. */
+  const warming = !!rules && d.counted < rules.live_floor;
   const ready = d.status === "ready";
   const colonies = useMemo(
     () => d.colonies.map((c) => ({ ...c, live: d.liveCounts[c.id] ?? 0 })).sort((a, b) => b.live - a.live),
@@ -34,6 +37,7 @@ export function useLive() {
     rules,
     palette,
     perCell,
+    warming,
     feed,
     ready,
     colonies,

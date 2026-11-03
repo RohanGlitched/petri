@@ -119,6 +119,22 @@
   font-size: 34px;
   line-height: 1.15;
 }
+/* A number on its way from NEAR: a soft sheen the width of a typical value. */
+.skel {
+  display: inline-block;
+  width: 3.4em;
+  max-width: 100%;
+  height: 0.72em;
+  border-radius: 6px;
+  vertical-align: -0.04em;
+  background: linear-gradient(90deg, rgba(243, 233, 218, 0.07) 0%, rgba(243, 233, 218, 0.16) 45%, rgba(243, 233, 218, 0.07) 90%);
+  background-size: 220% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -100% 0; }
+}
 .cue {
   margin: 18px 0 0;
   font-size: 13px;
@@ -209,12 +225,18 @@
   .lede { font-size: 16px; }
   .cue { display: none; }
   .caption, .capEnd { left: 16px; right: 16px; bottom: 24px; top: auto; translate: none; max-width: none; }
+  /* The copy fills the lower half of a phone: keep the agar under it near solid, so no bead sits behind the headline. */
+  .scrim {
+    background:
+      linear-gradient(180deg, rgba(18, 10, 5, 0.75) 0%, rgba(18, 10, 5, 0) 16%),
+      linear-gradient(0deg, rgba(18, 10, 5, 0.97) 0, rgba(18, 10, 5, 0.92) var(--copy, 55%), rgba(18, 10, 5, 0.45) calc(var(--copy, 55%) + 56px), rgba(18, 10, 5, 0) calc(var(--copy, 55%) + 140px));
+  }
 }
 @media (max-height: 760px) and (min-width: 901px) {
   .title { font-size: 56px; margin-bottom: 14px; }
   .stats dd { font-size: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .reveal, .title, .row, .stats, .loupe > * { animation: none; }
+  .reveal, .title, .row, .stats, .loupe > *, .skel { animation: none; }
   .cue::before { animation: none; }
 }

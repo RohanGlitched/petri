@@ -140,19 +140,19 @@ export function VerifyRun() {
         <div className={s.readout} aria-live="polite">
           <h2 id="run-title" className={s.genNum}>
             <span className="num">{gen.toLocaleString("en-US")}</span>
-            <small>of {target ? target.toLocaleString("en-US") : "—"} generations</small>
+            <small>of {target ? target.toLocaleString("en-US") : "—"} generations, the last one the contract stored</small>
           </h2>
           <p className={s.msg}>{msg}</p>
           {phase !== "idle" && (
             <p className={s.inputs}>
-              <span className="num">{counts.plants.toLocaleString("en-US")}</span> plantings,{" "}
-              <span className="num">{counts.colonies}</span> colonies and{" "}
-              <span className="num">{counts.checkpoints}</span> checkpoints (generation zero and every tide) read from{" "}
+              <span className="num">{counts.plants.toLocaleString("en-US")}</span> {counts.plants === 1 ? "planting" : "plantings"},{" "}
+              <span className="num">{counts.colonies}</span> {counts.colonies === 1 ? "colony" : "colonies"} and{" "}
+              <span className="num">{counts.checkpoints}</span> {counts.checkpoints === 1 ? "checkpoint" : "checkpoints"} ({counts.checkpoints === 1 ? "generation zero; no tide yet" : "generation zero and every tide"}) read from{" "}
               <a href={accountUrl(CONTRACT)}>{CONTRACT}</a> on NEAR {NETWORK}.
             </p>
           )}
           {phase === "done" && (
-            <div className={`${s.verdict} ${replayOk ? s.good : s.badV}`}>
+            <div className={`${s.verdict} ${allOk ? s.good : replayOk ? s.warnV : s.badV}`}>
               <b>{allOk ? "Everything matches." : replayOk ? "The whole history matches." : "Something differs."}</b>
               <span>
                 {replayOk
@@ -175,13 +175,14 @@ export function VerifyRun() {
           <h3 className="h3">What was checked</h3>
           <ul className={s.checks}>
             {(checks.length ? checks : PLACEHOLDER).map((c) => (
-              <li key={c.id} className={c.ok === null ? s.wait : c.ok ? s.pass : s.fail}>
-                <i aria-hidden="true">{c.ok === null ? "" : c.ok ? "✓" : "✕"}</i>
+              // The lock is a step still to come, not a mismatch, so it waits in amber rather than failing in red.
+              <li key={c.id} className={c.ok === null ? s.wait : c.ok ? s.pass : c.id === "lock" ? s.pending : s.fail}>
+                <i aria-hidden="true">{c.ok === null ? "" : c.ok ? "✓" : c.id === "lock" ? "!" : "✕"}</i>
                 <div>
                   <b>{c.label}</b>
                   <dl>
-                    <div><dt>Contract</dt><dd>{c.expected || "—"}</dd></div>
-                    <div><dt>Your browser</dt><dd>{c.got ?? "waiting for the replay"}</dd></div>
+                    <div><dt>On chain</dt><dd>{c.expected || "—"}</dd></div>
+                    <div><dt>Replay or rule</dt><dd>{c.got ?? "waiting for the replay"}</dd></div>
                   </dl>
                 </div>
               </li>

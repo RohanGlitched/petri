@@ -164,23 +164,23 @@ fn plant_rules() {
     let at = |d: &Dish, x, y| d.index(x, y) as u32;
     let free = PlantCheck { siege: false, rival: None };
     let siege = PlantCheck { siege: true, rival: Some(1) };
-    assert_eq!(d.check_plant(2, &[], 3, 64), Err(PlantError::Empty));
-    assert_eq!(d.check_plant(2, &[at(&d, 10, 10)], 3, 64), Err(PlantError::Occupied { index: at(&d, 10, 10) }));
+    assert_eq!(d.check_plant(2, &[], 3, 64, &[]), Err(PlantError::Empty));
+    assert_eq!(d.check_plant(2, &[at(&d, 10, 10)], 3, 64, &[]), Err(PlantError::Occupied { index: at(&d, 10, 10) }));
     // Within three cells of colony 1's block: allowed, as a siege.
-    assert_eq!(d.check_plant(2, &[at(&d, 14, 10)], 3, 64), Ok(siege));
-    assert_eq!(d.check_plant(2, &[at(&d, 15, 10)], 3, 64), Ok(free));
+    assert_eq!(d.check_plant(2, &[at(&d, 14, 10)], 3, 64, &[]), Ok(siege));
+    assert_eq!(d.check_plant(2, &[at(&d, 15, 10)], 3, 64, &[]), Ok(free));
     // One cell inside the buffer makes the whole planting a siege.
-    assert_eq!(d.check_plant(2, &[at(&d, 20, 20), at(&d, 14, 11)], 3, 64), Ok(siege));
+    assert_eq!(d.check_plant(2, &[at(&d, 20, 20), at(&d, 14, 11)], 3, 64, &[]), Ok(siege));
     // The owner may plant next to its own cells.
-    assert_eq!(d.check_plant(1, &[at(&d, 12, 10)], 3, 64), Ok(free));
+    assert_eq!(d.check_plant(1, &[at(&d, 12, 10)], 3, 64, &[]), Ok(free));
     // The buffer wraps across edges.
     let mut e = Dish::new(32, 32);
     place(&mut e, 1, 0, 0, patterns::BLOCK);
-    assert_eq!(e.check_plant(2, &[at(&e, 30, 30)], 3, 64), Ok(siege));
-    assert_eq!(d.check_plant(2, &[1000, 1000], 3, 64), Err(PlantError::Duplicate { index: 1000 }));
-    assert_eq!(d.check_plant(2, &[5000], 3, 64), Err(PlantError::OutOfRange { index: 5000 }));
+    assert_eq!(e.check_plant(2, &[at(&e, 30, 30)], 3, 64, &[]), Ok(siege));
+    assert_eq!(d.check_plant(2, &[1000, 1000], 3, 64, &[]), Err(PlantError::Duplicate { index: 1000 }));
+    assert_eq!(d.check_plant(2, &[5000], 3, 64, &[]), Err(PlantError::OutOfRange { index: 5000 }));
     let many: Vec<u32> = (0..65).map(|i| 600 + i).collect();
-    assert_eq!(d.check_plant(2, &many, 3, 64), Err(PlantError::TooMany { max: 64 }));
+    assert_eq!(d.check_plant(2, &many, 3, 64, &[]), Err(PlantError::TooMany { max: 64 }));
 }
 
 #[test]
@@ -263,16 +263,16 @@ proptest! {
 #[test]
 fn the_feed_is_capped_by_what_a_colony_planted() {
     // Colony 1 planted 10 cells and grew to 900: with reach 8 it is paid for at most 80. Colony 2 planted 100 and has 100.
-    assert_eq!(feed_weight(900, 10, 8), 80);
-    assert_eq!(feed_weight(100, 100, 8), 100);
-    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 900, 100], &[0, 10, 100], &[]);
+    assert_eq!(feed_weight(900, 10_000, 8), 80);
+    assert_eq!(feed_weight(100, 100_000, 8), 100);
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 900, 100], &[0, 10_000, 100_000], &[]);
     assert_eq!(f.keeper, 10_000_000 * 200 / 10_000);
     let s1 = f.shares.iter().find(|s| s.0 == 1).unwrap().1;
     let s2 = f.shares.iter().find(|s| s.0 == 2).unwrap().1;
     assert_eq!(s1 * 100 / (s1 + s2), 44, "{:?}", f.shares);
     assert!(f.paid <= 10_000_000);
     // A colony that never planted (it only received births) is paid nothing.
-    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50, 50], &[0, 0, 50], &[]);
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50, 50], &[0, 0, 50_000], &[]);
     assert_eq!(f.shares.len(), 1);
     assert_eq!(f.shares[0].0, 2);
 }
@@ -280,7 +280,7 @@ fn the_feed_is_capped_by_what_a_colony_planted() {
 proptest! {
     /// Splitting the same cells and the same plantings across any number of colonies never earns more.
     #[test]
-    fn splitting_never_earns_more(parts in proptest::collection::vec((1u32..400, 1u64..100), 1..12), rival in 1u32..2000, rival_planted in 1u64..500) {
+    fn splitting_never_earns_more(parts in proptest::collection::vec((1u32..400, 1u64..100_000), 1..12), rival in 1u32..2000, rival_planted in 1u64..500_000) {
         let reach = 8;
         let (live_sum, planted_sum) = parts.iter().fold((0u32, 0u64), |a, p| (a.0 + p.0, a.1 + p.1));
         let one = feed(1_000_000_000_000, 10, 200, reach, 1, &[0, live_sum, rival], &[0, planted_sum, rival_planted], &[]);
@@ -303,7 +303,7 @@ proptest! {
 #[test]
 fn a_quiet_dish_releases_only_the_floor_share() {
     // 4 counted cells against a floor of 1,000: the agar releases 4/1000 of its ration and keeps the rest.
-    let f = feed(1_000_000_000_000, 10, 200, 8, 1_000, &[0, 4], &[0, 4], &[]);
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1_000, &[0, 4], &[0, 4_000], &[]);
     assert_eq!(f.weight, 4);
     assert_eq!(f.paid, 10_000_000 * 4 / 1_000);
     // So a cell earns exactly what the price formula assumes.
@@ -311,17 +311,17 @@ fn a_quiet_dish_releases_only_the_floor_share() {
     let s1 = f.shares[0].1;
     assert!(s1.abs_diff(per * 4) <= 4, "{} vs {}", s1, per * 4);
     // Past the floor the whole ration is paid.
-    let g = feed(1_000_000_000_000, 10, 200, 8, 1_000, &[0, 1_500], &[0, 1_500], &[]);
+    let g = feed(1_000_000_000_000, 10, 200, 8, 1_000, &[0, 1_500], &[0, 1_500_000], &[]);
     assert_eq!(g.paid, 10_000_000 - 10_000_000 * 200 / 10_000 + 10_000_000 * 200 / 10_000);
 }
 
 #[test]
 fn the_house_is_never_fed() {
-    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50, 50], &[0, 50, 50], &[1]);
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50, 50], &[0, 50_000, 50_000], &[1]);
     assert_eq!(f.shares.len(), 1);
     assert_eq!(f.shares[0].0, 2);
     // A dish with only the house alive feeds nothing, so the agar keeps its PETRI.
-    assert_eq!(feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50], &[0, 50], &[1]).paid, 0);
+    assert_eq!(feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50], &[0, 50_000], &[1]).paid, 0);
 }
 
 #[test]
@@ -391,4 +391,47 @@ fn the_plant_price_follows_the_feed_with_a_floor() {
     assert_eq!(per, 10_000_000 * 98 / 100 / 1_000);
     assert_eq!(plant_price(per, 480, 500_000, 4), 4 * per * 480);
     assert_eq!(plant_price(0, 480, 500_000, 4), 2_000_000);
+}
+
+#[test]
+fn sparse_stepping_matches_full_stepping() {
+    let mut a = Dish::new(64, 64);
+    place(&mut a, 1, 5, 5, patterns::R_PENTOMINO);
+    place(&mut a, 3, 30, 30, patterns::GLIDER);
+    place(&mut a, 2, 50, 10, patterns::BLINKER);
+    let mut b = a.clone();
+    for _ in 0..200 {
+        let full = a.step(3);
+        let (sparse, total) = b.step_sparse();
+        assert_eq!(a, b);
+        assert_eq!(total, full.total_live);
+        let dense: Vec<(ColonyId, u32)> = full.live.iter().enumerate().skip(1).filter(|(_, &n)| n > 0).map(|(c, &n)| (c as ColonyId, n)).collect();
+        assert_eq!(sparse, dense);
+        let stake = [0u64, 9_000, 5_000, 4_000];
+        assert_eq!(
+            feed(1_000_000_000_000, 3, 200, 8, 1_000, &full.live, &stake, &[2]),
+            feed_sparse(1_000_000_000_000, 3, 200, 8, 1_000, &sparse, &stake, &[2])
+        );
+    }
+}
+
+#[test]
+fn stake_decays_tide_by_tide() {
+    assert_eq!(decay_stake(8_000, 8_750), 7_000);
+    let mut s = 4 * STAKE_UNIT;
+    for _ in 0..6 {
+        s = decay_stake(s, 8_750);
+    }
+    // After six tides a block's stake is under half: with reach 8 it is paid for at most 14 cells, then fewer.
+    assert!(s < 2 * STAKE_UNIT && feed_weight(4, s, 8) == 4);
+    assert_eq!(feed_weight(4, 400, 8), 3);
+}
+
+#[test]
+fn house_cells_never_make_a_siege() {
+    let mut d = Dish::new(32, 32);
+    place(&mut d, 1, 10, 10, patterns::BLOCK);
+    let at = d.index(14, 10) as u32;
+    assert!(d.check_plant(2, &[at], 3, 64, &[]).unwrap().siege);
+    assert!(!d.check_plant(2, &[at], 3, 64, &[1]).unwrap().siege);
 }

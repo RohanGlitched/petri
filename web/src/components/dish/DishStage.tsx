@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Culture, type CultureHandle } from "@/components/Culture";
 import { Loupe } from "@/components/site/Loupe";
 import { Specimen } from "@/components/site/Specimen";
+import { WarmUp } from "@/components/site/WarmUp";
 import { currentEngine, refreshDish } from "@/lib/dish-store";
 import { useLive, usePatternOffsets, petri, int, hex, near } from "@/lib/live";
-import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, connectWallet, createGuest, disconnectWallet, joinDish, plantCells, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
+import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, connectWallet, createGuest, disconnectWallet, joinDish, plantCells, setPayout, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
 import { buy_quote, pattern_cells, quote, sell_quote, PATTERNS, type PatternInfo, type PatternName } from "@/engine";
 import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPlantDeposit, type Colony } from "@/lib/chain";
 import { accountUrl, shortAccount, txUrl } from "@/lib/config";
@@ -55,10 +56,17 @@ function Countdown({ ms, total }: { ms: number; total: number }) {
 }
 
 export function DishStage() {
-  const { d, rules, palette, perCell, ready, colonies, w, h, secs, vault, tideIn } = useLive();
+  const { d, rules, palette, perCell, warming, ready, colonies, w, h, secs, vault, tideIn } = useLive();
   const player = usePlayer();
   const offsets = usePatternOffsets();
   const lens = useRef<CultureHandle>(null);
+  // The panels that float over the dish, measured so the opening view lands in the agar they leave uncovered.
+  const canvasBox = useRef<HTMLDivElement>(null);
+  const hudBox = useRef<HTMLDivElement>(null);
+  const warmBox = useRef<HTMLDivElement>(null);
+  const leftBox = useRef<HTMLElement>(null);
+  const rightBox = useRef<HTMLElement>(null);
+  const dockBox = useRef<HTMLElement>(null);
 
   const [me, setMe] = useState<Colony | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
@@ -286,6 +294,21 @@ export function DishStage() {
     }
   }
 
+  async function savePayout(to: string | null) {
+    setError(null);
+    setDone(null);
+    setBusy(to ? `Sending your winnings to ${to} from now on…` : "Sending your winnings back to this guest…");
+    try {
+      const r = await setPayout(to);
+      setDone({ text: to ? `Done. NEAR you win at the tides or get for sales now goes to ${to}.` : "Done. Your NEAR winnings go to this guest account again.", hash: r.hash });
+      await loadMe();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function buy() {
     setError(null);
     setDone(null);
@@ -392,13 +415,95 @@ export function DishStage() {
     setDone({ text: `A ${label} fits at ${sp.at.x}, ${sp.at.y}, ${sp.near >= 99 ? "13 or more" : sp.near} cells from the nearest rival.` });
   }
 
-  // On the first frame with cells, open on roomy agar instead of over rival buffers.
+  /** The part of the canvas no panel covers, in CSS px from the canvas's top left. */
+  function freeArea() {
+    const c = canvasBox.current?.getBoundingClientRect();
+    if (!c) return null;
+    let left = 0, right = c.width, top = 0, bottom = c.height;
+    for (const el of [hudBox.current, warmBox.current]) {
+      const r = el?.getBoundingClientRect();
+      if (r && r.height) top = Math.max(top, r.bottom - c.top + 10);
+    }
+    const desktop = window.matchMedia("(min-width: 901px)").matches;
+    const dock = dockBox.current?.getBoundingClientRect();
+    // On a desktop the cell inspector chip sits just above the dock.
+    if (dock && dock.top < c.bottom) bottom = Math.min(bottom, dock.top - c.top - (desktop ? 46 : 8));
+    if (desktop) {
+      // The side columns float over the dish only on wide screens; on phones they stack below it.
+      const l = leftBox.current?.getBoundingClientRect();
+      const r = rightBox.current?.getBoundingClientRect();
+      if (l) left = Math.max(left, l.right - c.left + 12);
+      if (r) right = Math.min(right, r.left - c.left - 12);
+    }
+    if (right - left < 160 || bottom - top < 140) return { left: 0, top: 0, right: c.width, bottom: c.height, w: c.width, h: c.height };
+    return { left, top, right, bottom, w: c.width, h: c.height };
+  }
+
+  /** Open on the living: the densest cluster of cells, fitted into the agar the panels leave free. */
+  function fitLiving(): boolean {
+    const L = lens.current;
+    const v = L?.view();
+    const cells = d.cells;
+    const area = freeArea();
+    if (!L || !v?.w || !cells || !area) return false;
+    const B = 24;
+    let best = 0;
+    let cx = 0, cy = 0;
+    for (let by = 0; by < h; by += 4)
+      for (let bx = 0; bx < w; bx += 4) {
+        let n = 0;
+        for (let y = by; y < by + B; y++) {
+          const row = (y % h) * w;
+          for (let x = bx; x < bx + B; x++) if (cells[row + (x % w)]) n++;
+        }
+        if (n > best) {
+          best = n;
+          cx = bx + B / 2;
+          cy = by + B / 2;
+        }
+      }
+    if (best === 0) return false;
+    // The cells around that window, measured from its centre across the wrapping edges; the outer 5% are left out so
+    // one stray glider does not pull the view wide.
+    const R = 40;
+    const dxs: number[] = [];
+    const dys: number[] = [];
+    for (let i = 0; i < cells.length; i++) {
+      if (!cells[i]) continue;
+      const dx = (((((i % w) - cx) % w) + w + w / 2) % w) - w / 2;
+      const dy = ((((((i / w) | 0) - cy) % h) + h + h / 2) % h) - h / 2;
+      if (Math.abs(dx) <= R && Math.abs(dy) <= R) {
+        dxs.push(dx);
+        dys.push(dy);
+      }
+    }
+    dxs.sort((a, b) => a - b);
+    dys.sort((a, b) => a - b);
+    const q = (a: number[], f: number) => a[Math.min(a.length - 1, Math.max(0, Math.round(f * (a.length - 1))))];
+    const x0 = q(dxs, 0.05), x1 = q(dxs, 0.95), y0 = q(dys, 0.05), y1 = q(dys, 0.95);
+    const midX = cx + (x0 + x1) / 2;
+    const midY = cy + (y0 + y1) / 2;
+    const dpr = v.dpr;
+    const pad = 12;
+    const fitZ = Math.min(((area.right - area.left) * dpr) / (x1 - x0 + 1 + pad), ((area.bottom - area.top) * dpr) / (y1 - y0 + 1 + pad));
+    L.centerOn(midX, midY, Math.min(v.roundFit * 5, Math.max(v.roundFit * 2, fitZ)));
+    // The view may refuse to zoom out that far; place the cluster at the free area's centre at the zoom it settled on.
+    const z = L.camera().zoom;
+    const fx = (area.left + area.right) / 2;
+    const fy = (area.top + area.bottom) / 2;
+    const wrap = (a: number, n: number) => ((a % n) + n) % n;
+    L.centerOn(wrap(midX + ((area.w / 2 - fx) * dpr) / z, w), wrap(midY + ((area.h / 2 - fy) * dpr) / z, h), z);
+    return true;
+  }
+
+  // On the first frame with cells, open on the living colonies in the uncovered agar; an empty dish opens on open agar.
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current || !d.cells || !rules || !currentEngine()) return;
     const z = mediumZoom();
     if (!z) return;
     opened.current = true;
+    if (fitLiving()) return;
     const sp = openSpot("block");
     if (sp) lens.current?.centerOn(sp.at.x, sp.at.y, z);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -429,7 +534,8 @@ export function DishStage() {
 
   return (
     <div className={s.app}>
-      <div className={s.canvas}>
+      <h1 className="sr">The live Petri dish</h1>
+      <div ref={canvasBox} className={s.canvas}>
         <Culture
           ref={lens}
           width={w}
@@ -463,7 +569,7 @@ export function DishStage() {
         />
       </div>
 
-      <div className={s.hud} aria-live="polite">
+      <div ref={hudBox} className={s.hud} aria-live="polite">
         <div className={s.hudGen}>
           <Countdown ms={d.nextInMs} total={genMs} />
           <div>
@@ -476,8 +582,13 @@ export function DishStage() {
         <div><span>Each cell earns</span><b className="num">{ready ? petri(perCell, 4) : "—"}</b></div>
         <div><span>Agar</span><b className="num">{ready ? petri(d.agar) : "—"}</b></div>
       </div>
+      {ready && warming && (
+        <div ref={warmBox} className={s.warmChip}>
+          <WarmUp />
+        </div>
+      )}
 
-      <aside className={s.left}>
+      <aside ref={leftBox} className={s.left}>
         {!me && (
           <JoinForm onStart={start} onConnect={connect} busy={!!busy} player={player} grant={ready ? petri(joinPetri) : "…"} colonies={d.colonies} />
         )}
@@ -552,7 +663,11 @@ export function DishStage() {
               <div><dt>Holding</dt><dd className="num">{balance === null ? "—" : petri(balance, 2)}</dd></div>
               <div><dt>Earned, unclaimed</dt><dd className="num"><span className={s.sign}>+</span>{petri(claimable.petri + Math.max(0, myPending), 3)}</dd></div>
               <div><dt>Living cells</dt><dd className="num">{int(myLive)}</dd></div>
-              <div><dt>Won at the tides</dt><dd className="num">{near(claimable.near + Number(me.near_claimed), 4)} <small>NEAR</small></dd></div>
+              {d.state && Number(d.state.tides) === 0 && claimable.near === 0 ? (
+                <div><dt>First tide</dt><dd className="num">in {int(tideIn)} <small>gens</small></dd></div>
+              ) : (
+                <div><dt>Won at the tides</dt><dd className="num">{near(claimable.near + Number(me.near_claimed), 4)} <small>NEAR</small></dd></div>
+              )}
             </dl>
             <p className={s.hint}>
               Your cells earn every generation; the PETRI waits in the dish until you claim it, and planting claims it for you.
@@ -574,7 +689,10 @@ export function DishStage() {
             {isWallet ? (
               <p className={s.hint}>Your wallet signs each move and pays its own gas and deposits{nearLeft !== null ? `; it holds ${near(Number(nearLeft), 3)} NEAR` : ""}.</p>
             ) : (
-              <p className={s.hint}>The site sponsored {near(Number(GUEST_CREDIT), 2)} testnet NEAR of credit for this guest, held by the dish contract and spendable only on joining, buying and planting; {near(Number(sponsoredLeft), 4)} NEAR of it is left. Connect a wallet to play with your own.</p>
+              <>
+                <p className={s.hint}>The site sponsored {near(Number(GUEST_CREDIT), 2)} testnet NEAR of credit for this guest, held by the dish contract and spendable only on joining, buying and planting; {near(Number(sponsoredLeft), 4)} NEAR of it is left. Connect a wallet to play with your own.</p>
+                <PayoutForm current={me.payout} busy={!!busy} onSave={savePayout} />
+              </>
             )}
             <div className={s.row}>
               <button className="btn btn-ghost btn-small" onClick={findMine} disabled={myLive === 0}>Find my colony</button>
@@ -612,7 +730,7 @@ export function DishStage() {
         )}
       </aside>
 
-      <aside className={s.right}>
+      <aside ref={rightBox} className={s.right}>
         <Loupe
           target={lens}
           width={w}
@@ -686,7 +804,7 @@ export function DishStage() {
         )}
       </div>
 
-      <nav className={s.dock} aria-label="Stamps">
+      <nav ref={dockBox} className={s.dock} aria-label="Stamps">
         <div className={s.dockScroll}>
           {DOCK_GROUPS.map((g) => (
             <div key={g.title} className={s.dockGroup} role="group" aria-label={g.title}>
@@ -744,6 +862,7 @@ function JoinForm({ onStart, onConnect, busy, player, grant, colonies }: { onSta
   // Until the player picks one, offer the first high-contrast stain nobody is using.
   const color = picked !== null && !taken.has(picked) ? picked : firstFreeStain(new Set(taken.keys()));
   const valid = name.trim().length > 0 && name.trim().length <= 24;
+  const takenStains = STAINS.flatMap((st) => (taken.has(st.color) ? [{ name: st.name, owner: taken.get(st.color)! }] : []));
   return (
     <section className={s.card}>
       <h2 className={s.joinTitle}>Start a colony</h2>
@@ -782,7 +901,15 @@ function JoinForm({ onStart, onConnect, busy, player, grant, colonies }: { onSta
             );
           })}
         </fieldset>
-        <p className={s.hint} style={{ margin: "6px 0 10px" }}>A slashed stain is already taken; hover it to see by whom.</p>
+        {takenStains.length > 0 && (
+          <>
+            <p className={`${s.hint} ${s.hoverOnly}`} style={{ margin: "6px 0 10px" }}>A slashed stain is already taken; hover it to see by whom.</p>
+            {/* Touch screens have no hover, so they say it in words. */}
+            <p className={`${s.hint} ${s.touchOnly}`} style={{ margin: "6px 0 10px" }}>
+              Slashed stains are taken: {takenStains.map((x) => `${x.name} by ${x.owner}`).join("; ")}.
+            </p>
+          </>
+        )}
         <button className="btn btn-amber" type="submit" disabled={!valid || busy} style={{ width: "100%" }}>
           {valid ? "Start my colony" : "Name your colony to start"}
         </button>
@@ -796,5 +923,42 @@ function JoinForm({ onStart, onConnect, busy, player, grant, colonies }: { onSta
         New here? <Link href="/rules">Read how it works</Link> first, or just plant a block and watch.
       </p>
     </section>
+  );
+}
+
+/** A NEAR account id: lowercase parts of letters, digits, - and _, joined by dots, 2 to 64 characters. */
+const ACCOUNT_ID = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+
+// A guest's NEAR winnings land in the guest account, whose key lives only in this browser. This sends them to a wallet.
+function PayoutForm({ current, busy, onSave }: { current: string | null; busy: boolean; onSave: (to: string | null) => void }) {
+  const [to, setTo] = useState("");
+  const clean = to.trim().toLowerCase();
+  const ok = ACCOUNT_ID.test(clean);
+  return (
+    <details className={s.payout} open={!!current || undefined}>
+      <summary>Send my winnings to a wallet</summary>
+      {current && (
+        <p className={s.hint}>
+          NEAR winnings and sales go to <a href={accountUrl(current)}>{shortAccount(current, 30)}</a>.{" "}
+          <button type="button" className={s.linkish} onClick={() => onSave(null)} disabled={busy}>
+            Keep them here instead
+          </button>
+        </p>
+      )}
+      <form
+        className={s.payoutRow}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ok) onSave(clean);
+        }}
+      >
+        <label className="sr" htmlFor="payout-to">NEAR account to receive the winnings</label>
+        <input id="payout-to" value={to} onChange={(e) => setTo(e.target.value)} placeholder="you.testnet" autoComplete="off" spellCheck={false} />
+        <button className="btn btn-ghost btn-small" type="submit" disabled={!ok || busy || clean === current}>
+          {current ? "Change" : "Send there"}
+        </button>
+      </form>
+      <p className={s.hint}>Tide winnings and PETRI sold back are paid in NEAR to that account. Your PETRI stays with the colony, and no deposit is needed.</p>
+    </details>
   );
 }

@@ -7,7 +7,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Engine, loadEngine } from "@/engine";
-import { getAllColonies, getBoard, getEarnings, getPlants, getRules, getState, type Colony, type DishState, type PlantRecord, type Rules } from "./chain";
+import { getAllColonies, getBoard, getEarnings, getPlants, getRules, getStakes, getState, type Colony, type DishState, type PlantRecord, type Rules } from "./chain";
 
 export type Snapshot = {
   status: "loading" | "ready" | "error";
@@ -88,12 +88,12 @@ function dueFor(rules: Rules, state: DishState): number {
 }
 
 async function loadStored(rules: Rules, state: DishState, colonies: Colony[]) {
-  const board = await getBoard();
-  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor);
+  const [board, stakes] = await Promise.all([getBoard(), getStakes(0, 2000)]);
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor, rules.stake_keep_bps);
   e.set_counted(state.counted);
   e.set_colonies(colonies.length);
   // Each colony's pay cap grows with the cells it has planted, so the browser's feed needs those counts.
-  e.set_planted(new Uint32Array(colonies.map((c) => Number(c.cells_planted))));
+  e.set_stakes(new BigUint64Array(stakes.map((v) => BigInt(v))));
   e.set_house(new Uint16Array(state.house));
   e.set_agar(state.agar);
   if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("The stored board could not be read");

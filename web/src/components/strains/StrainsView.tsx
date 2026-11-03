@@ -16,15 +16,26 @@ function ago(iso: string) {
   return `${Math.round(s / 3600)} h ago`;
 }
 
+/** Older log entries counted zero neighbours literally; say "empty agar" instead. */
+const plain = (o: string) => o.replace(/near 0 living cells/g, "in empty agar").replace(/fresh agar \(0 cells nearby\)/g, "empty agar");
+
 export function StrainsView() {
   const { d, colonies } = useLive();
   const log = useStrainLog();
   const [plants, setPlants] = useState<PlantRecord[]>([]);
+  const [plantsRead, setPlantsRead] = useState(false);
 
   const total = d.state ? Number(d.state.plants) : 0;
+  // Counts of plantings and notes are only true once they are read: a dish with no plantings is read as soon as its state is.
+  const read = plantsRead || (!!d.state && total === 0);
   useEffect(() => {
     if (!total) return;
-    getAllPlants(total).then(setPlants).catch(() => {});
+    getAllPlants(total)
+      .then((p) => {
+        setPlants(p);
+        setPlantsRead(true);
+      })
+      .catch(() => {});
   }, [total]);
 
   // Strains repeat their notes, so a planting is matched to its logged move by account and generation, not by note.
@@ -73,6 +84,8 @@ export function StrainsView() {
           const notes = mine.filter((p) => p.note).slice(0, 5);
           const actions = (log?.actions ?? []).filter((a) => a.account === st.account);
           const last = actions[actions.length - 1];
+          // A strain that has sat still for a while says so in generations, which is how the dish counts time.
+          const idle = last && d.status === "ready" ? d.generation - Number(last.generation) : 0;
           return (
             <li key={st.account} className={s.card}>
               <header className={s.cardHead}>
@@ -86,14 +99,14 @@ export function StrainsView() {
                 <div><dt>Living cells</dt><dd className="num">{c ? int(c.live) : "—"}</dd></div>
                 <div><dt>Earned</dt><dd className="num">{c ? petri((d.earnings[c.id] ?? 0) + (d.pending[c.id] ?? 0), 1) : "—"}</dd></div>
                 <div><dt>Spent planting</dt><dd className="num">{c ? petri(Number(c.petri_spent), 1) : "—"}</dd></div>
-                <div><dt>Plantings</dt><dd className="num">{int(mine.length)}</dd></div>
+                <div><dt>Plantings</dt><dd className="num">{read ? int(mine.length) : "—"}</dd></div>
               </dl>
               {last && (
                 <div className={s.last}>
                   <p className={s.lastHead}>
-                    Last move {ago(last.at)}, chosen by <b>{last.decided_by === "model" ? "the model" : "its rules"}</b>
+                    {idle > 120 ? `Last move ${int(idle)} generations ago (${ago(last.at)})` : `Last move ${ago(last.at)}`}, chosen by <b>{last.decided_by === "model" ? "the model" : "its rules"}</b>
                   </p>
-                  <p className={s.options}>It could have planted: {last.options.slice(0, 4).join("; ")}{last.options.length > 4 ? "; …" : ""}</p>
+                  <p className={s.options}>It could have planted: {last.options.slice(0, 4).map(plain).join("; ")}{last.options.length > 4 ? "; …" : ""}</p>
                   {last.signature?.signature && (
                     <p className={s.sig}>
                       Enclave signature <code>{last.signature.signature.slice(0, 26)}…</code> by <code>{(last.signature.signing_address ?? "").slice(0, 14)}…</code>
@@ -116,7 +129,7 @@ export function StrainsView() {
                     </li>
                   );
                 })}
-                {notes.length === 0 && <li className={s.dim}>No lab notes yet.</li>}
+                {notes.length === 0 && <li className={s.dim}>{read ? "No lab notes yet." : "Reading the lab notes from NEAR…"}</li>}
               </ol>
               <a className={s.acct} href={accountUrl(st.account)}>{st.account}</a>
             </li>

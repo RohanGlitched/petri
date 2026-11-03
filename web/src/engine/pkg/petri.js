@@ -144,6 +144,23 @@ export class Engine {
         return ret >>> 0;
     }
     /**
+     * Exact credit one colony won from the credit pool since this engine started (yoctoNEAR, decimal string).
+     * @param {number} colony
+     * @returns {string}
+     */
+    credit_won_of(colony) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.engine_credit_won_of(this.__wbg_ptr, colony);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * PETRI units earned per colony since this engine started, approximate (f64), for display.
      * @returns {Float64Array}
      */
@@ -263,9 +280,10 @@ export class Engine {
      * @param {number} keeper_bps
      * @param {number} reach
      * @param {number} live_floor
+     * @param {number} stake_keep_bps
      */
-    constructor(width, height, feed_ppm, keeper_bps, reach, live_floor) {
-        const ret = wasm.engine_new(width, height, feed_ppm, keeper_bps, reach, live_floor);
+    constructor(width, height, feed_ppm, keeper_bps, reach, live_floor, stake_keep_bps) {
+        const ret = wasm.engine_new(width, height, feed_ppm, keeper_bps, reach, live_floor, stake_keep_bps);
         this.__wbg_ptr = ret;
         EngineFinalization.register(this, this.__wbg_ptr, this);
         return this;
@@ -313,13 +331,13 @@ export class Engine {
         wasm.engine_set_house(this.__wbg_ptr, ptr0, len0);
     }
     /**
-     * Cells each colony has planted, as the contract counts them (when the engine starts mid-history).
-     * @param {Uint32Array | number[]} planted
+     * Each colony's stake, as the contract's `stakes` view returns it (when the engine starts mid-history).
+     * @param {BigUint64Array | bigint[]} stakes
      */
-    set_planted(planted) {
-        const ptr0 = passArray32ToWasm0(planted, wasm.__wbindgen_malloc);
+    set_stakes(stakes) {
+        const ptr0 = passArray64ToWasm0(stakes, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        wasm.engine_set_planted(this.__wbg_ptr, ptr0, len0);
+        wasm.engine_set_stakes(this.__wbg_ptr, ptr0, len0);
     }
     /**
      * Advance `n` generations, tracking the chain and the agar's feed exactly as the contract does.
@@ -329,23 +347,34 @@ export class Engine {
         wasm.engine_step(this.__wbg_ptr, n);
     }
     /**
-     * Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping the house, add it to each colony's winnings
+     * Run a tide: split `pay` yoctoNEAR (the vault's share) and `credit_pay` (the credit pool's) by the window's
+     * earnings, skipping the house, decay every stake, add it to each colony's winnings
      * and reset the window. Returns the total paid to colonies, as a decimal string.
      * @param {string} pay
+     * @param {string} credit_pay
      * @returns {string}
      */
-    tide(pay) {
-        let deferred2_0;
-        let deferred2_1;
+    tide(pay, credit_pay) {
+        let deferred3_0;
+        let deferred3_1;
         try {
-            const ptr0 = passStringToWasm0(pay, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            const len0 = WASM_VECTOR_LEN;
-            const ret = wasm.engine_tide(this.__wbg_ptr, ptr0, len0);
-            deferred2_0 = ret[0];
-            deferred2_1 = ret[1];
+            let ptr0, len0, ptr1, len1;
+            try {
+                ptr0 = passStringToWasm0(pay, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+                len0 = WASM_VECTOR_LEN;
+                ptr1 = passStringToWasm0(credit_pay, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+                len1 = WASM_VECTOR_LEN;
+            } catch (e) {
+                if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+                if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+                throw e;
+            }
+            const ret = wasm.engine_tide(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            deferred3_0 = ret[0];
+            deferred3_1 = ret[1];
             return getStringFromWasm0(ret[0], ret[1]);
         } finally {
-            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
         }
     }
     /**
@@ -605,6 +634,14 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
+let cachedBigUint64ArrayMemory0 = null;
+function getBigUint64ArrayMemory0() {
+    if (cachedBigUint64ArrayMemory0 === null || cachedBigUint64ArrayMemory0.byteLength === 0) {
+        cachedBigUint64ArrayMemory0 = new BigUint64Array(wasm.memory.buffer);
+    }
+    return cachedBigUint64ArrayMemory0;
+}
+
 let cachedFloat64ArrayMemory0 = null;
 function getFloat64ArrayMemory0() {
     if (cachedFloat64ArrayMemory0 === null || cachedFloat64ArrayMemory0.byteLength === 0) {
@@ -652,6 +689,13 @@ function passArray16ToWasm0(arg, malloc) {
 function passArray32ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 4, 4) >>> 0;
     getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArray64ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 8, 8) >>> 0;
+    getBigUint64ArrayMemory0().set(arg, ptr / 8);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
@@ -734,6 +778,7 @@ function __wbg_finalize_init(instance, module) {
     wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
+    cachedBigUint64ArrayMemory0 = null;
     cachedFloat64ArrayMemory0 = null;
     cachedUint16ArrayMemory0 = null;
     cachedUint32ArrayMemory0 = null;

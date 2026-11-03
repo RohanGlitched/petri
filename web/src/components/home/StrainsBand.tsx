@@ -73,7 +73,7 @@ export function StrainsBand() {
                       <footer className="num">Generation {int(note.gen)}</footer>
                     </>
                   ) : (
-                    <p className={s.noteEmpty}>No lab note yet.</p>
+                    <p className={s.noteEmpty}>{d.status === "ready" && log ? "No lab note yet." : "Reading the lab notes…"}</p>
                   )}
                 </blockquote>
               </li>

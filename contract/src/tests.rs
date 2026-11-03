@@ -1,4 +1,5 @@
 use super::*;
+use petri_core::feed;
 use near_sdk::test_utils::{get_logs, VMContextBuilder};
 use near_sdk::testing_env;
 use petri_core::patterns;
@@ -10,34 +11,30 @@ const MAX: u128 = 1_000_000 * P;
 const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
 const T0: u64 = 1_000_000;
 
+/// The launch rules exactly as deployed (contract/launch-rules.json), on a 32 × 32 dish with tides every 8 generations
+/// so tests run quickly. Every economic parameter is the launched one.
+fn launch() -> Rules {
+    near_sdk::serde_json::from_str(include_str!("../launch-rules.json")).unwrap()
+}
+
 fn rules() -> Rules {
     Rules {
         width: 32,
         height: 32,
-        generation_ms: U64(GEN_MS),
-        max_supply: U128(MAX),
-        feed_ppm: 10,
-        keeper_bps: 200,
-        reach: 8,
-        burn_bps: 5_000,
-        payback: 480,
-        min_cell_price: U128(P / 2),
-        live_floor: 1_000,
-        petri_price: U128(NEAR / 5_000),
-        min_join: U128(NEAR / 100),
-        cell_fee: U128(NEAR / 10_000),
         tide_every: 8,
-        tide_bps: 5_000,
-        tide_bounty_bps: 100,
-        max_bounty: U128(NEAR / 1_000),
-        sell_bps: 5_000,
-        sell_cap_bps: 1_000,
-        siege_x: 4,
-        buffer: 3,
-        max_plant_cells: 64,
         max_catchup: 40,
+        max_lag: 400,
         house: vec!["house.testnet".parse().unwrap()],
+        ..launch()
     }
+}
+
+#[test]
+fn the_tests_use_the_launched_economics() {
+    let l = launch();
+    let r = rules();
+    assert_eq!((l.feed_ppm, l.reach, l.stake_keep_bps, l.siege_x, l.tide_bps, l.sell_bps, l.sell_cap_bps), (r.feed_ppm, r.reach, r.stake_keep_bps, r.siege_x, r.tide_bps, r.sell_bps, r.sell_cap_bps));
+    assert_eq!(l.house.len(), 5);
 }
 
 fn ctx(who: &str, ms: u64, deposit: u128) {
@@ -79,14 +76,22 @@ fn conserved(c: &Petri, holders: &[&str]) {
     assert_eq!(unclaimed, s.unclaimed.0, "the unclaimed counter matches the record");
     assert_eq!(s.agar.0, MAX - s.sold.0 - s.fed.0 + s.returned.0 + s.bought_back.0, "agar = launch - sold - fed + returned + bought back");
     let mut out = 0u128;
+    let mut back = 0u128;
+    let mut credit_out = 0u128;
     for e in c.ledger(None, Some(1_000)) {
         match e {
-            Entry::Tide { bounty, storage, paid, .. } => out += bounty.0 + storage.0 + paid.0,
+            Entry::Tide { bounty, storage, paid, credit_paid, .. } => {
+                out += bounty.0 + storage.0 + paid.0;
+                credit_out += credit_paid.0;
+            }
             Entry::Sell { near, .. } => out += near.0,
+            Entry::Refund { near, .. } => back += near.0,
             _ => {}
         }
     }
-    assert_eq!(s.vault.0 + out, s.near_in.0, "vault = NEAR in - everything paid out");
+    assert_eq!(s.vault.0 + out, s.near_in.0 + back, "vault = NEAR in - everything paid out + refunds");
+    assert_eq!(s.credit_pool.0 + credit_out, s.credit_in.0, "credit pool = credit in - credit paid out");
+    assert!(c.solvency().solvent, "the contract covers everything it owes");
 }
 
 fn new_dish() -> Petri {
@@ -194,7 +199,7 @@ fn planting_charges_the_payback_price_and_half_comes_back() {
     let before = c.state();
     let price = c.quote(4, None).0;
     // A nearly empty dish counts 1,000 cells. The agar pays 10 ppm of itself, 98% of that to cells, for 480 generations.
-    let per_cell = before.agar.0 * 10 / 1_000_000 * 9_800 / 10_000 / 1_000;
+    let per_cell = before.agar.0 * 3 / 1_000_000 * 9_800 / 10_000 / 1_000;
     assert_eq!(price, 4 * per_cell * 480);
     plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), Some("first block"));
     let s = c.state();
@@ -219,14 +224,14 @@ fn planting_needs_its_fee() {
 }
 
 #[test]
-fn planting_inside_a_rival_buffer_is_a_siege_at_four_times_the_price() {
+fn planting_inside_a_rival_buffer_is_a_siege_at_siege_x_the_price() {
     let mut c = new_dish();
     join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 50);
     plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
     join(&mut c, "bob.testnet", T0, "Bob", 2, NEAR / 20);
     let normal = c.quote(4, None).0;
     let siege = c.quote(4, Some(true)).0;
-    assert_eq!(siege, 4 * normal);
+    assert_eq!(siege, rules().siege_x as u128 * normal);
     let held = bal(&c, "bob.testnet");
     plant(&mut c, "bob.testnet", T0, cells(6, 2, patterns::BLOCK), None);
     assert_eq!(held - bal(&c, "bob.testnet"), siege);
@@ -264,7 +269,7 @@ fn the_feed_accrues_and_is_claimed() {
 
 #[test]
 fn pay_is_capped_by_cells_planted_and_splitting_does_not_help() {
-    // A five-cell R-pentomino grows wild; with reach 2 it is paid for at most 10 cells.
+    // A five-cell R-pentomino grows wild; with reach 2 it is paid for at most 10 cells (before any tide decays it).
     at("deployer.testnet", T0);
     let mut c = Petri::new(Rules { reach: 2, ..rules() });
     join(&mut c, "wild.testnet", T0, "Wild", 1, NEAR / 20);
@@ -325,10 +330,12 @@ fn tides_pay_by_what_was_earned_since_the_last_tide() {
     let alice = c.claimable(acct("alice.testnet")).near.0;
     let bob = c.claimable(acct("bob.testnet")).near.0;
     assert!(bob > 0 && alice > 6 * bob, "alice {} bob {}", alice, bob);
-    let pay = vault / 2;
-    let bounty = pay / 100;
-    assert_eq!(s.near_bounties.0, bounty, "the caller who ran the tide got 1%");
-    assert!(alice + bob <= pay - bounty && alice + bob + 100 * NEAR / 1_000_000 > pay - bounty - NEAR / 100, "the rest went to colonies, less the tide's storage");
+    let r = rules();
+    let pay = vault * r.tide_bps as u128 / 10_000;
+    let bounty = (pay * r.tide_bounty_bps as u128 / 10_000).min(r.max_bounty.0);
+    assert_eq!(s.near_bounties.0, bounty, "the caller who ran the tide got its capped bounty");
+    let storage = c.ledger(None, None).iter().find_map(|e| if let Entry::Tide { storage, .. } = e { Some(storage.0) } else { None }).unwrap();
+    assert!(alice + bob <= pay - bounty - storage && alice + bob + 10 > pay - bounty - storage, "the rest went to colonies, less the tide's storage");
     at("alice.testnet", T0 + 8 * GEN_MS);
     assert_eq!(c.claim().near.0, alice);
     assert_eq!(c.claimable(acct("alice.testnet")).near.0, 0);
@@ -370,6 +377,8 @@ fn sponsored_credit_pays_for_joining_and_planting_and_cannot_leave() {
     let s = c.state();
     assert_eq!(s.credit_spent.0, NEAR / 50 + d);
     assert_eq!(s.credit_given.0, credit);
+    assert_eq!(s.vault.0, 0, "sponsored NEAR never reaches the NEAR vault");
+    assert!(s.credit_pool.0 > 0);
     assert_eq!(c.colony_of(acct("g-1.relayer.testnet")).unwrap().near_paid.0, NEAR / 50 + d);
     conserved(&c, &["g-1.relayer.testnet"]);
 }
@@ -533,6 +542,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     let mut chain = [0u8; 32];
     let mut agar = MAX;
     let mut vault = 0u128;
+    let mut pool = 0u128;
     let mut burned = 0u128;
     let mut counted = 0u32;
     let mut earned = vec![0u128; 4];
@@ -549,7 +559,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     loop {
         while li < log.len() {
             let gen = match &log[li] {
-                Entry::Join { generation, .. } | Entry::Buy { generation, .. } | Entry::Plant { generation, .. } | Entry::Sell { generation, .. } | Entry::Tide { generation, .. } => generation.0,
+                Entry::Join { generation, .. } | Entry::Buy { generation, .. } | Entry::Plant { generation, .. } | Entry::Sell { generation, .. } | Entry::Tide { generation, .. } | Entry::Skip { generation, .. } | Entry::Refund { generation, .. } => generation.0,
             };
             if gen != g {
                 break;
@@ -561,22 +571,24 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                         house.push(*colony);
                     }
                 }
-                Entry::Buy { petri, near, .. } => {
-                    assert_eq!(petri_for_near(near.0, agar, r.petri_price.0 / 1_000_000 * MAX), petri.0, "purchase on the curve");
+                Entry::Buy { petri, near, credit, .. } => {
+                    assert_eq!(petri_for_near(near.0 + credit.0, agar, r.petri_price.0 / 1_000_000 * MAX), petri.0, "purchase on the curve");
                     agar -= petri.0;
                     vault += near.0;
+                    pool += credit.0;
                 }
-                Entry::Plant { colony, cells, cost, near, siege, .. } => {
+                Entry::Plant { colony, cells, cost, near, credit, siege, .. } => {
                     let cells: Vec<u32> = cells.iter().map(|&c| c as u32).collect();
                     let cells = &cells;
-                    let check = dish.check_plant(*colony, cells, r.buffer, r.max_plant_cells).expect("a legal planting");
+                    let check = dish.check_plant(*colony, cells, r.buffer, r.max_plant_cells, &house).expect("a legal planting");
                     assert_eq!(check.siege, *siege);
                     let per = feed_per_cell(agar, r.feed_ppm, r.keeper_bps, counted, r.live_floor);
                     assert_eq!(planting_cost(per, r.payback, r.min_cell_price.0, cells.len() as u32, *siege, r.siege_x), cost.0, "price at generation {}", g);
                     agar += cost.0 - cost.0 * r.burn_bps as u128 / 10_000;
                     burned += cost.0 * r.burn_bps as u128 / 10_000;
-                    planted[*colony as usize] += cells.len() as u64;
+                    planted[*colony as usize] += cells.len() as u64 * petri_core::STAKE_UNIT;
                     vault += near.0;
+                    pool += credit.0;
                     dish.plant_unchecked(*colony, cells);
                 }
                 Entry::Sell { petri, near, .. } => {
@@ -586,6 +598,8 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                     vault -= near.0;
                 }
                 Entry::Tide { .. } => panic!("a tide is recorded while stepping"),
+                Entry::Skip { .. } => {}
+                Entry::Refund { near, .. } => vault += near.0,
             }
             li += 1;
         }
@@ -605,7 +619,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
             window[i as usize] += v as u64;
         }
         if g % r.tide_every as u64 == 0 {
-            let Entry::Tide { generation, chain: ch, pay, bounty, storage, paid } = &log[li] else { panic!("tide entry at {}", g) };
+            let Entry::Tide { generation, chain: ch, pay, bounty, storage, paid, credit_pay, credit_paid } = &log[li] else { panic!("tide entry at {}", g) };
             assert_eq!(generation.0, g);
             assert_eq!(*ch, hex::encode(chain));
             assert_eq!(pay.0, vault * r.tide_bps as u128 / 10_000);
@@ -615,7 +629,14 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                 won[i as usize] += v;
             }
             vault -= paid.0 + bounty.0 + storage.0;
+            assert_eq!(credit_pay.0, pool * r.tide_bps as u128 / 10_000);
+            let (_, ctotal) = tide_split(credit_pay.0, &window, &house);
+            assert_eq!(ctotal, credit_paid.0);
+            pool -= credit_paid.0;
             window.iter_mut().for_each(|w| *w = 0);
+            for st in planted.iter_mut() {
+                *st = petri_core::decay_stake(*st, r.stake_keep_bps);
+            }
             tides_seen += 1;
             li += 1;
         }
@@ -626,6 +647,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     assert_eq!(hex::encode(dish.hash()), s.board_hash);
     assert_eq!(agar, s.agar.0);
     assert_eq!(vault, s.vault.0);
+    assert_eq!(pool, s.credit_pool.0);
     let e = c.earnings(None, None);
     let w = c.tide_winnings(None, None);
     for i in 0..3 {
@@ -673,4 +695,75 @@ fn a_lone_block_earns_what_its_price_assumes() {
     assert!(earned.abs_diff(want) * 100 <= want, "earned {} vs {}", earned, want);
     assert_eq!(c.state().counted, 4);
     conserved(&c, &["alice.testnet", "keeper.testnet"]);
+}
+
+#[test]
+fn an_untended_dish_skips_ahead_instead_of_piling_up_work() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 50);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    // A thousand generations pass with nobody calling.
+    at("alice.testnet", T0 + 1_000 * GEN_MS);
+    c.advance(None);
+    let s = c.state();
+    assert_eq!(s.skipped.0, 1_000 - 40, "the clock skipped to max_catchup behind");
+    assert_eq!(s.generation.0, 40);
+    assert_eq!(s.due_generation.0, 40, "and caught up in one call");
+    plant(&mut c, "alice.testnet", T0 + 1_000 * GEN_MS, cells(20, 20, patterns::BLOCK), None);
+    conserved(&c, &["alice.testnet"]);
+}
+
+#[test]
+fn stake_decays_so_ground_is_rent() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 50);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    assert_eq!(c.stakes(None, None)[0].0, 4 * petri_core::STAKE_UNIT);
+    at("keeper.testnet", T0 + 8 * GEN_MS);
+    c.advance(None);
+    assert_eq!(c.stakes(None, None)[0].0, 4 * petri_core::STAKE_UNIT * 8_750 / 10_000);
+}
+
+#[test]
+fn a_guest_collects_winnings_in_a_wallet() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 20);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    at("alice.testnet", T0);
+    c.set_payout(Some(acct("alice-wallet.testnet")));
+    assert_eq!(c.colony_of(acct("alice.testnet")).unwrap().payout, Some(acct("alice-wallet.testnet")));
+    at("keeper.testnet", T0 + 8 * GEN_MS);
+    c.advance(None);
+    at("alice.testnet", T0 + 8 * GEN_MS);
+    assert!(c.claim().near.0 > 0);
+    conserved(&c, &["alice.testnet", "keeper.testnet"]);
+}
+
+#[test]
+fn a_sponsor_takes_back_credit_left_unused() {
+    let mut c = new_dish();
+    ctx("relayer.testnet", T0, NEAR / 20);
+    let credit = c.sponsor(acct("g-1.relayer.testnet")).0;
+    ctx("mallory.testnet", T0 + 6_000 * GEN_MS, 0);
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        c.unsponsor(acct("g-1.relayer.testnet"));
+    }));
+    assert!(r.is_err(), "only the sponsor");
+    ctx("relayer.testnet", T0 + 6_000 * GEN_MS, 0);
+    assert_eq!(c.unsponsor(acct("g-1.relayer.testnet")).0, credit);
+    assert_eq!(c.credit_of(acct("g-1.relayer.testnet")).0, 0);
+    assert_eq!(c.state().credit_reclaimed.0, credit);
+}
+
+#[test]
+fn house_cells_never_make_a_siege_for_newcomers() {
+    let mut c = new_dish();
+    join(&mut c, "house.testnet", T0, "House", 1, NEAR / 50);
+    plant(&mut c, "house.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    join(&mut c, "bob.testnet", T0, "Bob", 2, NEAR / 50);
+    let price = c.quote(4, None).0;
+    let held = bal(&c, "bob.testnet");
+    plant(&mut c, "bob.testnet", T0, cells(6, 2, patterns::BLOCK), None);
+    assert_eq!(held - bal(&c, "bob.testnet"), price, "next to the house is ordinary ground");
+    assert!(!c.plants(None, None)[1].siege);
 }
