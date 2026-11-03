@@ -1,0 +1,10 @@
+target/
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+*.log
+.vercel
+web/public/pkg/
+.DS_Store

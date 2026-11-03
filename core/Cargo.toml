@@ -1,0 +1,12 @@
+[package]
+name = "petri-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "The rules of the Petri dish: Conway's Life with colony ownership, shared by the contract, the browser and the simulator."
+
+[dependencies]
+sha2 = { version = "0.10", default-features = false }
+
+[dev-dependencies]
+proptest = "1"
