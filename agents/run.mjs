@@ -7,7 +7,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { callDish, liveDish, log, nearBalance, view, CONTRACT } from "./lib.mjs";
+import { callDish, liveDish, log, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
 import { candidates, makeRng } from "./strategies.mjs";
 import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent } from "./model.mjs";
 
@@ -15,16 +15,22 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
+// On testnet the strains are petri-<name>.testnet and pay with sponsored credit through dish-only keys. On mainnet
+// they are <name>.petri-dish.near and attach their own NEAR, so everything the house spends lands in the vault and is
+// paid out to the other players at the tides in real NEAR.
+const MAINNET = NETWORK === "mainnet";
+const acct = (short) => (MAINNET ? `${short}.petri-dish.near` : `petri-${short}.testnet`);
+
 export const STRAINS = [
-  { account: "petri-violet.testnet", name: "Crystal Violet", color: 0x6b2fa0, temperament: "gardener", every: [40, 80],
+  { account: acct("violet"), name: "Crystal Violet", color: 0x6b2fa0, temperament: "gardener", every: [40, 80],
     voice: "You are patient and orderly. You grow tidy gardens of still lifes and wall them off from raiders." },
-  { account: "petri-safranin.testnet", name: "Safranin", color: 0xc8325a, temperament: "raider", every: [40, 70],
+  { account: acct("safranin"), name: "Safranin", color: 0xc8325a, temperament: "raider", every: [40, 70],
     voice: "You are bold and hungry. You send gliders at whoever has grown fattest, and you enjoy it." },
-  { account: "petri-methylene.testnet", name: "Methylene Blue", color: 0x2364aa, temperament: "engineer", every: [50, 90],
+  { account: acct("methylene"), name: "Methylene Blue", color: 0x2364aa, temperament: "engineer", every: [50, 90],
     voice: "You are careful and technical. You build eaters to absorb attacks and guns when you can afford them." },
-  { account: "petri-malachite.testnet", name: "Malachite Green", color: 0x1e8c6e, temperament: "wanderer", every: [40, 80],
+  { account: acct("malachite"), name: "Malachite Green", color: 0x1e8c6e, temperament: "wanderer", every: [40, 80],
     voice: "You are curious and restless. You settle fresh agar far from everyone else before it is crowded." },
-  { account: "petri-congo.testnet", name: "Congo Red", color: 0xc8431f, temperament: "chaos", every: [60, 100], cap: 220,
+  { account: acct("congo"), name: "Congo Red", color: 0xc8431f, temperament: "chaos", every: [60, 100], cap: 220,
     voice: "You are mischievous. You seed small chaos and watch what the dish does with it." },
 ];
 
@@ -40,7 +46,12 @@ export const BENCH = [
     voice: "A test colony that sends the odd glider." },
 ];
 
-const KEEPER = process.env.PETRI_KEEPER ?? "petri-keeper.testnet";
+const KEEPER = process.env.PETRI_KEEPER ?? acct("keeper");
+// The bench only plays on testnet; on mainnet the players are real.
+const PLAYERS = MAINNET ? STRAINS : [...STRAINS, ...BENCH];
+// Who attaches NEAR instead of spending credit.
+const attaches = (s) => !!s.bench || MAINNET;
+const PACE = Number(process.env.PETRI_PACE ?? (MAINNET ? "2" : "1"));
 const PORT = Number(process.env.PETRI_LOG_PORT ?? 0);
 const recent = [];
 let lastHealth = null;
@@ -75,13 +86,15 @@ function serve() {
 const YOCTO = 10n ** 24n;
 const JOIN_NEAR = (YOCTO * 5n) / 100n; // a strain brings 0.05 NEAR, which buys its first PETRI
 const TOP_UP_NEAR = (YOCTO * 2n) / 100n;
+// NEAR an attaching strain always keeps (nearBalance is in NEAR).
+const MIN_NEAR = Number(process.env.PETRI_MIN_NEAR ?? "0.12");
 const lastClaim = new Map();
 
 async function ensureJoined(s, colonies) {
   const c = colonies.find((x) => x.account === s.account);
   if (c) return c;
   log(s.name, "joining");
-  await callDish(s.account, "join", { name: s.name, color: s.color }, 200, JOIN_NEAR, !!s.bench);
+  await callDish(s.account, "join", { name: s.name, color: s.color }, 200, JOIN_NEAR, attaches(s));
   return (await view("colony_of", { account_id: s.account })) ?? null;
 }
 
@@ -95,8 +108,13 @@ async function act(s) {
   let balance = Number(held) + Number(waiting.petri);
   // A strain that cannot afford three blocks buys a little PETRI from the agar, like anyone would.
   if (balance < Number(world.state.cell_price) * 12) {
+    // A strain that attaches its own NEAR stops buying before its account runs dry: it keeps enough for gas.
+    if (attaches(s) && Number(await nearBalance(s.account)) < MIN_NEAR) {
+      log(s.name, "keeps its last NEAR for gas; not buying");
+      return;
+    }
     try {
-      const r = await callDish(s.account, "buy", {}, 150, TOP_UP_NEAR, !!s.bench);
+      const r = await callDish(s.account, "buy", {}, 150, TOP_UP_NEAR, attaches(s));
       log(s.name, "bought PETRI from the agar", r.hash);
       balance = Number(await view("ft_balance_of", { account_id: s.account }));
     } catch (e) {
@@ -141,7 +159,7 @@ async function act(s) {
   const note = cleanNote(pick?.note) || chosen.why.charAt(0).toUpperCase() + chosen.why.slice(1) + ".";
   try {
     const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
-    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 200, BigInt(deposit), !!s.bench);
+    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 200, BigInt(deposit), attaches(s));
     log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", note, r.hash);
     record({
       at: new Date().toISOString(),
@@ -208,7 +226,7 @@ async function keep() {
 
 async function health() {
   const out = {};
-  for (const a of [KEEPER, ...STRAINS.map((s) => s.account), ...BENCH.map((s) => s.account)]) {
+  for (const a of [KEEPER, ...PLAYERS.map((s) => s.account)]) {
     try {
       out[a] = await nearBalance(a);
     } catch {
@@ -226,7 +244,7 @@ async function main() {
   serve();
   await health();
   if (once) {
-    for (const s of [...STRAINS, ...BENCH]) await act(s).catch((e) => log(s.name, "error", e.message));
+    for (const s of PLAYERS) await act(s).catch((e) => log(s.name, "error", e.message));
     return;
   }
   let tick = 0;
@@ -235,11 +253,12 @@ async function main() {
       const st = await view("state");
       const due = Number(st.due_generation);
       await keep();
-      for (const s of [...STRAINS, ...BENCH]) {
+      for (const s of PLAYERS) {
         const at = nextAt.get(s.account) ?? due + Math.floor(rng() * 6);
         if (due >= at) {
           await act(s).catch((e) => log(s.name, "error", e.message));
-          const [lo, hi] = s.every;
+          // On mainnet the house plays at half the pace, so its NEAR lasts through judging.
+          const [lo, hi] = s.every.map((g) => g * PACE);
           nextAt.set(s.account, due + lo + Math.floor(rng() * (hi - lo + 1)));
         } else if (!nextAt.has(s.account)) {
           nextAt.set(s.account, at);
