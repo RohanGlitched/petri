@@ -2,7 +2,7 @@
 //! run the dish ahead of the stored generation, replay its whole history from the plant log and check the result
 //! against the contract's history chain.
 
-use petri_core::{chain_due, chain_next, split_emission, Dish, PlantError};
+use petri_core::{chain_due, chain_next, plant_cost, split_emission, Dish, PlantError};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -11,7 +11,9 @@ pub struct Engine {
     generation: u64,
     chain: [u8; 32],
     colonies: u16,
-    emission: u128,
+    /// PETRI units still in the agar, as the contract would hold them at this generation.
+    agar: u128,
+    feed_ppm: u32,
     keeper_bps: u16,
     /// PETRI earned per colony during this engine's run (index = colony id).
     earned: Vec<u128>,
@@ -24,13 +26,14 @@ pub struct Engine {
 #[wasm_bindgen]
 impl Engine {
     #[wasm_bindgen(constructor)]
-    pub fn new(width: u16, height: u16, emission: f64, keeper_bps: u16) -> Engine {
+    pub fn new(width: u16, height: u16, feed_ppm: u32, keeper_bps: u16) -> Engine {
         Engine {
             dish: Dish::new(width, height),
             generation: 0,
             chain: [0; 32],
             colonies: 0,
-            emission: emission as u128,
+            agar: 0,
+            feed_ppm,
             keeper_bps,
             earned: vec![0],
             last_births: vec![0],
@@ -41,6 +44,14 @@ impl Engine {
     }
 
     /// Start from a stored board (the contract's `board` view, base64-decoded) at a known generation.
+    pub fn set_agar(&mut self, units: &str) {
+        self.agar = units.parse().unwrap_or(0);
+    }
+
+    pub fn agar(&self) -> String {
+        self.agar.to_string()
+    }
+
     pub fn load_compact(&mut self, bytes: &[u8], generation: f64, chain_hex: &str) -> bool {
         match Dish::from_compact(self.dish.width, self.dish.height, bytes) {
             Some(d) => {
@@ -106,9 +117,8 @@ impl Engine {
         }
     }
 
-    /// Advance `n` generations, tracking the chain and emission exactly as the contract does.
+    /// Advance `n` generations, tracking the chain and the agar's feed exactly as the contract does.
     pub fn step(&mut self, n: u32) {
-        let keeper_cut = self.emission * self.keeper_bps as u128 / 10_000;
         for _ in 0..n {
             let s = self.dish.step(self.colonies);
             self.generation += 1;
@@ -116,9 +126,14 @@ impl Engine {
                 self.chain = chain_next(&self.chain, self.generation, &self.dish.hash());
             }
             if s.total_live > 0 {
-                for (c, v) in split_emission(self.emission - keeper_cut, &s.live, s.total_live).into_iter().enumerate() {
+                let feed = self.agar * self.feed_ppm as u128 / 1_000_000;
+                let keeper_cut = feed * self.keeper_bps as u128 / 10_000;
+                let mut paid = keeper_cut;
+                for (c, v) in split_emission(feed - keeper_cut, &s.live, s.total_live).into_iter().enumerate() {
                     self.earned[c] += v;
+                    paid += v;
                 }
+                self.agar -= paid;
             }
             self.last_births = s.births;
             self.last_deaths = s.deaths;
@@ -166,7 +181,8 @@ impl Engine {
             generation: self.generation,
             chain: self.chain,
             colonies: self.colonies,
-            emission: self.emission,
+            agar: self.agar,
+            feed_ppm: self.feed_ppm,
             keeper_bps: self.keeper_bps,
             earned: self.earned.clone(),
             last_births: self.last_births.clone(),
@@ -175,6 +191,12 @@ impl Engine {
             last_contested: self.last_contested,
         }
     }
+}
+
+/// What planting `cells` costs (in PETRI units, as a decimal string) with `total_live` cells alive.
+#[wasm_bindgen]
+pub fn quote(base_units: &str, cells: u32, total_live: u32, capacity: u32) -> String {
+    plant_cost(base_units.parse().unwrap_or(0), cells, total_live, capacity).to_string()
 }
 
 /// Flat indices for a named pattern placed at (x, y), wrapped onto the dish. Empty if the name is unknown.

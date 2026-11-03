@@ -10,13 +10,15 @@ use near_sdk::store::{LookupMap, Vector};
 use near_sdk::{
     env, log, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
 };
-use petri_core::{chain_due, chain_next, split_emission, Dish, PlantError};
+use petri_core::{chain_due, chain_next, plant_cost, split_emission, Dish, PlantError};
 
 mod token;
 
 const BOARD_KEY: &[u8] = b"board";
 const CHECKPOINT_EVERY: u64 = 240;
 const MAX_NAME: usize = 24;
+const MAX_NOTE: usize = 140;
+const NOTE_PREFIX: &[u8] = b"n";
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
@@ -24,9 +26,17 @@ pub struct Rules {
     pub width: u16,
     pub height: u16,
     pub generation_ms: U64,
-    pub emission_per_generation: U128,
+    /// Every PETRI that will ever exist. All of it starts in the agar.
+    pub max_supply: U128,
+    /// Share of the agar fed to the living each generation, in parts per million.
+    pub feed_ppm: u32,
+    /// Share of each generation's feed paid to whoever advanced it.
     pub keeper_bps: u16,
+    /// Share of a planting's cost that is burned; the rest goes back into the agar.
+    pub burn_bps: u16,
     pub plant_cost: U128,
+    /// Live cells at which planting costs twice `plant_cost` (it scales linearly with the living population).
+    pub capacity: u32,
     pub starter_grant: U128,
     pub buffer: u16,
     pub max_plant_cells: u32,
@@ -56,6 +66,16 @@ pub struct PlantRecord {
     pub cells: Vec<u32>,
 }
 
+/// A planting as the `plants` view returns it, with its lab note if it has one.
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct PlantView {
+    pub generation: U64,
+    pub colony: u16,
+    pub cells: Vec<u32>,
+    pub note: Option<String>,
+}
+
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
 pub struct Checkpoint {
@@ -75,8 +95,10 @@ pub struct DishState {
     pub colonies: u16,
     pub plants: U64,
     pub total_supply: U128,
+    pub agar: U128,
     pub granted: U128,
-    pub emitted: U128,
+    pub fed: U128,
+    pub returned: U128,
     pub burned: U128,
     pub keeper_paid: U128,
 }
@@ -94,9 +116,11 @@ pub struct Petri {
     plants: Vector<PlantRecord>,
     checkpoints: Vector<Checkpoint>,
     balances: LookupMap<AccountId, u128>,
-    total_supply: u128,
+    /// PETRI still in the agar (held by the contract itself).
+    agar: u128,
     granted: u128,
-    emitted: u128,
+    fed: u128,
+    returned: u128,
     burned: u128,
     keeper_paid: u128,
 }
@@ -109,7 +133,10 @@ impl Petri {
         require!((rules.width as u32) * (rules.height as u32) <= 65_536, "dish too large");
         require!(rules.generation_ms.0 >= 1_000, "generations must be at least a second apart");
         require!(rules.keeper_bps <= 10_000, "keeper share above 100%");
+        require!(rules.burn_bps <= 10_000, "burn share above 100%");
+        require!(rules.feed_ppm <= 1_000_000, "feed above 100% per generation");
         require!(rules.max_catchup >= 1, "max_catchup must be at least 1");
+        require!(rules.capacity >= 1, "capacity must be at least 1");
         let dish = Dish::new(rules.width, rules.height);
         env::storage_write(BOARD_KEY, &dish.to_compact());
         let epoch_ms = env::block_timestamp_ms();
@@ -124,12 +151,15 @@ impl Petri {
             plants: Vector::new(b"p"),
             checkpoints: Vector::new(b"k"),
             balances: LookupMap::new(b"b"),
-            total_supply: 0,
+            agar: 0,
             granted: 0,
-            emitted: 0,
+            fed: 0,
+            returned: 0,
             burned: 0,
             keeper_paid: 0,
         };
+        this.agar = this.rules.max_supply.0;
+        token::emit_mint(&env::current_account_id(), this.agar, "launch: every PETRI starts in the agar");
         this.checkpoints.push(Checkpoint { generation: U64(0), chain: hex::encode(this.chain) });
         this
     }
@@ -159,15 +189,22 @@ impl Petri {
         };
         self.colonies.push(colony.clone());
         self.colony_of.insert(account.clone(), id);
-        let grant = self.rules.starter_grant.0;
-        self.mint(&account, grant, "starter grant");
+        let grant = self.rules.starter_grant.0.min(self.agar);
+        self.agar -= grant;
+        self.credit(&account, grant);
         self.granted += grant;
+        token::emit_transfer_pub(&env::current_account_id(), &account, grant, "starter grant from the agar");
         emit("join", json!({ "colony": id, "account": account, "name": name, "color": color, "generation": U64(self.generation) }));
         colony
     }
 
-    /// Bring cells to life. `cells` are flat indices (`y * width + x`). Burns `plant_cost` PETRI per cell.
-    pub fn plant(&mut self, cells: Vec<u32>) -> U64 {
+    /// Bring cells to life. `cells` are flat indices (`y * width + x`). `note` is an optional lab note (up to 140
+    /// characters) stored with the planting; the AI strains use it to say why they planted.
+    pub fn plant(&mut self, cells: Vec<u32>, note: Option<String>) -> U64 {
+        let note = note.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+        if let Some(n) = &note {
+            require!(n.chars().count() <= MAX_NOTE, "a lab note is at most 140 characters");
+        }
         let account = env::predecessor_account_id();
         let id = self.colony_of.get(&account).copied().unwrap_or_else(|| env::panic_str("join the dish first"));
         self.catch_up(self.rules.max_catchup as u64, &account);
@@ -183,10 +220,19 @@ impl Petri {
         if let Err(e) = dish.check_plant(id, &cells, self.rules.buffer, self.rules.max_plant_cells) {
             env::panic_str(&plant_error_text(&dish, e));
         }
-        let cost = self.rules.plant_cost.0 * cells.len() as u128;
+        let cost = plant_cost(self.rules.plant_cost.0, cells.len() as u32, self.total_live, self.rules.capacity);
         let balance = self.balance(&account);
         require!(balance >= cost, format!("planting {} cells costs {} PETRI; you hold {}", cells.len(), fmt_petri(cost), fmt_petri(balance)));
-        self.burn(&account, cost, "planting");
+        let burn = cost * self.rules.burn_bps as u128 / 10_000;
+        self.burn(&account, burn, "planting");
+        if cost > burn {
+            let back = cost - burn;
+            let held = self.balance(&account);
+            self.balances.insert(account.clone(), held - back);
+            self.agar += back;
+            self.returned += back;
+            token::emit_transfer_pub(&account, &env::current_account_id(), back, "planting feeds the agar");
+        }
         dish.plant_unchecked(id, &cells);
         self.store_dish(&dish);
         self.total_live += cells.len() as u32;
@@ -194,8 +240,11 @@ impl Petri {
         colony.cells_planted = U64(colony.cells_planted.0 + cells.len() as u64);
         colony.petri_burned = U128(colony.petri_burned.0 + cost);
         self.colonies.set(id as u32 - 1, colony);
+        if let Some(n) = &note {
+            env::storage_write(&note_key(self.plants.len() as u64), n.as_bytes());
+        }
         self.plants.push(PlantRecord { generation: U64(self.generation), colony: id, cells: cells.clone() });
-        emit("plant", json!({ "colony": id, "generation": U64(self.generation), "cells": cells.len(), "burned": U128(cost) }));
+        emit("plant", json!({ "colony": id, "generation": U64(self.generation), "cells": cells.len(), "cost": U128(cost), "note": note }));
         U64(self.generation)
     }
 
@@ -209,6 +258,11 @@ impl Petri {
     }
 
     // ---------- views ----------
+
+    /// What planting `cells` cells would cost right now (before any catch-up the planting itself triggers).
+    pub fn quote(&self, cells: u32) -> U128 {
+        U128(plant_cost(self.rules.plant_cost.0, cells, self.total_live, self.rules.capacity))
+    }
 
     pub fn rules(&self) -> Rules {
         self.rules.clone()
@@ -226,9 +280,11 @@ impl Petri {
             total_live: self.total_live,
             colonies: self.colonies.len() as u16,
             plants: U64(self.plants.len() as u64),
-            total_supply: U128(self.total_supply),
+            total_supply: U128(self.total_supply()),
+            agar: U128(self.agar),
             granted: U128(self.granted),
-            emitted: U128(self.emitted),
+            fed: U128(self.fed),
+            returned: U128(self.returned),
             burned: U128(self.burned),
             keeper_paid: U128(self.keeper_paid),
         }
@@ -251,10 +307,19 @@ impl Petri {
     }
 
     /// The plant log. Replaying it from an empty dish with `petri-core` reproduces every generation.
-    pub fn plants(&self, from: Option<u64>, limit: Option<u32>) -> Vec<PlantRecord> {
+    pub fn plants(&self, from: Option<u64>, limit: Option<u32>) -> Vec<PlantView> {
         let from = from.unwrap_or(0) as u32;
         let limit = limit.unwrap_or(200).min(1_000);
-        (from..self.plants.len().min(from.saturating_add(limit))).filter_map(|i| self.plants.get(i).cloned()).collect()
+        (from..self.plants.len().min(from.saturating_add(limit)))
+            .filter_map(|i| {
+                self.plants.get(i).map(|p| PlantView {
+                    generation: p.generation,
+                    colony: p.colony,
+                    cells: p.cells.clone(),
+                    note: env::storage_read(&note_key(i as u64)).and_then(|b| String::from_utf8(b).ok()),
+                })
+            })
+            .collect()
     }
 
     /// The history chain every `CHECKPOINT_EVERY` generations.
@@ -289,10 +354,9 @@ impl Petri {
         let mut dish = self.load_dish();
         let n = self.colonies.len() as u16;
         let mut earned = vec![0u128; n as usize + 1];
-        let emission = self.rules.emission_per_generation.0;
-        let keeper_cut = emission * self.rules.keeper_bps as u128 / 10_000;
         let mut keeper_total = 0u128;
         let mut ran = 0u64;
+        let mut agar = self.agar;
         while self.generation < target {
             let stats = dish.step(n);
             self.generation += 1;
@@ -301,11 +365,15 @@ impl Petri {
             }
             self.total_live = stats.total_live;
             if stats.total_live > 0 {
-                let shares = split_emission(emission - keeper_cut, &stats.live, stats.total_live);
-                for (c, s) in shares.into_iter().enumerate() {
+                let feed = agar * self.rules.feed_ppm as u128 / 1_000_000;
+                let keeper_cut = feed * self.rules.keeper_bps as u128 / 10_000;
+                let mut paid = keeper_cut;
+                for (c, s) in split_emission(feed - keeper_cut, &stats.live, stats.total_live).into_iter().enumerate() {
                     earned[c] += s;
+                    paid += s;
                 }
                 keeper_total += keeper_cut;
+                agar -= paid;
             }
             if self.generation % CHECKPOINT_EVERY == 0 {
                 self.checkpoints.push(Checkpoint { generation: U64(self.generation), chain: hex::encode(self.chain) });
@@ -330,10 +398,10 @@ impl Petri {
             self.keeper_paid += keeper_total;
             total += keeper_total;
         }
+        self.agar -= total;
+        self.fed += total;
         if total > 0 {
-            self.total_supply += total;
-            self.emitted += total;
-            token::emit_mint(keeper, total, "emission");
+            token::emit_transfer_pub(&env::current_account_id(), keeper, total, "the agar feeds the living");
         }
         emit("generation", json!({ "from": U64(self.generation - ran), "to": U64(self.generation), "live": self.total_live, "minted": U128(total), "keeper": keeper }));
         ran
@@ -344,24 +412,31 @@ impl Petri {
         self.balances.insert(account.clone(), b + amount);
     }
 
-    fn mint(&mut self, account: &AccountId, amount: u128, memo: &str) {
-        self.credit(account, amount);
-        self.total_supply += amount;
-        token::emit_mint(account, amount, memo);
-    }
-
     fn burn(&mut self, account: &AccountId, amount: u128, memo: &str) {
         let b = self.balance(account);
         require!(b >= amount, "not enough PETRI");
         self.balances.insert(account.clone(), b - amount);
-        self.total_supply -= amount;
         self.burned += amount;
         token::emit_burn(account, amount, memo);
     }
 
     fn balance(&self, account: &AccountId) -> u128 {
+        if *account == env::current_account_id() {
+            return self.agar;
+        }
         self.balances.get(account).copied().unwrap_or(0)
     }
+
+    /// Every PETRI minted at launch minus everything burned since. Includes the agar.
+    pub(crate) fn total_supply(&self) -> u128 {
+        self.rules.max_supply.0 - self.burned
+    }
+}
+
+fn note_key(index: u64) -> Vec<u8> {
+    let mut k = NOTE_PREFIX.to_vec();
+    k.extend_from_slice(&index.to_le_bytes());
+    k
 }
 
 fn emit(event: &str, data: near_sdk::serde_json::Value) {

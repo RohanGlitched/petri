@@ -1,6 +1,6 @@
 // Loads petri-core (compiled to WebAssembly) once per page.
 
-import init, { Engine, pattern_cells } from "./pkg/petri";
+import init, { Engine, pattern_cells, quote } from "./pkg/petri";
 
 let ready: Promise<void> | null = null;
 
@@ -11,7 +11,7 @@ export function loadEngine(): Promise<void> {
   return ready;
 }
 
-export { Engine, pattern_cells };
+export { Engine, pattern_cells, quote };
 
 export type PatternName =
   | "block"

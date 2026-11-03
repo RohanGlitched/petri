@@ -128,7 +128,7 @@ export function readableFailure(f: unknown): string {
 }
 
 export const joinDish = (name: string, color: number) => call("join", { name, color }, 60);
-export const plantCells = (cells: number[]) => call("plant", { cells }, 150);
+export const plantCells = (cells: number[], note?: string) => call("plant", { cells, note: note?.trim() || null }, 150);
 export const advanceDish = () => call("advance", {}, 200);
 
 export function usePlayer(): Player {

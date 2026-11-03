@@ -6,7 +6,7 @@ import { PatternGlyph } from "./PatternGlyph";
 import { usePalette } from "./LiveHero";
 import { currentEngine, refreshDish, useDish } from "@/lib/dish-store";
 import { createGuest, joinDish, plantCells, usePlayer, forgetGuest } from "@/lib/wallet";
-import { loadEngine, pattern_cells, PATTERNS, type PatternName } from "@/engine";
+import { loadEngine, pattern_cells, quote, PATTERNS, type PatternName } from "@/engine";
 import { colorHex, getBalance, getColonyOf, type Colony } from "@/lib/chain";
 import { accountUrl, fmtPetri, shortAccount, txUrl } from "@/lib/config";
 import { STAINS, stainName } from "@/lib/stains";
@@ -129,7 +129,7 @@ export function DishApp() {
   }, [d.cells, pending]);
 
   const info = PATTERNS.find((p) => p.name === pattern);
-  const cost = info && d.rules ? (info.cells * Number(d.rules.plant_cost)) : 0;
+  const cost = info && d.rules && glyphs[info.name] ? Number(quote(d.rules.plant_cost, info.cells, d.totalLive, d.rules.capacity)) : 0;
   const myLive = me ? d.liveCounts[me.id] ?? 0 : 0;
   const myPending = me ? d.pending[me.id] ?? 0 : 0;
   const plantedThisGen = me?.last_plant_generation != null && Number(me.last_plant_generation) >= d.generation;
@@ -146,7 +146,7 @@ export function DishApp() {
       }
       setBusy("Joining the dish…");
       const r = await joinDish(name, color);
-      setDone({ text: `${name} joined the dish with 64 PETRI. Pick a pattern and plant it.`, hash: r.hash });
+      setDone({ text: `${name} joined the dish with ${fmtPetri(d.rules?.starter_grant ?? 0)} PETRI from the agar. Pick a pattern and plant it.`, hash: r.hash });
       await refreshDish();
       await loadMe();
     } catch (e) {
@@ -165,7 +165,7 @@ export function DishApp() {
     setPending({ cells, label: info.label, at: Date.now() });
     try {
       const r = await plantCells(cells);
-      setDone({ text: `Planted a ${info.label.toLowerCase()} (${cells.length} cells, ${fmtPetri(cost)} PETRI burned).`, hash: r.hash });
+      setDone({ text: `Planted a ${info.label.toLowerCase()} (${cells.length} cells for ${fmtPetri(cost)} PETRI: half burned, half back to the agar).`, hash: r.hash });
       setPending({ cells, label: info.label, at: Date.now(), hash: r.hash });
       setTarget(null);
       await refreshDish();
@@ -408,7 +408,7 @@ function JoinForm({ onStart, busy, player }: { onStart: (name: string, color: nu
     <section className="panel-block">
       <h2 className="panel-title">Start a colony</h2>
       <p className="hint">
-        Name it and choose its stain. You get 64 PETRI to plant with{player ? "" : " and a guest account on NEAR testnet; no wallet needed"}.
+        Name it and choose its stain. The agar grants you 64 PETRI to plant with{player ? "" : ", and you get a guest account on NEAR testnet: no wallet, no gas"}.
       </p>
       <form
         onSubmit={(e) => {

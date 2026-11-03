@@ -4,6 +4,7 @@
 export class Engine {
     free(): void;
     [Symbol.dispose](): void;
+    agar(): string;
     board_hash_hex(): string;
     /**
      * The owner array (u16 per cell), copied out for rendering.
@@ -26,18 +27,19 @@ export class Engine {
     last_contested(): number;
     last_deaths(): Uint32Array;
     live_counts(): Uint32Array;
-    /**
-     * Start from a stored board (the contract's `board` view, base64-decoded) at a known generation.
-     */
     load_compact(bytes: Uint8Array | number[], generation: number, chain_hex: string): boolean;
-    constructor(width: number, height: number, emission: number, keeper_bps: number);
+    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number);
     /**
      * Plant without checks (replaying the contract's log).
      */
     plant(colony: number, cells: Uint32Array | number[]): void;
+    /**
+     * Start from a stored board (the contract's `board` view, base64-decoded) at a known generation.
+     */
+    set_agar(units: string): void;
     set_colonies(n: number): void;
     /**
-     * Advance `n` generations, tracking the chain and emission exactly as the contract does.
+     * Advance `n` generations, tracking the chain and the agar's feed exactly as the contract does.
      */
     step(n: number): void;
     total_live(): number;
@@ -49,11 +51,17 @@ export class Engine {
  */
 export function pattern_cells(name: string, x: number, y: number, width: number, height: number, rotate: number, flip: boolean): Uint32Array;
 
+/**
+ * What planting `cells` costs (in PETRI units, as a decimal string) with `total_live` cells alive.
+ */
+export function quote(base_units: string, cells: number, total_live: number, capacity: number): string;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_engine_free: (a: number, b: number) => void;
+    readonly engine_agar: (a: number) => [number, number];
     readonly engine_board_hash_hex: (a: number) => [number, number];
     readonly engine_cells: (a: number) => [number, number];
     readonly engine_chain_hex: (a: number) => [number, number];
@@ -70,11 +78,13 @@ export interface InitOutput {
     readonly engine_load_compact: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
     readonly engine_new: (a: number, b: number, c: number, d: number) => number;
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
+    readonly engine_set_agar: (a: number, b: number, c: number) => void;
     readonly engine_set_colonies: (a: number, b: number) => void;
     readonly engine_step: (a: number, b: number) => void;
     readonly engine_total_live: (a: number) => number;
     readonly engine_width: (a: number) => number;
     readonly pattern_cells: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+    readonly quote: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

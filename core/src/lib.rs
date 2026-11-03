@@ -464,6 +464,13 @@ fn plurality(p: [ColonyId; 3]) -> Option<ColonyId> {
     }
 }
 
+/// What planting `cells` costs when `total_live` cells are already alive: `base` per cell, scaled up by crowding,
+/// `base * cells * (capacity + total_live) / capacity`. The dish has a carrying capacity: life gets dearer as it fills.
+pub fn plant_cost(base: u128, cells: u32, total_live: u32, capacity: u32) -> u128 {
+    let capacity = capacity.max(1) as u128;
+    base * cells as u128 * (capacity + total_live as u128) / capacity
+}
+
 /// Split `emission` between colonies in proportion to their live cells. Remainders from integer division are not
 /// minted. Index 0 of the result is always 0.
 pub fn split_emission(emission: u128, live: &[u32], total_live: u32) -> Vec<u128> {

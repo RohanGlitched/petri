@@ -20,6 +20,21 @@ export class Engine {
     /**
      * @returns {string}
      */
+    agar() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.engine_agar(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
     board_hash_hex() {
         let deferred1_0;
         let deferred1_1;
@@ -157,7 +172,6 @@ export class Engine {
         return v1;
     }
     /**
-     * Start from a stored board (the contract's `board` view, base64-decoded) at a known generation.
      * @param {Uint8Array | number[]} bytes
      * @param {number} generation
      * @param {string} chain_hex
@@ -182,11 +196,11 @@ export class Engine {
     /**
      * @param {number} width
      * @param {number} height
-     * @param {number} emission
+     * @param {number} feed_ppm
      * @param {number} keeper_bps
      */
-    constructor(width, height, emission, keeper_bps) {
-        const ret = wasm.engine_new(width, height, emission, keeper_bps);
+    constructor(width, height, feed_ppm, keeper_bps) {
+        const ret = wasm.engine_new(width, height, feed_ppm, keeper_bps);
         this.__wbg_ptr = ret;
         EngineFinalization.register(this, this.__wbg_ptr, this);
         return this;
@@ -203,13 +217,22 @@ export class Engine {
         wasm.engine_plant(this.__wbg_ptr, val2, ptr0, len0);
     }
     /**
+     * Start from a stored board (the contract's `board` view, base64-decoded) at a known generation.
+     * @param {string} units
+     */
+    set_agar(units) {
+        const ptr0 = passStringToWasm0(units, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.engine_set_agar(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
      * @param {number} n
      */
     set_colonies(n) {
         wasm.engine_set_colonies(this.__wbg_ptr, n);
     }
     /**
-     * Advance `n` generations, tracking the chain and emission exactly as the contract does.
+     * Advance `n` generations, tracking the chain and the agar's feed exactly as the contract does.
      * @param {number} n
      */
     step(n) {
@@ -256,6 +279,32 @@ export function pattern_cells(name, x, y, width, height, rotate, flip) {
     var v8 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
     return v8;
+}
+
+/**
+ * What planting `cells` costs (in PETRI units, as a decimal string) with `total_live` cells alive.
+ * @param {string} base_units
+ * @param {number} cells
+ * @param {number} total_live
+ * @param {number} capacity
+ * @returns {string}
+ */
+export function quote(base_units, cells, total_live, capacity) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const val2 = +cells;
+        const val3 = +total_live;
+        const val4 = +capacity;
+        const ptr0 = passStringToWasm0(base_units, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.quote(ptr0, len0, val2, val3, val4);
+        deferred5_0 = ret[0];
+        deferred5_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+    }
 }
 function __wbg_get_imports() {
     const import0 = {

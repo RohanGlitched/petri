@@ -35,8 +35,13 @@ pub struct StorageBounds {
 
 const ICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23E9DDB8' stroke='%235B3A1E' stroke-width='2'/%3E%3Crect x='10' y='10' width='5' height='5' fill='%237B2D8E'/%3E%3Crect x='15' y='15' width='5' height='5' fill='%237B2D8E'/%3E%3Crect x='10' y='20' width='5' height='5' fill='%237B2D8E'/%3E%3Crect x='15' y='20' width='5' height='5' fill='%237B2D8E'/%3E%3Crect x='20' y='15' width='5' height='5' fill='%23C8324A'/%3E%3C/svg%3E";
 
+/// Launch mints the whole supply to the contract, which holds it as the agar.
 pub(crate) fn emit_mint(owner: &AccountId, amount: u128, memo: &str) {
     log!("EVENT_JSON:{}", json!({ "standard": "nep141", "version": "1.0.0", "event": "ft_mint", "data": [{ "owner_id": owner, "amount": U128(amount), "memo": memo }] }));
+}
+
+pub(crate) fn emit_transfer_pub(from: &AccountId, to: &AccountId, amount: u128, memo: &str) {
+    emit_transfer(from, to, amount, Some(memo));
 }
 
 pub(crate) fn emit_burn(owner: &AccountId, amount: u128, memo: &str) {
@@ -86,7 +91,7 @@ impl Petri {
             Ok(v) => near_sdk::serde_json::from_slice::<U128>(&v).map(|u| u.0.min(amount.0)).unwrap_or(amount.0),
             Err(_) => amount.0,
         };
-        if unused > 0 {
+        if unused > 0 && receiver_id != env::current_account_id() {
             let held = self.balance(&receiver_id);
             let refund = unused.min(held);
             if refund > 0 {
@@ -100,7 +105,7 @@ impl Petri {
     }
 
     pub fn ft_total_supply(&self) -> U128 {
-        U128(self.total_supply)
+        U128(self.total_supply())
     }
 
     pub fn ft_balance_of(&self, account_id: AccountId) -> U128 {
@@ -142,6 +147,7 @@ impl Petri {
 impl Petri {
     fn internal_transfer(&mut self, from: &AccountId, to: &AccountId, amount: u128, memo: Option<&str>) {
         require!(amount > 0, "amount must be positive");
+        require!(*to != env::current_account_id(), "PETRI goes back to the agar only by planting");
         require!(from != to, "sender and receiver are the same account");
         if self.balances.get(to).is_none() {
             require!(amount >= ONE_PETRI, "a transfer to a new holder must be at least 1 PETRI");

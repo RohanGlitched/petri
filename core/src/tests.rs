@@ -180,6 +180,14 @@ fn plant_rules() {
 }
 
 #[test]
+fn planting_gets_dearer_as_the_dish_fills() {
+    assert_eq!(plant_cost(1_000_000, 4, 0, 1000), 4_000_000);
+    assert_eq!(plant_cost(1_000_000, 4, 1000, 1000), 8_000_000);
+    assert_eq!(plant_cost(1_000_000, 5, 3000, 1000), 20_000_000);
+    assert_eq!(plant_cost(1_000_000, 1, 500, 0), 501_000_000);
+}
+
+#[test]
 fn emission_split_is_proportional_and_never_overpays() {
     let s = split_emission(10_000_000, &[0, 3, 1, 0], 4);
     assert_eq!(s, vec![0, 7_500_000, 2_500_000, 0]);

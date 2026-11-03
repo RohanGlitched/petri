@@ -35,6 +35,8 @@ export type Snapshot = {
   pending: number[];
   /** The latest plantings, newest first. */
   recentPlants: PlantRecord[];
+  /** PETRI units in the agar at the browser's generation. */
+  agar: number;
 };
 
 const empty: Snapshot = {
@@ -53,6 +55,7 @@ const empty: Snapshot = {
   ahead: 0,
   pending: [],
   recentPlants: [],
+  agar: 0,
 };
 
 let snap: Snapshot = empty;
@@ -80,8 +83,9 @@ function dueFor(rules: Rules, state: DishState): number {
 
 async function loadStored(rules: Rules, state: DishState, colonies: Colony[]) {
   const board = await getBoard();
-  const e = new Engine(rules.width, rules.height, Number(rules.emission_per_generation), rules.keeper_bps);
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps);
   e.set_colonies(colonies.length);
+  e.set_agar(state.agar);
   if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("The stored board could not be read");
   engine?.free();
   engine = e;
@@ -110,6 +114,7 @@ function advanceTo(due: number, force = false) {
     chain: engine.chain_hex(),
     ahead: engine.generation() - storedGeneration,
     pending: Array.from(engine.earned()),
+    agar: Number(engine.agar()),
   });
 }
 

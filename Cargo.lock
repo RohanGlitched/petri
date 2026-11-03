@@ -1730,6 +1730,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "petri-sim"
+version = "0.1.0"
+dependencies = [
+ "petri-core",
+]
+
+[[package]]
 name = "petri-wasm"
 version = "0.1.0"
 dependencies = [

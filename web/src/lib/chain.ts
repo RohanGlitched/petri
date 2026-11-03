@@ -6,9 +6,12 @@ export type Rules = {
   width: number;
   height: number;
   generation_ms: string;
-  emission_per_generation: string;
+  max_supply: string;
+  feed_ppm: number;
   keeper_bps: number;
+  burn_bps: number;
   plant_cost: string;
+  capacity: number;
   starter_grant: string;
   buffer: number;
   max_plant_cells: number;
@@ -26,8 +29,10 @@ export type DishState = {
   colonies: number;
   plants: string;
   total_supply: string;
+  agar: string;
   granted: string;
-  emitted: string;
+  fed: string;
+  returned: string;
   burned: string;
   keeper_paid: string;
 };
@@ -44,7 +49,7 @@ export type Colony = {
   petri_earned: string;
 };
 
-export type PlantRecord = { generation: string; colony: number; cells: number[] };
+export type PlantRecord = { generation: string; colony: number; cells: number[]; note: string | null };
 export type Checkpoint = { generation: string; chain: string };
 
 let preferred = 0;
@@ -107,6 +112,7 @@ export const getColonies = (from = 0, limit = 500) => view<Colony[]>("colonies",
 export const getPlants = (from = 0, limit = 1000) => view<PlantRecord[]>("plants", { from, limit });
 export const getCheckpoints = (from = 0, limit = 2000) => view<Checkpoint[]>("checkpoints", { from, limit });
 export const getBalance = (account_id: string) => view<string>("ft_balance_of", { account_id });
+export const getQuote = (cells: number) => view<string>("quote", { cells });
 export const getColonyOf = (account_id: string) => view<Colony | null>("colony_of", { account_id });
 
 export async function getAllPlants(total: number): Promise<PlantRecord[]> {

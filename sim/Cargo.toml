@@ -1,0 +1,9 @@
+[package]
+name = "petri-sim"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Simulates weeks of Petri with scripted societies to choose and justify the launch parameters."
+
+[dependencies]
+petri-core = { path = "../core" }

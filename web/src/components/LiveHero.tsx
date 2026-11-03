@@ -20,7 +20,8 @@ export function LiveHero() {
   const palette = usePalette(d.colonies);
   const w = d.rules?.width ?? 128;
   const h = d.rules?.height ?? 128;
-  const perCell = d.totalLive > 0 && d.rules ? Number(d.rules.emission_per_generation) * (1 - d.rules.keeper_bps / 10000) / d.totalLive : 0;
+  const feed = d.rules ? (d.agar * d.rules.feed_ppm) / 1e6 : 0;
+  const perCell = d.totalLive > 0 && d.rules ? (feed * (1 - d.rules.keeper_bps / 10000)) / d.totalLive : 0;
   const secs = Math.ceil(d.nextInMs / 1000);
 
   return (
@@ -34,7 +35,8 @@ export function LiveHero() {
           <p className="hero-sub">A coin that is alive.</p>
           <p className="lede">
             A NEAR contract runs Conway&rsquo;s Life on one shared dish. Every living cell belongs to a real account.
-            Each generation mints PETRI to the living, and bringing new cells to life burns it.
+            Every PETRI starts in the agar; each generation the agar feeds the living, and bringing new cells to life
+            pays half back into it and burns the rest.
           </p>
           <dl className="readout" aria-live="polite">
             <div>
@@ -50,8 +52,8 @@ export function LiveHero() {
               <dd className="num">{d.status === "ready" ? fmtPetri(perCell, 4) : "—"}<small>PETRI / gen</small></dd>
             </div>
             <div>
-              <dt>PETRI in existence</dt>
-              <dd className="num">{d.state ? fmtPetri(d.state.total_supply, 0) : "—"}</dd>
+              <dt>Left in the agar</dt>
+              <dd className="num">{d.status === "ready" ? fmtPetri(d.agar, 0) : "—"}<small>PETRI</small></dd>
             </div>
           </dl>
           <div className="hero-actions">

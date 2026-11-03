@@ -1,0 +1,14 @@
+{
+  "name": "petri-agents",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "The keeper and the AI strains that keep the Petri dish alive.",
+  "scripts": {
+    "start": "node run.mjs",
+    "once": "node run.mjs --once"
+  },
+  "dependencies": {
+    "near-api-js": "7.4.0"
+  }
+}
