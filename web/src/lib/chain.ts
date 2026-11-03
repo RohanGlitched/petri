@@ -35,6 +35,12 @@ export type Rules = {
   /** When the dish is this far behind the clock, the clock skips ahead. */
   max_lag: number;
   house: string[];
+  /** PETRI units a specimen slide costs per living cell it captures, all burned. */
+  slide_cells_price: string;
+  /** A slide must capture at least this many of the colony's own living cells. */
+  slide_min_cells: number;
+  /** The wNEAR contract whose `ft_transfer_call` joins or buys for the account its message names (NEAR Intents). */
+  wnear: string | null;
 };
 
 export type DishState = {
@@ -89,6 +95,13 @@ export type DishState = {
   tides: string;
   skipped: string;
   house: number[];
+  /** specimen slides minted, and the PETRI they burned (counted in `burned` too) */
+  slides: string;
+  slides_burned: string;
+  /** yoctoNEAR waiting for accounts to claim (wNEAR that could not join or buy), and wNEAR held, not yet unwrapped */
+  pending: string;
+  wrapped: string;
+  wnear_ready: boolean;
   /** PETRI units per cell right now */
   cell_price: string;
   /** yoctoNEAR per PETRI right now */
@@ -112,8 +125,10 @@ export type Colony = {
   near_paid: string;
   near_claimed: string;
   near_sold: string;
-  /** credit won at the tides, from the credit pool and as vault shares */
+  /** credit won at the tides, from the credit pool and as vault shares (and bounties, for a guest that ran a tide) */
   credit_won: string;
+  /** started by someone else's payment (wNEAR through NEAR Intents); the account may `rename` it once */
+  proxy: boolean;
 };
 
 export type PlantRecord = { index: string; generation: string; colony: number; cells: number[]; cost: string; siege: boolean; note: string | null };
@@ -122,9 +137,32 @@ export type Entry =
   | { Buy: { generation: string; colony: number; petri: string; near: string; credit: string } }
   | { Plant: { generation: string; colony: number; cells: number[]; cost: string; near: string; credit: string; siege: boolean } }
   | { Sell: { generation: string; colony: number; petri: string; near: string; paid: string; as_credit: boolean } }
-  | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string; as_credit: string; credit_pay: string; credit_paid: string } }
+  | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string; as_credit: string; credit_pay: string; credit_paid: string; by: number } }
   | { Skip: { generation: string; skipped: string } }
-  | { Refund: { generation: string; colony: number; near: string } };
+  | { Refund: { generation: string; colony: number; near: string } }
+  | { Slide: { generation: string; colony: number; token: string; x: number; y: number; w: number; h: number; cells: number; bitmap: string; cost: string } };
+
+/** A specimen slide as the `slides`, `slide` and `slides_for` views return it (no image: draw it with `slide_svg`
+ * from the engine, which is exactly what the contract serves as the NFT's media). `bitmap` is base64: bit i of the
+ * w × h rectangle, row by row from (x, y), is byte i >> 3, bit i & 7. */
+export type SlideView = {
+  token_id: string;
+  owner_id: string;
+  colony: number;
+  /** the colony's name now */
+  name: string;
+  /** the colony's colour when it was minted */
+  color: number;
+  generation: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  cells: number;
+  title: string | null;
+  bitmap: string;
+  minted_ms: string;
+};
 
 export const entryGeneration = (e: Entry): number => Number(Object.values(e)[0].generation);
 export type Checkpoint = { generation: string; chain: string };
@@ -215,6 +253,42 @@ export const getQuote = (cells: number, siege = false) => view<string>("quote", 
 export const getBuyQuote = (near: string) => view<string>("buy_quote", { near });
 export const getPlantDeposit = (cells: number, note_bytes: number | null) => view<string>("plant_deposit", { cells, note_bytes });
 export const getColonyOf = (account_id: string) => view<Colony | null>("colony_of", { account_id });
+/** Slides in mint order (token "1" is the first), at most 500 a call. */
+export const getSlides = (from = 0, limit = 100) => view<SlideView[]>("slides", { from, limit });
+export const getSlide = (token_id: string) => view<SlideView | null>("slide", { token_id });
+export const getSlidesFor = (account_id: string, from = 0, limit = 100) => view<SlideView[]>("slides_for", { account_id, from, limit });
+/** yoctoNEAR to attach to a slide of w × h with a title of `title_bytes` UTF-8 bytes; what is not used comes back. */
+export const getSlideDeposit = (w: number, h: number, title_bytes: number | null) => view<string>("slide_deposit", { w, h, title_bytes });
+/** yoctoNEAR waiting for an account to claim with `claim_pending` (wNEAR sent for it that could not join or buy). */
+export const getPending = (account_id: string) => view<string>("pending_of", { account_id });
+
+/** Decode a slide's base64 bitmap for `slide_svg` or for drawing cells yourself. */
+export function slideBits(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/*
+ * Calls for the wallet (wallet.ts), as the contract takes them:
+ *
+ * mintSlide: method "mint_slide", args { x, y, w, h, title: string | null, credit: string | null } (w and h 4 to 32;
+ *   x, y the rectangle's top-left cell; the rectangle wraps at the dish's edges). Attach getSlideDeposit(w, h, bytes)
+ *   yoctoNEAR (unused NEAR comes back), or pass that much as `credit` for a guest; 300 TGas (it catches the dish up
+ *   first). Returns the token id. It needs at least rules.slide_min_cells of the caller's own living cells inside the
+ *   rectangle at the stored generation and burns rules.slide_cells_price PETRI per cell (unclaimed earnings count).
+ * claimPending: method "claim_pending", args {}, no deposit, 30 TGas. Sends the caller its pending NEAR.
+ * rename: method "rename", args { name, color }, no deposit. Only for a colony started by someone else's payment
+ *   (`proxy`), once.
+ * NEP-171: "nft_transfer" { receiver_id, token_id, approval_id: null, memo: null } with exactly 1 yoctoNEAR attached.
+ *
+ * Paying with NEAR Intents: 1Click's `customRecipientMsg` (wNEAR delivered to the dish with ft_transfer_call) is the
+ * JSON string {"for": "<account>", "do": "join" | "buy", "name": "<colony name>", "color": <0xRRGGBB as a number>}.
+ * At least 0.01 NEAR; "join" for an account that already has a colony buys instead; anything that cannot be done
+ * waits as pending NEAR for "for" (see getPending). Give the delivery as much gas as 1Click allows: below about
+ * 100 TGas the join may not fit and the NEAR waits as pending.
+ */
 
 /** An account's NEAR balance in yoctoNEAR (what a guest has left for deposits). */
 export async function getNearBalance(account_id: string): Promise<bigint> {

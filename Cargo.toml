@@ -9,3 +9,8 @@ lto = true
 debug = false
 panic = "abort"
 overflow-checks = true
+
+# The contract's own code (its many method entry points, mostly argument parsing) is built for size: mainnet charges
+# storage for every byte of it. petri-core, which runs Life on every generation, and the libraries stay at opt-level 3.
+[profile.release.package.petri-contract]
+opt-level = "z"

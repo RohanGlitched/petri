@@ -486,3 +486,33 @@
   .loupe, .zoom { display: none; }
   .log ol { max-height: 360px; }
 }
+
+/* Fossilize: the slide preview and its three numbers */
+.fossilGlass { margin: 14px 0 12px; }
+.fossilGlass > * { aspect-ratio: 2.2 / 1; }
+.fossilStats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+.fossilStats dt { font-size: 12px; color: var(--dim); }
+.fossilStats dd { margin: 0; font-family: var(--display); font-size: 20px; }
+.fossilStats dd small { font-family: var(--body); font-size: 12px; color: var(--dim); }
+/* The log's waiting line has no swatch, so it spans the whole row. */
+.log li.hint { display: block; }
+.renameRow { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.renameRow .row { margin-top: 8px; }
+.renameRow input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 0;
+  background: rgba(243, 233, 218, 0.06);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--bone);
+  font: 15px var(--body);
+}
+.renameRow input:focus { outline: 2px solid var(--amber); outline-offset: 0; }

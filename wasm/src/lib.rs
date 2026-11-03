@@ -2,7 +2,7 @@
 //! run the dish ahead of the stored generation, replay its whole history from the plant log and check the result
 //! against the contract's history chain.
 
-use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, tide_due, tide_split, Dish, PlantError, STAKE_UNIT};
+use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, slide_svg as core_slide_svg, tide_due, tide_split, Dish, PlantError, STAKE_UNIT};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -261,6 +261,21 @@ impl Engine {
         format!("{},{},{}", paid, credit_paid, as_credit)
     }
 
+    /// Add `amount` yoctoNEAR to what `colony` won as credit: a tide's bounty paid to a guest that ran it (a Tide entry
+    /// whose `by` never attached NEAR).
+    pub fn add_credit_won(&mut self, colony: u16, amount: &str) {
+        if colony > self.colonies {
+            self.set_colonies(colony);
+        }
+        self.credit_won[colony as usize] += amount.parse::<u128>().unwrap_or(0);
+    }
+
+    /// A specimen slide as the contract captures it: `colony`'s living cells in the `w` × `h` rectangle at (`x`, `y`),
+    /// as the bitmap a Slide entry holds (see `Dish::region_bitmap`). Count its set bits for the cells.
+    pub fn region_bitmap(&self, colony: u16, x: u16, y: u16, w: u16, h: u16) -> Vec<u8> {
+        self.dish.region_bitmap(colony, x, y, w, h).0
+    }
+
     /// Exact credit one colony won at the tides since this engine started, from the credit pool and as vault shares
     /// (yoctoNEAR, decimal string).
     pub fn credit_won_of(&self, colony: u16) -> String {
@@ -370,6 +385,13 @@ pub fn sell_quote(petri: &str, agar: &str, petri_price: &str, max_supply: &str, 
 pub fn buy_quote(near: &str, agar: &str, petri_price: &str, max_supply: &str) -> String {
     let k = petri_price.parse::<u128>().unwrap_or(0) / 1_000_000 * max_supply.parse::<u128>().unwrap_or(0);
     petri_for_near(near.parse().unwrap_or(0), agar.parse().unwrap_or(0), k).to_string()
+}
+
+/// A specimen slide's image exactly as the contract's `nft_token` draws it: an SVG of `bitmap` (`w` × `h`, a Slide
+/// entry's or the `slides` view's) in `color` (0xRRGGBB), marked with its generation.
+#[wasm_bindgen]
+pub fn slide_svg(bitmap: &[u8], w: u16, h: u16, color: u32, generation: f64) -> String {
+    core_slide_svg(bitmap, w, h, color, generation as u64)
 }
 
 /// Flat indices for a named pattern placed at (x, y), wrapped onto the dish. Empty if the name is unknown.

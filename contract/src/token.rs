@@ -71,24 +71,25 @@ impl Petri {
         require!(env::attached_deposit() == NearToken::from_yoctonear(1), "requires exactly 1 yoctoNEAR");
         let sender = caller();
         self.internal_transfer(&sender, &receiver_id, amount.0, memo.as_deref());
-        // The receiver gets all the gas that is left after the resolve callback is reserved.
-        let left = env::prepaid_gas().saturating_sub(env::used_gas()).saturating_sub(GAS_FOR_RESOLVE).saturating_sub(Gas::from_tgas(5));
-        require!(left >= GAS_FOR_ON_TRANSFER_MIN, "more gas is required");
+        // The receiver gets whatever gas is left once the resolve callback is provided for (the runtime shares it out);
+        // every receipt also costs its own fees up front, hence the margin.
+        let left = env::prepaid_gas().saturating_sub(env::used_gas());
+        require!(left >= GAS_FOR_ON_TRANSFER_MIN.saturating_add(GAS_FOR_RESOLVE).saturating_add(Gas::from_tgas(15)), "more gas is required");
         Promise::new(receiver_id.clone())
-            .function_call(
+            .function_call_weight(
                 "ft_on_transfer",
                 json!({ "sender_id": sender, "amount": amount, "msg": msg }).to_string().into_bytes(),
                 NearToken::from_yoctonear(0),
-                left,
+                GAS_FOR_ON_TRANSFER_MIN,
+                near_sdk::GasWeight(1),
             )
-            .then(
-                Promise::new(env::current_account_id()).function_call(
-                    "ft_resolve_transfer",
-                    json!({ "sender_id": sender, "receiver_id": receiver_id, "amount": amount }).to_string().into_bytes(),
-                    NearToken::from_yoctonear(0),
-                    GAS_FOR_RESOLVE,
-                ),
-            )
+            .then(Promise::new(env::current_account_id()).function_call_weight(
+                "ft_resolve_transfer",
+                json!({ "sender_id": sender, "receiver_id": receiver_id, "amount": amount }).to_string().into_bytes(),
+                NearToken::from_yoctonear(0),
+                GAS_FOR_RESOLVE,
+                near_sdk::GasWeight(0),
+            ))
             .into()
     }
 

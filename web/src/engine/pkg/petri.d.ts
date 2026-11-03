@@ -4,6 +4,11 @@
 export class Engine {
     free(): void;
     [Symbol.dispose](): void;
+    /**
+     * Add `amount` yoctoNEAR to what `colony` won as credit: a tide's bounty paid to a guest that ran it (a Tide entry
+     * whose `by` never attached NEAR).
+     */
+    add_credit_won(colony: number, amount: string): void;
     agar(): string;
     /**
      * Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is above zero):
@@ -64,6 +69,11 @@ export class Engine {
      * Plant without checks (replaying the contract's log).
      */
     plant(colony: number, cells: Uint32Array | number[]): void;
+    /**
+     * A specimen slide as the contract captures it: `colony`'s living cells in the `w` × `h` rectangle at (`x`, `y`),
+     * as the bitmap a Slide entry holds (see `Dish::region_bitmap`). Count its set bits for the cells.
+     */
+    region_bitmap(colony: number, x: number, y: number, w: number, h: number): Uint8Array;
     /**
      * Start from a stored board (the contract's `board` view, base64-decoded) at a known generation.
      */
@@ -133,12 +143,19 @@ export function quote(agar: string, feed_ppm: number, keeper_bps: number, total_
  */
 export function sell_quote(petri: string, agar: string, petri_price: string, max_supply: string, sell_bps: number, vault: string, outstanding: string): string;
 
+/**
+ * A specimen slide's image exactly as the contract's `nft_token` draws it: an SVG of `bitmap` (`w` × `h`, a Slide
+ * entry's or the `slides` view's) in `color` (0xRRGGBB), marked with its generation.
+ */
+export function slide_svg(bitmap: Uint8Array | number[], w: number, h: number, color: number, generation: number): string;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_engine_free: (a: number, b: number) => void;
     readonly buy_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+    readonly engine_add_credit_won: (a: number, b: number, c: number, d: number) => void;
     readonly engine_agar: (a: number) => [number, number];
     readonly engine_attach: (a: number, b: number) => void;
     readonly engine_board_hash_hex: (a: number) => [number, number];
@@ -163,6 +180,7 @@ export interface InitOutput {
     readonly engine_load_compact: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
     readonly engine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
+    readonly engine_region_bitmap: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly engine_set_agar: (a: number, b: number, c: number) => void;
     readonly engine_set_colonies: (a: number, b: number) => void;
     readonly engine_set_counted: (a: number, b: number) => void;
@@ -178,6 +196,7 @@ export interface InitOutput {
     readonly pattern_cells: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number];
     readonly sell_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number];
+    readonly slide_svg: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

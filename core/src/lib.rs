@@ -8,6 +8,7 @@
 #![no_std]
 extern crate alloc;
 
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use sha2::{Digest, Sha256};
@@ -453,6 +454,86 @@ impl Dish {
     pub fn total_live(&self) -> u32 {
         self.bits.iter().map(|b| b.count_ones()).sum()
     }
+
+    /// A specimen slide: which cells of the `w` × `h` rectangle at (`x`, `y`) (wrapping at the edges) are alive and
+    /// owned by `colony`, as a bitmap row by row from the rectangle's top left, bit `i` in byte `i / 8` at
+    /// `1 << (i % 8)`; and how many there are. Other colonies' cells and empty cells are 0, and so is everything for
+    /// colony 0. The contract captures slides with this and both replays recompute it.
+    pub fn region_bitmap(&self, colony: ColonyId, x: u16, y: u16, w: u16, h: u16) -> (Vec<u8>, u32) {
+        let n = w as usize * h as usize;
+        let mut out = vec![0u8; (n + 7) / 8];
+        let mut count = 0u32;
+        if colony == EMPTY {
+            return (out, 0);
+        }
+        for i in 0..n {
+            let (dx, dy) = ((i % w as usize) as i32, (i / w as usize) as i32);
+            if self.cells[self.index(x as i32 + dx, y as i32 + dy)] == colony {
+                out[i / 8] |= 1 << (i % 8);
+                count += 1;
+            }
+        }
+        (out, count)
+    }
+}
+
+/// A specimen slide as an SVG image: a dark agar disc, each live cell of the bitmap (see `Dish::region_bitmap`) a small
+/// rounded square in the colony's colour (`0xRRGGBB`), and the generation small in the corner. A 32 × 32 slide stays
+/// under 6 KB for any pattern Life can hold. The contract serves it as the NFT's media; the browser can draw the same.
+pub fn slide_svg(bitmap: &[u8], w: u16, h: u16, color: u32, generation: u64) -> String {
+    use core::fmt::Write;
+    let (w, h) = (w as u32, h as u32);
+    // The disc holds the whole rectangle with a cell to spare: its side is the rectangle's diagonal plus two.
+    let d2 = w * w + h * h;
+    let mut s = 1u32;
+    while s * s < d2 {
+        s += 1;
+    }
+    let side = s + 2;
+    // Cell centres in half units, so a rectangle of odd and even sides both sit centred.
+    let (ox, oy) = (side - w, side - h);
+    let half = |v: u32| if v % 2 == 0 { alloc::format!("{}", v / 2) } else { alloc::format!("{}.5", v / 2) };
+    let mut path = String::new();
+    let mut at: Option<(i32, i32)> = None;
+    for i in 0..(w * h) as usize {
+        if bitmap.get(i / 8).map(|b| b >> (i % 8) & 1 == 1) != Some(true) {
+            continue;
+        }
+        let (cx, cy) = ((i as u32 % w) as i32, (i as u32 / w) as i32);
+        match at {
+            // Each cell is a zero-length subpath; its caps draw it.
+            None => {
+                let _ = write!(path, "M{} {}h0", half(ox + 2 * cx as u32 + 1), half(oy + 2 * cy as u32 + 1));
+            }
+            Some((px, py)) => {
+                let _ = write!(path, "m{} {}h0", cx - px, cy - py);
+            }
+        }
+        at = Some((cx, cy));
+    }
+    // Lengths in tenths of a cell, printed as decimals.
+    let tenths = |v: u32| if v % 10 == 0 { alloc::format!("{}", v / 10) } else { alloc::format!("{}.{}", v / 10, v % 10) };
+    let mut out = String::with_capacity(path.len() + 700);
+    let _ = write!(
+        out,
+        concat!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 {s} {s}\">",
+            "<rect width=\"{s}\" height=\"{s}\" fill=\"#0b0705\"/>",
+            "<circle cx=\"{c}\" cy=\"{c}\" r=\"{r}\" fill=\"#24130a\" stroke=\"#f3e9da\" stroke-opacity=\".2\" stroke-width=\".25\"/>",
+            "<defs><path id=\"c\" d=\"{d}\"/></defs>",
+            "<g fill=\"none\" stroke=\"#{col:06x}\"><use xlink:href=\"#c\" stroke-width=\".9\" stroke-linecap=\"round\"/><use xlink:href=\"#c\" stroke-width=\".72\" stroke-linecap=\"square\"/></g>",
+            "<text x=\".6\" y=\"{ty}\" font-family=\"monospace\" font-size=\"{fs}\" fill=\"#f3e9da\" fill-opacity=\".55\">gen {g}</text></svg>"
+        ),
+        s = side,
+        c = tenths(side * 5),
+        r = tenths(side * 5 - 4),
+        d = path,
+        col = color & 0xFF_FF_FF,
+        ty = tenths(side * 10 - 6),
+        fs = tenths((side * 10 + 11) / 22),
+        g = generation,
+    );
+    out
 }
 
 /// Whether the history chain advances at this generation.

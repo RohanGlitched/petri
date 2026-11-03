@@ -6,12 +6,16 @@ import { Culture, type CultureHandle } from "@/components/Culture";
 import { Loupe } from "@/components/site/Loupe";
 import { Specimen } from "@/components/site/Specimen";
 import { WarmUp } from "@/components/site/WarmUp";
+import { PayAnyToken } from "@/components/intents/PayAnyToken";
+import { SlideGlass } from "@/components/specimens/SlideGlass";
 import { currentEngine, refreshDish } from "@/lib/dish-store";
 import { useLive, usePatternOffsets, petri, int, hex, near } from "@/lib/live";
-import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, connectWallet, createGuest, disconnectWallet, joinDish, plantCells, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
+import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, claimPending, connectWallet, renameColony, createGuest, disconnectWallet, joinDish, mintSlide, plantCells, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
 import { buy_quote, pattern_cells, quote, sell_quote, PATTERNS, type PatternInfo, type PatternName } from "@/engine";
-import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPlantDeposit, type Colony } from "@/lib/chain";
-import { accountUrl, shortAccount, txUrl } from "@/lib/config";
+import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPending, getPlantDeposit, getSlide, getSlideDeposit, type Colony } from "@/lib/chain";
+import { accountUrl, shortAccount, switchNetwork, txUrl } from "@/lib/config";
+import { SLIDE_TITLE_MAX, capture, cellsBitmap, clampRect, densest, normalizeSlide, rectFromDrag, slideOffsets, slideRules, slideSvg, svgUrl, type Rect } from "@/lib/slides";
+import { useNet } from "@/lib/use-net";
 import { STAINS, firstFreeStain } from "@/lib/stains";
 import { strainOf } from "@/lib/strains";
 import { actionIndex, useStrainLog } from "@/lib/strain-log";
@@ -26,6 +30,43 @@ const DOCK_GROUPS: { title: string; kinds: PatternInfo["kind"][] }[] = [
   { title: "Gamble", kinds: ["wild"] },
 ];
 type Pending = { cells: number[]; label: string; at: number; hash?: string };
+/** What is in hand: one of the classic stamps, or a pattern loaded from a specimen. */
+type StampInfo = { name: PatternName | null; label: string; cells: number; note: string };
+type Custom = { offsets: [number, number][]; label: string; id: string };
+
+
+/** A specimen's cells as a stamp centred on (x, y), turned and mirrored like any other stamp. */
+function customCells(offsets: [number, number][], x: number, y: number, w: number, h: number, rotate: number, flip: boolean): Uint32Array {
+  let pts = offsets.map(([a, b]) => [a, b] as [number, number]);
+  const size = () => [Math.max(0, ...pts.map((p) => p[0])) + 1, Math.max(0, ...pts.map((p) => p[1])) + 1];
+  if (flip) {
+    const [sw] = size();
+    pts = pts.map(([a, b]) => [sw - 1 - a, b]);
+  }
+  for (let r = 0; r < rotate; r++) {
+    const [, sh] = size();
+    pts = pts.map(([a, b]) => [sh - 1 - b, a]);
+  }
+  const [sw, sh] = size();
+  const ox = x - Math.floor(sw / 2);
+  const oy = y - Math.floor(sh / 2);
+  return new Uint32Array(pts.map(([a, b]) => ((((oy + b) % h) + h) % h) * w + ((((ox + a) % w) + w) % w)));
+}
+
+/** Whatever shape the contract reports pending NEAR in, as yoctoNEAR. */
+function pendingYocto(v: unknown): bigint {
+  try {
+    if (typeof v === "string" || typeof v === "number") return BigInt(v);
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      const n = o.near ?? o.amount ?? o.pending;
+      if (typeof n === "string" || typeof n === "number") return BigInt(n);
+    }
+  } catch {
+    /* unreadable: nothing pending */
+  }
+  return 0n;
+}
 
 function explain(v: string | null, w: number, names: Map<number, string>, siegeX = 3): string {
   if (!v) return "";
@@ -58,6 +99,7 @@ function Countdown({ ms, total }: { ms: number; total: number }) {
 export function DishStage() {
   const { d, rules, palette, perCell, warming, ready, colonies, w, h, secs, vault, tideIn } = useLive();
   const player = usePlayer();
+  const net = useNet();
   const offsets = usePatternOffsets();
   const lens = useRef<CultureHandle>(null);
   // The panels that float over the dish, measured so the opening view lands in the agar they leave uncovered.
@@ -81,10 +123,17 @@ export function DishStage() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ text: string; hash?: string } | null>(null);
+  const [done, setDone] = useState<{ text: string; hash?: string; link?: { href: string; label: string } } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [logOpen, setLogOpen] = useState(true);
   const [snapped, setSnapped] = useState(false);
+  const [custom, setCustom] = useState<Custom | null>(null);
+  // Fossilize: the frame being drawn over the player's own colony, and the slide's title.
+  const [fossil, setFossil] = useState<Rect | null>(null);
+  const [fossilOn, setFossilOn] = useState(false);
+  const [slideTitle, setSlideTitle] = useState("");
+  const [payOpen, setPayOpen] = useState(false);
+  const [pendingNear, setPendingNear] = useState(0n);
 
   const names = useMemo(() => new Map(d.colonies.map((c) => [c.id, c.name])), [d.colonies]);
   // The strains' log says, move by move, whether the model or the written rules chose it.
@@ -98,13 +147,15 @@ export function DishStage() {
       return;
     }
     try {
-      const [c, b, cl, n, cr] = await Promise.all([
+      const [c, b, cl, n, cr, pn] = await Promise.all([
         getColonyOf(player.accountId),
         getBalance(player.accountId),
         getClaimable(player.accountId),
         getNearBalance(player.accountId).catch(() => null),
         getCredit(player.accountId).catch(() => "0"),
+        getPending(player.accountId).catch(() => "0"),
       ]);
+      setPendingNear(pendingYocto(pn));
       setMe(c);
       setBalance(Number(b));
       setClaimable({ petri: Number(cl.petri), near: Number(cl.near) });
@@ -129,18 +180,42 @@ export function DishStage() {
       if (e.key === "f" || e.key === "F") setFlip((f) => !f);
       if (e.key === "Escape") {
         setPattern(null);
+        setCustom(null);
         setTarget(null);
+        setFossilOn(false);
       }
     };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, []);
 
+  // While framing a slide, the arrow keys move the frame and Shift with them resizes it.
+  useEffect(() => {
+    if (!fossilOn) return;
+    const k = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const dir = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number]>)[e.key];
+      if (!dir) return;
+      e.preventDefault();
+      setFossil((r) => (r ? clampRect(e.shiftKey ? { ...r, w: r.w + dir[0], h: r.h + dir[1] } : { ...r, x: r.x + dir[0], y: r.y + dir[1] }, w, h) : r));
+    };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [fossilOn, w, h]);
+
   const anchor = target ?? hover;
+  /** The stamp in hand placed at (x, y): a classic pattern or a specimen's cells. */
+  const cellsAt = useCallback(
+    (x: number, y: number): Uint32Array | null =>
+      pattern ? pattern_cells(pattern, x, y, w, h, rotate, flip) : custom ? customCells(custom.offsets, x, y, w, h, rotate, flip) : null,
+    [pattern, custom, rotate, flip, w, h],
+  );
   const stamp = useMemo(() => {
-    if (!pattern || !anchor) return null;
-    return Array.from(pattern_cells(pattern, anchor.x, anchor.y, w, h, rotate, flip));
-  }, [pattern, anchor, rotate, flip, w, h]);
+    if (!anchor) return null;
+    const c = cellsAt(anchor.x, anchor.y);
+    return c ? Array.from(c) : null;
+  }, [cellsAt, anchor]);
 
   const verdict = useMemo(() => {
     if (!stamp || !rules) return null;
@@ -155,9 +230,22 @@ export function DishStage() {
   const siege = !!verdict && verdict.startsWith("siege:");
   const legal = verdict === "" || siege;
 
+  // The cells a slide made now would keep: the player's own living cells inside the frame.
+  const kept = useMemo(() => (fossilOn && fossil && me ? capture(d.cells, fossil, w, h, me.id) : []), [fossilOn, fossil, me, d.cells, w, h]);
+
   const overlay = useMemo(() => {
     const o = new Uint8Array(w * h);
-    if (pattern && d.cells && rules) {
+    if (fossilOn && fossil) {
+      // Everything outside the frame dims, as under a microscope's field stop.
+      o.fill(8);
+      for (let dy = 0; dy < fossil.h; dy++)
+        for (let dx = 0; dx < fossil.w; dx++) {
+          const i = ((fossil.y + dy) % h) * w + ((fossil.x + dx) % w);
+          o[i] = d.cells && me && d.cells[i] === me.id ? 7 : 6;
+        }
+      return o;
+    }
+    if ((pattern || custom) && d.cells && rules) {
       const b = rules.buffer;
       const myId = me?.id ?? -1;
       for (let i = 0; i < d.cells.length; i++) {
@@ -174,7 +262,7 @@ export function DishStage() {
     if (stamp) for (const i of stamp) o[i] = legal ? 1 : 2;
     if (pending) for (const i of pending.cells) o[i] = 4;
     return o;
-  }, [pattern, d.cells, rules, me, stamp, legal, pending, w, h]);
+  }, [pattern, custom, fossilOn, fossil, d.cells, rules, me, stamp, legal, pending, w, h]);
 
   useEffect(() => {
     if (!pending) return;
@@ -182,7 +270,12 @@ export function DishStage() {
     if (Date.now() - pending.at > 60_000) setPending(null);
   }, [d.cells, pending]);
 
-  const info = PATTERNS.find((p) => p.name === pattern);
+  const info: StampInfo | undefined =
+    PATTERNS.find((p) => p.name === pattern) ??
+    (custom
+      ? { name: null, label: custom.label, cells: custom.offsets.length, note: `The cells of specimen ${custom.id}, as its slide fixed them. Planting them is an ordinary planting at the normal price.` }
+      : undefined);
+  const infoOffsets = info?.name ? offsets[info.name] : custom?.offsets;
   // The contract's own price formula, from the same crate.
   const costOf = (n: number, besieging = false) =>
     rules && ready ? Number(quote(String(d.agar), rules.feed_ppm, rules.keeper_bps, d.counted, rules.live_floor, rules.payback, rules.min_cell_price, n, besieging, rules.siege_x)) : 0;
@@ -206,10 +299,34 @@ export function DishStage() {
   const myColor = me ? hex(me.color) : "#f2b45a";
   /** What the player can spend: their balance and earnings once joined, what a 0.02 NEAR stake buys before. */
   const budget = me ? spendable : joinPetri;
+  // A slide burns a fixed PETRI price for each cell it keeps, from the balance the colony holds.
+  const sr = slideRules(rules);
+  const slideCost = sr.cellPrice !== null ? Number(sr.cellPrice) * kept.length : null;
+  const slideMin = sr.minCells ?? 1;
+  // Drawn exactly as the contract will draw the token's picture, from the same bitmap.
+  const previewSrc = useMemo(
+    () => (fossil && me ? svgUrl(slideSvg(cellsBitmap(kept, fossil.w, fossil.h), fossil.w, fossil.h, me.color, d.generation)) : null),
+    [kept, fossil, me, d.generation],
+  );
+  const fossilBlock = !me
+    ? "Start a colony first."
+    : !fossil
+      ? "Drag across your colony to frame a slide."
+      : kept.length === 0
+        ? `None of ${me.name}'s living cells are inside the frame. Drag it over your colony.`
+        : kept.length < slideMin
+          ? `A slide needs at least ${slideMin} of your living cells; this frame holds ${kept.length}.`
+          : slideCost !== null && balance !== null && spendable < slideCost
+            ? `This slide burns ${petri(slideCost, 2)} PETRI; ${me.name} can spend ${petri(spendable, 2)}.`
+            : null;
 
   async function start(name: string, color: number) {
     setError(null);
     setDone(null);
+    if (!player && !net.freePlay) {
+      setError("Connect a NEAR wallet first: on the mainnet dish your own wallet signs and pays.");
+      return;
+    }
     try {
       if (!player) {
         setBusy("Making your guest account on NEAR testnet…");
@@ -310,6 +427,126 @@ export function DishStage() {
     }
   }
 
+  /** Open the Fossilize frame, first over the colony's densest patch. */
+  function openFossil() {
+    if (!me) return;
+    setPattern(null);
+    setCustom(null);
+    setTarget(null);
+    setError(null);
+    setDone(null);
+    const r = fossil ?? densest(d.cells, w, h, me.id, 16) ?? { x: 56, y: 56, w: 16, h: 16 };
+    setFossil(r);
+    setFossilOn(true);
+    lens.current?.centerOn((r.x + Math.floor(r.w / 2)) % w, (r.y + Math.floor(r.h / 2)) % h, mediumZoom());
+  }
+
+  async function mintFossil() {
+    if (!me || !fossil || fossilBlock) return;
+    setError(null);
+    setDone(null);
+    setBusy("Fixing the slide…");
+    const n = kept.length;
+    try {
+      // The contract's own figure for the storage, which it keeps; anything over comes back.
+      const t = slideTitle.trim();
+      const deposit = BigInt(await getSlideDeposit(fossil.w, fossil.h, t ? new TextEncoder().encode(t).length : null));
+      const r = await mintSlide({ ...fossil, title: t }, deposit);
+      setDone({
+        text: `Specimen made: ${int(n)} cells of ${me.name} fixed on a slide${slideCost !== null ? ` for ${petri(slideCost, 2)} PETRI, burned` : ""}.`,
+        hash: r.hash,
+        link: { href: "/specimens", label: "See it in the slide box" },
+      });
+      setFossilOn(false);
+      setSlideTitle("");
+      await refreshDish();
+      await loadMe();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // /dish?replant=<id> loads a specimen's cells into the stamp; /dish?tool=fossil opens the frame once the colony is known.
+  const asked = useRef<{ fossil: boolean } | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    asked.current = { fossil: q.get("tool") === "fossil" };
+    if (asked.current.fossil) setDone({ text: "Fossilize frames your own living cells, so it opens as soon as your colony is on the dish." });
+    const id = q.get("replant");
+    if (!id) return;
+    getSlide(id).then(
+      (raw) => {
+        const sl = raw ? normalizeSlide(raw) : null;
+        const cells = sl ? slideOffsets(sl) : null;
+        if (!sl || !cells || cells.length === 0) {
+          setError(sl ? `Specimen ${id}'s cells could not be read, so it cannot be loaded as a stamp.` : `There is no specimen ${id} on this dish.`);
+          return;
+        }
+        setPattern(null);
+        setCustom({ offsets: cells, label: sl.title?.trim() || `Specimen ${id}`, id });
+        setDone({ text: `Specimen ${id}'s ${int(cells.length)} cells are in the stamp. Point at open agar and click to place them; R turns them, F flips them.` });
+      },
+      (e) => setError(`Specimen ${id} could not be read: ${e instanceof Error ? e.message : String(e)}`),
+    );
+  }, []);
+  useEffect(() => {
+    if (!me || !d.cells || !asked.current?.fossil) return;
+    asked.current.fossil = false;
+    openFossil();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me, d.cells]);
+
+  /** A payment through NEAR Intents landed: show the colony it made or fed. */
+  async function landed(account: string) {
+    setPayOpen(false);
+    await refreshDish();
+    await loadMe();
+    const c = await getColonyOf(account).catch(() => null);
+    const mine = player?.accountId === account;
+    setDone({
+      text: c
+        ? mine
+          ? `${c.name} is on the dish with its PETRI. Pick a stamp below and plant it.`
+          : `${c.name} is on the dish for ${shortAccount(account, 28)}. Connect that account's wallet here to plant with it.`
+        : `The NEAR reached the dish for ${shortAccount(account, 28)}.`,
+    });
+  }
+
+  /** A colony started by someone else's payment takes the name its owner chooses, once. */
+  async function rename(name: string) {
+    if (!me) return;
+    setError(null);
+    setDone(null);
+    setBusy("Renaming the colony…");
+    try {
+      const r = await renameColony(name, me.color);
+      setDone({ text: `The colony is called ${name} now.`, hash: r.hash });
+      await refreshDish();
+      await loadMe();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function claimBack() {
+    setError(null);
+    setDone(null);
+    setBusy("Claiming the pending NEAR…");
+    try {
+      const r = await claimPending();
+      setDone({ text: `Claimed ${near(Number(pendingNear), 4)} NEAR back to your account.`, hash: r.hash });
+      await loadMe();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function findMine() {
     if (!me || !d.cells) return;
     let first = -1;
@@ -330,7 +567,7 @@ export function DishStage() {
   /** The legal anchor nearest to (x, y) for the chosen stamp, searching outward ring by ring. */
   function nearestFit(x: number, y: number, maxR = 18): Cell | null {
     const e = currentEngine();
-    if (!e || !pattern || !rules) return null;
+    if (!e || !(pattern || custom) || !rules) return null;
     const id = me?.id ?? 65535;
     for (let r = 0; r <= maxR; r++) {
       for (let dy = -r; dy <= r; dy++) {
@@ -338,8 +575,8 @@ export function DishStage() {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
           const ax = (((x + dx) % w) + w) % w;
           const ay = (((y + dy) % h) + h) % h;
-          const cells = pattern_cells(pattern, ax, ay, w, h, rotate, flip);
-          if (e.check_plant(id, cells, rules.buffer, rules.max_plant_cells) === "") return { x: ax, y: ay };
+          const cells = cellsAt(ax, ay);
+          if (cells && e.check_plant(id, cells, rules.buffer, rules.max_plant_cells) === "") return { x: ax, y: ay };
         }
       }
     }
@@ -347,7 +584,7 @@ export function DishStage() {
   }
 
   /** The roomiest open agar where `stamp` actually fits: the legal anchor farthest from any rival. */
-  function openSpot(stamp: PatternName): { at: Cell; near: number } | null {
+  function openSpot(make: (x: number, y: number) => Uint32Array | null): { at: Cell; near: number } | null {
     const e = currentEngine();
     if (!e || !d.cells || !rules) return null;
     const myId = me?.id ?? -1;
@@ -371,8 +608,8 @@ export function DishStage() {
       }
     spots.sort((a, b) => b.near - a.near);
     for (const sp of spots) {
-      const cells = pattern_cells(stamp, sp.at.x, sp.at.y, w, h, rotate, flip);
-      if (e.check_plant(id, cells, rules.buffer, rules.max_plant_cells) === "") return sp;
+      const cells = make(sp.at.x, sp.at.y);
+      if (cells && e.check_plant(id, cells, rules.buffer, rules.max_plant_cells) === "") return sp;
     }
     return null;
   }
@@ -385,9 +622,9 @@ export function DishStage() {
 
   /** Centre the view on open agar where the chosen stamp (or a block) fits. */
   function findOpen() {
-    const stampName = pattern ?? "block";
-    const sp = openSpot(stampName);
-    const label = PATTERNS.find((p) => p.name === stampName)?.label.toLowerCase() ?? "block";
+    const inHand = !!(pattern || custom);
+    const sp = openSpot(inHand ? cellsAt : (x, y) => pattern_cells("block", x, y, w, h, rotate, flip));
+    const label = inHand ? info?.label.toLowerCase() ?? "stamp" : "block";
     if (!sp) {
       setDone({ text: `No open agar is left where a ${label} fits. Try a smaller stamp, or send a glider.` });
       return;
@@ -396,7 +633,7 @@ export function DishStage() {
     const cur = lens.current?.camera().zoom ?? 0;
     const zoom = v && v.w ? Math.min(v.roundFit * 3, Math.max(cur, v.roundFit * 2)) : undefined;
     lens.current?.centerOn(sp.at.x, sp.at.y, zoom);
-    if (pattern && !target) setHover(sp.at);
+    if (inHand && !target) setHover(sp.at);
     setDone({ text: `A ${label} fits at ${sp.at.x}, ${sp.at.y}, ${sp.near >= 99 ? "13 or more" : sp.near} cells from the nearest rival.` });
   }
 
@@ -489,7 +726,7 @@ export function DishStage() {
     if (!z) return;
     opened.current = true;
     if (fitLiving()) return;
-    const sp = openSpot("block");
+    const sp = openSpot((x, y) => pattern_cells("block", x, y, w, h, 0, false));
     if (sp) lens.current?.centerOn(sp.at.x, sp.at.y, z);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.cells, rules]);
@@ -537,11 +774,20 @@ export function DishStage() {
           interactive
           maxDpr={1.5}
           onHover={(c) => !target && setHover(c)}
+          select={fossilOn}
+          onSelect={(a, b, end) => {
+            if (end && a.x === b.x && a.y === b.y) {
+              // A tap moves the frame so it is centred where you tapped.
+              setFossil((r) => clampRect(r ? { ...r, x: a.x - Math.floor(r.w / 2), y: a.y - Math.floor(r.h / 2) } : { x: a.x - 8, y: a.y - 8, w: 16, h: 16 }, w, h));
+              return;
+            }
+            setFossil(rectFromDrag(a, b, w, h));
+          }}
           onCellClick={(c) => {
-            if (pattern) {
+            if (pattern || custom) {
               const e = currentEngine();
-              const cells = pattern_cells(pattern, c.x, c.y, w, h, rotate, flip);
-              const fits = e && rules ? e.check_plant(me?.id ?? 65535, cells, rules.buffer, rules.max_plant_cells) === "" : false;
+              const cells = cellsAt(c.x, c.y);
+              const fits = e && rules && cells ? e.check_plant(me?.id ?? 65535, cells, rules.buffer, rules.max_plant_cells) === "" : false;
               const spot = fits ? c : nearestFit(c.x, c.y);
               setTarget(spot ?? c);
               setSnapped(!fits && !!spot);
@@ -550,7 +796,7 @@ export function DishStage() {
             }
             setHover(c);
           }}
-          label={`The live dish, generation ${d.generation}. Drag to move, scroll or pinch to zoom.`}
+          label={fossilOn ? `The live dish, generation ${d.generation}. Drag across your colony to frame a slide; the arrow keys move the frame.` : `The live dish, generation ${d.generation}. Drag to move, scroll or pinch to zoom.`}
         />
       </div>
 
@@ -574,27 +820,44 @@ export function DishStage() {
       )}
 
       <aside ref={leftBox} className={s.left}>
-        {!me && (
-          <JoinForm onStart={start} onConnect={connect} busy={!!busy} player={player} grant={ready ? petri(joinPetri) : "…"} colonies={d.colonies} />
+        {!me &&
+          (net.freePlay || player ? (
+            <JoinForm onStart={start} onConnect={connect} onPay={net.freePlay ? undefined : () => setPayOpen(true)} busy={!!busy} player={player} grant={ready ? petri(joinPetri) : "…"} colonies={d.colonies} />
+          ) : (
+            <MainnetStart onConnect={connect} onPay={() => setPayOpen(true)} busy={!!busy} />
+          ))}
+
+        {player && pendingNear > 0n && (
+          <section className={`${s.card} ${s.status}`}>
+            <p>
+              {near(Number(pendingNear), 4)} NEAR reached the dish for this account through NEAR Intents and was not used.
+              {isWallet ? " It is yours to claim back." : ""}
+            </p>
+            {isWallet && (
+              <div className={s.row}>
+                <button className="btn btn-amber btn-small" onClick={claimBack} disabled={!!busy}>Claim {near(Number(pendingNear), 4)} NEAR</button>
+              </div>
+            )}
+          </section>
         )}
 
         {info && !me && (
           <section className={`${s.card} ${s.stampLine}`}>
-            <Specimen offsets={offsets[info.name]} color={myColor} size={30} />
+            <Specimen offsets={infoOffsets} color={myColor} size={30} />
             <p>{info.label} selected. Start a colony to plant it.</p>
-            <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setTarget(null); }}>×</button>
+            <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setCustom(null); setTarget(null); }}>×</button>
           </section>
         )}
 
         {info && me && (
           <section className={`${s.card} ${s.plantCard}`}>
             <div className={s.plantHead}>
-              <Specimen offsets={offsets[info.name]} color={myColor} size={48} />
+              <Specimen offsets={infoOffsets} color={myColor} size={48} />
               <div>
                 <h2>{info.label}</h2>
                 <span className="num">{stamp?.length ?? info.cells} cells, {petri(cost, 2)} PETRI{siege ? ` (siege, ${rules?.siege_x ?? 3}×)` : ""}</span>
               </div>
-              <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setTarget(null); }}>×</button>
+              <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setCustom(null); setTarget(null); }}>×</button>
             </div>
             <p className={s.hint}>{info.note}</p>
             <div className={s.row}>
@@ -627,7 +890,7 @@ export function DishStage() {
           </section>
         )}
 
-        {me && info && (
+        {me && (info || fossilOn) && (
           // While a stamp is in hand the colony card shrinks to one line, so the planting controls fit the column.
           <section className={`${s.card} ${s.stampLine}`}>
             <i className="swatch" style={{ background: myColor, width: 16, height: 16 }} />
@@ -637,7 +900,7 @@ export function DishStage() {
           </section>
         )}
 
-        {me && !info && (
+        {me && !info && !fossilOn && (
           <section className={s.card}>
             <div className={s.meHead}>
               <i className="swatch" style={{ background: myColor, width: 16, height: 16 }} />
@@ -686,10 +949,22 @@ export function DishStage() {
             )}
             <div className={s.row}>
               <button className="btn btn-ghost btn-small" onClick={findMine} disabled={myLive === 0}>Find my colony</button>
+              <button className="btn btn-ghost btn-small" onClick={openFossil} disabled={myLive === 0 || !!busy} title="Fix a patch of your living cells onto a slide, minted as a NEAR token">
+                Fossilize a patch
+              </button>
+            </div>
+            <div className={s.row}>
               {isWallet ? (
-                <button className={s.linkish} onClick={() => disconnectWallet().catch(() => {})}>
-                  Disconnect wallet
-                </button>
+                <>
+                  {!net.freePlay && (
+                    <button className={s.linkish} onClick={() => setPayOpen(true)}>
+                      Top up with any token
+                    </button>
+                  )}
+                  <button className={s.linkish} onClick={() => disconnectWallet().catch(() => {})}>
+                    Disconnect wallet
+                  </button>
+                </>
               ) : (
                 <>
                 <button className={s.linkish} onClick={connect} disabled={!!busy}>
@@ -704,6 +979,48 @@ export function DishStage() {
                 </>
               )}
             </div>
+            {me.proxy && isWallet && <Rename current={me.name} busy={!!busy} onRename={rename} />}
+          </section>
+        )}
+
+        {me && fossilOn && (
+          <section className={`${s.card} ${s.plantCard}`} aria-labelledby="fossil-title">
+            <div className={s.plantHead}>
+              <div>
+                <h2 id="fossil-title">Fossilize</h2>
+                <span>A slide of {me.name}&rsquo;s own living cells</span>
+              </div>
+              <button className={s.close} aria-label="Close the frame" onClick={() => setFossilOn(false)}>×</button>
+            </div>
+            <div className={s.fossilGlass}>
+              <SlideGlass size="mini" src={previewSrc} title={slideTitle} placeholder="Untitled specimen" colony={me} generation={d.generation} count={kept.length} />
+            </div>
+            <dl className={s.fossilStats} aria-live="polite">
+              <div><dt>Frame</dt><dd className="num">{fossil ? `${fossil.w} × ${fossil.h}` : "—"}</dd></div>
+              <div><dt>Your cells inside</dt><dd className="num">{int(kept.length)}</dd></div>
+              <div><dt>PETRI it burns</dt><dd className="num">{slideCost !== null ? petri(slideCost, 2) : "—"}</dd></div>
+            </dl>
+            <p className={s.hint}>
+              Drag across your colony to frame it, 4 to 32 cells a side; tap to move the frame. The arrow keys move it and Shift with the
+              arrows resizes it. Shift and drag, or two fingers, moves the dish.
+            </p>
+            <label className={s.noteField}>
+              <span>Title, stored on the token (optional)</span>
+              <input value={slideTitle} onChange={(e) => setSlideTitle(e.target.value)} maxLength={SLIDE_TITLE_MAX} placeholder="e.g. Beehives at dawn" />
+              <em className="num">{slideTitle.length}/{SLIDE_TITLE_MAX}</em>
+            </label>
+            <p className={`${s.verdict} ${fossilBlock ? s.warn : s.ok}`}>
+              {fossilBlock ??
+                "Ready. The contract keeps your cells as they are when the transaction lands, which may be a generation after this preview: still lifes stay put, gliders move on."}
+            </p>
+            <button className="btn btn-amber" disabled={!!fossilBlock || !!busy} onClick={mintFossil}>
+              Mint this specimen
+            </button>
+            <p className={s.hint}>
+              {isWallet
+                ? "Your wallet also attaches the NEAR for the token's storage, a few thousandths, as the contract quotes it; anything over comes back."
+                : "Free play: the token's storage, a few thousandths of a NEAR, comes out of this guest's sponsored credit."}
+            </p>
           </section>
         )}
 
@@ -714,6 +1031,7 @@ export function DishStage() {
             {done && (
               <p className={s.ok}>
                 {done.text} {done.hash && <a href={txUrl(done.hash)}>See the transaction</a>}
+                {done.link && <> <Link href={done.link.href}>{done.link.label}</Link></>}
               </p>
             )}
           </section>
@@ -790,7 +1108,7 @@ export function DishStage() {
             )}
           </>
         ) : (
-          <span className={s.hintInline}>Drag to move. Scroll or pinch to zoom. The edges wrap.</span>
+          <span className={s.hintInline}>{fossilOn ? "Drag to frame a slide. Shift and drag moves the dish." : "Drag to move. Scroll or pinch to zoom. The edges wrap."}</span>
         )}
       </div>
 
@@ -814,6 +1132,8 @@ export function DishStage() {
                         aria-label={`${p.label}, ${p.cells} cells${price ? `, ${price}` : ""}${short ? `, ${gap} PETRI more than ${whose}` : ""}`}
                         onClick={() => {
                           setPattern(pattern === p.name ? null : p.name);
+                          setCustom(null);
+                          setFossilOn(false);
                           setTarget(null);
                         }}
                         title={short ? `${p.note} Costs ${gap} PETRI more than ${whose} right now.` : p.note}
@@ -833,13 +1153,72 @@ export function DishStage() {
       </nav>
 
       {d.status === "error" && (
-        <p className={s.err}>The dish could not be read from NEAR ({d.error}). Retrying every few seconds.</p>
+        <p className={s.err}>
+          {/does not exist|UNKNOWN_ACCOUNT|CodeDoesNotExist/i.test(d.error ?? "")
+            ? `${net.contract} is not deployed on ${net.label.chain} yet. Retrying every few seconds.`
+            : `The dish could not be read from NEAR (${d.error}). Retrying every few seconds.`}
+          {!net.freePlay && (
+            <>
+              {" "}
+              <button className={s.linkish} onClick={() => switchNetwork("testnet")}>Play free on testnet</button>
+            </>
+          )}
+        </p>
+      )}
+
+      {!net.freePlay && (
+        <PayAnyToken open={payOpen} onClose={() => setPayOpen(false)} account={player?.kind === "wallet" ? player.accountId : null} onLanded={landed} />
       )}
     </div>
   );
 }
 
-function JoinForm({ onStart, onConnect, busy, player, grant, colonies }: { onStart: (name: string, color: number) => void; onConnect: () => void; busy: boolean; player: Player; grant: string; colonies: Colony[] }) {
+/** A colony a NEAR Intents payment started for this account carries the payer's name for it until renamed, once. */
+function Rename({ current, busy, onRename }: { current: string; busy: boolean; onRename: (name: string) => void }) {
+  const [name, setName] = useState("");
+  const clean = name.split(/\s+/).filter(Boolean).join(" ");
+  const ok = /^[A-Za-z0-9 \-'.&!?_,:()]{1,24}$/.test(clean) && clean !== current;
+  return (
+    <form
+      className={s.renameRow}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ok) onRename(clean);
+      }}
+    >
+      <p className={s.hint}>Someone&rsquo;s payment started this colony for you, so its name was their choice. You may rename it once.</p>
+      <div className={s.row}>
+        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder={current} aria-label="New colony name" />
+        <button className="btn btn-ghost btn-small" type="submit" disabled={!ok || busy}>Rename</button>
+      </div>
+    </form>
+  );
+}
+
+/** The mainnet dish has no guests: a colony starts from a wallet, or from any token through NEAR Intents. */
+function MainnetStart({ onConnect, onPay, busy }: { onConnect: () => void; onPay: () => void; busy: boolean }) {
+  return (
+    <section className={s.card}>
+      <h2 className={s.joinTitle}>Start a colony</h2>
+      <p className={s.hint}>
+        This is the mainnet dish: the NEAR is real, and every move is signed by your own wallet. Joining stakes 0.02 NEAR; a little
+        pays for your colony&rsquo;s storage and the rest buys PETRI from the agar.
+      </p>
+      <button className="btn btn-amber" onClick={onConnect} disabled={busy} style={{ width: "100%", marginTop: 16 }}>
+        Connect a NEAR wallet
+      </button>
+      <button className="btn btn-ghost" onClick={onPay} style={{ width: "100%", marginTop: 10 }}>
+        Pay with any token
+      </button>
+      <p className={s.hint}>No NEAR? Pay with USDC, ETH, SOL or BTC from their own chains. NEAR Intents swaps it, and the dish joins for the NEAR account you name.</p>
+      <p className={s.hint} style={{ marginTop: 12 }}>
+        Just looking? <button className={s.linkish} onClick={() => switchNetwork("testnet")}>Try free play on testnet</button>, with a guest account and no wallet.
+      </p>
+    </section>
+  );
+}
+
+function JoinForm({ onStart, onConnect, onPay, busy, player, grant, colonies }: { onStart: (name: string, color: number) => void; onConnect: () => void; onPay?: () => void; busy: boolean; player: Player; grant: string; colonies: Colony[] }) {
   const [name, setName] = useState("");
   const taken = useMemo(() => {
     const m = new Map<number, string>();
@@ -907,6 +1286,11 @@ function JoinForm({ onStart, onConnect, busy, player, grant, colonies }: { onSta
       {player?.kind !== "wallet" && (
         <button className="btn btn-ghost btn-small" type="button" onClick={onConnect} disabled={busy} style={{ width: "100%", marginTop: 10 }}>
           Use my NEAR wallet instead
+        </button>
+      )}
+      {onPay && (
+        <button className="btn btn-ghost btn-small" type="button" onClick={onPay} disabled={busy} style={{ width: "100%", marginTop: 10 }}>
+          Pay with any token instead
         </button>
       )}
       <p className={s.hint} style={{ marginTop: 12 }}>

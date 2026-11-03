@@ -443,3 +443,46 @@ fn house_cells_never_make_a_siege() {
     assert!(d.check_plant(2, &[at], 3, 64, &[]).unwrap().siege);
     assert!(!d.check_plant(2, &[at], 3, 64, &[1]).unwrap().siege);
 }
+
+#[test]
+fn a_slide_captures_only_its_colony_and_wraps() {
+    let mut d = Dish::new(16, 16);
+    place(&mut d, 1, 14, 14, patterns::BLOCK);
+    // A rival's block inside the same rectangle, across the wrapped edge.
+    place(&mut d, 2, 0, 0, patterns::BLOCK);
+    place(&mut d, 1, 1, 2, patterns::BLINKER);
+    let (bits, n) = d.region_bitmap(1, 14, 14, 6, 6);
+    assert_eq!(n, 4 + 3);
+    assert_eq!(bits.len(), 5);
+    let on = |i: usize| bits[i / 8] >> (i % 8) & 1 == 1;
+    // The block at (14..16, 14..16) is the rectangle's top left; the blinker at (1..4, 2) is row 4, columns 3..6.
+    for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1), (3, 4), (4, 4), (5, 4)] {
+        assert!(on(dy * 6 + dx), "({}, {})", dx, dy);
+    }
+    // The rival's block (columns 2..4, rows 2..4) is not captured.
+    assert!(!on(2 * 6 + 2) && !on(3 * 6 + 3));
+    assert_eq!(d.region_bitmap(2, 14, 14, 6, 6).1, 4);
+    assert_eq!(d.region_bitmap(EMPTY, 14, 14, 6, 6).1, 0, "empty cells are never a colony's");
+}
+
+#[test]
+fn a_slide_image_is_small_and_draws_every_cell() {
+    // Half of a 32 x 32 slide alive, every other cell: denser than anything Life holds for long.
+    let mut bits = vec![0u8; 128];
+    for i in 0..1024usize {
+        if (i % 32 + i / 32) % 2 == 0 {
+            bits[i / 8] |= 1 << (i % 8);
+        }
+    }
+    let svg = slide_svg(&bits, 32, 32, 0xc8431f, 123_456);
+    assert!(svg.len() < 6_000, "{} bytes", svg.len());
+    assert!(svg.starts_with("<svg") && svg.ends_with("</svg>"));
+    assert!(svg.contains("#c8431f") && svg.contains("gen 123456"));
+    assert_eq!(svg.matches("h0").count(), 512);
+    // A full slide of every cell is still well under the 16 KB a view can comfortably return.
+    let full = slide_svg(&[0xff; 128], 32, 32, 0x1e8c6e, 1);
+    assert!(full.len() < 7_000, "{} bytes", full.len());
+    assert_eq!(full.matches("h0").count(), 1024);
+    // An odd by even rectangle sits centred on half cells.
+    assert!(slide_svg(&[0b1], 5, 4, 0, 0).contains("M2.5 3h0"));
+}

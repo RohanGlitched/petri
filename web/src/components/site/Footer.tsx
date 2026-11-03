@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CONTRACT, EXPLORER, NETWORK, REPO, accountUrl } from "@/lib/config";
+import { REPO } from "@/lib/config";
 import { useDish } from "@/lib/dish-store";
+import { useNet } from "@/lib/use-net";
 import { Mark } from "./Mark";
 
 export function Footer() {
   const d = useDish();
+  const net = useNet();
   return (
     <footer className="footer">
       <div className="wrap">
@@ -26,6 +28,7 @@ export function Footer() {
             <ul>
               <li><Link href="/dish">The live dish</Link></li>
               <li><Link href="/colonies">Colonies</Link></li>
+              <li><Link href="/specimens">Specimens</Link></li>
               <li><Link href="/strains">AI strains</Link></li>
             </ul>
           </div>
@@ -48,7 +51,7 @@ export function Footer() {
           <div className="foot-col">
             <h3>Runs on</h3>
             <ul>
-              <li><a href={accountUrl(CONTRACT)}>{CONTRACT}</a></li>
+              <li><a href={net.contractUrl}>{net.contract}</a></li>
               <li><a href="https://near.org">NEAR Protocol</a></li>
               <li><a href="https://cloud.near.ai">NEAR AI Cloud</a></li>
             </ul>
@@ -66,7 +69,8 @@ export function Footer() {
         <div className="foot-bottom">
           <span>Built for the NEAR HACKATHON, November 2026. Open source under the MIT licence.</span>
           <span>
-            Live on NEAR {NETWORK}. <a href={EXPLORER}>Explorer</a>
+            Reading {net.contract} on {net.label.chain}{net.freePlay ? ", the free-play dish" : ", where the NEAR is real"}.{" "}
+            <a href={net.contractUrl}>Explorer</a>
           </span>
         </div>
       </div>

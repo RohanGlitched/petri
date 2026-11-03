@@ -5,7 +5,8 @@ import { RuleDemo, type Seed } from "@/components/site/RuleDemo";
 import { buy_quote } from "@/engine";
 import { useLive, petri, int, near, hex } from "@/lib/live";
 import { view } from "@/lib/chain";
-import { CONTRACT, accountUrl, fmtPetri } from "@/lib/config";
+import { fmtPetri } from "@/lib/config";
+import { useNet } from "@/lib/use-net";
 import { LAUNCH, DEMO, YOCTO, nearPer, weightOf } from "./shared";
 import s from "./rules.module.css";
 
@@ -88,6 +89,7 @@ const BUYS = [0.01, 0.05, 0.5, 2, 10];
 
 export function CoinSection() {
   const { d, rules, ready, feed, perCell, petriPrice, colonies } = useLive();
+  const net = useNet();
   const r = rules ?? LAUNCH;
   const st = d.state;
   const keeperPct = r.keeper_bps / 100;
@@ -412,7 +414,7 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
             <div className={s.foldBody}>
               <p>
                 Read from the <code className={s.codePaper}>state</code> view of{" "}
-                <a className={s.linkPaper} href={accountUrl(CONTRACT)}>{CONTRACT}</a> at stored generation{" "}
+                <a className={s.linkPaper} href={net.contractUrl}>{net.contract}</a> at stored generation{" "}
                 {st ? int(Number(st.generation)) : "—"}. Feed for the generations since then is added when the dish next advances.
               </p>
               <dl className={s.ledger}>

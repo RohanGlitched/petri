@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLive, int, near } from "@/lib/live";
 import { fmtPetri } from "@/lib/config";
+import { useNet } from "@/lib/use-net";
 import { getPlantDeposit } from "@/lib/chain";
 import { LAUNCH } from "./shared";
 import s from "./rules.module.css";
@@ -123,6 +124,7 @@ function useDeposits(ready: boolean) {
 
 export function PlantingSection() {
   const { d, rules, ready, cellPrice } = useLive();
+  const net = useNet();
   const r = rules ?? LAUNCH;
   // Prices count the cells the last feed counted (living cells of fed colonies, capped by reach), as the contract does.
   const live = ready ? d.counted : 0;
@@ -259,7 +261,7 @@ cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
               The player pays for what their planting stores: the ledger entry, its cells and its note. On top of that every
               planted cell carries a fee of <b className="num">{near(Number(r.cell_fee), 4)} NEAR</b>. The contract measures the
               storage the planting actually used and keeps it; everything above that goes to the tide vault. A wallet attaches
-              the NEAR; a guest spends it from the credit the site sponsored for it.
+              the NEAR; {net.freePlay ? "a guest spends it from the credit the site sponsored for it." : "on the free-play testnet dish, a guest spends it from credit the site sponsored."}
             </p>
             <pre className={s.formula}>
               {`bring = (200 + 4 × cells + (note bytes + 64, if there is a note)) bytes × 0.00001 NEAR

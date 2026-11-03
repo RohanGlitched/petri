@@ -29,6 +29,9 @@ export const LAUNCH: Rules = {
   max_catchup: 120,
   max_lag: 480,
   house: ["petri-violet.testnet", "petri-safranin.testnet", "petri-methylene.testnet", "petri-malachite.testnet", "petri-congo.testnet"],
+  slide_cells_price: "1000000",
+  slide_min_cells: 5,
+  wnear: "wrap.testnet",
 };
 
 /** The colours the explanatory dishes use (the same stains as the home page demos). */

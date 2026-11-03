@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLive, int } from "@/lib/live";
 import { getLock } from "@/lib/chain";
-import { CONTRACT, REPO, accountUrl } from "@/lib/config";
+import { CONTRACTS, REPO } from "@/lib/config";
+import { useNet } from "@/lib/use-net";
 import s from "./rules.module.css";
 
 const CHAIN_EVERY = 16;
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit (as in scripts/verify.mjs). */
 const BUILD_HASH = "7GNyLTrzbFSmSxVp92Ne7bVXaKpUtxPsMYGqtx9ULuaS";
-const LOCK_COMMAND = `near account delete-keys ${CONTRACT} public-keys ed25519:CDu2wUQhzNN3JKwHcduXqjS5TLSM78WVhowgPByum4LE network-config testnet sign-with-legacy-keychain send`;
+const LOCK_COMMAND = `near account delete-keys ${CONTRACTS.testnet} public-keys ed25519:CDu2wUQhzNN3JKwHcduXqjS5TLSM78WVhowgPByum4LE network-config testnet sign-with-legacy-keychain send`;
 
 const CHECKS = [
   "History chain",
@@ -52,6 +53,7 @@ function useLock() {
 
 export function VerifySection() {
   const { d, rules, ready } = useLive();
+  const net = useNet();
   const st = d.state;
   const lock = useLock();
   const stored = st ? Number(st.generation) : 0;
@@ -147,7 +149,7 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
               <h3 className="h3">The lock</h3>
               <p>
                 No method changes a parameter, mints PETRI or edits the board. What remains is the account itself: whoever holds a
-                full-access key to <a className={s.link} href={accountUrl(CONTRACT)}>{CONTRACT}</a> could deploy other code.
+                full-access key to <a className={s.link} href={net.contractUrl}>{net.contract}</a> could deploy other code.
               </p>
               <p>
                 The code was built with <code className={s.code}>cargo near build reproducible-wasm</code>; its hash is{" "}
@@ -168,9 +170,9 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
               <p>
                 {lock && lock.fullAccessKeys === 0
                   ? "The account has no full-access key, so its code can never change."
-                  : "The account still has one full-access key. The team will delete it before judging, so the code can never change; until then the full-access check is the one that fails on /verify and in the terminal. The command:"}
+                  : "The account still has one full-access key. The team will delete it before judging, so the code can never change; until then the full-access check is the one that fails on /verify and in the terminal." + (net.freePlay ? " The command:" : "")}
               </p>
-              {!(lock && lock.fullAccessKeys === 0) && <pre className={s.formula}>{LOCK_COMMAND}</pre>}
+              {!(lock && lock.fullAccessKeys === 0) && net.freePlay && <pre className={s.formula}>{LOCK_COMMAND}</pre>}
             </div>
           </div>
         </div>

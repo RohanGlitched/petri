@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useLive, int } from "@/lib/live";
-import { CONTRACT, REPO, accountUrl } from "@/lib/config";
+import { REPO } from "@/lib/config";
+import { useNet } from "@/lib/use-net";
 import s from "./bands.module.css";
 
 const PARTS = [
   {
     name: "The contract",
-    where: CONTRACT,
+    where: "contract",
     text: "Rust on NEAR. Holds the board as bit rows, runs Life 64 cells at a time, pays the agar out, takes plantings, burns. A planting that also catches the dish up three generations burns about 4.4 TGas.",
   },
   {
@@ -17,9 +18,14 @@ const PARTS = [
     text: "The very same crate, compiled for the browser. It draws the dish ahead of the chain, checks a planting before you sign, and replays history to verify it.",
   },
   {
-    name: "Gasless guests",
-    where: "NEP-366 meta transactions",
-    text: "No wallet needed to play. Your browser's key is a function-call key for the dish alone; it signs delegate actions, the relayer pays the gas, and the NEAR you play with is credit the relayer sponsored inside the contract. Or connect any NEAR wallet with NEAR Connect.",
+    name: "Gasless guests, on free play",
+    where: "NEP-366 meta transactions, testnet",
+    text: "On the testnet dish no wallet is needed. Your browser's key is a function-call key for the dish alone; it signs delegate actions, the relayer pays the gas, and the NEAR you play with is credit the relayer sponsored inside the contract. On mainnet there are no guests: connect any NEAR wallet with NEAR Connect.",
+  },
+  {
+    name: "Pay with any token",
+    where: "NEAR Intents, mainnet",
+    text: "On the mainnet dish you can join or buy with USDC, ETH, SOL or BTC from their own chains. NEAR Intents swaps the deposit into wNEAR and sends it to the contract with a message naming your account; the contract unwraps it and joins for you.",
   },
   {
     name: "The keeper and the strains",
@@ -30,8 +36,9 @@ const PARTS = [
 
 export function ProofBand() {
   const { d, ready } = useLive();
+  const net = useNet();
   return (
-    <section className="band band-2" aria-labelledby="proof-title">
+    <section className="band" aria-labelledby="proof-title">
       <div className="wrap">
         <div className={s.proof}>
           <div>
@@ -53,7 +60,7 @@ export function ProofBand() {
             {PARTS.map((p) => (
               <li key={p.name}>
                 <h3 className="h3">{p.name}</h3>
-                <span className={s.where}>{p.where === CONTRACT ? <a href={accountUrl(CONTRACT)}>{CONTRACT}</a> : p.where}</span>
+                <span className={s.where}>{p.where === "contract" ? <><a href={net.contractUrl}>{net.contract}</a> on {net.label.chain}</> : p.where}</span>
                 <p className="muted">{p.text}</p>
               </li>
             ))}
@@ -70,15 +77,16 @@ export function ProofBand() {
 }
 
 export function CtaBand() {
-  const { rules } = useLive();
+  const net = useNet();
   return (
     <section className="band" aria-labelledby="cta-title">
       <div className="wrap">
         <div className={s.cta}>
           <h2 id="cta-title" className="h2">Stake a few cents of NEAR, plant a colony, hold your ground.</h2>
           <p className="lede">
-            On testnet the site gives you a guest account with the NEAR to start: name it, pick a stain, plant something. No
-            wallet, no gas, about thirty seconds.{rules ? "" : ""}
+            {net.freePlay
+              ? "On the free-play dish the site gives you a guest account with testnet NEAR to start: name it, pick a stain, plant something. No wallet, no gas, about thirty seconds."
+              : "On the mainnet dish the NEAR is real: connect a NEAR wallet and stake 0.02 NEAR, or pay with USDC, ETH, SOL or BTC through NEAR Intents."}
           </p>
           <Link className="btn btn-amber" href="/dish">Start a colony</Link>
         </div>

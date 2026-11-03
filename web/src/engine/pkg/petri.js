@@ -18,6 +18,18 @@ export class Engine {
         wasm.__wbg_engine_free(ptr, 0);
     }
     /**
+     * Add `amount` yoctoNEAR to what `colony` won as credit: a tide's bounty paid to a guest that ran it (a Tide entry
+     * whose `by` never attached NEAR).
+     * @param {number} colony
+     * @param {string} amount
+     */
+    add_credit_won(colony, amount) {
+        const val2 = +colony;
+        const ptr0 = passStringToWasm0(amount, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.engine_add_credit_won(this.__wbg_ptr, val2, ptr0, len0);
+    }
+    /**
      * @returns {string}
      */
     agar() {
@@ -318,6 +330,22 @@ export class Engine {
         wasm.engine_plant(this.__wbg_ptr, val2, ptr0, len0);
     }
     /**
+     * A specimen slide as the contract captures it: `colony`'s living cells in the `w` × `h` rectangle at (`x`, `y`),
+     * as the bitmap a Slide entry holds (see `Dish::region_bitmap`). Count its set bits for the cells.
+     * @param {number} colony
+     * @param {number} x
+     * @param {number} y
+     * @param {number} w
+     * @param {number} h
+     * @returns {Uint8Array}
+     */
+    region_bitmap(colony, x, y, w, h) {
+        const ret = wasm.engine_region_bitmap(this.__wbg_ptr, colony, x, y, w, h);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
      * Start from a stored board (the contract's `board` view, base64-decoded) at a known generation.
      * @param {string} units
      */
@@ -615,6 +643,35 @@ export function sell_quote(petri, agar, petri_price, max_supply, sell_bps, vault
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred8_0, deferred8_1, 1);
+    }
+}
+
+/**
+ * A specimen slide's image exactly as the contract's `nft_token` draws it: an SVG of `bitmap` (`w` × `h`, a Slide
+ * entry's or the `slides` view's) in `color` (0xRRGGBB), marked with its generation.
+ * @param {Uint8Array | number[]} bitmap
+ * @param {number} w
+ * @param {number} h
+ * @param {number} color
+ * @param {number} generation
+ * @returns {string}
+ */
+export function slide_svg(bitmap, w, h, color, generation) {
+    let deferred6_0;
+    let deferred6_1;
+    try {
+        const val2 = +w;
+        const val3 = +h;
+        const val4 = +color;
+        const val5 = +generation;
+        const ptr0 = passArray8ToWasm0(bitmap, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.slide_svg(ptr0, len0, val2, val3, val4, val5);
+        deferred6_0 = ret[0];
+        deferred6_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred6_0, deferred6_1, 1);
     }
 }
 function __wbg_get_imports() {

@@ -8,8 +8,10 @@
 // the right share of the vault and the credit pool, the capped bounty and no more storage than a tide record costs.
 // A colony that never put NEAR into the vault itself is paid its vault shares and its sales as credit; the replay
 // knows which colonies have from their purchases and plantings, and checks every tide and sale paid each the right
-// way. It also stops at every tide generation and checks that a tide ran exactly when some colony outside the house
-// had earned since the last one (an idle tide leaves no entry). Between entries it steps Life and feeds the living
+// way, and that a tide's bounty went as credit to a guest that ran it. Every specimen slide must be exactly the minting
+// colony's living cells in its rectangle as the board stood, at the rule's price, all burned. It also stops at every
+// tide generation and checks that a tide ran exactly when some colony outside the house had earned since the last one
+// (an idle tide leaves no entry). Between entries it steps Life and feeds the living
 // exactly as the contract does. The board, the history chain, the agar, the burn, the vault, the credit pool and every
 // colony's PETRI earnings, NEAR winnings and credit winnings must all come out identical, to the unit; and the
 // contract's NEAR balance must cover everything it owes.
@@ -34,7 +36,7 @@ export type ReplayInput = {
 };
 
 type Problem = { generation: number; what: string };
-type Kind = "plant" | "price" | "fee" | "buy" | "sell" | "tide";
+type Kind = "plant" | "price" | "fee" | "buy" | "sell" | "tide" | "slide";
 
 /** Most a tide record can cost in storage (it is about 200 bytes at 10^19 yoctoNEAR a byte). */
 const TIDE_STORAGE_MAX = 3n * 10n ** 21n;
@@ -60,6 +62,8 @@ export class Replayer {
   creditWon = 0n;
   creditSold = 0n;
   plants = 0;
+  slides = 0;
+  slidesBurned = 0n;
   buys = 0;
   sells = 0;
   tides = 0;
@@ -67,7 +71,7 @@ export class Replayer {
   /** Tide generations with nobody to pay, which the contract skips. */
   idleTides = 0;
   /** The first entry of each kind that did not follow the rules. */
-  problems: Record<Kind, Problem | null> = { plant: null, price: null, fee: null, buy: null, sell: null, tide: null };
+  problems: Record<Kind, Problem | null> = { plant: null, price: null, fee: null, buy: null, sell: null, tide: null, slide: null };
   log: { generation: number; text: string; ok: boolean }[] = [];
   private applied = new Set<number>();
 
@@ -166,6 +170,21 @@ export class Replayer {
         this.creditIn += BigInt(p.credit);
       } else if ("Refund" in entry) {
         this.vault += BigInt(entry.Refund.near);
+      } else if ("Slide" in entry) {
+        const x = entry.Slide;
+        this.slides++;
+        const want = this.e.region_bitmap(x.colony, x.x, x.y, x.w, x.h);
+        const got = fromB64(x.bitmap);
+        const cells = want.reduce((n, b) => n + popcount(b), 0);
+        const cost = BigInt(x.cost);
+        const price = BigInt(rules.slide_cells_price) * BigInt(cells);
+        if (x.w < 4 || x.w > 32 || x.h < 4 || x.h > 32) this.flag("slide", `slide ${x.token} is ${x.w} × ${x.h}; slides are 4 to 32 a side`);
+        else if (Number(x.token) !== this.slides) this.flag("slide", `slide ${x.token} is out of order`);
+        else if (want.length !== got.length || want.some((b, i) => b !== got[i])) this.flag("slide", `slide ${x.token} is not colony ${x.colony}'s cells as the dish stood`);
+        else if (cells !== x.cells || cells < rules.slide_min_cells) this.flag("slide", `slide ${x.token} holds ${cells} cells (recorded ${x.cells}, at least ${rules.slide_min_cells})`);
+        else if (cost !== price) this.flag("slide", `slide ${x.token} burned ${x.cost}; the rule gives ${price}`);
+        this.burned += cost;
+        this.slidesBurned += cost;
       } else if ("Tide" in entry) {
         const t = entry.Tide;
         this.tides++;
@@ -182,6 +201,9 @@ export class Replayer {
         const asCredit = BigInt(asCreditS);
         const bounty = BigInt(t.bounty);
         const winners = paid + asCredit > 0n;
+        // A guest (a colony that never attached NEAR) that ran the tide is paid its bounty as credit.
+        const bountyCredit = t.by > 0 && !this.e.has_attached(t.by) ? bounty : 0n;
+        if (bountyCredit > 0n) this.e.add_credit_won(t.by, bountyCredit.toString());
         const problem = !chainOk
           ? "the history chain differs"
           : pay !== BigInt(t.pay) || paid !== BigInt(t.paid)
@@ -200,8 +222,8 @@ export class Replayer {
         this.vault -= paid + asCredit + bounty + storage;
         this.pool -= creditPaid;
         this.nearTides += paid;
-        this.nearAsCredit += asCredit;
-        this.creditWon += creditPaid + asCredit;
+        this.nearAsCredit += asCredit + bountyCredit;
+        this.creditWon += creditPaid + asCredit + bountyCredit;
         this.sellLeft = (this.vault * BigInt(rules.sell_cap_bps)) / 10000n;
         this.log.push({
           generation: g,
@@ -257,6 +279,15 @@ export class Replayer {
       rule("buys", "Every purchase followed the agar's curve", this.buys, "purchases", this.problems.buy),
       rule("sells", "Every sale back followed the curve and the allowance", this.sells, "sales", this.problems.sell),
       {
+        id: "specimens",
+        label: "Specimens: every slide is its colony's own cells as the dish stood, at the rule's price, burned",
+        expected: `${state.slides} ${state.slides === "1" ? "slide" : "slides"}`,
+        got: this.problems.slide
+          ? `differs at generation ${this.problems.slide.generation.toLocaleString("en-US")}: ${this.problems.slide.what}`
+          : `${this.slides} of ${state.slides} match the dish`,
+        ok: this.problems.slide === null && String(this.slides) === state.slides,
+      },
+      {
         id: "tides",
         label: "Every tide: ran when due, chain, shares of the vault and credit pool, bounty, storage",
         expected: `${this.tides} ${this.tides === 1 ? "tide" : "tides"}`,
@@ -267,7 +298,8 @@ export class Replayer {
       },
       c("agar", "PETRI left in the agar", fmt(BigInt(state.agar)), fmt(BigInt(this.e.agar()))),
       c("sold", "PETRI sold from the agar", fmt(BigInt(state.sold)), fmt(this.sold)),
-      c("burned", "PETRI burned by planting", fmt(BigInt(state.burned)), fmt(this.burned)),
+      c("burned", "PETRI burned by planting and by specimen slides", fmt(BigInt(state.burned)), fmt(this.burned)),
+      c("slides_burned", "PETRI burned by specimen slides", fmt(BigInt(state.slides_burned)), fmt(this.slidesBurned)),
       c("returned", "PETRI returned to the agar by planting", fmt(BigInt(state.returned)), fmt(this.returned)),
       c("bought_back", "PETRI bought back by the agar", fmt(BigInt(state.bought_back)), fmt(this.boughtBack)),
       c("keeper", "PETRI set aside for keepers", fmt(keeper), fmt(BigInt(this.e.keeper_total()))),
@@ -275,7 +307,7 @@ export class Replayer {
       c("vault", "NEAR in the tide vault", fmtNear(BigInt(state.vault)), fmtNear(this.vault)),
       c("near_in", "NEAR paid in by players", fmtNear(BigInt(state.near_in)), fmtNear(this.nearIn)),
       c("near_tides", "NEAR paid out at tides", fmtNear(BigInt(state.near_tides)), fmtNear(this.nearTides)),
-      c("near_as_credit", "Vault shares paid as credit to colonies that never attached NEAR", fmtNear(BigInt(state.near_as_credit)), fmtNear(this.nearAsCredit)),
+      c("near_as_credit", "Vault shares and bounties paid as credit to colonies that never attached NEAR", fmtNear(BigInt(state.near_as_credit)), fmtNear(this.nearAsCredit)),
       c("credit_sold", "Sales paid as credit to colonies that never attached NEAR", fmtNear(BigInt(state.credit_sold)), fmtNear(this.creditSold)),
       every("won", "Every colony's NEAR won at tides", wonOk),
       c("credit_pool", "Sponsored credit in the credit pool", fmtNear(BigInt(state.credit_pool)), fmtNear(this.pool)),
@@ -283,10 +315,11 @@ export class Replayer {
       every("credit_each", "Every colony's credit won at tides", creditOk),
     ];
     if (lock) {
-      // The contract's NEAR must cover the vault, the credit pool, unspent credit (won or sponsored) and unclaimed winnings.
+      // The contract's NEAR (and any wNEAR it has not unwrapped yet) must cover the vault, the credit pool, unspent credit
+      // (won or sponsored), unclaimed winnings and pending NEAR.
       const outstanding = BigInt(state.credit_given) + BigInt(state.credit_won) + BigInt(state.credit_sold) - BigInt(state.credit_spent) - BigInt(state.credit_reclaimed);
-      const owed = BigInt(state.vault) + BigInt(state.credit_pool) + outstanding + BigInt(state.tides_owed);
-      const free = BigInt(lock.balance) - BigInt(lock.storageUsage) * BYTE_COST;
+      const owed = BigInt(state.vault) + BigInt(state.credit_pool) + outstanding + BigInt(state.tides_owed) + BigInt(state.pending);
+      const free = BigInt(lock.balance) - BigInt(lock.storageUsage) * BYTE_COST + BigInt(state.wrapped);
       out.push({
         id: "solvent",
         label: "The contract's NEAR covers everything it owes",
@@ -308,6 +341,19 @@ export class Replayer {
   free() {
     this.e.free();
   }
+}
+
+function fromB64(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function popcount(b: number) {
+  let n = 0;
+  for (let v = b; v; v &= v - 1) n++;
+  return n;
 }
 
 export function fmt(units: bigint) {

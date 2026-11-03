@@ -1,16 +1,19 @@
 "use client";
 // The player's account. Either a NEAR wallet connected through NEAR Connect, which signs and pays for its own
 // transactions, or a guest: a key made in this browser and a testnet account the site creates for it. A guest's key
-// never leaves the browser; the server only sees the public half and relays what the guest signs.
+// never leaves the browser; the server only sees the public half and relays what the guest signs. Guests exist only on
+// the free-play dish (testnet); on mainnet every move is signed by the player's own wallet.
 
 import { Account, JsonRpcProvider, KeyPair, type KeyPairString } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { useSyncExternalStore } from "react";
 import type { NearConnector } from "@hot-labs/near-connect";
-import { CONTRACT, NETWORK, RPC_URLS } from "./config";
+import type { DataStorage } from "@hot-labs/near-connect";
+import { CONTRACT, FREE_PLAY, NETWORK, RPC_URLS, isAccountId } from "./config";
 
 const STORE = "petri.guest.v1";
-const WALLET_STORE = "petri.wallet.v1";
+// Each network remembers its own wallet; testnet keeps the key it always had.
+const WALLET_STORE = NETWORK === "testnet" ? "petri.wallet.v1" : `petri.wallet.v1.${NETWORK}`;
 
 export type Player = { accountId: string; kind: "guest" | "wallet" } | null;
 
@@ -21,6 +24,7 @@ let loaded = false;
 const listeners = new Set<() => void>();
 
 function guestPlayer(): Player {
+  if (!FREE_PLAY) return null;
   const s = saved();
   return s ? { accountId: s.accountId, kind: "guest" } : null;
 }
@@ -39,7 +43,7 @@ function load() {
   if (hadWallet) {
     connector()
       .then((c) => c.getConnectedWallet())
-      .then(({ accounts }) => accounts[0] && set({ accountId: accounts[0].accountId, kind: "wallet" }))
+      .then(({ accounts }) => accounts[0] && isAccountId(accounts[0].accountId) && set({ accountId: accounts[0].accountId, kind: "wallet" }))
       .catch(() => {
         /* the wallet session ended; stay a guest */
       });
@@ -48,12 +52,43 @@ function load() {
 
 let connecting: Promise<NearConnector> | null = null;
 
+/** NEAR Connect's own records (the chosen wallet), kept apart per network so a testnet session never opens on mainnet. */
+const connectStorage: DataStorage = {
+  async get(key) {
+    try {
+      return localStorage.getItem(`${NETWORK}:${key}`) ?? (NETWORK === "testnet" ? localStorage.getItem(key) : null);
+    } catch {
+      return null;
+    }
+  },
+  async set(key, value) {
+    try {
+      localStorage.setItem(`${NETWORK}:${key}`, value);
+    } catch {
+      /* this visit only */
+    }
+  },
+  async remove(key) {
+    try {
+      localStorage.removeItem(`${NETWORK}:${key}`);
+      if (NETWORK === "testnet") localStorage.removeItem(key);
+    } catch {
+      /* nothing stored */
+    }
+  },
+};
+
 /** NEAR Connect, loaded only when a wallet is wanted. Wallet code runs in its own sandboxed iframe. */
 function connector(): Promise<NearConnector> {
   connecting ??= import("@hot-labs/near-connect").then(({ NearConnector }) => {
-    const c = new NearConnector({ network: NETWORK, providers: { [NETWORK]: RPC_URLS } });
+    const c = new NearConnector({ network: NETWORK, providers: { [NETWORK]: RPC_URLS }, storage: connectStorage });
     c.on("wallet:signIn", ({ accounts }) => {
       if (!accounts[0]) return;
+      if (!isAccountId(accounts[0].accountId)) {
+        // A wallet still signed in to the other network; this dish cannot use that account.
+        c.disconnect().catch(() => {});
+        return;
+      }
       try {
         localStorage.setItem(WALLET_STORE, "1");
       } catch {
@@ -123,6 +158,7 @@ async function proofOfWork(challenge: string, publicKey: string, bits: number): 
 }
 
 export async function createGuest(): Promise<string> {
+  if (!FREE_PLAY) throw new Error("Guest accounts are for free play on testnet. Connect a NEAR wallet to play with real NEAR.");
   const kp = KeyPair.fromRandom("ed25519");
   const publicKey = kp.getPublicKey().toString();
   // The server hands out a signed, short-lived challenge; the proof of work is bound to it and to this key.
@@ -202,6 +238,7 @@ async function walletCall(methodName: string, args: Record<string, unknown>, tga
 async function call(methodName: string, args: Record<string, unknown>, tgas: number, deposit: bigint = 0n): Promise<TxResult> {
   load();
   if (player?.kind === "wallet") return walletCall(methodName, args, tgas, deposit);
+  if (!FREE_PLAY) throw new Error("Connect a NEAR wallet first: on mainnet every move is signed and paid by your own wallet.");
   if (deposit > 0n) {
     args = { ...args, credit: deposit.toString() };
     deposit = 0n;
@@ -246,6 +283,15 @@ export const buyPetri = (deposit: bigint = BUY_NEAR) => call("buy", {}, 150, dep
 export const sellPetri = (units: bigint) => call("sell", { petri: units.toString() }, 150);
 export const claimAll = () => call("claim", {}, 150);
 export const advanceDish = () => call("advance", {}, 250);
+/** Fix a rectangle of the caller colony's own living cells onto a slide, minted as a NEP-171 token. It burns PETRI for
+ * each captured cell; `deposit` pays the token's storage (a guest spends it from credit). */
+export const mintSlide = (args: { x: number; y: number; w: number; h: number; title?: string | null }, deposit: bigint) =>
+  call("mint_slide", { ...args, title: args.title?.trim() || null }, 300, deposit);
+/** NEAR that arrived for this account through NEAR Intents but could not be used (say, a join under the minimum), paid
+ * back to the account. */
+export const claimPending = () => call("claim_pending", {}, 30);
+/** A colony someone else's payment started (`proxy`) may take its own name and stain, once. */
+export const renameColony = (name: string, color: number) => call("rename", { name, color }, 50);
 /** Where the colony's NEAR payouts (tide winnings and sales) go from now on; `null` sends them to its own account again.
  * Only a colony that has attached NEAR may set one: a guest is paid in credit, and the relayer does not relay this call. */
 export const setPayout = (account: string | null) => call("set_payout", { account_id: account }, 50);

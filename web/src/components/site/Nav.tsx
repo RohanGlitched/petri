@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { NETWORK } from "@/lib/config";
+import { NETWORK, networkInUrl } from "@/lib/config";
 import { useDish } from "@/lib/dish-store";
+import { useNet } from "@/lib/use-net";
 import { Mark } from "./Mark";
+import { NetSwitch } from "./NetSwitch";
 
 export const LINKS = [
   { href: "/dish", label: "The dish" },
   { href: "/rules", label: "How it works" },
   { href: "/colonies", label: "Colonies" },
+  { href: "/specimens", label: "Specimens" },
   { href: "/strains", label: "AI strains" },
   { href: "/verify", label: "Verify" },
 ];
@@ -19,6 +22,7 @@ export function Nav() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const d = useDish();
+  const net = useNet();
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -28,6 +32,11 @@ export function Nav() {
   }, [open]);
 
   useEffect(() => setOpen(false), [path]);
+  // A link that names the other network in its address reloads into that dish.
+  useEffect(() => {
+    const wanted = networkInUrl();
+    if (wanted && wanted !== NETWORK) window.location.reload();
+  }, [path]);
 
   return (
     <header className="nav">
@@ -51,14 +60,15 @@ export function Nav() {
             title={
               d.status === "ready" && d.state
                 ? `The contract stored generation ${Number(d.state.generation).toLocaleString("en-US")}; your browser runs the same rules ${d.ahead} ${d.ahead === 1 ? "generation" : "generations"} ahead until someone advances it`
-                : `Reading the dish live from NEAR ${NETWORK}`
+                : `Reading ${net.contract} live from ${net.label.chain}`
             }
           >
             <i className="pulse" aria-hidden="true" />
-            {d.status === "ready" ? `Generation ${d.generation.toLocaleString("en-US")}` : `NEAR ${NETWORK}`}
+            {d.status === "ready" ? `Generation ${d.generation.toLocaleString("en-US")}` : d.status === "error" ? "Not answering" : "Reading…"}
             {/* The browser steps the stored board forward to the clock; say how far, quietly. */}
             {d.status === "ready" && d.ahead > 0 && <small className="net-ahead num">browser ahead by {d.ahead.toLocaleString("en-US")}</small>}
           </span>
+          <NetSwitch />
           <Link className="btn btn-amber btn-small" href="/dish">
             Start a colony
           </Link>
@@ -82,6 +92,7 @@ export function Nav() {
               {l.label}
             </Link>
           ))}
+          <NetSwitch variant="sheet" />
           <Link className="btn btn-amber" href="/dish" onClick={() => setOpen(false)}>
             Start a colony
           </Link>

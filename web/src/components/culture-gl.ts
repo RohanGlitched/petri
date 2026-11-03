@@ -135,9 +135,32 @@ void main() {
     }
   }
 
-  // Overlay: 1 ghost ok, 2 ghost blocked, 3 forbidden buffer, 4 pending planting, 5 highlight.
+  // Overlay: 1 ghost ok, 2 ghost blocked, 3 forbidden buffer, 4 pending planting, 5 highlight,
+  // 6 inside a slide frame, 7 a cell the slide would keep, 8 outside the frame (dimmed, as under a field stop).
   uint ov = texelFetch(uOverlay, wrapCell(base), 0).r;
-  if (ov != 0u) {
+  if (ov == 8u) {
+    c *= 0.62;
+  } else if (ov == 6u || ov == 7u) {
+    c = mix(c, vec3(1.0, 0.97, 0.9), 0.05);
+    if (ov == 7u) {
+      vec2 q = f - 0.5;
+      float ringK = smoothstep(0.36, 0.42, length(q)) * (1.0 - smoothstep(0.46, 0.52, length(q)));
+      c = mix(c, mix(uGhost, vec3(1.0), 0.45), ringK * 0.55);
+    }
+    // The frame's edge: a fine line on each side whose neighbour lies outside the frame.
+    float lw = clamp(1.6 / uZoom, 0.03, 0.22);
+    vec3 edgeInk = vec3(1.0, 0.86, 0.58);
+    uint l = texelFetch(uOverlay, wrapCell(base + ivec2(-1, 0)), 0).r;
+    uint rr = texelFetch(uOverlay, wrapCell(base + ivec2(1, 0)), 0).r;
+    uint t = texelFetch(uOverlay, wrapCell(base + ivec2(0, -1)), 0).r;
+    uint b = texelFetch(uOverlay, wrapCell(base + ivec2(0, 1)), 0).r;
+    float e = 0.0;
+    if (l != 6u && l != 7u) e = max(e, 1.0 - smoothstep(lw * 0.5, lw, f.x));
+    if (rr != 6u && rr != 7u) e = max(e, smoothstep(1.0 - lw, 1.0 - lw * 0.5, f.x));
+    if (t != 6u && t != 7u) e = max(e, 1.0 - smoothstep(lw * 0.5, lw, f.y));
+    if (b != 6u && b != 7u) e = max(e, smoothstep(1.0 - lw, 1.0 - lw * 0.5, f.y));
+    c = mix(c, edgeInk, e * 0.95);
+  } else if (ov != 0u) {
     vec2 gq = abs(f - 0.5);
     float m = max(gq.x, gq.y);
     bool dark = uLook != 0;

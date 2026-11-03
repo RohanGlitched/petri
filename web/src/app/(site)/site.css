@@ -270,6 +270,86 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   70% { box-shadow: 0 0 0 9px rgba(159, 216, 168, 0); }
   100% { box-shadow: 0 0 0 0 rgba(159, 216, 168, 0); }
 }
+/* Which dish the site reads. Green for free play, amber where the NEAR is real. */
+.netswitch { position: relative; }
+.netswitch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 11px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--bone);
+  font: 600 13.5px/1 var(--body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.netswitch-btn:hover { background: rgba(243, 233, 218, 0.05); }
+.netswitch-btn small { font-weight: 400; font-size: 12.5px; color: var(--dim); }
+.netswitch-btn svg { color: var(--dim); transition: rotate 0.2s ease; }
+.netswitch-btn[aria-expanded="true"] svg { rotate: 180deg; }
+.netdot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--ok);
+}
+.netdot-mainnet { background: var(--amber); }
+.netswitch-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 330px;
+  padding: 8px;
+  border-radius: 18px;
+  background: rgba(33, 20, 11, 0.98);
+  box-shadow: inset 0 0 0 1px var(--line-2), 0 30px 60px -20px rgba(0, 0, 0, 0.8);
+  z-index: 60;
+}
+.netswitch-head { margin: 6px 10px 8px; font-size: 13px; color: var(--dim); line-height: 1.4; }
+.netswitch-opt, .netsheet-opt {
+  display: grid;
+  grid-template-columns: 8px 1fr;
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--bone);
+  text-align: left;
+  cursor: pointer;
+}
+.netswitch-opt .netdot, .netsheet-opt .netdot { margin-top: 7px; }
+.netswitch-opt:hover, .netsheet-opt:hover { background: rgba(243, 233, 218, 0.05); }
+.netswitch-opt[aria-checked="true"], .netsheet-opt[aria-checked="true"] {
+  background: rgba(242, 180, 90, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.42);
+}
+.netswitch-opt b, .netsheet-opt b { font-weight: 600; font-size: 15px; }
+.netswitch-opt small, .netsheet-opt small { font-size: 13px; color: var(--dim); margin-left: 4px; }
+.netswitch-opt em, .netsheet-opt em { display: block; font-style: normal; font-size: 13px; line-height: 1.4; color: var(--text-2); margin-top: 3px; }
+.netsheet { display: grid; gap: 6px; margin-top: 22px; }
+.netsheet-opt { padding: 14px; }
+/* The switch names the dish, so on narrower desktops the generation pill and then the button make room for it. */
+@media (max-width: 1280px) and (min-width: 901px) {
+  .net { display: none; }
+}
+@media (max-width: 1100px) and (min-width: 901px) {
+  .nav-in { gap: 24px; }
+  .nav-links { gap: 18px; }
+  .nav-end .btn { display: none; }
+}
+@media (max-width: 420px) {
+  .netswitch-btn small { display: none; }
+  .netswitch-menu { right: -50px; width: min(330px, calc(100vw - 32px)); }
+}
+
 .menu-btn {
   display: none;
   width: 42px;

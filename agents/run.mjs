@@ -214,6 +214,16 @@ async function keep() {
   // Advance when the stored board falls well behind, or (only if the keeper can receive PETRI) when the keeper pot is
   // worth collecting. The site and the strains run the dish ahead of the chain, so a few generations behind costs
   // nothing, and every call is gas.
+  // wNEAR from a token payment that arrived with too little gas to unwrap waits in the dish; unwrap it so its owners
+  // can collect it (it becomes their pending NEAR).
+  if (BigInt(st.wrapped ?? "0") > BigInt(st.unwrapping ?? "0")) {
+    try {
+      const r = await callDish(KEEPER, "unwrap_wnear", {}, 100);
+      log("keeper unwrapped waiting wNEAR", r.hash);
+    } catch (e) {
+      log("unwrap refused:", e instanceof Error ? e.message : e);
+    }
+  }
   if (behind >= 20 || (keeperRegistered && Number(st.keeper_pot) > 50_000_000)) {
     try {
       const r = await callDish(KEEPER, "advance", {}, 250);

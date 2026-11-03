@@ -25,7 +25,7 @@ const CHALLENGE_MS = 10 * 60_000;
 const PER_IP_PER_HOUR = 4;
 const PER_HOUR = 120;
 // No set_payout: a guest attaches no NEAR, so the dish pays it in credit and it has no NEAR payouts to send anywhere.
-const METHODS = ["join", "buy", "plant", "sell", "claim", "advance"];
+const METHODS = ["join", "buy", "plant", "sell", "claim", "advance", "mint_slide"];
 const hits = new Map<string, number[]>();
 let global: number[] = [];
 

@@ -1,11 +1,13 @@
 "use client";
 
 import { useLive, int, near, hex } from "@/lib/live";
+import { useNet } from "@/lib/use-net";
 import { LAUNCH, genTime, weightOf } from "./shared";
 import s from "./rules.module.css";
 
 export function TidesSection() {
   const { d, rules, ready, colonies, vault, tideIn } = useLive();
+  const net = useNet();
   const r = rules ?? LAUNCH;
   const st = d.state;
   const tidePct = r.tide_bps / 100;
@@ -52,7 +54,7 @@ export function TidesSection() {
     ],
     ["Selling back", "Comes out of the vault: the sale record's storage, and the rest to the seller."],
     ["Registering to hold PETRI", "The storage of one balance record, refunded by storage_unregister once the account is empty."],
-    ["Gas", "Every transaction pays its own gas. Guests on the site have theirs paid by the relayer."],
+    ["Gas", net.freePlay ? "Every transaction pays its own gas. Guests on the free-play dish have theirs paid by the site's relayer." : "Every transaction pays its own gas, from the wallet that signs it."],
   ];
 
   return (
@@ -101,8 +103,10 @@ a colony's share = (pay − bounty − storage) × its window ÷ every window`}
             <p>
               Anyone can call <code className={s.code}>sponsor(account_id)</code> with NEAR attached. The contract keeps the
               NEAR (less its record&rsquo;s storage) as credit for that account, spendable only on joining, buying and
-              planting, and never withdrawable. The site&rsquo;s relayer gives every guest 0.05 NEAR of credit this way, so it
-              never has to attach NEAR to a call it relays.
+              planting, and never withdrawable.{" "}
+              {net.freePlay
+                ? "On this free-play dish the site's relayer gives every guest 0.05 NEAR of credit this way, so it never has to attach NEAR to a call it relays."
+                : "The site sponsors nobody on mainnet; guests and their sponsored credit exist only on the free-play testnet dish."}
             </p>
           </div>
           <div className={s.hashes}>

@@ -37,6 +37,10 @@ type Props = {
   interactive?: boolean;
   onHover?: (cell: { x: number; y: number } | null) => void;
   onCellClick?: (cell: { x: number; y: number }) => void;
+  /** Framing mode: a one-finger or mouse drag draws a rectangle instead of panning (Shift and drag still pans, two
+   * fingers pinch and pan). Called as the drag moves and once more when it ends; a tap reports a == b. */
+  select?: boolean;
+  onSelect?: (a: { x: number; y: number }, b: { x: number; y: number }, done: boolean) => void;
   onCamera?: (cam: Camera) => void;
   label?: string;
   className?: string;
@@ -237,6 +241,8 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
     let moved = 0;
     let pinchStart = 0;
     let zoomStart = 0;
+    let selA: { x: number; y: number } | null = null;
+    let lastMid: { x: number; y: number } | null = null;
 
     const toLens = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
@@ -257,10 +263,13 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       touchedAt.current = performance.now();
       moved = 0;
+      selA = cbRef.current.select && pointers.size === 1 && !e.shiftKey ? cellAt(e.clientX, e.clientY) : null;
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         pinchStart = Math.hypot(a.x - b.x, a.y - b.y);
         zoomStart = camRef.current.zoom;
+        lastMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        selA = null;
       }
     };
     const move = (e: PointerEvent) => {
@@ -276,7 +285,22 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
         if (pinchStart > 0) camRef.current.zoom = clampZoom((zoomStart * d) / pinchStart);
+        // While framing, one finger draws, so two fingers also move the dish.
+        if (cbRef.current.select && lastMid) {
+          const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const c = camRef.current;
+          c.cx = (((c.cx - ((mid.x - lastMid.x) * s.dpr) / c.zoom) % width) + width) % width;
+          c.cy = (((c.cy - ((mid.y - lastMid.y) * s.dpr) / c.zoom) % height) + height) % height;
+          lastMid = mid;
+        }
         moved += 10;
+      } else if (selA) {
+        moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const b = cellAt(e.clientX, e.clientY);
+        if (b && moved >= 8) cbRef.current.onSelect?.(selA, b, false);
+        if (e.pointerType === "mouse") cbRef.current.onHover?.(b);
+        return;
       } else {
         const dx = (e.clientX - p.x) * s.dpr;
         const dy = (e.clientY - p.y) * s.dpr;
@@ -292,6 +316,14 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
     };
     const up = (e: PointerEvent) => {
       const wasTap = pointers.size === 1 && moved < 8;
+      if (selA && pointers.size === 1) {
+        const a = selA;
+        selA = null;
+        pointers.delete(e.pointerId);
+        cbRef.current.onSelect?.(a, wasTap ? a : cellAt(e.clientX, e.clientY) ?? a, true);
+        return;
+      }
+      if (pointers.size <= 2) lastMid = null;
       pointers.delete(e.pointerId);
       if (wasTap) {
         const cell = cellAt(e.clientX, e.clientY);
@@ -337,7 +369,7 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
         ref={canvasRef}
         role="img"
         aria-label={props.label ?? "The live Petri dish"}
-        style={{ display: "block", touchAction: interactive ? "none" : "auto", cursor: interactive ? "grab" : "default" }}
+        style={{ display: "block", touchAction: interactive ? "none" : "auto", cursor: props.select ? "crosshair" : interactive ? "grab" : "default" }}
       />
       {failed && <p style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", padding: 24, textAlign: "center" }}>This browser cannot draw the dish (WebGL2 is off). The numbers are still live.</p>}
     </div>

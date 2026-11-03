@@ -47,6 +47,18 @@ fn ctx(who: &str, ms: u64, deposit: u128) {
     testing_env!(b.build());
 }
 
+/// A call with `tgas` of gas, as a real transaction has (the unit-test default is far more than a transaction can buy).
+fn ctx_gas(who: &str, ms: u64, deposit: u128, tgas: u64) {
+    let mut b = VMContextBuilder::new();
+    b.predecessor_account_id(who.parse().unwrap())
+        .current_account_id("petri.testnet".parse().unwrap())
+        .account_balance(NearToken::from_near(1_000))
+        .block_timestamp(ms * MS)
+        .attached_deposit(NearToken::from_yoctonear(deposit))
+        .prepaid_gas(Gas::from_tgas(tgas));
+    testing_env!(b.build());
+}
+
 fn at(who: &str, ms: u64) {
     ctx(who, ms, 0);
 }
@@ -79,22 +91,41 @@ fn conserved(c: &Petri, holders: &[&str]) {
     let mut back = 0u128;
     let mut credit_out = 0u128;
     let mut as_credit_out = 0u128;
+    let mut bounties = 0u128;
+    let mut bounty_refunds = 0u128;
+    let mut slide_burns = 0u128;
+    let mut slides = 0u64;
     for e in (0..s.ledger.0).step_by(1_000).flat_map(|from| c.ledger(Some(from), Some(1_000))) {
         match e {
             Entry::Tide { bounty, storage, paid, as_credit, credit_paid, .. } => {
                 out += bounty.0 + storage.0 + paid.0 + as_credit.0;
                 credit_out += credit_paid.0;
                 as_credit_out += as_credit.0;
+                bounties += bounty.0;
             }
             Entry::Sell { near, .. } => out += near.0,
-            Entry::Refund { near, .. } => back += near.0,
+            Entry::Refund { near, colony, .. } => {
+                back += near.0;
+                if colony == 0 {
+                    bounty_refunds += near.0;
+                }
+            }
+            Entry::Slide { token, cost, .. } => {
+                slides += 1;
+                assert_eq!(token.0, slides, "slides are numbered in order");
+                slide_burns += cost.0;
+            }
             _ => {}
         }
     }
     assert_eq!(s.vault.0 + out, s.near_in.0 + back, "vault = NEAR in - everything paid out + refunds");
     assert_eq!(s.credit_pool.0 + credit_out, s.credit_in.0, "credit pool = credit in - credit paid out");
-    assert_eq!(s.near_as_credit.0, as_credit_out, "vault shares paid as credit");
-    assert_eq!(s.credit_won.0, credit_out + as_credit_out, "credit won = the credit pool's shares + the vault's shares paid as credit");
+    // Vault shares and guests' bounties paid as credit.
+    let bounty_credit = s.near_as_credit.0 - as_credit_out;
+    assert_eq!(s.near_bounties.0 + bounty_credit + bounty_refunds, bounties, "every bounty was paid in NEAR, as a guest's credit, or refunded");
+    assert_eq!(s.credit_won.0, credit_out + s.near_as_credit.0, "credit won = the credit pool's shares + the vault's shares and bounties paid as credit");
+    assert_eq!((s.slides.0, s.slides_burned.0), (slides, slide_burns), "every slide is in the ledger with what it burned");
+    assert_eq!(c.nft_total_supply().0, slides as u128);
     let won: u128 = c.load_u128s(CREDIT_WON_KEY).iter().sum();
     assert_eq!(won, s.credit_won.0, "the colonies' credit won adds up to the counter");
     let owed: u128 = c.load_u128s(TIDES_KEY).iter().sum();
@@ -552,6 +583,11 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     plant_on_credit(&mut c, g4, t, cells(26, 4, patterns::BLOCK));
     for g in 0..37u64 {
         t += GEN_MS;
+        if g == 15 {
+            // The guest tends the dish at the second tide, so it runs it and is paid the bounty as credit.
+            at(g4, t);
+            c.advance(None);
+        }
         let who = ["alice.testnet", "bob.testnet", "house.testnet"][(g % 3) as usize];
         let x = 2 + ((g * 5) % 24) as i32;
         let d = c.plant_deposit(3, None).0;
@@ -575,6 +611,11 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
             at(g4, t);
             c.sell(U128(30 * P));
         }
+        if g == 25 {
+            let d = c.slide_deposit(32, 6, Some(5)).0;
+            ctx("alice.testnet", t, d);
+            c.mint_slide(0, 26, 32, 6, Some("Row 28".into()), None);
+        }
         at("keeper.testnet", t);
         c.advance(None);
     }
@@ -595,16 +636,19 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     let mut attached = vec![false; 5];
     let mut house: Vec<u16> = vec![];
     let colonies_view = c.colonies(None, None);
+    assert_eq!(s.burned.0, c.ledger(None, Some(1000)).iter().map(|e| match e { Entry::Plant { cost, .. } => cost.0 * r.burn_bps as u128 / 10_000, Entry::Slide { cost, .. } => cost.0, _ => 0 }).sum::<u128>(), "burned = half of every planting + every slide");
     let mut colonies = 0u16;
     let log = c.ledger(None, Some(1000));
     let mut tides_seen = 0;
     let mut credit_sales = 0;
+    let mut slides_seen = 0;
+    let mut guest_bounties = 0;
     let mut li = 0;
     let mut g = 0u64;
     loop {
         while li < log.len() {
             let gen = match &log[li] {
-                Entry::Join { generation, .. } | Entry::Buy { generation, .. } | Entry::Plant { generation, .. } | Entry::Sell { generation, .. } | Entry::Tide { generation, .. } | Entry::Skip { generation, .. } | Entry::Refund { generation, .. } => generation.0,
+                Entry::Join { generation, .. } | Entry::Buy { generation, .. } | Entry::Plant { generation, .. } | Entry::Sell { generation, .. } | Entry::Tide { generation, .. } | Entry::Skip { generation, .. } | Entry::Refund { generation, .. } | Entry::Slide { generation, .. } => generation.0,
             };
             if gen != g {
                 break;
@@ -647,6 +691,14 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                     vault -= near.0;
                 }
                 Entry::Tide { .. } => panic!("a tide is recorded while stepping"),
+                Entry::Slide { colony, x, y, w, h, cells, bitmap, cost, .. } => {
+                    let (bits, n) = dish.region_bitmap(*colony, *x, *y, *w, *h);
+                    assert_eq!((&bits, n), (&bitmap.0, *cells), "the slide is the colony's own cells, as the dish stood");
+                    assert!(n >= r.slide_min_cells);
+                    assert_eq!(cost.0, r.slide_cells_price.0 * n as u128);
+                    burned += cost.0;
+                    slides_seen += 1;
+                }
                 Entry::Skip { .. } => {}
                 Entry::Refund { near, .. } => vault += near.0,
             }
@@ -668,7 +720,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
             window[i as usize] += v as u64;
         }
         if g % r.tide_every as u64 == 0 && tide_due(&window, &house) {
-            let Entry::Tide { generation, chain: ch, pay, bounty, storage, paid, as_credit, credit_pay, credit_paid } = &log[li] else { panic!("tide entry at {}", g) };
+            let Entry::Tide { generation, chain: ch, pay, bounty, storage, paid, as_credit, credit_pay, credit_paid, by } = &log[li] else { panic!("tide entry at {}", g) };
             assert_eq!(generation.0, g);
             assert_eq!(*ch, hex::encode(chain));
             assert_eq!(pay.0, vault * r.tide_bps as u128 / 10_000);
@@ -692,6 +744,11 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                 credit_won[i as usize] += v;
             }
             pool -= credit_paid.0;
+            // A guest that ran the tide was paid its bounty as credit.
+            if *by > 0 && !attached[*by as usize] && bounty.0 > 0 {
+                credit_won[*by as usize] += bounty.0;
+                guest_bounties += 1;
+            }
             window.iter_mut().for_each(|w| *w = 0);
             for st in planted.iter_mut() {
                 *st = petri_core::decay_stake(*st, r.stake_keep_bps);
@@ -702,10 +759,13 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     }
     assert!(tides_seen >= 4);
     assert_eq!(credit_sales, 1, "the guest's sale");
+    assert_eq!(slides_seen, 1, "alice's slide");
+    assert_eq!(guest_bounties, 1, "the tide the guest ran");
     assert_eq!(li, log.len(), "every entry replayed");
     assert_eq!(hex::encode(chain), s.chain);
     assert_eq!(hex::encode(dish.hash()), s.board_hash);
     assert_eq!(agar, s.agar.0);
+    assert_eq!(burned, s.burned.0);
     assert_eq!(vault, s.vault.0);
     assert_eq!(pool, s.credit_pool.0);
     let e = c.earnings(None, None);
@@ -719,6 +779,19 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     assert_eq!(won[4], 0, "the guest won no NEAR");
     assert!(credit_won[4] > colonies_view[0].credit_won.0, "but credit in its place");
     conserved(&c, &["alice.testnet", "bob.testnet", "house.testnet", g4, "keeper.testnet"]);
+    // PETRI_DUMP=<file> writes what the views return, so the browser's and the script's replays can be run on it too.
+    if let Ok(path) = std::env::var("PETRI_DUMP") {
+        let dump = json!({
+            "rules": c.rules(),
+            "state": c.state(),
+            "colonies": c.colonies(None, None),
+            "ledger": c.ledger(None, Some(1000)),
+            "earnings": c.earnings(None, None),
+            "tide_winnings": c.tide_winnings(None, None),
+            "account": { "amount": U128(env::account_balance().as_yoctonear()), "storage_usage": env::storage_usage() },
+        });
+        std::fs::write(path, dump.to_string()).unwrap();
+    }
 }
 
 #[test]
@@ -1015,4 +1088,648 @@ fn a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit() {
     }
     let refs: Vec<&str> = holders.iter().map(|s| s.as_str()).chain(["keeper.testnet"]).collect();
     conserved(&c, &refs);
+}
+
+// ---------- specimen slides ----------
+
+/// Function calls and transfers the last call scheduled: (receiver, method or "transfer", args, deposit).
+fn scheduled() -> Vec<(String, String, Vec<u8>, u128)> {
+    use near_sdk::mock::MockAction;
+    near_sdk::test_utils::get_created_receipts()
+        .into_iter()
+        .flat_map(|r| {
+            let to = r.receiver_id.to_string();
+            r.actions.into_iter().filter_map(move |a| match a {
+                MockAction::FunctionCallWeight { method_name, args, attached_deposit, .. } => Some((to.clone(), String::from_utf8(method_name).unwrap(), args, attached_deposit.as_yoctonear())),
+                MockAction::Transfer { deposit, .. } => Some((to.clone(), "transfer".into(), vec![], deposit.as_yoctonear())),
+                _ => None,
+            })
+        })
+        .collect()
+}
+
+/// Run a callback as the contract itself, with one mocked promise result.
+fn callback(ms: u64, result: Option<Vec<u8>>) {
+    let mut b = VMContextBuilder::new();
+    b.predecessor_account_id(acct("petri.testnet")).current_account_id(acct("petri.testnet")).account_balance(NearToken::from_near(1_000)).block_timestamp(ms * MS);
+    let r = match result {
+        Some(v) => near_sdk::PromiseResult::Successful(v),
+        None => near_sdk::PromiseResult::Failed,
+    };
+    testing_env!(b.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![r]);
+}
+
+/// Alice's beehive at (2, 2) and Bob's block at (7, 2), in her buffer and so a siege.
+fn two_colonies() -> Petri {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 0xc8431f, NEAR / 10);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BEEHIVE), None);
+    join(&mut c, "bob.testnet", T0, "Bob", 0x1e8c6e, NEAR / 10);
+    plant(&mut c, "bob.testnet", T0, cells(7, 2, patterns::BLOCK), None);
+    c
+}
+
+fn mint(c: &mut Petri, who: &str, ms: u64, rect: (u16, u16, u16, u16), title: Option<&str>) -> String {
+    let d = c.slide_deposit(rect.2, rect.3, title.map(|t| t.len() as u32)).0;
+    ctx(who, ms, d);
+    c.mint_slide(rect.0, rect.1, rect.2, rect.3, title.map(String::from), None)
+}
+
+fn transfer(to: &str, amount: u128) -> (String, String, Vec<u8>, u128) {
+    (to.to_string(), "transfer".to_string(), vec![], amount)
+}
+
+#[test]
+fn a_slide_captures_only_the_colonys_own_cells_and_burns_its_price() {
+    let mut c = two_colonies();
+    let before = c.state();
+    let held = bal(&c, "alice.testnet");
+    let d = c.slide_deposit(12, 6, Some(9)).0;
+    ctx("alice.testnet", T0, d);
+    let storage = env::storage_usage();
+    let id = c.mint_slide(0, 0, 12, 6, Some("First one".into()), None);
+    let used = (env::storage_usage() - storage) as u128 * env::storage_byte_cost().as_yoctonear();
+    let refund: u128 = scheduled().iter().filter(|r| r.1 == "transfer").map(|r| r.3).sum();
+    let logs = get_logs();
+    assert_eq!(id, "1");
+    // Six beehive cells are Alice's; Bob's block in the same rectangle is not.
+    let v = c.slide(id.clone()).unwrap();
+    assert_eq!((v.cells, v.colony, v.owner_id.as_str(), v.title.as_deref()), (6, 1, "alice.testnet", Some("First one")));
+    let (bits, n) = c.load_dish().region_bitmap(1, 0, 0, 12, 6);
+    assert_eq!((v.bitmap.0, v.cells), (bits, n));
+    assert_eq!(c.load_dish().region_bitmap(2, 0, 0, 12, 6).1, 4, "Bob's block was in the rectangle");
+    let price = rules().slide_cells_price.0 * 6;
+    assert_eq!(held - bal(&c, "alice.testnet"), price, "the price, burned");
+    let s = c.state();
+    assert_eq!(s.burned.0 - before.burned.0, price);
+    assert_eq!((s.slides.0, s.slides_burned.0), (1, price));
+    assert_eq!(s.total_supply.0, before.total_supply.0 - price);
+    assert_eq!((s.vault.0, s.credit_pool.0), (before.vault.0, before.credit_pool.0), "a slide moves no NEAR into the pools");
+    // The storage and its reserve were paid; the rest of the deposit went back.
+    let reserve = 184 * env::storage_byte_cost().as_yoctonear();
+    assert_eq!(d - refund, used + reserve, "storage {} + reserve, of {}", used, d);
+    assert!(refund < d / 4, "the deposit asks little more than it needs: {} back of {}", refund, d);
+    assert!(logs.iter().any(|l| l.contains("\"standard\":\"nep171\"") && l.contains("\"nft_mint\"") && l.contains("\"token_ids\":[\"1\"]")));
+    assert!(logs.iter().any(|l| l.contains("\"ft_burn\"") && l.contains("specimen slide")));
+    conserved(&c, &["alice.testnet", "bob.testnet"]);
+}
+
+#[test]
+fn a_slide_token_carries_an_svg_drawn_on_chain() {
+    use base64::Engine;
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    let t = c.nft_token("1".into()).unwrap();
+    let m = t.metadata.unwrap();
+    assert_eq!(m.title.as_deref(), Some("Specimen #1 \u{b7} Alice"));
+    assert!(m.description.unwrap().contains("6 living cells of Alice, fixed at generation 0"));
+    let media = m.media.unwrap();
+    let svg = base64::engine::general_purpose::STANDARD.decode(media.strip_prefix("data:image/svg+xml;base64,").expect("an inline SVG")).unwrap();
+    let text = String::from_utf8(svg.clone()).unwrap();
+    assert!(text.starts_with("<svg") && text.contains("#c8431f") && text.matches("h0").count() == 6, "{}", text);
+    // NEP-177: media_hash is the base64 sha256 of what media holds, 32 bytes.
+    assert_eq!(m.media_hash.unwrap().0, env::sha256(&svg));
+    assert_eq!((m.copies, m.issued_at.is_some()), (Some(1), true));
+    let json = near_sdk::serde_json::to_value(c.nft_token("1".into()).unwrap()).unwrap();
+    assert!(json["metadata"]["media_hash"].is_string() && json["approved_account_ids"].is_object());
+    let meta = c.nft_metadata();
+    assert_eq!((meta.spec.as_str(), meta.symbol.as_str(), meta.name.as_str()), ("nft-2.1.0", "SLIDE", "Petri specimens"));
+    assert!(c.nft_token("2".into()).is_none() && c.nft_token("01".into()).is_none() && c.nft_token("0".into()).is_none());
+    assert_eq!(c.nft_tokens(None, None).len(), 1);
+}
+
+#[test]
+#[should_panic(expected = "at least 5 of your living cells")]
+fn a_slide_needs_enough_of_your_own_cells() {
+    let mut c = two_colonies();
+    // Bob's block is four cells.
+    mint(&mut c, "bob.testnet", T0, (6, 1, 4, 4), None);
+}
+
+#[test]
+#[should_panic(expected = "that rectangle holds 0")]
+fn nobody_can_mint_a_rivals_cells() {
+    let mut c = two_colonies();
+    // Alice's beehive alone, framed by Bob.
+    mint(&mut c, "bob.testnet", T0, (1, 1, 5, 4), None);
+}
+
+#[test]
+#[should_panic(expected = "you hold")]
+fn a_slide_costs_petri_you_have() {
+    let mut c = two_colonies();
+    ctx("carol.testnet", T0, NEAR / 100);
+    c.storage_deposit(None, None);
+    let all = bal(&c, "alice.testnet");
+    ctx("alice.testnet", T0, 1);
+    c.ft_transfer(acct("carol.testnet"), U128(all - 5 * P), None);
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+}
+
+#[test]
+#[should_panic(expected = "for its storage")]
+fn a_slide_pays_for_its_storage() {
+    let mut c = two_colonies();
+    ctx("alice.testnet", T0, 0);
+    c.mint_slide(0, 0, 12, 6, None, None);
+}
+
+#[test]
+#[should_panic(expected = "4 to 32 cells")]
+fn a_slide_is_at_most_32_cells_a_side() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 33, 6), None);
+}
+
+#[test]
+fn a_guest_pays_for_a_slide_from_credit() {
+    let mut c = new_dish();
+    let g = "g-1.relayer.testnet";
+    guest(&mut c, g, T0, "Guest", 3);
+    plant_on_credit(&mut c, g, T0, cells(2, 2, patterns::BEEHIVE));
+    let credit = c.credit_of(acct(g)).0;
+    let d = c.slide_deposit(8, 8, None).0;
+    ctx(g, T0, 0);
+    c.mint_slide(0, 0, 8, 8, None, Some(U128(d)));
+    let spent = credit - c.credit_of(acct(g)).0;
+    assert!(spent > 0 && spent < d, "only the storage is taken from credit: {} of {}", spent, d);
+    assert!(scheduled().is_empty(), "nothing to send back");
+    assert_eq!(c.nft_supply_for_owner(acct(g)).0, 1);
+    conserved(&c, &[g]);
+}
+
+#[test]
+fn slides_move_between_owners_and_enumerate() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    mint(&mut c, "alice.testnet", T0, (0, 0, 6, 6), Some("Close up"));
+    assert_eq!(c.nft_supply_for_owner(acct("alice.testnet")).0, 2);
+    let long = format!("{}.testnet", "c".repeat(56));
+    ctx("alice.testnet", T0, 1);
+    c.nft_transfer(acct(&long), "2".into(), None, Some("for you".into()));
+    assert!(get_logs().iter().any(|l| l.contains("\"nft_transfer\"") && l.contains("\"memo\":\"for you\"") && !l.contains("authorized_id")));
+    assert_eq!(c.nft_token("2".into()).unwrap().owner_id.as_str(), long);
+    assert_eq!(c.nft_supply_for_owner(acct("alice.testnet")).0, 1);
+    assert_eq!(c.nft_tokens_for_owner(acct(&long), None, None)[0].token_id, "2");
+    assert_eq!(c.slides_for(acct("alice.testnet"), None, None)[0].token_id, "1");
+    assert_eq!(c.slides(None, None).len(), 2);
+    assert_eq!(c.nft_total_supply().0, 2);
+    // Moving a slide changes nothing in the dish.
+    assert_eq!(c.ledger(None, Some(100)).iter().filter(|e| matches!(e, Entry::Slide { .. })).count(), 2);
+    conserved(&c, &["alice.testnet", "bob.testnet"]);
+}
+
+#[test]
+#[should_panic(expected = "already belongs to the receiver")]
+fn a_slide_cannot_be_sent_to_its_owner() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    ctx("alice.testnet", T0, 1);
+    c.nft_transfer(acct("alice.testnet"), "1".into(), None, None);
+}
+
+#[test]
+#[should_panic(expected = "only the slide's owner or an approved account")]
+fn a_stranger_cannot_move_a_slide() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    ctx("bob.testnet", T0, 1);
+    c.nft_transfer(acct("bob.testnet"), "1".into(), None, None);
+}
+
+#[test]
+#[should_panic(expected = "does not hold slides")]
+fn a_slide_cannot_be_stranded_in_the_dish() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    ctx("alice.testnet", T0, 1);
+    c.nft_transfer(acct("petri.testnet"), "1".into(), None, None);
+}
+
+#[test]
+#[should_panic(expected = "exactly 1 yoctoNEAR")]
+fn moving_a_slide_needs_one_yocto() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    at("alice.testnet", T0);
+    c.nft_transfer(acct("carol.testnet"), "1".into(), None, None);
+}
+
+#[test]
+fn an_approved_market_moves_a_slide_once_and_approvals_are_refunded() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    let byte = env::storage_byte_cost().as_yoctonear();
+    let cost = (12 + "market.testnet".len() as u128) * byte;
+    ctx("alice.testnet", T0, cost + 5);
+    let storage = env::storage_usage();
+    c.nft_approve("1".into(), acct("market.testnet"), None);
+    assert_eq!((env::storage_usage() - storage) as u128 * byte, cost, "the approval pays exactly its storage");
+    assert_eq!(scheduled(), vec![transfer("alice.testnet", 5)], "the rest goes back");
+    let other = (12 + "other.testnet".len() as u128) * byte;
+    ctx("alice.testnet", T0, other);
+    c.nft_approve("1".into(), acct("other.testnet"), None);
+    assert!(c.nft_is_approved("1".into(), acct("market.testnet"), Some(0)));
+    assert!(!c.nft_is_approved("1".into(), acct("market.testnet"), Some(1)));
+    assert!(c.nft_is_approved("1".into(), acct("other.testnet"), None));
+    // A stale approval id is refused.
+    ctx("market.testnet", T0, 1);
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.nft_transfer(acct("dave.testnet"), "1".into(), Some(7), None)));
+    assert!(r.is_err());
+    ctx("market.testnet", T0, 1);
+    c.nft_transfer(acct("dave.testnet"), "1".into(), Some(0), None);
+    assert!(get_logs().iter().any(|l| l.contains("\"authorized_id\":\"market.testnet\"")));
+    // Both approvals went with the sale, and their storage back to Alice.
+    assert_eq!(scheduled(), vec![transfer("alice.testnet", cost + other)]);
+    assert!(!c.nft_is_approved("1".into(), acct("market.testnet"), None));
+    assert_eq!(c.nft_token("1".into()).unwrap().owner_id.as_str(), "dave.testnet");
+    ctx("market.testnet", T0, 1);
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.nft_transfer(acct("market.testnet"), "1".into(), Some(0), None)));
+    assert!(r.is_err(), "an approval does not survive a transfer");
+    // Revoking refunds too.
+    ctx("dave.testnet", T0, cost);
+    c.nft_approve("1".into(), acct("market.testnet"), None);
+    ctx("dave.testnet", T0, 1);
+    c.nft_revoke_all("1".into());
+    assert_eq!(scheduled(), vec![transfer("dave.testnet", cost)]);
+}
+
+#[test]
+#[should_panic(expected = "for its storage")]
+fn an_approval_pays_for_its_storage() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    ctx("alice.testnet", T0, 1);
+    c.nft_approve("1".into(), acct("market.testnet"), None);
+}
+
+#[test]
+fn a_slide_sent_with_a_call_comes_back_if_the_receiver_returns_it() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    let cost = (12 + "market.testnet".len() as u128) * env::storage_byte_cost().as_yoctonear();
+    ctx("alice.testnet", T0, cost);
+    c.nft_approve("1".into(), acct("market.testnet"), None);
+    ctx_gas("alice.testnet", T0, 1, 300);
+    let _ = c.nft_transfer_call(acct("vault.testnet"), "1".into(), None, None, "keep?".into());
+    let calls = scheduled();
+    assert_eq!((calls[0].0.as_str(), calls[0].1.as_str()), ("vault.testnet", "nft_on_transfer"));
+    assert_eq!(calls[1].1, "nft_resolve_transfer");
+    let args: near_sdk::serde_json::Value = near_sdk::serde_json::from_slice(&calls[1].2).unwrap();
+    assert_eq!(c.nft_token("1".into()).unwrap().owner_id.as_str(), "vault.testnet");
+    // The receiver answers true: give it back. The slide returns to Alice with her approval.
+    callback(T0, Some(b"true".to_vec()));
+    let kept = c.nft_resolve_transfer(acct("alice.testnet"), acct("vault.testnet"), "1".into(), near_sdk::serde_json::from_value(args["approved_account_ids"].clone()).unwrap());
+    assert!(!kept);
+    assert_eq!(c.nft_token("1".into()).unwrap().owner_id.as_str(), "alice.testnet");
+    assert!(c.nft_is_approved("1".into(), acct("market.testnet"), Some(0)));
+    assert_eq!(c.nft_supply_for_owner(acct("vault.testnet")).0, 0);
+    // Sent again, and this time the receiver keeps it: the approvals it had are refunded.
+    ctx_gas("alice.testnet", T0, 1, 300);
+    let _ = c.nft_transfer_call(acct("vault.testnet"), "1".into(), None, None, "keep".into());
+    callback(T0, Some(b"false".to_vec()));
+    let approvals: std::collections::HashMap<AccountId, u64> = [(acct("market.testnet"), 0)].into_iter().collect();
+    assert!(c.nft_resolve_transfer(acct("alice.testnet"), acct("vault.testnet"), "1".into(), Some(approvals)));
+    assert_eq!(scheduled(), vec![transfer("alice.testnet", cost)]);
+    assert_eq!(c.nft_token("1".into()).unwrap().owner_id.as_str(), "vault.testnet");
+    conserved(&c, &["alice.testnet", "bob.testnet"]);
+}
+
+#[test]
+#[should_panic(expected = "only the dish itself")]
+fn nobody_else_can_resolve_a_slide_transfer() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    at("mallory.testnet", T0);
+    c.nft_resolve_transfer(acct("mallory.testnet"), acct("alice.testnet"), "1".into(), None);
+}
+
+/// A slide pays for any owner it can have: sent along a chain of the longest accounts, each a new owner, the
+/// contract's storage never grows past what the minter paid.
+#[test]
+fn transfers_never_outgrow_the_storage_a_slide_paid_for() {
+    let mut c = new_dish();
+    join(&mut c, "al.testnet", T0, "Al", 1, NEAR / 10);
+    plant(&mut c, "al.testnet", T0, cells(2, 2, patterns::BEEHIVE), None);
+    let d = c.slide_deposit(8, 8, None).0;
+    ctx("al.testnet", T0, d);
+    let before = env::storage_usage();
+    c.mint_slide(0, 0, 8, 8, None, None);
+    let refund: u128 = scheduled().iter().map(|r| r.3).sum();
+    let paid = (d - refund) / env::storage_byte_cost().as_yoctonear();
+    let mut owner = "al.testnet".to_string();
+    for i in 0..5 {
+        let next = format!("{}{}.testnet", "x".repeat(55), i);
+        assert_eq!(next.len(), 64);
+        ctx(&owner, T0, 1);
+        c.nft_transfer(acct(&next), "1".into(), None, None);
+        let grown = env::storage_usage() - before;
+        assert!(grown as u128 <= paid, "storage {} past the {} paid", grown, paid);
+        owner = next;
+    }
+}
+
+// ---------- paying with wNEAR ----------
+
+const WNEAR: &str = "wrap.testnet";
+
+/// wNEAR's `ft_transfer_call` landing in the dish, from the intents contract, with `gas` TGas left.
+fn wnear_in(c: &mut Petri, ms: u64, amount: u128, msg: &str, gas: u64) -> U128 {
+    let mut b = VMContextBuilder::new();
+    b.predecessor_account_id(acct(WNEAR)).current_account_id(acct("petri.testnet")).account_balance(NearToken::from_near(1_000)).block_timestamp(ms * MS).prepaid_gas(Gas::from_tgas(gas));
+    testing_env!(b.build());
+    match c.ft_on_transfer(acct("intents.testnet"), U128(amount), msg.into()) {
+        PromiseOrValue::Value(v) => v,
+        PromiseOrValue::Promise(_) => panic!("ft_on_transfer returns a value"),
+    }
+}
+
+fn order_args(v: &near_sdk::serde_json::Value) -> (AccountId, String, Option<String>, Option<u32>) {
+    (v["account"].as_str().unwrap().parse().unwrap(), v["what"].as_str().unwrap().into(), v["name"].as_str().map(String::from), v["color"].as_u64().map(|c| c as u32))
+}
+
+fn u128_arg(v: &near_sdk::serde_json::Value) -> U128 {
+    U128(v.as_str().unwrap().parse().unwrap())
+}
+
+/// The whole path, as the chain runs it: wNEAR arrives, the unwrap succeeds (or not), then the join or purchase.
+fn pay_wnear(c: &mut Petri, ms: u64, amount: u128, msg: &str, unwrap_ok: bool) -> String {
+    assert_eq!(wnear_in(c, ms, amount, msg, 300).0, 0, "the whole amount is kept");
+    let calls = scheduled();
+    assert_eq!((calls[0].0.as_str(), calls[0].1.as_str(), calls[0].3), (WNEAR, "near_withdraw", 1));
+    assert_eq!(calls[1].1, "on_unwrapped");
+    let a: near_sdk::serde_json::Value = near_sdk::serde_json::from_slice(&calls[1].2).unwrap();
+    assert_eq!(u128_arg(&a["amount"]).0, amount);
+    let (account, what, name, color) = order_args(&a);
+    callback(ms, if unwrap_ok { Some(vec![]) } else { None });
+    c.on_unwrapped(account, what, name, color, U128(amount));
+    let calls = scheduled();
+    let Some(settle) = calls.iter().find(|c| c.1 == "settle_intent") else { return "pending".into() };
+    let a: near_sdk::serde_json::Value = near_sdk::serde_json::from_slice(&settle.2).unwrap();
+    let (account, what, name, color) = order_args(&a);
+    callback(ms, None);
+    c.settle_intent(account, what, name, color, u128_arg(&a["amount"]))
+}
+
+#[test]
+fn wnear_joins_for_the_account_it_names_as_if_it_had_attached_near() {
+    let mut c = new_dish();
+    let did = pay_wnear(&mut c, T0, NEAR / 50, r#"{"for":"pat.testnet","do":"join","name":"Gram Stain","color":7012000}"#, true);
+    assert_eq!(did, "join");
+    let col = c.colony_of(acct("pat.testnet")).unwrap();
+    assert_eq!((col.name.as_str(), col.color, col.proxy, col.near_paid.0), ("Gram Stain", 7012000, true, NEAR / 50));
+    assert!(bal(&c, "pat.testnet") > 0, "it bought PETRI");
+    let s = c.state();
+    assert_eq!(s.vault.0, s.near_in.0);
+    assert!(s.vault.0 > 0 && s.credit_pool.0 == 0, "the NEAR went to the vault as the player's own");
+    assert!(c.attached_of(col.id) > 0, "a NEAR colony: paid its tides in NEAR");
+    assert_eq!((s.pending.0, s.wrapped.0, c.pending_of(acct("pat.testnet")).0), (0, 0, 0));
+    assert!(matches!(c.ledger(None, None)[1], Entry::Buy { near, credit, .. } if near.0 > 0 && credit.0 == 0));
+    assert!(get_logs().iter().any(|l| l.contains("\"intents\"") && l.contains("\"did\":\"join\"")));
+    // Anyone could have paid for pat, so pat may choose its own name and colour, once.
+    at("pat.testnet", T0);
+    c.rename("Pat".into(), 0x2364aa);
+    let col = c.colony_of(acct("pat.testnet")).unwrap();
+    assert_eq!((col.name.as_str(), col.proxy), ("Pat", false));
+    // The old name is free again.
+    join(&mut c, "gram.testnet", T0, "Gram Stain", 1, NEAR / 50);
+    conserved(&c, &["pat.testnet", "gram.testnet"]);
+}
+
+#[test]
+#[should_panic(expected = "only a colony someone else started")]
+fn a_colony_renames_once_and_only_if_someone_else_started_it() {
+    let mut c = new_dish();
+    pay_wnear(&mut c, T0, NEAR / 50, r#"{"for":"pat.testnet","do":"join","name":"Gram Stain"}"#, true);
+    at("pat.testnet", T0);
+    c.rename("Pat".into(), 1);
+    at("pat.testnet", T0);
+    c.rename("Pat Again".into(), 1);
+}
+
+#[test]
+#[should_panic(expected = "only a colony someone else started")]
+fn a_colony_that_joined_itself_cannot_rename() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 50);
+    at("alice.testnet", T0);
+    c.rename("Not Alice".into(), 1);
+}
+
+#[test]
+fn wnear_buys_for_a_colony_and_a_join_for_one_that_exists_buys() {
+    let mut c = new_dish();
+    let g = "g-1.relayer.testnet";
+    guest(&mut c, g, T0, "Guest", 3);
+    let held = bal(&c, g);
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 20, &format!(r#"{{"for":"{}","do":"buy"}}"#, g), true), "buy");
+    let after = bal(&c, g);
+    assert!(after > held);
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 20, &format!(r#"{{"for":"{}","do":"join","name":"Other"}}"#, g), true), "buy", "already joined: a purchase");
+    assert!(bal(&c, g) > after);
+    assert_eq!(c.colony_of(acct(g)).unwrap().name, "Guest", "and no second colony");
+    assert!(c.attached_of(1) > 0, "the guest now has NEAR of its own in the vault");
+    assert_eq!(c.state().pending.0, 0);
+    conserved(&c, &[g]);
+}
+
+#[test]
+fn an_unusable_order_waits_as_pending_near_and_is_claimed() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Taken", 1, NEAR / 50);
+    let vault = c.state().vault.0;
+    // Unreadable: pending for the sender.
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 50, "not json", true), "pending");
+    // A name already taken, no name, no order, an account that is not valid, and the dish itself: pending for whoever
+    // the order names, or else the sender.
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 50, r#"{"for":"bo.testnet","do":"join","name":"taken"}"#, true), "pending");
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 50, r#"{"for":"bo.testnet","do":"join"}"#, true), "pending");
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 50, r#"{"for":"bo.testnet"}"#, true), "pending");
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 50, r#"{"for":"NOT VALID","do":"join","name":"X"}"#, true), "pending");
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 50, r#"{"for":"petri.testnet","do":"buy"}"#, true), "pending");
+    // A purchase for an account with no colony.
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 50, r#"{"for":"cy.testnet","do":"buy"}"#, true), "pending");
+    let sender = c.pending_of(acct("intents.testnet")).0;
+    let bo = c.pending_of(acct("bo.testnet")).0;
+    let cy = c.pending_of(acct("cy.testnet")).0;
+    let record = |a: &str| (61 + a.len() as u128) * env::storage_byte_cost().as_yoctonear();
+    assert_eq!(sender, 3 * NEAR / 50 - record("intents.testnet"), "three payments, one record");
+    assert_eq!(bo, 3 * NEAR / 50 - record("bo.testnet"));
+    assert_eq!(cy, NEAR / 50 - record("cy.testnet"));
+    let s = c.state();
+    assert_eq!(s.pending.0, sender + bo + cy);
+    assert_eq!((s.vault.0, s.wrapped.0), (vault, 0), "nothing reached the vault");
+    assert_eq!(c.colonies(None, None).len(), 1, "nobody joined");
+    // Claiming sends the NEAR and the record's storage, and only to the account itself.
+    at("bo.testnet", T0);
+    assert_eq!(c.claim_pending().0, 3 * NEAR / 50);
+    assert_eq!(scheduled()[0], transfer("bo.testnet", 3 * NEAR / 50));
+    assert_eq!(c.pending_of(acct("bo.testnet")).0, 0);
+    assert_eq!(c.state().pending.0, sender + cy);
+    at("bo.testnet", T0);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.claim_pending())).is_err(), "nothing twice");
+    // A claim that cannot be delivered is pending again.
+    callback(T0, None);
+    c.on_pending_paid(acct("bo.testnet"), U128(3 * NEAR / 50));
+    assert_eq!(c.pending_of(acct("bo.testnet")).0, bo);
+    conserved(&c, &["alice.testnet"]);
+}
+
+#[test]
+fn other_tokens_and_dust_are_refunded_and_forged_calls_do_nothing() {
+    let mut c = new_dish();
+    // A different token, even with a perfect order.
+    let mut b = VMContextBuilder::new();
+    b.predecessor_account_id(acct("fake-wrap.testnet")).current_account_id(acct("petri.testnet"));
+    testing_env!(b.build());
+    let r = c.ft_on_transfer(acct("pat.testnet"), U128(NEAR), r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#.into());
+    assert!(matches!(r, PromiseOrValue::Value(v) if v.0 == NEAR), "refunded in full");
+    // A player calling ft_on_transfer itself claims wNEAR it never sent: refunded, nothing recorded.
+    at("pat.testnet", T0);
+    let r = c.ft_on_transfer(acct("pat.testnet"), U128(NEAR), r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#.into());
+    assert!(matches!(r, PromiseOrValue::Value(v) if v.0 == NEAR));
+    assert!(scheduled().is_empty());
+    // wNEAR below the least a payment brings: refunded rather than kept in a record it cannot pay for.
+    assert_eq!(wnear_in(&mut c, T0, NEAR / 1_000, r#"{"for":"pat.testnet","do":"buy"}"#, 300).0, NEAR / 1_000);
+    let s = c.state();
+    assert_eq!((s.wrapped.0, s.pending.0, s.colonies), (0, 0, 0));
+    assert!(c.colony_of(acct("pat.testnet")).is_none());
+}
+
+#[test]
+#[should_panic(expected = "only the dish itself")]
+fn nobody_else_can_call_the_unwrap_callback() {
+    let mut c = new_dish();
+    ctx("mallory.testnet", T0, 0);
+    c.on_unwrapped(acct("mallory.testnet"), "join".into(), Some("Free".into()), None, U128(NEAR));
+}
+
+#[test]
+#[should_panic(expected = "only the dish itself")]
+fn nobody_else_can_settle_an_order() {
+    let mut c = new_dish();
+    ctx("mallory.testnet", T0, 0);
+    c.settle_intent(acct("mallory.testnet"), "join".into(), Some("Free".into()), None, U128(NEAR));
+}
+
+#[test]
+fn a_failed_unwrap_keeps_the_wnear_for_its_account_until_it_is_unwrapped() {
+    let mut c = new_dish();
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 10, r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#, false), "pending");
+    let owed = c.pending_of(acct("pat.testnet")).0;
+    assert!(owed > 0 && owed < NEAR / 10);
+    let s = c.state();
+    assert_eq!((s.wrapped.0, s.pending.0), (NEAR / 10, owed), "still wNEAR, and counted as held");
+    assert!(c.colony_of(acct("pat.testnet")).is_none());
+    // Anyone can unwrap it; then the NEAR is held as NEAR.
+    at("keeper.testnet", T0);
+    let _ = c.unwrap_wnear();
+    let calls = scheduled();
+    assert_eq!((calls[0].0.as_str(), calls[0].1.as_str()), (WNEAR, "near_withdraw"));
+    let a: near_sdk::serde_json::Value = near_sdk::serde_json::from_slice(&calls[0].2).unwrap();
+    assert_eq!(u128_arg(&a["amount"]).0, NEAR / 10);
+    // While it is under way nobody can unwrap it twice.
+    at("keeper.testnet", T0);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.unwrap_wnear())).is_err());
+    callback(T0, Some(vec![]));
+    c.on_wnear_unwrapped(U128(NEAR / 10));
+    assert_eq!(c.state().wrapped.0, 0);
+    assert_eq!(c.pending_of(acct("pat.testnet")).0, owed, "and pat can claim it");
+    conserved(&c, &[]);
+}
+
+#[test]
+fn wnear_with_too_little_gas_to_unwrap_is_kept_for_its_account() {
+    let mut c = new_dish();
+    assert_eq!(wnear_in(&mut c, T0, NEAR / 10, r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#, 20).0, 0, "kept");
+    assert!(scheduled().is_empty(), "nothing scheduled that could run out of gas");
+    let s = c.state();
+    assert_eq!(s.wrapped.0, NEAR / 10);
+    assert_eq!(s.pending.0, c.pending_of(acct("pat.testnet")).0);
+    assert!(s.pending.0 > 0);
+    conserved(&c, &[]);
+}
+
+#[test]
+fn an_order_claimed_before_it_settles_is_not_spent_twice() {
+    let mut c = new_dish();
+    assert_eq!(wnear_in(&mut c, T0, NEAR / 10, r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#, 300).0, 0);
+    callback(T0, Some(vec![]));
+    c.on_unwrapped(acct("pat.testnet"), "join".into(), Some("Pat".into()), None, U128(NEAR / 10));
+    let a: near_sdk::serde_json::Value = near_sdk::serde_json::from_slice(&scheduled().iter().find(|c| c.1 == "settle_intent").unwrap().2).unwrap();
+    // Pat claims the NEAR in the block between.
+    at("pat.testnet", T0);
+    assert_eq!(c.claim_pending().0, NEAR / 10);
+    callback(T0, None);
+    assert_eq!(c.settle_intent(acct("pat.testnet"), "join".into(), Some("Pat".into()), None, u128_arg(&a["amount"])), "claimed");
+    assert!(c.colony_of(acct("pat.testnet")).is_none());
+    // A settle that runs twice finds nothing the second time.
+    assert_eq!(pay_wnear(&mut c, T0, NEAR / 10, r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#, true), "join");
+    callback(T0, None);
+    assert_eq!(c.settle_intent(acct("pat.testnet"), "join".into(), Some("Pat".into()), None, U128(NEAR / 10)), "claimed");
+    assert_eq!(c.colony_of(acct("pat.testnet")).unwrap().near_paid.0, NEAR / 10);
+    conserved(&c, &["pat.testnet"]);
+}
+
+#[test]
+fn registering_on_wnear_is_paid_by_the_caller_or_the_surplus() {
+    let mut c = new_dish();
+    ctx("anyone.testnet", T0, intents::WNEAR_STORAGE + 7);
+    let _ = c.register_wnear();
+    let calls = scheduled();
+    assert!(calls.iter().any(|r| r.0 == WNEAR && r.1 == "storage_deposit" && r.3 == intents::WNEAR_STORAGE));
+    assert!(calls.contains(&transfer("anyone.testnet", 7)));
+    callback(T0, Some(br#"{"total":"1250000000000000000000","available":"0"}"#.to_vec()));
+    c.on_wnear_registered();
+    assert!(c.state().wnear_ready);
+    at("anyone.testnet", T0);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.register_wnear())).is_err(), "once");
+}
+
+// ---------- the bounty of a tide a guest runs ----------
+
+#[test]
+fn a_guest_that_runs_a_tide_is_paid_its_bounty_as_credit() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    let g = "g-1.relayer.testnet";
+    guest(&mut c, g, T0, "Guest", 2);
+    let credit = c.credit_of(acct(g)).0;
+    at(g, T0 + 8 * GEN_MS);
+    c.advance(None);
+    let Entry::Tide { bounty, by, .. } = last_tide(&c) else { unreachable!() };
+    assert!(bounty.0 > 0);
+    assert_eq!(by, 2, "the guest ran it");
+    assert!(scheduled().iter().all(|r| r.1 != "transfer"), "no NEAR left the dish");
+    let won = c.colony_of(acct(g)).unwrap().credit_won.0;
+    assert_eq!(won, bounty.0, "the guest earned nothing, so its credit won is the bounty");
+    assert_eq!(c.credit_of(acct(g)).0, credit + bounty.0, "spendable in the dish at once");
+    let s = c.state();
+    assert_eq!(s.near_bounties.0, 0, "no NEAR bounty");
+    assert!(s.near_as_credit.0 >= bounty.0, "counted with the vault's shares paid as credit");
+    // The keeper, with no colony, is paid in NEAR; so is a colony that has attached NEAR.
+    for (who, gen) in [("keeper.testnet", 16), ("alice.testnet", 24)] {
+        at(who, T0 + gen * GEN_MS);
+        c.advance(None);
+        let Entry::Tide { bounty, by, .. } = last_tide(&c) else { unreachable!() };
+        assert_eq!(by, if who == "keeper.testnet" { 0 } else { 1 });
+        assert!(scheduled().contains(&transfer(who, bounty.0)), "{} paid in NEAR", who);
+    }
+    conserved(&c, &["alice.testnet", g, "keeper.testnet"]);
+}
+
+#[test]
+fn transfer_calls_fit_in_a_transaction() {
+    let mut c = two_colonies();
+    ctx("vault.testnet", T0, NEAR / 100);
+    c.storage_deposit(None, None);
+    ctx_gas("alice.testnet", T0, 1, 300);
+    let _ = c.ft_transfer_call(acct("vault.testnet"), U128(P), None, "hi".into());
+    let calls = scheduled();
+    assert_eq!((calls[0].1.as_str(), calls[1].1.as_str()), ("ft_on_transfer", "ft_resolve_transfer"));
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    ctx_gas("alice.testnet", T0, 1, 60);
+    let _ = c.nft_transfer_call(acct("vault.testnet"), "1".into(), None, None, "hi".into());
+    assert_eq!(scheduled()[0].1, "nft_on_transfer");
 }

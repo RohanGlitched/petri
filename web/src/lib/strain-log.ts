@@ -2,6 +2,7 @@
 // The strains' public action log (served by /api/strains) and what it says about the model right now.
 
 import { useEffect, useState } from "react";
+import { NETWORK } from "./config";
 
 export type StrainAction = {
   at: string;
@@ -35,7 +36,7 @@ export function useStrainLog(): StrainLog | null {
     let stop = false;
     const load = async () => {
       try {
-        const r = await fetch("/api/strains", { cache: "no-store" });
+        const r = await fetch(`/api/strains?net=${NETWORK}`, { cache: "no-store" });
         const body = (await r.json()) as StrainLog;
         if (!stop) setLog({ ...body, actions: body.actions ?? [] });
       } catch {

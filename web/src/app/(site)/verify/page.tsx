@@ -1,5 +1,6 @@
 import { VerifyRun } from "@/components/verify/VerifyRun";
-import { CONTRACT, REPO } from "@/lib/config";
+import { REPO } from "@/lib/config";
+import { DishName, NetName } from "@/components/site/DishName";
 import s from "@/components/verify/verify.module.css";
 
 export const metadata = {
@@ -60,10 +61,10 @@ export default function VerifyPage() {
           </svg>
           <ol className={s.steps}>
             <li>
-              <p>Your browser reads the rules, the colonies, the whole ledger, each colony's earnings and tide winnings, and the contract account's keys from {CONTRACT}, all at one final block. Nothing else.</p>
+              <p>Your browser reads the rules, the colonies, the whole ledger, each colony's earnings and tide winnings, and the contract account's keys from <DishName chain />, all at one final block. Nothing else. The switch at the top of the page picks the dish: free play on testnet or real NEAR on mainnet.</p>
             </li>
             <li>
-              <p>It starts petri-core on an empty dish with all 1,000,000 PETRI in the agar and an empty vault, then applies each entry at its generation: it checks every planting is legal and paid the formula's price, every purchase and sale followed the curve, and every tide paid the right share of the vault, split the right way. Between entries it steps Life and feeds the living exactly as the contract does.</p>
+              <p>It starts petri-core on an empty dish with all 1,000,000 PETRI in the agar and an empty vault, then applies each entry at its generation: it checks every planting is legal and paid the formula's price, every purchase and sale followed the curve, every tide paid the right share of the vault, split the right way, and every specimen slide held only living cells of its own colony. Between entries it steps Life and feeds the living exactly as the contract does.</p>
             </li>
             <li>
               <p>At every tide and at the end it compares hashes, PETRI and NEAR with the contract. A match means the dish you see, and every coin and NEAR in it, is what the rules produced.</p>
@@ -84,7 +85,7 @@ export default function VerifyPage() {
             <b>node</b> scripts/verify.mjs{"\n"}
             {"\n"}
             # or check another dish or network{"\n"}
-            <b>node</b> scripts/verify.mjs --contract {CONTRACT} --network testnet
+            <b>node</b> scripts/verify.mjs --contract <DishName /> --network <NetName />
           </pre>
           <h3 className="h3" style={{ marginTop: 48 }}>What this does not prove</h3>
           <ul className={s.limits}>
