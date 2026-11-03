@@ -1,0 +1,248 @@
+/* Rules demos */
+.demos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+.demo {
+  margin: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border-radius: 22px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.demoDish {
+  aspect-ratio: 40 / 22;
+  position: relative;
+  border-bottom: 1px solid var(--line);
+}
+.demoCap {
+  padding: 22px 22px 20px;
+  display: grid;
+  align-content: start;
+}
+.demoCap p {
+  margin: 0 0 14px;
+  color: var(--text-2);
+  font-size: 15.5px;
+}
+.demoLive {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: auto !important;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px !important;
+  color: var(--dim) !important;
+}
+.demoLive span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.demoLive b { color: var(--bone); font-weight: 600; }
+
+/* Coin band (paper) */
+.coinGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 40px 56px;
+  align-items: center;
+}
+.coinFig {
+  background: #fbf5ec;
+  border-radius: 28px;
+  padding: 18px;
+  box-shadow: 0 1px 0 rgba(29, 18, 8, 0.06), 0 30px 60px -40px rgba(29, 18, 8, 0.45);
+}
+.cycle { width: 100%; height: auto; display: block; }
+.cyBig { font-family: var(--display); font-size: 26px; fill: #1d1208; }
+.cyNum { font-family: var(--display); font-size: 25px; fill: #1d1208; }
+.cyLabel { font-family: var(--display); font-size: 22px; fill: #1d1208; }
+.cySmall { font: 500 13px var(--body); fill: #4e3d2c; }
+.cyTick { font: 500 12px var(--body); fill: #6f5c47; }
+.cyBtn { font: 600 16px var(--body); fill: #f3e9da; }
+.ledger {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+.ledger div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 18px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(29, 18, 8, 0.12);
+}
+.ledger dt { font-weight: 600; color: var(--ink); }
+.ledger dd { margin: 0; font-family: var(--display); font-size: 24px; color: var(--ink); }
+.ledger p { grid-column: 1 / -1; margin: 2px 0 0; color: var(--ink-3); font-size: 14px; }
+.priceRow {
+  margin-top: 64px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px 56px;
+  align-items: center;
+}
+.priceRow p { color: var(--ink-2); margin: 0 0 20px; }
+.priceRow b { color: var(--ink); }
+.curve { width: 100%; height: auto; }
+
+/* Stamps */
+.groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+}
+.group {
+  padding: 28px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.group > p { margin: 0 0 18px; font-size: 15.5px; }
+.stamps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.stamp {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.stamp svg {
+  background: radial-gradient(circle at 40% 35%, #3a2210, #1a0e06 70%);
+  border-radius: 50%;
+  padding: 6px;
+  width: 72px;
+  height: 72px;
+  box-shadow: inset 0 0 0 1px rgba(243, 233, 218, 0.12);
+}
+.stamp b { display: block; font-weight: 600; }
+.stamp span { font-size: 13px; color: var(--dim); }
+.stamp p { margin: 4px 0 0; font-size: 14.5px; color: var(--text-2); }
+.after { margin: 40px 0 0; }
+
+/* Strains */
+.strains {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
+}
+.strain {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  padding: 22px 20px;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.strainHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.strainHead :global(.h3) { margin: 0; font-size: 22px; }
+.temper {
+  font-size: 12.5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--amber);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.35);
+}
+.note {
+  margin: 4px 0 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(243, 233, 218, 0.04);
+  align-self: start;
+}
+.note p { margin: 0; font-family: var(--display); font-size: 17px; line-height: 1.35; color: var(--bone); }
+.note footer { margin-top: 8px; font-size: 12.5px; color: var(--dim); }
+.strainFoot {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--dim);
+  word-break: break-all;
+}
+.strainFoot a { color: var(--dim); }
+
+/* Proof */
+.proof {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px 72px;
+  align-items: start;
+}
+.chainCard {
+  display: grid;
+  gap: 8px;
+  padding: 20px 22px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.chainCard code {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--amber-2);
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
+}
+.parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.parts li {
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+.parts li:first-child { border-top: 0; padding-top: 0; }
+.parts p { margin: 6px 0 0; font-size: 15.5px; }
+.where { font-size: 13.5px; color: var(--amber); }
+.where a { color: var(--amber); }
+
+.cta {
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  padding: 56px 24px;
+  border-radius: 32px;
+  background:
+    radial-gradient(60% 80% at 50% 0%, rgba(242, 180, 90, 0.16), transparent 70%),
+    var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.cta :global(.h2) { max-width: 24ch; }
+
+@media (max-width: 1100px) {
+  .strains { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 960px) {
+  .demos { grid-template-columns: 1fr; }
+  .demo { grid-template-rows: auto auto; }
+  .coinGrid, .priceRow, .proof, .groups { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .strains { grid-template-columns: 1fr; }
+  .group { padding: 20px; }
+  .stamp { grid-template-columns: 60px 1fr; }
+  .stamp svg { width: 60px; height: 60px; }
+}
