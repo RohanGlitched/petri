@@ -214,7 +214,7 @@ const PLACEHOLDER: Check[] = [
   ["prices", "Every planting paid the formula's price"],
   ["buys", "Every purchase followed the agar's curve"],
   ["sells", "Every sale back followed the curve"],
-  ["tides", "Every tide: chain, share of the vault and split"],
+  ["tides", "Every tide: ran when due, chain, share of the vault and split"],
   ["agar", "PETRI left in the agar"],
   ["sold", "PETRI sold from the agar for NEAR"],
   ["burned", "PETRI burned by planting"],

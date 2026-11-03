@@ -360,6 +360,14 @@ fn tides_follow_the_window_and_skip_the_house() {
 }
 
 #[test]
+fn a_tide_is_due_only_when_someone_outside_the_house_earned() {
+    assert!(tide_due(&[0, 0, 7], &[]));
+    assert!(!tide_due(&[0, 0, 0], &[]), "an empty window");
+    assert!(!tide_due(&[0, 5, 0], &[1]), "only the house, which is never fed anyway");
+    assert!(!tide_due(&[9], &[]), "index 0 is not a colony");
+}
+
+#[test]
 fn selling_back_always_loses_against_buying() {
     let k = 200_000_000_000_000u128 * 1_000_000_000_000;
     let agar = 900_000_000_000u128;

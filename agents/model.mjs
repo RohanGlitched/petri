@@ -1,17 +1,40 @@
-// The strains think with a model on NEAR AI Cloud that runs inside a TEE. The model only chooses among moves the
-// rules already accept and writes the lab note; every answer's signature is fetched so anyone can check that the
-// enclave produced it. Without a key the strains fall back to their first candidate and say so in the note.
+// The strains think with Claude Haiku, within a fixed dollar budget, and can also think with a model on NEAR AI Cloud
+// that runs inside a TEE (each NEAR AI answer's signature is fetched so anyone can check the enclave produced it).
+// Either model only chooses among moves the rules already accept and writes the lab note; the log says which model
+// chose. If no model answers, the strains fall back to their first candidate.
+
+import fs from "node:fs";
+import Anthropic from "@anthropic-ai/sdk";
 
 const BASE = process.env.NEARAI_BASE_URL ?? "https://cloud-api.near.ai/v1";
 const KEY = process.env.NEARAI_API_KEY ?? "";
 export const MODEL = process.env.NEARAI_MODEL ?? "z-ai/glm-5.3-flash";
 
-export const hasModel = () => KEY.length > 0;
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-haiku-5-5";
+const claude = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
+// Dollars per token for Claude Haiku 5.5 (prompts under 100K tokens), and the most the strains may spend in total.
+const PRICE_IN = 0.1 / 1e6;
+const PRICE_OUT = 0.5 / 1e6;
+const BUDGET = Number(process.env.CLAUDE_BUDGET_USD ?? "10");
+const SPENT_FILE = new URL("./log/claude-spent.json", import.meta.url);
+let spent = 0;
+try {
+  spent = Number(JSON.parse(fs.readFileSync(SPENT_FILE, "utf8")).usd) || 0;
+} catch {
+  /* nothing spent yet */
+}
+export const claudeSpent = () => spent;
+
+const ORDER = (process.env.PETRI_MODELS ?? "claude,nearai").split(",").map((p) => p.trim());
+
+export const hasModel = () => KEY.length > 0 || claude !== null;
+export const modelName = () =>
+  ORDER.map((p) => (p === "claude" ? claude && CLAUDE_MODEL : p === "nearai" ? KEY && MODEL : null)).filter(Boolean).join(" / ") || null;
 
 let errors = 0;
 let lastError = null;
 export const modelErrors = () => errors;
-export const lastModelError = () => (KEY ? lastError : "no NEAR AI key configured");
+export const lastModelError = () => (hasModel() ? lastError : "no model configured");
 
 function prompt(strain, summary, cands) {
   const system = `You are ${strain.name}, a colony of cells living on a shared Petri dish run by a NEAR smart contract. ${strain.voice}
@@ -24,10 +47,78 @@ ${cands.map((c, i) => `${i + 1}. ${c.why} (${c.cells.length} cells, ${c.costText
   return { system, user };
 }
 
-/** Returns { index, note, model, chatId, signature } or null when there is no model or it fails. */
+/** Returns { index, note, model, chatId, signature } or null when no model can answer. */
 export async function choose(strain, summary, cands) {
-  if (!KEY || cands.length === 0) return null;
+  if (cands.length === 0) return null;
   lastError = null;
+  // Providers in order (PETRI_MODELS="claude,nearai" by default): the first that answers chooses.
+  const errs = [];
+  for (const p of ORDER) {
+    const pick = p === "claude" ? await chooseClaude(strain, summary, cands) : p === "nearai" && KEY ? await chooseNearAI(strain, summary, cands) : null;
+    if (pick) return pick;
+    if (lastError) errs.push(lastError);
+    lastError = null;
+  }
+  lastError = errs.join("; ").slice(0, 240) || null;
+  return null;
+}
+
+/** Picks a candidate from a model's JSON answer, or throws. */
+function parsePick(text, cands) {
+  const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+  const index = Number(json.choice) - 1;
+  if (!Number.isInteger(index) || index < 0 || index >= cands.length) throw new Error(`choice out of range: ${json.choice}`);
+  let note = String(json.note ?? "").replace(/\s+/g, " ").trim();
+  // Keep whole words: a note cut mid-word reads like a glitch.
+  if (note.length > 120) note = `${note.slice(0, 119).replace(/\s+\S*$/, "")}…`;
+  return { index, note };
+}
+
+const PICK_SCHEMA = {
+  type: "object",
+  properties: { choice: { type: "integer" }, note: { type: "string" } },
+  required: ["choice", "note"],
+  additionalProperties: false,
+};
+
+async function chooseClaude(strain, summary, cands) {
+  if (!claude) return null;
+  if (spent >= BUDGET) {
+    lastError = `Claude budget of $${BUDGET} spent`;
+    return null;
+  }
+  const { system, user } = prompt(strain, summary, cands);
+  try {
+    const res = await claude.messages.create(
+      {
+        model: CLAUDE_MODEL,
+        max_tokens: 400,
+        system,
+        messages: [{ role: "user", content: user }],
+        thinking: { type: "disabled" },
+        output_config: { effort: "low", format: { type: "json_schema", schema: PICK_SCHEMA } },
+      },
+      { timeout: 40_000 },
+    );
+    spent += res.usage.input_tokens * PRICE_IN + res.usage.output_tokens * PRICE_OUT;
+    try {
+      fs.writeFileSync(SPENT_FILE, JSON.stringify({ usd: spent, at: new Date().toISOString() }));
+    } catch {
+      /* the budget still holds for this run */
+    }
+    if (res.stop_reason === "refusal") throw new Error("Claude declined");
+    const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    const { index, note } = parsePick(text, cands);
+    return { index, note, model: CLAUDE_MODEL, chatId: res.id, signature: null, usage: res.usage };
+  } catch (e) {
+    errors++;
+    lastError = `Claude: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}`;
+    console.error("model failed:", lastError);
+    return null;
+  }
+}
+
+async function chooseNearAI(strain, summary, cands) {
   const { system, user } = prompt(strain, summary, cands);
   try {
     const res = await fetch(`${BASE}/chat/completions`, {
@@ -48,10 +139,7 @@ export async function choose(strain, summary, cands) {
     if (!res.ok) throw new Error(`NEAR AI ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const body = await res.json();
     const text = body.choices?.[0]?.message?.content ?? "";
-    const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
-    const index = Number(json.choice) - 1;
-    if (!Number.isInteger(index) || index < 0 || index >= cands.length) throw new Error(`choice out of range: ${json.choice}`);
-    const note = String(json.note ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+    const { index, note } = parsePick(text, cands);
     let signature = null;
     try {
       const s = await fetch(`${BASE}/signature/${encodeURIComponent(body.id)}?model=${encodeURIComponent(MODEL)}&signing_algo=ecdsa`, {

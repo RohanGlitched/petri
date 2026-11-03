@@ -18,7 +18,7 @@ export const LAUNCH: Rules = {
   min_join: "10000000000000000000000",
   cell_fee: "100000000000000000000",
   tide_every: 240,
-  tide_bps: 1000,
+  tide_bps: 500,
   tide_bounty_bps: 100,
   max_bounty: "1000000000000000000000",
   sell_bps: 5000,

@@ -63,7 +63,10 @@ export type DishState = {
   /** yoctoNEAR waiting in the tide vault */
   vault: string;
   near_in: string;
+  /** NEAR the tides made claimable (shares of colonies that have attached NEAR) */
   near_tides: string;
+  /** the vault's tide shares paid as credit to colonies that never attached NEAR (counted in credit_won too) */
+  near_as_credit: string;
   near_bounties: string;
   near_sold: string;
   near_refunded: string;
@@ -75,9 +78,14 @@ export type DishState = {
   credit_pool: string;
   credit_in: string;
   credit_given: string;
+  /** credit spent in the dish, won or sponsored */
   credit_spent: string;
+  /** credit won at the tides: the credit pool's shares and the vault's shares paid as credit */
   credit_won: string;
+  /** credit paid for PETRI sold back by colonies that never attached NEAR */
+  credit_sold: string;
   credit_reclaimed: string;
+  /** tides that ran; a tide with nobody to pay is skipped */
   tides: string;
   skipped: string;
   house: number[];
@@ -104,6 +112,7 @@ export type Colony = {
   near_paid: string;
   near_claimed: string;
   near_sold: string;
+  /** credit won at the tides, from the credit pool and as vault shares */
   credit_won: string;
 };
 
@@ -112,8 +121,8 @@ export type Entry =
   | { Join: { generation: string; colony: number } }
   | { Buy: { generation: string; colony: number; petri: string; near: string; credit: string } }
   | { Plant: { generation: string; colony: number; cells: number[]; cost: string; near: string; credit: string; siege: boolean } }
-  | { Sell: { generation: string; colony: number; petri: string; near: string; paid: string } }
-  | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string; credit_pay: string; credit_paid: string } }
+  | { Sell: { generation: string; colony: number; petri: string; near: string; paid: string; as_credit: boolean } }
+  | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string; as_credit: string; credit_pay: string; credit_paid: string } }
   | { Skip: { generation: string; skipped: string } }
   | { Refund: { generation: string; colony: number; near: string } };
 

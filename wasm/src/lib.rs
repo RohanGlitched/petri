@@ -2,7 +2,7 @@
 //! run the dish ahead of the stored generation, replay its whole history from the plant log and check the result
 //! against the contract's history chain.
 
-use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, tide_split, Dish, PlantError, STAKE_UNIT};
+use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, tide_due, tide_split, Dish, PlantError, STAKE_UNIT};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -28,9 +28,12 @@ pub struct Engine {
     window: Vec<u64>,
     /// The dish's own colonies: never fed, no tide share.
     house: Vec<u16>,
-    /// NEAR and credit each colony won at the tides during this engine's run.
+    /// NEAR and credit each colony won at the tides during this engine's run. A colony that never put NEAR into the
+    /// vault itself wins its vault shares as credit.
     won: Vec<u128>,
     credit_won: Vec<u128>,
+    /// Colonies that have put NEAR into the vault (a purchase or planting with `near` above zero).
+    attached: Vec<bool>,
     /// PETRI set aside for keepers during this engine's run.
     keeper: u128,
     last_births: Vec<u32>,
@@ -61,6 +64,7 @@ impl Engine {
             house: Vec::new(),
             won: vec![0],
             credit_won: vec![0],
+            attached: vec![false],
             keeper: 0,
             last_births: vec![0],
             last_deaths: vec![0],
@@ -101,6 +105,21 @@ impl Engine {
         self.window.resize(n as usize + 1, 0);
         self.won.resize(n as usize + 1, 0);
         self.credit_won.resize(n as usize + 1, 0);
+        self.attached.resize(n as usize + 1, false);
+    }
+
+    /// Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is above zero):
+    /// from then on its tide shares are paid in NEAR.
+    pub fn attach(&mut self, colony: u16) {
+        if colony > self.colonies {
+            self.set_colonies(colony);
+        }
+        self.attached[colony as usize] = true;
+    }
+
+    /// Whether `colony` has put NEAR into the vault. One that has not is paid its tide shares and sales as credit.
+    pub fn has_attached(&self, colony: u16) -> bool {
+        self.attached.get(colony as usize).copied().unwrap_or(false)
     }
 
     /// The dish's house colonies (the contract's `state().house`): they are never fed and win no tides.
@@ -209,13 +228,27 @@ impl Engine {
         self.earned.get(colony as usize).copied().unwrap_or(0).to_string()
     }
 
+    /// Whether the contract runs a tide now (at a multiple of `tide_every`): some colony outside the house earned since
+    /// the last one. A tide with nobody to pay is skipped and leaves no ledger entry.
+    pub fn tide_due(&self) -> bool {
+        tide_due(&self.window, &self.house)
+    }
+
     /// Run a tide: split `pay` yoctoNEAR (the vault's share) and `credit_pay` (the credit pool's) by the window's
-    /// earnings, skipping the house, decay every stake, add it to each colony's winnings
-    /// and reset the window. Returns the total paid to colonies, as a decimal string.
+    /// earnings, skipping the house, decay every stake, add it to each colony's winnings (a vault share as credit for a
+    /// colony that never attached NEAR) and reset the window. Returns "paid,credit_paid,as_credit": the NEAR colonies
+    /// can claim, the credit pool's share paid, and the vault's share paid as credit, as decimal strings.
     pub fn tide(&mut self, pay: &str, credit_pay: &str) -> String {
-        let (split, paid) = tide_split(pay.parse().unwrap_or(0), &self.window, &self.house);
+        let (split, _) = tide_split(pay.parse().unwrap_or(0), &self.window, &self.house);
+        let (mut paid, mut as_credit) = (0u128, 0u128);
         for (c, v) in split {
-            self.won[c as usize] += v;
+            if self.attached[c as usize] {
+                self.won[c as usize] += v;
+                paid += v;
+            } else {
+                self.credit_won[c as usize] += v;
+                as_credit += v;
+            }
         }
         let (csplit, credit_paid) = tide_split(credit_pay.parse().unwrap_or(0), &self.window, &self.house);
         for (c, v) in csplit {
@@ -225,10 +258,11 @@ impl Engine {
         for st in self.planted.iter_mut() {
             *st = decay_stake(*st, self.stake_keep_bps);
         }
-        format!("{},{}", paid, credit_paid)
+        format!("{},{},{}", paid, credit_paid, as_credit)
     }
 
-    /// Exact credit one colony won from the credit pool since this engine started (yoctoNEAR, decimal string).
+    /// Exact credit one colony won at the tides since this engine started, from the credit pool and as vault shares
+    /// (yoctoNEAR, decimal string).
     pub fn credit_won_of(&self, colony: u16) -> String {
         self.credit_won.get(colony as usize).copied().unwrap_or(0).to_string()
     }
@@ -303,6 +337,7 @@ impl Engine {
             house: self.house.clone(),
             won: self.won.clone(),
             credit_won: self.credit_won.clone(),
+            attached: self.attached.clone(),
             keeper: self.keeper,
             last_births: self.last_births.clone(),
             last_deaths: self.last_deaths.clone(),

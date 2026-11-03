@@ -6,9 +6,13 @@
 // generation the replay applies that generation's entries in order: it checks every planting is legal, paid the
 // formula's price and its fee, every purchase and sale followed the curve and the sale allowance, and every tide paid
 // the right share of the vault and the credit pool, the capped bounty and no more storage than a tide record costs.
-// Between entries it steps Life and feeds the living exactly as the contract does. The board, the history chain, the
-// agar, the burn, the vault, the credit pool and every colony's PETRI earnings, NEAR winnings and credit winnings must
-// all come out identical, to the unit; and the contract's NEAR balance must cover everything it owes.
+// A colony that never put NEAR into the vault itself is paid its vault shares and its sales as credit; the replay
+// knows which colonies have from their purchases and plantings, and checks every tide and sale paid each the right
+// way. It also stops at every tide generation and checks that a tide ran exactly when some colony outside the house
+// had earned since the last one (an idle tide leaves no entry). Between entries it steps Life and feeds the living
+// exactly as the contract does. The board, the history chain, the agar, the burn, the vault, the credit pool and every
+// colony's PETRI earnings, NEAR winnings and credit winnings must all come out identical, to the unit; and the
+// contract's NEAR balance must cover everything it owes.
 
 import { Engine, buy_quote, pattern_cells, quote, sell_quote } from "@/engine";
 import type { Colony, DishState, Entry, Rules } from "./chain";
@@ -52,12 +56,16 @@ export class Replayer {
   nearIn = 0n;
   creditIn = 0n;
   nearTides = 0n;
+  nearAsCredit = 0n;
   creditWon = 0n;
+  creditSold = 0n;
   plants = 0;
   buys = 0;
   sells = 0;
   tides = 0;
   tidesMatched = 0;
+  /** Tide generations with nobody to pay, which the contract skips. */
+  idleTides = 0;
   /** The first entry of each kind that did not follow the rules. */
   problems: Record<Kind, Problem | null> = { plant: null, price: null, fee: null, buy: null, sell: null, tide: null };
   log: { generation: number; text: string; ok: boolean }[] = [];
@@ -90,7 +98,15 @@ export class Replayer {
     if (this.applied.has(g)) return;
     this.applied.add(g);
     const { rules, colonies } = this.input;
-    for (const entry of this.at.get(g) ?? []) {
+    const entries = this.at.get(g) ?? [];
+    // A tide runs at a multiple of tide_every when some colony outside the house earned since the last one, and only then.
+    const onSchedule = g > 0 && g % rules.tide_every === 0;
+    const due = onSchedule && this.e.tide_due();
+    const ran = entries.some((x) => "Tide" in x);
+    if (due && !ran) this.flag("tide", "a tide was due (colonies had earned) but none was recorded");
+    else if (ran && !due) this.flag("tide", "a tide was recorded with nobody to pay, or off the schedule");
+    else if (onSchedule && !due) this.idleTides++;
+    for (const entry of entries) {
       if ("Join" in entry) {
         const id = entry.Join.colony;
         this.e.set_colonies(id);
@@ -110,6 +126,7 @@ export class Replayer {
         this.nearIn += BigInt(b.near);
         this.pool += BigInt(b.credit);
         this.creditIn += BigInt(b.credit);
+        if (BigInt(b.near) > 0n) this.e.attach(b.colony);
       } else if ("Sell" in entry) {
         const x = entry.Sell;
         this.sells++;
@@ -118,6 +135,8 @@ export class Replayer {
         const near = BigInt(x.near);
         if (want !== near) this.flag("sell", `sold ${x.petri} units for ${x.near} yocto; the curve gives ${want}`);
         else if (near > this.sellLeft) this.flag("sell", `sold for ${x.near} yocto with only ${this.sellLeft} left to buy back before the tide`);
+        else if (x.as_credit === this.e.has_attached(x.colony)) this.flag("sell", `colony ${x.colony} was paid in ${x.as_credit ? "credit" : "NEAR"}, but it ${x.as_credit ? "has" : "never"} attached NEAR`);
+        if (x.as_credit) this.creditSold += BigInt(x.paid);
         this.e.set_agar((BigInt(this.e.agar()) + BigInt(x.petri)).toString());
         this.boughtBack += BigInt(x.petri);
         this.vault -= near;
@@ -140,6 +159,7 @@ export class Replayer {
         this.returned += cost - burn;
         this.e.set_agar((BigInt(this.e.agar()) + cost - burn).toString());
         this.e.plant(p.colony, cells);
+        if (BigInt(p.near) > 0n) this.e.attach(p.colony);
         this.vault += BigInt(p.near);
         this.nearIn += BigInt(p.near);
         this.pool += BigInt(p.credit);
@@ -156,31 +176,36 @@ export class Replayer {
         const storage = BigInt(t.storage);
         const creditPay = (this.pool * BigInt(rules.tide_bps)) / 10000n;
         const pool = pay - capped;
-        const [paidS, creditPaidS] = this.e.tide((pool > storage ? pool - storage : 0n).toString(), creditPay.toString()).split(",");
+        const [paidS, creditPaidS, asCreditS] = this.e.tide((pool > storage ? pool - storage : 0n).toString(), creditPay.toString()).split(",");
         const paid = BigInt(paidS);
         const creditPaid = BigInt(creditPaidS);
+        const asCredit = BigInt(asCreditS);
         const bounty = BigInt(t.bounty);
+        const winners = paid + asCredit > 0n;
         const problem = !chainOk
           ? "the history chain differs"
           : pay !== BigInt(t.pay) || paid !== BigInt(t.paid)
             ? `paid ${t.paid} of ${t.pay}; the replay gives ${paid} of ${pay}`
-            : bounty !== (paid > 0n ? capped : 0n)
-              ? `bounty ${t.bounty}; the rules give ${paid > 0n ? capped : 0n}`
-              : storage > TIDE_STORAGE_MAX
-                ? `charged ${t.storage} yocto of storage for one record`
-                : creditPay !== BigInt(t.credit_pay) || creditPaid !== BigInt(t.credit_paid)
-                  ? `credit pool paid ${t.credit_paid} of ${t.credit_pay}; the replay gives ${creditPaid} of ${creditPay}`
-                  : null;
+            : asCredit !== BigInt(t.as_credit)
+              ? `paid ${t.as_credit} of the vault as credit; the replay gives ${asCredit}`
+              : bounty !== (winners ? capped : 0n)
+                ? `bounty ${t.bounty}; the rules give ${winners ? capped : 0n}`
+                : storage > TIDE_STORAGE_MAX
+                  ? `charged ${t.storage} yocto of storage for one record`
+                  : creditPay !== BigInt(t.credit_pay) || creditPaid !== BigInt(t.credit_paid)
+                    ? `credit pool paid ${t.credit_paid} of ${t.credit_pay}; the replay gives ${creditPaid} of ${creditPay}`
+                    : null;
         if (problem) this.flag("tide", problem);
         else this.tidesMatched++;
-        this.vault -= paid + bounty + storage;
+        this.vault -= paid + asCredit + bounty + storage;
         this.pool -= creditPaid;
         this.nearTides += paid;
-        this.creditWon += creditPaid;
+        this.nearAsCredit += asCredit;
+        this.creditWon += creditPaid + asCredit;
         this.sellLeft = (this.vault * BigInt(rules.sell_cap_bps)) / 10000n;
         this.log.push({
           generation: g,
-          text: `Tide at generation ${g.toLocaleString("en-US")}: ${chainOk ? "chain matches" : "chain differs"}, ${fmtNear(paid)} NEAR and ${fmtNear(creditPaid)} credit to colonies`,
+          text: `Tide at generation ${g.toLocaleString("en-US")}: ${chainOk ? "chain matches" : "chain differs"}, ${fmtNear(paid)} NEAR and ${fmtNear(creditPaid + asCredit)} credit to colonies`,
           ok: !problem,
         });
       }
@@ -194,10 +219,11 @@ export class Replayer {
     while (left > 0) {
       this.applyEvents();
       if (this.generation >= this.target) return true;
-      // Jump straight to the next generation that has an entry, within the budget.
+      // Jump straight to the next generation that has an entry or is a tide's, within the budget.
       let next = this.generation + 1;
       const limit = Math.min(this.target, this.generation + left);
-      while (next < limit && !this.at.has(next)) next++;
+      const every = this.input.rules.tide_every;
+      while (next < limit && !this.at.has(next) && next % every !== 0) next++;
       const n = next - this.generation;
       this.e.step(n);
       left -= n;
@@ -232,10 +258,12 @@ export class Replayer {
       rule("sells", "Every sale back followed the curve and the allowance", this.sells, "sales", this.problems.sell),
       {
         id: "tides",
-        label: "Every tide: chain, shares of the vault and credit pool, bounty, storage",
+        label: "Every tide: ran when due, chain, shares of the vault and credit pool, bounty, storage",
         expected: `${this.tides} ${this.tides === 1 ? "tide" : "tides"}`,
-        got: this.problems.tide ? `differs at generation ${this.problems.tide.generation}: ${this.problems.tide.what}` : `${this.tidesMatched} of ${this.tides} match`,
-        ok: this.tides > 0 ? this.problems.tide === null : this.target < Number(this.input.rules.tide_every),
+        got: this.problems.tide
+          ? `differs at generation ${this.problems.tide.generation}: ${this.problems.tide.what}`
+          : `${this.tidesMatched} of ${this.tides} match${this.idleTides > 0 ? `; ${this.idleTides} idle, skipped` : ""}`,
+        ok: this.problems.tide === null,
       },
       c("agar", "PETRI left in the agar", fmt(BigInt(state.agar)), fmt(BigInt(this.e.agar()))),
       c("sold", "PETRI sold from the agar", fmt(BigInt(state.sold)), fmt(this.sold)),
@@ -247,14 +275,17 @@ export class Replayer {
       c("vault", "NEAR in the tide vault", fmtNear(BigInt(state.vault)), fmtNear(this.vault)),
       c("near_in", "NEAR paid in by players", fmtNear(BigInt(state.near_in)), fmtNear(this.nearIn)),
       c("near_tides", "NEAR paid out at tides", fmtNear(BigInt(state.near_tides)), fmtNear(this.nearTides)),
+      c("near_as_credit", "Vault shares paid as credit to colonies that never attached NEAR", fmtNear(BigInt(state.near_as_credit)), fmtNear(this.nearAsCredit)),
+      c("credit_sold", "Sales paid as credit to colonies that never attached NEAR", fmtNear(BigInt(state.credit_sold)), fmtNear(this.creditSold)),
       every("won", "Every colony's NEAR won at tides", wonOk),
       c("credit_pool", "Sponsored credit in the credit pool", fmtNear(BigInt(state.credit_pool)), fmtNear(this.pool)),
       c("credit_won", "Credit paid out at tides", fmtNear(BigInt(state.credit_won)), fmtNear(this.creditWon)),
       every("credit_each", "Every colony's credit won at tides", creditOk),
     ];
     if (lock) {
-      // The contract's NEAR must cover the vault, the credit pool, unspent credit and unclaimed winnings.
-      const owed = BigInt(state.vault) + BigInt(state.credit_pool) + BigInt(state.credit_given) + BigInt(state.credit_won) - BigInt(state.credit_spent) - BigInt(state.credit_reclaimed) + BigInt(state.tides_owed);
+      // The contract's NEAR must cover the vault, the credit pool, unspent credit (won or sponsored) and unclaimed winnings.
+      const outstanding = BigInt(state.credit_given) + BigInt(state.credit_won) + BigInt(state.credit_sold) - BigInt(state.credit_spent) - BigInt(state.credit_reclaimed);
+      const owed = BigInt(state.vault) + BigInt(state.credit_pool) + outstanding + BigInt(state.tides_owed);
       const free = BigInt(lock.balance) - BigInt(lock.storageUsage) * BYTE_COST;
       out.push({
         id: "solvent",

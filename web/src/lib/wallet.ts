@@ -246,7 +246,8 @@ export const buyPetri = (deposit: bigint = BUY_NEAR) => call("buy", {}, 150, dep
 export const sellPetri = (units: bigint) => call("sell", { petri: units.toString() }, 150);
 export const claimAll = () => call("claim", {}, 150);
 export const advanceDish = () => call("advance", {}, 250);
-/** Where the colony's NEAR payouts (tide winnings and sales) go from now on; `null` sends them to its own account again. */
+/** Where the colony's NEAR payouts (tide winnings and sales) go from now on; `null` sends them to its own account again.
+ * Only a colony that has attached NEAR may set one: a guest is paid in credit, and the relayer does not relay this call. */
 export const setPayout = (account: string | null) => call("set_payout", { account_id: account }, 50);
 
 export function usePlayer(): Player {

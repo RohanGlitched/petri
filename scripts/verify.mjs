@@ -9,9 +9,11 @@
 // order), every colony's PETRI earnings and NEAR tide winnings, the contract account and its NEP-330 source metadata. It replays all of it with
 // petri-core (the same Rust crate the contract runs, compiled to WebAssembly) and compares: the history chain and
 // board hash, the living cells, that every planting was legal and paid the formula's price and its fee, that every
-// purchase and sale followed the curve and the sale allowance, every tide's chain, shares, bounty and storage, the agar
-// and every PETRI counter, the vault, the credit pool and every NEAR counter, each colony's earnings and winnings, and
-// that the contract's NEAR covers everything it owes. It also checks the deployed code hash (--code-hash, by default
+// purchase and sale followed the curve and the sale allowance, every tide's chain, shares, bounty and storage (and that
+// a tide ran at exactly the tide generations where some colony outside the house had earned), that colonies which
+// never attached NEAR were paid their vault shares and sales as credit, the agar and every PETRI counter, the vault,
+// the credit pool and every NEAR and credit counter, each colony's earnings and winnings, and that the contract's NEAR
+// covers everything it owes. It also checks the deployed code hash (--code-hash, by default
 // the hash of `cargo near build reproducible-wasm` at the commit the contract's own metadata names: rebuild it to check
 // this constant) and that the contract account has no full-access key, so nobody can change the code.
 // Exits 0 when everything matches, 1 on any mismatch, 2 if the dish could not be read. Needs Node 20 or later.
@@ -111,8 +113,8 @@ const at = new Map();
 for (const x of ledger) at.set(genOf(x), [...(at.get(genOf(x)) ?? []), x]);
 const house = [];
 const TIDE_STORAGE_MAX = 3n * 10n ** 21n;
-let sold = 0n, burned = 0n, returned = 0n, boughtBack = 0n, vault = 0n, pool = 0n, sellLeft = 0n, nearIn = 0n, nearTides = 0n, creditWon = 0n;
-const count = { plants: 0, buys: 0, sells: 0, tides: 0 };
+let sold = 0n, burned = 0n, returned = 0n, boughtBack = 0n, vault = 0n, pool = 0n, sellLeft = 0n, nearIn = 0n, nearTides = 0n, nearAsCredit = 0n, creditWon = 0n, creditSold = 0n;
+const count = { plants: 0, buys: 0, sells: 0, tides: 0, idle: 0 };
 const bad = { legal: null, price: null, fee: null, buy: null, sell: null, tide: null };
 const flag = (k, g, what) => {
   if (!bad[k]) bad[k] = `generation ${g}: ${what}`;
@@ -120,7 +122,15 @@ const flag = (k, g, what) => {
 
 for (;;) {
   const g = e.generation();
-  for (const x of at.get(g) ?? []) {
+  const entries = at.get(g) ?? [];
+  // A tide runs at a multiple of tide_every when some colony outside the house earned since the last one, and only then.
+  const onSchedule = g > 0 && g % rules.tide_every === 0;
+  const due = onSchedule && e.tide_due();
+  const ran = entries.some((x) => x.Tide);
+  if (due && !ran) flag("tide", g, "a tide was due (colonies had earned) but none was recorded");
+  else if (ran && !due) flag("tide", g, "a tide was recorded with nobody to pay, or off the schedule");
+  else if (onSchedule && !due) count.idle++;
+  for (const x of entries) {
     if (x.Join) {
       e.set_colonies(x.Join.colony);
       if (colonies[x.Join.colony - 1]?.house) {
@@ -137,12 +147,15 @@ for (;;) {
       vault += BigInt(x.Buy.near);
       nearIn += BigInt(x.Buy.near);
       pool += BigInt(x.Buy.credit);
+      if (BigInt(x.Buy.near) > 0n) e.attach(x.Buy.colony);
     } else if (x.Sell) {
       count.sells++;
       const outstanding = BigInt(rules.max_supply) - burned - BigInt(e.agar());
       const want = sell_quote(x.Sell.petri, e.agar(), rules.petri_price, rules.max_supply, rules.sell_bps, vault.toString(), outstanding.toString());
       if (want !== x.Sell.near) flag("sell", g, `${x.Sell.near} yocto for ${x.Sell.petri} units, curve gives ${want}`);
       else if (BigInt(x.Sell.near) > sellLeft) flag("sell", g, `sold beyond the allowance (${sellLeft} left)`);
+      else if (x.Sell.as_credit === e.has_attached(x.Sell.colony)) flag("sell", g, `colony ${x.Sell.colony} paid in ${x.Sell.as_credit ? "credit" : "NEAR"}, but it ${x.Sell.as_credit ? "has" : "never"} attached NEAR`);
+      if (x.Sell.as_credit) creditSold += BigInt(x.Sell.paid);
       e.set_agar((BigInt(e.agar()) + BigInt(x.Sell.petri)).toString());
       boughtBack += BigInt(x.Sell.petri);
       vault -= BigInt(x.Sell.near);
@@ -164,6 +177,7 @@ for (;;) {
       returned += cost - burn;
       e.set_agar((BigInt(e.agar()) + cost - burn).toString());
       e.plant(p.colony, cells);
+      if (BigInt(p.near) > 0n) e.attach(p.colony);
       vault += BigInt(p.near);
       nearIn += BigInt(p.near);
       pool += BigInt(p.credit);
@@ -178,25 +192,29 @@ for (;;) {
       const storage = BigInt(t.storage);
       const creditPay = (pool * BigInt(rules.tide_bps)) / 10000n;
       const left = pay - capped;
-      const [paidS, creditS] = e.tide((left > storage ? left - storage : 0n).toString(), creditPay.toString()).split(",");
+      const [paidS, creditS, asCreditS] = e.tide((left > storage ? left - storage : 0n).toString(), creditPay.toString()).split(",");
       const paid = BigInt(paidS);
       const creditPaid = BigInt(creditS);
+      const asCredit = BigInt(asCreditS);
+      const winners = paid + asCredit > 0n;
       if (e.chain_hex() !== t.chain) flag("tide", g, "history chain differs");
       else if (pay !== BigInt(t.pay) || paid !== BigInt(t.paid)) flag("tide", g, `paid ${t.paid} of ${t.pay}, replay ${paid} of ${pay}`);
-      else if (BigInt(t.bounty) !== (paid > 0n ? capped : 0n)) flag("tide", g, `bounty ${t.bounty}, rules give ${paid > 0n ? capped : 0n}`);
+      else if (asCredit !== BigInt(t.as_credit)) flag("tide", g, `paid ${t.as_credit} of the vault as credit, replay ${asCredit}`);
+      else if (BigInt(t.bounty) !== (winners ? capped : 0n)) flag("tide", g, `bounty ${t.bounty}, rules give ${winners ? capped : 0n}`);
       else if (storage > TIDE_STORAGE_MAX) flag("tide", g, `charged ${t.storage} yocto of storage for one record`);
       else if (creditPay !== BigInt(t.credit_pay) || creditPaid !== BigInt(t.credit_paid)) flag("tide", g, `credit pool paid ${t.credit_paid} of ${t.credit_pay}, replay ${creditPaid} of ${creditPay}`);
-      vault -= paid + BigInt(t.bounty) + storage;
+      vault -= paid + asCredit + BigInt(t.bounty) + storage;
       pool -= creditPaid;
       nearTides += paid;
-      creditWon += creditPaid;
+      nearAsCredit += asCredit;
+      creditWon += creditPaid + asCredit;
       sellLeft = (vault * BigInt(rules.sell_cap_bps)) / 10000n;
     }
     // A Skip entry only moves the clock; the dish does not change.
   }
   if (g >= target) break;
   let next = g + 1;
-  while (next < target && !at.has(next)) next++;
+  while (next < target && !at.has(next) && next % rules.tide_every !== 0) next++;
   e.step(next - g);
 }
 const ms = performance.now() - t0;
@@ -205,7 +223,8 @@ const earnedBad = colonies.filter((c, i) => e.earned_of(c.id) !== earnings[i]);
 const wonBad = colonies.filter((c, i) => e.won_of(c.id) !== winnings[i]);
 const creditBad = colonies.filter((c) => e.credit_won_of(c.id) !== c.credit_won);
 const fullKeys = keys.keys.filter((k) => k.access_key.permission === "FullAccess").length;
-const owed = BigInt(state.vault) + BigInt(state.credit_pool) + BigInt(state.credit_given) + BigInt(state.credit_won) - BigInt(state.credit_spent) - BigInt(state.credit_reclaimed) + BigInt(state.tides_owed);
+const outstanding = BigInt(state.credit_given) + BigInt(state.credit_won) + BigInt(state.credit_sold) - BigInt(state.credit_spent) - BigInt(state.credit_reclaimed);
+const owed = BigInt(state.vault) + BigInt(state.credit_pool) + outstanding + BigInt(state.tides_owed);
 const free = BigInt(account.amount) - BigInt(account.storage_usage) * 10n ** 19n;
 const rule = (k, n, noun) => [`${noun[0].toUpperCase()}${noun.slice(1)}`, `${n} of ${n}`, bad[k] ? `differs at ${bad[k]}` : `${n} of ${n}`];
 const all = (name, list) => [name, `${colonies.length} of ${colonies.length}`, `${colonies.length - list.length} of ${colonies.length}`];
@@ -229,6 +248,8 @@ const checks = [
   ["Vault (NEAR)", fmtNear(state.vault), fmtNear(vault)],
   ["NEAR paid in", fmtNear(state.near_in), fmtNear(nearIn)],
   ["NEAR paid at tides", fmtNear(state.near_tides), fmtNear(nearTides)],
+  ["Vault shares paid as credit", fmtNear(state.near_as_credit), fmtNear(nearAsCredit)],
+  ["Sales paid as credit", fmtNear(state.credit_sold), fmtNear(creditSold)],
   all("Colony tide winnings", wonBad),
   ["Credit pool", fmtNear(state.credit_pool), fmtNear(pool)],
   ["Credit paid at tides", fmtNear(state.credit_won), fmtNear(creditWon)],
@@ -246,6 +267,7 @@ for (const [name, want, got] of checks) {
 for (const c of earnedBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmt(earnings[c.id - 1])}, replay ${fmt(e.earned_of(c.id))}`);
 for (const c of wonBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmtNear(winnings[c.id - 1])} NEAR won, replay ${fmtNear(e.won_of(c.id))}`);
 if (meta) console.log(`Source: ${meta.link ?? "no link"}; built with ${meta.build_info?.build_command?.join(" ") ?? "no build info"} in ${meta.build_info?.build_environment ?? "?"}`);
+if (count.idle > 0) console.log(`${count.idle} tide generation(s) had nobody to pay and were skipped, as the rules say.`);
 console.log(`Owed: ${fmtNear(owed)} NEAR (vault, credit pool, unspent credit, unclaimed winnings); held beyond storage: ${fmtNear(free)} NEAR.`);
 if (fullKeys > 0) console.log("  The contract account still has a full-access key: whoever holds it could deploy different code.");
 console.log(differ === 0 ? `Everything matches. Replay took ${ms.toFixed(0)} ms.` : `${differ} check(s) differ.`);

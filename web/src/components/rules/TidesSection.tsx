@@ -25,8 +25,9 @@ export function TidesSection() {
 
   // NEAR in = vault + everything paid out. Tide and sale records are paid from the vault too, and are not counted in
   // `state`, so the live counters can only show the gap they leave.
-  const big = (k: "vault" | "near_in" | "near_tides" | "near_bounties" | "near_sold") => (st ? BigInt(st[k]) : 0n);
-  const out = big("vault") + big("near_tides") + big("near_bounties") + big("near_sold");
+  // Shares and sales paid as credit to colonies that never attached NEAR left the vault too.
+  const big = (k: "vault" | "near_in" | "near_tides" | "near_as_credit" | "near_bounties" | "near_sold" | "credit_sold") => (st ? BigInt(st[k]) : 0n);
+  const out = big("vault") + big("near_tides") + big("near_as_credit") + big("near_bounties") + big("near_sold") + big("credit_sold");
   const gap = big("near_in") - out;
   const nearOk = st ? gap >= 0n : null;
 
@@ -36,7 +37,7 @@ export function TidesSection() {
     ["Paid at the tides so far", st ? `${near(Number(st.near_tides), 4)} NEAR` : "—"],
     ["Tides run", st ? int(Number(st.tides)) : "—"],
     ["Credit sponsored", st ? `${near(Number(st.credit_given), 3)} NEAR` : "—"],
-    ["Of which spent in the dish", st ? `${near(Number(st.credit_spent), 3)} NEAR` : "—"],
+    ["Credit spent in the dish, won or sponsored", st ? `${near(Number(st.credit_spent), 3)} NEAR` : "—"],
   ];
 
   const ways: [string, string][] = [

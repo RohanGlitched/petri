@@ -603,6 +603,12 @@ pub fn tide_split(pay: u128, window: &[u64], house: &[ColonyId]) -> (Vec<(Colony
     (out, paid)
 }
 
+/// Whether a tide has anyone to pay: some colony outside `house` earned from the feed since the last tide. A tide that
+/// does not is skipped altogether (no ledger entry, no decay, the buy-back allowance unchanged).
+pub fn tide_due(window: &[u64], house: &[ColonyId]) -> bool {
+    window.iter().enumerate().skip(1).any(|(c, &w)| w > 0 && !house.contains(&(c as ColonyId)))
+}
+
 /// `a * b / d` without overflowing when `a` is large and `b < d`.
 fn mul_div(a: u128, b: u128, d: u128) -> u128 {
     a / d * b + (a % d) * b / d

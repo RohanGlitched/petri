@@ -5,6 +5,11 @@ export class Engine {
     free(): void;
     [Symbol.dispose](): void;
     agar(): string;
+    /**
+     * Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is above zero):
+     * from then on its tide shares are paid in NEAR.
+     */
+    attach(colony: number): void;
     board_hash_hex(): string;
     /**
      * What one cell costs to plant now, in PETRI units, by the contract's formula.
@@ -27,7 +32,8 @@ export class Engine {
      */
     counted(): number;
     /**
-     * Exact credit one colony won from the credit pool since this engine started (yoctoNEAR, decimal string).
+     * Exact credit one colony won at the tides since this engine started, from the credit pool and as vault shares
+     * (yoctoNEAR, decimal string).
      */
     credit_won_of(colony: number): string;
     /**
@@ -39,6 +45,10 @@ export class Engine {
      */
     earned_of(colony: number): string;
     generation(): number;
+    /**
+     * Whether `colony` has put NEAR into the vault. One that has not is paid its tide shares and sales as credit.
+     */
+    has_attached(colony: number): boolean;
     height(): number;
     /**
      * Exact PETRI units set aside for keepers since this engine started.
@@ -77,10 +87,16 @@ export class Engine {
     step(n: number): void;
     /**
      * Run a tide: split `pay` yoctoNEAR (the vault's share) and `credit_pay` (the credit pool's) by the window's
-     * earnings, skipping the house, decay every stake, add it to each colony's winnings
-     * and reset the window. Returns the total paid to colonies, as a decimal string.
+     * earnings, skipping the house, decay every stake, add it to each colony's winnings (a vault share as credit for a
+     * colony that never attached NEAR) and reset the window. Returns "paid,credit_paid,as_credit": the NEAR colonies
+     * can claim, the credit pool's share paid, and the vault's share paid as credit, as decimal strings.
      */
     tide(pay: string, credit_pay: string): string;
+    /**
+     * Whether the contract runs a tide now (at a multiple of `tide_every`): some colony outside the house earned since
+     * the last one. A tide with nobody to pay is skipped and leaves no ledger entry.
+     */
+    tide_due(): boolean;
     total_live(): number;
     width(): number;
     /**
@@ -124,6 +140,7 @@ export interface InitOutput {
     readonly __wbg_engine_free: (a: number, b: number) => void;
     readonly buy_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly engine_agar: (a: number) => [number, number];
+    readonly engine_attach: (a: number, b: number) => void;
     readonly engine_board_hash_hex: (a: number) => [number, number];
     readonly engine_cell_price: (a: number, b: number, c: number, d: number) => [number, number];
     readonly engine_cells: (a: number) => [number, number];
@@ -136,6 +153,7 @@ export interface InitOutput {
     readonly engine_earned: (a: number) => [number, number];
     readonly engine_earned_of: (a: number, b: number) => [number, number];
     readonly engine_generation: (a: number) => number;
+    readonly engine_has_attached: (a: number, b: number) => number;
     readonly engine_height: (a: number) => number;
     readonly engine_keeper_total: (a: number) => [number, number];
     readonly engine_last_births: (a: number) => [number, number];
@@ -152,6 +170,7 @@ export interface InitOutput {
     readonly engine_set_stakes: (a: number, b: number, c: number) => void;
     readonly engine_step: (a: number, b: number) => void;
     readonly engine_tide: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly engine_tide_due: (a: number) => number;
     readonly engine_total_live: (a: number) => number;
     readonly engine_width: (a: number) => number;
     readonly engine_window_of: (a: number, b: number) => [number, number];

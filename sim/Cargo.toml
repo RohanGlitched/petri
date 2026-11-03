@@ -1,9 +1,11 @@
 [package]
 name = "petri-sim"
-version = "0.1.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT"
-description = "Simulates weeks of Petri with scripted societies to choose and justify the launch parameters."
+description = "Simulates weeks of Petri with scripted societies under the launched v5 rules (contract/launch-rules.json)."
 
 [dependencies]
 petri-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

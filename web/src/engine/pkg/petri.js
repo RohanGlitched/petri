@@ -33,6 +33,14 @@ export class Engine {
         }
     }
     /**
+     * Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is above zero):
+     * from then on its tide shares are paid in NEAR.
+     * @param {number} colony
+     */
+    attach(colony) {
+        wasm.engine_attach(this.__wbg_ptr, colony);
+    }
+    /**
      * @returns {string}
      */
     board_hash_hex() {
@@ -144,7 +152,8 @@ export class Engine {
         return ret >>> 0;
     }
     /**
-     * Exact credit one colony won from the credit pool since this engine started (yoctoNEAR, decimal string).
+     * Exact credit one colony won at the tides since this engine started, from the credit pool and as vault shares
+     * (yoctoNEAR, decimal string).
      * @param {number} colony
      * @returns {string}
      */
@@ -193,6 +202,15 @@ export class Engine {
     generation() {
         const ret = wasm.engine_generation(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * Whether `colony` has put NEAR into the vault. One that has not is paid its tide shares and sales as credit.
+     * @param {number} colony
+     * @returns {boolean}
+     */
+    has_attached(colony) {
+        const ret = wasm.engine_has_attached(this.__wbg_ptr, colony);
+        return ret !== 0;
     }
     /**
      * @returns {number}
@@ -348,8 +366,9 @@ export class Engine {
     }
     /**
      * Run a tide: split `pay` yoctoNEAR (the vault's share) and `credit_pay` (the credit pool's) by the window's
-     * earnings, skipping the house, decay every stake, add it to each colony's winnings
-     * and reset the window. Returns the total paid to colonies, as a decimal string.
+     * earnings, skipping the house, decay every stake, add it to each colony's winnings (a vault share as credit for a
+     * colony that never attached NEAR) and reset the window. Returns "paid,credit_paid,as_credit": the NEAR colonies
+     * can claim, the credit pool's share paid, and the vault's share paid as credit, as decimal strings.
      * @param {string} pay
      * @param {string} credit_pay
      * @returns {string}
@@ -376,6 +395,15 @@ export class Engine {
         } finally {
             wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
         }
+    }
+    /**
+     * Whether the contract runs a tide now (at a multiple of `tide_every`): some colony outside the house earned since
+     * the last one. A tide with nobody to pay is skipped and leaves no ledger entry.
+     * @returns {boolean}
+     */
+    tide_due() {
+        const ret = wasm.engine_tide_due(this.__wbg_ptr);
+        return ret !== 0;
     }
     /**
      * @returns {number}

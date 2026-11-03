@@ -1,0 +1,34 @@
+=== 9. Fix experiments: one change at a time against the launched rules (same seeds; 7 days; 12 seeds at 150 players, 10 at 1,500) ===
+  Cells: median cash (NEAR withdrawn - NEAR paid incl. gas) per player of each kind. stor% = storage / NEAR in; keepGas/d = team keeper
+  gas per day; lockTd% = the locker's share of all tide NEAR; free7% = free cells for a newcomer at the end.
+                                                           |  Builder   Raider Methusel     Late    Whale SplitWha   Locker    Racer   Seller SybilGue SelfSpon    House |  stor% keepGas/d lockTd%  free7%
+  150 p | launched rules                                   |  -0.1831  -0.1534  +0.1419  -0.2682  -2.1219  -1.3715  -0.5767  -0.0542  -0.1055  -0.1240  -0.4205  -1.0810 |  42.2%    0.5331    5.8%   48.8%
+  150 p | team keeper registered (collects the pot)        |  -0.1733  -0.1534  +0.1101  -0.2666  -1.7837  -1.2657  -0.4554  -0.0458  -0.1055  -0.1378  -0.4029  -1.0811 |  42.0%    0.0361    5.7%   45.2%
+  150 p | ledger kept as events (sim: no stored entries)   |  -0.0293  -0.0659  +0.2788  -0.1151  -0.9182  -0.8671  -0.2804  -0.0558  -0.1032  -0.0598  -0.1585  -1.1261 |  14.2%    0.1914    6.5%   37.4%
+  150 p | tide_bps 500                                     |  -0.1657  -0.1560  +0.2892  -0.2563  -2.0521  -1.6734  -1.2077  -0.0598  -0.1054  -0.1228  -0.4630  -1.0808 |  42.3%    0.3371    3.1%   45.4%
+  150 p | stake_keep_bps 8000                              |  -0.1741  -0.1458  +0.1146  -0.2752  -1.8698  -1.3275  -0.5152  -0.0529  -0.1055  -0.1097  -0.4046  -1.0814 |  42.0%    0.5809    5.5%   47.1%
+  150 p | reach 4                                          |  -0.1798  -0.1475  +0.1109  -0.2643  -2.0632  -1.3949  -0.4439  -0.0537  -0.1055  -0.1455  -0.3957  -1.0805 |  42.3%    0.5456    5.3%   48.4%
+  150 p | reach 2                                          |  -0.1714  -0.1551  +0.0740  -0.2691  -1.7583  -1.2875  -0.4850  -0.0533  -0.1055  -0.1470  -0.4138  -1.0801 |  42.1%    0.5180    5.8%   49.8%
+  150 p | siege_x 2                                        |  -0.1763  -0.1687  +0.1325  -0.2728  -2.1062  -1.3942  -0.5863  -0.0534  -0.1055  -0.1437  -0.4079  -1.0804 |  42.5%    0.5864    5.8%   51.2%
+  150 p | sell_bps 3000                                    |  -0.1785  -0.1483  +0.1289  -0.2717  -2.1011  -1.3294  -0.4961  -0.0515  -0.1441  -0.1500  -0.3794  -1.0807 |  42.2%    0.8522    4.8%   45.7%
+  1500 p | launched rules                                  |  -0.1094  -0.1256  -0.0407  -0.1535  -0.9856  -1.1381  +0.5901  -0.0611  -0.1022  -0.0986  -0.3265  -1.1114 |  37.1%    0.8454    1.4%   48.0%
+  1500 p | team keeper registered (collects the pot)       |  -0.1089  -0.1279  -0.0356  -0.1528  -0.9974  -1.1549  +0.5901  -0.0189  -0.1022  -0.1105  -0.3235  -1.1128 |  37.1%    0.0809    1.4%   47.3%
+  1500 p | ledger kept as events (sim: no stored entries)  |  -0.0385  -0.0609  -0.0347  -0.0502  -0.7704  -0.6897  +0.9813  -0.0590  -0.1000  -0.0449  -0.1315  -1.1627 |   9.4%    1.0714    2.2%   51.5%
+  1500 p | tide_bps 500                                    |  -0.1098  -0.1260  -0.0443  -0.0995  -1.1898  -1.5392  -0.4506  -0.0695  -0.1025  -0.1078  -0.4018  -1.1107 |  36.8%    0.3914    0.7%   43.3%
+  1500 p | stake_keep_bps 8000                             |  -0.1086  -0.1252  -0.0384  -0.1535  -0.9971  -1.0824  +0.6376  -0.0614  -0.1022  -0.1039  -0.3318  -1.1103 |  37.1%    0.8582    1.4%   47.8%
+  1500 p | reach 4                                         |  -0.1098  -0.1256  -0.0374  -0.1510  -0.9879  -1.1019  +0.7034  -0.0602  -0.1022  -0.1033  -0.3243  -1.1107 |  37.1%    0.8626    1.4%   47.7%
+  1500 p | reach 2                                         |  -0.1061  -0.1259  -0.0401  -0.1526  -0.9703  -1.1771  +0.6222  -0.0614  -0.1023  -0.1042  -0.3239  -1.1122 |  36.9%    0.8394    1.4%   48.4%
+  1500 p | siege_x 2                                       |  -0.1189  -0.1394  -0.0439  -0.1567  -0.9760  -1.1521  +0.6128  -0.0596  -0.1021  -0.1075  -0.3461  -1.1098 |  37.8%    0.9401    1.4%   46.8%
+  1500 p | sell_bps 3000                                   |  -0.0992  -0.1202  -0.0499  -0.1537  -1.1748  -1.0653  +0.3890  -0.0459  -0.1430  -0.0966  -0.2970  -1.1119 |  37.1%    1.4090    1.2%   47.8%
+
+  Gas at scale (1 day, 3 seeds): biggest tide call, tides over 300 TGas (each one would fail and halt the dish), credit winners per tide
+    1500 p, 1 day | launched rules                             biggest tide 104 (102..105) TGas  tides > 300 TGas 0 (0..0)  biggest call 110 (109..111) TGas  winners max 369 (362..373)
+    1500 p, 1 day | credit tide kept in a packed array         biggest tide 11 (11..11) TGas  tides > 300 TGas 0 (0..0)  biggest call 19 (17..19) TGas  winners max 365 (365..402)
+    15000 p, 1 day | launched rules                            biggest tide 595 (586..625) TGas  tides > 300 TGas 23 (23..23)  biggest call 635 (614..642) TGas  winners max 2195 (2164..2309)
+    15000 p, 1 day | credit tide kept in a packed array        biggest tide 70 (70..70) TGas  tides > 300 TGas 0 (0..0)  biggest call 115 (115..115) TGas  winners max 2195 (2164..2309)
+
+  Zero players, 30 days: storage the contract pays itself, keeper gas, NEAR left in the vault
+    zero, empty dish, keeper on | launched rules                       contract storage +1.9512 NEAR  keeper gas 3.1755 NEAR  vault 0.0000 NEAR  house paid 0.0000 NEAR
+    zero, empty dish, keeper on | no entry for a tide that pays nobody contract storage +0.0000 NEAR  keeper gas 3.1755 NEAR  vault 0.0000 NEAR  house paid 0.0000 NEAR
+    zero, house only, keeper on | launched rules                       contract storage -0.0796 NEAR  keeper gas 3.4962 NEAR  vault 0.2696 NEAR  house paid 5.3930 NEAR
+    zero, house only, keeper on | no entry for a tide that pays nobody contract storage -0.0796 NEAR  keeper gas 3.4962 NEAR  vault 2.2208 NEAR  house paid 5.3930 NEAR

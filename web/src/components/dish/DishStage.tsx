@@ -8,7 +8,7 @@ import { Specimen } from "@/components/site/Specimen";
 import { WarmUp } from "@/components/site/WarmUp";
 import { currentEngine, refreshDish } from "@/lib/dish-store";
 import { useLive, usePatternOffsets, petri, int, hex, near } from "@/lib/live";
-import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, connectWallet, createGuest, disconnectWallet, joinDish, plantCells, setPayout, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
+import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, connectWallet, createGuest, disconnectWallet, joinDish, plantCells, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
 import { buy_quote, pattern_cells, quote, sell_quote, PATTERNS, type PatternInfo, type PatternName } from "@/engine";
 import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPlantDeposit, type Colony } from "@/lib/chain";
 import { accountUrl, shortAccount, txUrl } from "@/lib/config";
@@ -269,7 +269,7 @@ export function DishStage() {
     setBusy("Claiming…");
     try {
       const r = await claimAll();
-      setDone({ text: "Claimed. Your PETRI is in your balance and any NEAR from the tides is on its way to your account.", hash: r.hash });
+      setDone({ text: isWallet ? "Claimed. Your PETRI is in your balance and any NEAR from the tides is on its way to your account." : "Claimed. Your PETRI is in your balance.", hash: r.hash });
       await loadMe();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -284,23 +284,8 @@ export function DishStage() {
     setBusy("Selling PETRI back to the agar…");
     try {
       const r = await sellPetri(BigInt(SELL_UNITS));
-      setDone({ text: `Sold ${petri(SELL_UNITS)} PETRI back to the agar for about ${near(sellNear, 4)} NEAR, paid from the tide vault.`, hash: r.hash });
+      setDone({ text: `Sold ${petri(SELL_UNITS)} PETRI back to the agar for about ${near(sellNear, 4)} NEAR from the tide vault${isWallet ? "" : ", paid to this guest as credit"}.`, hash: r.hash });
       await refreshDish();
-      await loadMe();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function savePayout(to: string | null) {
-    setError(null);
-    setDone(null);
-    setBusy(to ? `Sending your winnings to ${to} from now on…` : "Sending your winnings back to this guest…");
-    try {
-      const r = await setPayout(to);
-      setDone({ text: to ? `Done. NEAR you win at the tides or get for sales now goes to ${to}.` : "Done. Your NEAR winnings go to this guest account again.", hash: r.hash });
       await loadMe();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -666,14 +651,19 @@ export function DishStage() {
               {d.state && Number(d.state.tides) === 0 && claimable.near === 0 ? (
                 <div><dt>First tide</dt><dd className="num">in {int(tideIn)} <small>gens</small></dd></div>
               ) : (
-                <div><dt>Won at the tides</dt><dd className="num">{near(claimable.near + Number(me.near_claimed), 4)} <small>NEAR</small></dd></div>
+                isWallet ? (
+                  <div><dt>Won at the tides</dt><dd className="num">{near(claimable.near + Number(me.near_claimed), 4)} <small>NEAR</small></dd></div>
+                ) : (
+                  <div><dt>Won at the tides</dt><dd className="num">{near(Number(me.credit_won), 4)} <small>credit</small></dd></div>
+                )
               )}
             </dl>
             <p className={s.hint}>
               Your cells earn every generation; the PETRI waits in the dish until you claim it, and planting claims it for you.
               Every {rules?.tide_every ?? 240} generations {rules ? rules.tide_bps / 100 : 10}% of the tide vault ({near(vault, 3)} NEAR
-              now) is paid out in NEAR, split by the PETRI each colony earned since the last tide. Next tide in {int(tideIn)}{" "}
-              generations; the agar buys PETRI back after it.
+              now) is paid out{isWallet ? " in NEAR" : ""}, split by the PETRI each colony earned since the last
+              tide{isWallet ? "" : "; a guest’s share comes as credit"}. Next tide in {int(tideIn)}{" "}
+              generations, if anyone has earned by then; the agar buys PETRI back after it.
             </p>
             <div className={s.row}>
               <button className="btn btn-amber btn-small" onClick={claim} disabled={!!busy || (claimable.petri <= 0 && claimable.near <= 0)}>
@@ -683,15 +673,15 @@ export function DishStage() {
                 Buy PETRI with 0.01 NEAR
               </button>
               <button className="btn btn-ghost btn-small" onClick={sell} disabled={!!busy || !canSell} title={d.state && sellNear > Number(d.state.sell_left) ? "The agar has bought back all it will until the next tide." : undefined}>
-                Sell {petri(SELL_UNITS)} back for {near(sellNear, 4)} NEAR
+                Sell {petri(SELL_UNITS)} back for {near(sellNear, 4)} {isWallet ? "NEAR" : "credit"}
               </button>
             </div>
             {isWallet ? (
               <p className={s.hint}>Your wallet signs each move and pays its own gas and deposits{nearLeft !== null ? `; it holds ${near(Number(nearLeft), 3)} NEAR` : ""}.</p>
             ) : (
               <>
-                <p className={s.hint}>The site sponsored {near(Number(GUEST_CREDIT), 2)} testnet NEAR of credit for this guest, held by the dish contract and spendable only on joining, buying and planting; {near(Number(sponsoredLeft), 4)} NEAR of it is left. Connect a wallet to play with your own.</p>
-                <PayoutForm current={me.payout} busy={!!busy} onSave={savePayout} />
+                <p className={s.hint}>The site sponsored {near(Number(GUEST_CREDIT), 2)} testnet NEAR of credit for this guest, held by the dish contract and spendable only on joining, buying and planting; with what it has won, {near(Number(sponsoredLeft), 4)} NEAR of credit is left. Connect a wallet to play with your own.</p>
+                <p className={s.hint}>Free play earns credit, not NEAR: a guest&rsquo;s tide shares and sales are paid as credit it can spend here.</p>
               </>
             )}
             <div className={s.row}>
@@ -923,42 +913,5 @@ function JoinForm({ onStart, onConnect, busy, player, grant, colonies }: { onSta
         New here? <Link href="/rules">Read how it works</Link> first, or just plant a block and watch.
       </p>
     </section>
-  );
-}
-
-/** A NEAR account id: lowercase parts of letters, digits, - and _, joined by dots, 2 to 64 characters. */
-const ACCOUNT_ID = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
-
-// A guest's NEAR winnings land in the guest account, whose key lives only in this browser. This sends them to a wallet.
-function PayoutForm({ current, busy, onSave }: { current: string | null; busy: boolean; onSave: (to: string | null) => void }) {
-  const [to, setTo] = useState("");
-  const clean = to.trim().toLowerCase();
-  const ok = ACCOUNT_ID.test(clean);
-  return (
-    <details className={s.payout} open={!!current || undefined}>
-      <summary>Send my winnings to a wallet</summary>
-      {current && (
-        <p className={s.hint}>
-          NEAR winnings and sales go to <a href={accountUrl(current)}>{shortAccount(current, 30)}</a>.{" "}
-          <button type="button" className={s.linkish} onClick={() => onSave(null)} disabled={busy}>
-            Keep them here instead
-          </button>
-        </p>
-      )}
-      <form
-        className={s.payoutRow}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (ok) onSave(clean);
-        }}
-      >
-        <label className="sr" htmlFor="payout-to">NEAR account to receive the winnings</label>
-        <input id="payout-to" value={to} onChange={(e) => setTo(e.target.value)} placeholder="you.testnet" autoComplete="off" spellCheck={false} />
-        <button className="btn btn-ghost btn-small" type="submit" disabled={!ok || busy || clean === current}>
-          {current ? "Change" : "Send there"}
-        </button>
-      </form>
-      <p className={s.hint}>Tide winnings and PETRI sold back are paid in NEAR to that account. Your PETRI stays with the colony, and no deposit is needed.</p>
-    </details>
   );
 }

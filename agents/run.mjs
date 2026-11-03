@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { callDish, liveDish, log, nearBalance, view, CONTRACT } from "./lib.mjs";
 import { candidates, makeRng } from "./strategies.mjs";
-import { choose, hasModel, MODEL, modelErrors, lastModelError } from "./model.mjs";
+import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent } from "./model.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
@@ -65,7 +65,7 @@ function serve() {
   }
   http
     .createServer((req, res) => {
-      const body = req.url?.startsWith("/health") ? lastHealth : { contract: CONTRACT, model: hasModel() ? MODEL : null, health: lastHealth, actions: recent.slice(-200) };
+      const body = req.url?.startsWith("/health") ? lastHealth : { contract: CONTRACT, model: modelName(), health: lastHealth, actions: recent.slice(-200) };
       res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "public, max-age=15" });
       res.end(JSON.stringify(body));
     })
@@ -180,19 +180,23 @@ function cleanNote(n) {
   return t.slice(0, 120);
 }
 
+let keeperChecked = false;
 let keeperRegistered = false;
 async function keep() {
-  if (!keeperRegistered) {
+  if (!keeperChecked) {
     const reg = await view("storage_balance_of", { account_id: KEEPER });
+    keeperRegistered = !!reg;
     // The keeper's key can only call the dish without NEAR, so registering it for PETRI is a one-off done by hand
     // (`storage_deposit` from its full-access key). Unregistered, it still advances the dish and earns tide bounties.
     if (!reg) log("keeper is not registered for PETRI; the keeper pot waits for whoever is");
-    keeperRegistered = true;
+    keeperChecked = true;
   }
   const st = await view("state");
   const behind = Number(st.due_generation) - Number(st.generation);
-  // Advance when the stored board falls behind, or when the keeper pot is worth collecting.
-  if (behind >= 5 || Number(st.keeper_pot) > 5_000_000) {
+  // Advance when the stored board falls well behind, or (only if the keeper can receive PETRI) when the keeper pot is
+  // worth collecting. The site and the strains run the dish ahead of the chain, so a few generations behind costs
+  // nothing, and every call is gas.
+  if (behind >= 20 || (keeperRegistered && Number(st.keeper_pot) > 50_000_000)) {
     try {
       const r = await callDish(KEEPER, "advance", {}, 250);
       log("keeper advanced", behind, "due generation(s)", r.hash);
@@ -211,14 +215,14 @@ async function health() {
       out[a] = null;
     }
   }
-  lastHealth = { at: new Date().toISOString(), near: out, model: hasModel() ? MODEL : null, modelErrors: modelErrors() };
+  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)) };
   fs.writeFileSync(path.join(LOG_DIR, "health.json"), JSON.stringify(lastHealth, null, 1));
   const low = Object.entries(out).filter(([, v]) => v !== null && v < 0.5);
   if (low.length) log("LOW GAS:", low.map(([a, v]) => `${a} ${v}`).join(", "));
 }
 
 async function main() {
-  log(`petri agents on ${CONTRACT}; model ${hasModel() ? MODEL : "none (rules choose)"}`);
+  log(`petri agents on ${CONTRACT}; model ${modelName() ?? "none (rules choose)"}`);
   serve();
   await health();
   if (once) {
