@@ -215,9 +215,12 @@ near contract call-function as-transaction petri-dish.near claim_pending json-ar
           </tr>
           <tr>
             <td>App fee</td>
-            <td>None: the site&rsquo;s quote request sets no <C>appFees</C></td>
             <td>
-              <C>/api/intents/quote</C>
+              0.2% (20 bps), added by 1Click itself to quotes made without an API key: live quotes return it in{" "}
+              <C>quoteRequest.appFees</C>. The site&rsquo;s own request asks for no fee, and the payment dialog shows the fee each quote carries.
+            </td>
+            <td>
+              NEAR Intents; shown by <C>PayAnyToken.tsx</C>
             </td>
           </tr>
           <tr>

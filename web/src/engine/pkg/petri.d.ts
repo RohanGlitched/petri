@@ -49,6 +49,11 @@ export class Engine {
      * Exact PETRI units one colony earned since this engine started, as a decimal string.
      */
     earned_of(colony: number): string;
+    /**
+     * Whether `cells` are exactly a specimen slide's pattern (its `bitmap`, `w` × `h`, as a Slide entry holds it) moved
+     * to another place on this dish, as the contract requires of a planting under the slide's licence.
+     */
+    fits_slide(cells: Uint32Array | number[], bitmap: Uint8Array | number[], w: number, h: number): boolean;
     generation(): number;
     /**
      * Whether `colony` has put NEAR into the vault. One that has not is paid its tide shares and sales as credit.
@@ -126,6 +131,12 @@ export class Engine {
 export function buy_quote(near: string, agar: string, petri_price: string, max_supply: string): string;
 
 /**
+ * What a planting that would cost `cost` PETRI units costs under a specimen slide's licence (`slide_discount_bps`
+ * off), and the royalty (`slide_royalty_bps` of that) anyone but the slide's holder pays its holder: "cost,royalty".
+ */
+export function licence(cost: string, discount_bps: number, royalty_bps: number): string;
+
+/**
  * Flat indices for a named pattern placed at (x, y), wrapped onto the dish. Empty if the name is unknown.
  */
 export function pattern_cells(name: string, x: number, y: number, width: number, height: number, rotate: number, flip: boolean): Uint32Array;
@@ -169,6 +180,7 @@ export interface InitOutput {
     readonly engine_credit_won_of: (a: number, b: number) => [number, number];
     readonly engine_earned: (a: number) => [number, number];
     readonly engine_earned_of: (a: number, b: number) => [number, number];
+    readonly engine_fits_slide: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
     readonly engine_generation: (a: number) => number;
     readonly engine_has_attached: (a: number, b: number) => number;
     readonly engine_height: (a: number) => number;
@@ -193,6 +205,7 @@ export interface InitOutput {
     readonly engine_width: (a: number) => number;
     readonly engine_window_of: (a: number, b: number) => [number, number];
     readonly engine_won_of: (a: number, b: number) => [number, number];
+    readonly licence: (a: number, b: number, c: number, d: number) => [number, number];
     readonly pattern_cells: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number];
     readonly sell_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number];

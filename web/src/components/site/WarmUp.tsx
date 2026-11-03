@@ -12,10 +12,19 @@ export function WarmUp({ tone = "dark", className = "" }: { tone?: "dark" | "pap
   const pct = Math.min(100, (100 * d.counted) / floor);
   return (
     <div className={`${s.warm} ${tone === "paper" ? s.paper : ""} ${className}`} role="status">
+      {/* Below the floor the agar releases that fraction of its ration, so with no player cell counted nothing is fed. */}
       <p className={s.line}>
-        <span className={s.tag}>Warming up</span> Feed pays in full from {int(floor)} counted cells:{" "}
+        {d.counted === 0 ? (
+          <>
+            <span className={s.tag}>Not feeding yet</span> Feeding starts with the first player cell and is full at {int(floor)} counted cells:{" "}
+          </>
+        ) : (
+          <>
+            <span className={s.tag}>Warming up</span> Feeding at {Math.max(1, Math.floor(pct))}% until {int(floor)} cells are counted:{" "}
+          </>
+        )}
         <b className="num">
-          {int(d.counted)} / {int(floor)}
+          {int(d.counted)}&nbsp;/&nbsp;{int(floor)}
         </b>
       </p>
       <span className={s.track} aria-hidden="true">

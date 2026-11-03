@@ -278,10 +278,14 @@ export const BUY_NEAR = 10n ** 22n;
 /** NEAR of credit the site's relayer sponsors on chain for each guest (kept in step with /api/guest). */
 export const GUEST_CREDIT = 5n * 10n ** 22n;
 export const joinDish = (name: string, color: number, deposit: bigint = JOIN_NEAR) => call("join", { name, color }, 200, deposit);
-export const plantCells = (cells: number[], note: string | undefined, deposit: bigint) => call("plant", { cells, note: note?.trim() || null }, 200, deposit);
-export const buyPetri = (deposit: bigint = BUY_NEAR) => call("buy", {}, 150, deposit);
-export const sellPetri = (units: bigint) => call("sell", { petri: units.toString() }, 150);
-export const claimAll = () => call("claim", {}, 150);
+/** Plant `cells`; with `slide` (a token id) under that slide's licence: the cells must be exactly its pattern moved
+ * anywhere, the planting costs slide_discount_bps less, and a planter that does not hold the slide pays its holder a
+ * royalty. `deposit` is getPlantDeposit(cells, note bytes, slide). */
+export const plantCells = (cells: number[], note: string | undefined, deposit: bigint, slide: string | null = null) => call("plant", { cells, note: note?.trim() || null, ...(slide ? { slide } : {}) }, 200, deposit);
+// Gas left unused is refunded, so these leave room for a crowded dish: a call's cost grows with the colonies playing.
+export const buyPetri = (deposit: bigint = BUY_NEAR) => call("buy", {}, 200, deposit);
+export const sellPetri = (units: bigint) => call("sell", { petri: units.toString() }, 200);
+export const claimAll = () => call("claim", {}, 250);
 export const advanceDish = () => call("advance", {}, 250);
 /** Fix a rectangle of the caller colony's own living cells onto a slide, minted as a NEP-171 token. It burns PETRI for
  * each captured cell; `deposit` pays the token's storage (a guest spends it from credit). */
@@ -290,7 +294,10 @@ export const mintSlide = (args: { x: number; y: number; w: number; h: number; ti
 /** NEAR that arrived for this account through NEAR Intents but could not be used (say, a join under the minimum), paid
  * back to the account. */
 export const claimPending = () => call("claim_pending", {}, 30);
-/** A colony someone else's payment started (`proxy`) may take its own name and stain, once. */
+/** Run the order waiting with `account`'s pending NEAR (from NEAR Intents): its join or purchase. Anyone may. */
+export const settlePending = (account: string) => call("settle_pending", { account_id: account }, 100);
+/** A colony someone else's payment started (`proxy`, under a neutral "Culture" name) may take its own name and stain,
+ * once. */
 export const renameColony = (name: string, color: number) => call("rename", { name, color }, 50);
 /** Where the colony's NEAR payouts (tide winnings and sales) go from now on; `null` sends them to its own account again.
  * Only a colony that has attached NEAR may set one: a guest is paid in credit, and the relayer does not relay this call. */

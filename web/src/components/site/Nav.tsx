@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { NETWORK, networkInUrl } from "@/lib/config";
 import { useDish } from "@/lib/dish-store";
 import { useNet } from "@/lib/use-net";
+import { useDocsHref } from "@/lib/use-docs";
 import { Mark } from "./Mark";
 import { NetSwitch } from "./NetSwitch";
 
@@ -14,9 +15,10 @@ export const LINKS = [
   { href: "/rules", label: "How it works" },
   { href: "/colonies", label: "Colonies" },
   { href: "/specimens", label: "Specimens" },
+  { href: "/records", label: "Records" },
   { href: "/strains", label: "AI strains" },
   { href: "/verify", label: "Verify" },
-  { href: "https://docs.playpetri.xyz", label: "Docs" },
+  { href: "docs", label: "Docs" },
 ];
 
 export function Nav() {
@@ -24,6 +26,8 @@ export function Nav() {
   const [open, setOpen] = useState(false);
   const d = useDish();
   const net = useNet();
+  const docs = useDocsHref();
+  const hrefOf = (h: string) => (h === "docs" ? docs : h);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -49,7 +53,7 @@ export function Nav() {
         <ul className="nav-links">
           {LINKS.map((l) => (
             <li key={l.href}>
-              <Link href={l.href} aria-current={path === l.href ? "page" : undefined}>
+              <Link href={hrefOf(l.href)} aria-current={path === l.href ? "page" : undefined}>
                 {l.label}
               </Link>
             </li>
@@ -89,7 +93,7 @@ export function Nav() {
         <nav id="site-menu" className="sheet" aria-label="Site">
           <Link href="/" onClick={() => setOpen(false)}>Home</Link>
           {LINKS.map((l) => (
-            <Link key={l.href} href={l.href} onClick={() => setOpen(false)} aria-current={path === l.href ? "page" : undefined}>
+            <Link key={l.href} href={hrefOf(l.href)} onClick={() => setOpen(false)} aria-current={path === l.href ? "page" : undefined}>
               {l.label}
             </Link>
           ))}

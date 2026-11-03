@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useLive, petri, int, hex } from "@/lib/live";
-import { getBalance } from "@/lib/chain";
+import { useLive, petri, int, hex, near } from "@/lib/live";
+import { getBalance, getTideWinnings } from "@/lib/chain";
 import { accountUrl, shortAccount } from "@/lib/config";
-import { strainOf } from "@/lib/strains";
+import { sideOf, strainOf } from "@/lib/strains";
 import s from "./ledger.module.css";
 
 type Sort = "live" | "earned" | "spent" | "net" | "joined";
@@ -76,6 +76,19 @@ export function Ledger() {
   const fedYet = !!d.state && (Number(d.state.fed) > 0 || d.pending.some((p) => p > 0));
   const [sort, setSort] = useState<Sort>("live");
   const [balances, setBalances] = useState<Record<string, number>>({});
+  // NEAR each colony has won at the tides, claimed or not (index = colony id - 1), for the outside-players counter.
+  const [winnings, setWinnings] = useState<number[] | null>(null);
+  const tides = d.state?.tides;
+  useEffect(() => {
+    let stop = false;
+    getTideWinnings(0, 2000).then(
+      (w) => !stop && setWinnings(w.map(Number)),
+      () => !stop && setWinnings((x) => x),
+    );
+    return () => {
+      stop = true;
+    };
+  }, [tides, d.colonies.length]);
 
   // Balances are one view call per colony; read them for the colonies on screen, refreshed every half minute.
   useEffect(() => {
@@ -121,18 +134,64 @@ export function Ledger() {
 
   const total = d.totalLive || 1;
   const alive = rows.filter((r) => r.live > 0);
+  // The honest counters: who outside the team plays, and what the dish has paid them.
+  const outside = rows.filter((r) => sideOf(r.account, r.house) === "player");
+  const outsideAlive = outside.filter((r) => r.live > 0).length;
+  const outsideWon = winnings ? outside.reduce((n, r) => n + (winnings[r.id - 1] ?? 0), 0) : null;
+  const teamWon = winnings ? rows.filter((r) => sideOf(r.account, r.house) !== "player").reduce((n, r) => n + (winnings[r.id - 1] ?? 0), 0) : null;
+  const slides = d.state ? Number(d.state.slides) : null;
+  const legend = alive.slice().sort((a, b) => b.live - a.live);
 
   return (
     <>
+      <dl className={s.counters} aria-live="polite">
+        <div>
+          <dt>Outside colonies</dt>
+          <dd className="num">{ready ? int(outside.length) : "—"}</dd>
+          <p>{ready ? `${int(outsideAlive)} alive now. Not counted: the five house strains${d.colonies.some((c) => sideOf(c.account) === "bench") ? " and the team's three bench colonies" : ""}.` : "Reading the colonies…"}</p>
+        </div>
+        <div>
+          <dt>NEAR won at tides by outside players</dt>
+          <dd className="num">{outsideWon !== null ? near(outsideWon, 4) : "—"}</dd>
+          <p>
+            {outsideWon === null
+              ? "Reading the tide winnings…"
+              : teamWon && teamWon > 0
+                ? `Claimed or waiting to be claimed. The bench won ${near(teamWon, 4)} more; the house wins nothing.`
+                : "Claimed or waiting to be claimed. The house strains never win a tide."}
+          </p>
+        </div>
+        <div>
+          <dt>Specimen slides minted</dt>
+          <dd className="num">{slides !== null ? int(slides) : "—"}</dd>
+          <p>
+            <Link href="/specimens">See the slide box</Link>
+          </p>
+        </div>
+      </dl>
+
       <section className={s.share} aria-label="Share of the dish">
         <div className={s.bar}>
-          {alive
-            .slice()
-            .sort((a, b) => b.live - a.live)
-            .map((r) => (
-              <span key={r.id} style={{ width: `${(100 * r.live) / total}%`, background: hex(r.color) }} title={`${r.name}: ${int(r.live)} cells`} />
-            ))}
+          {legend.map((r) => (
+            <span key={r.id} style={{ width: `${(100 * r.live) / total}%`, background: hex(r.color) }} title={`${r.name}: ${int(r.live)} cells`} />
+          ))}
         </div>
+        {legend.length > 0 && (
+          <ul className={s.legend}>
+            {legend.slice(0, 12).map((r) => {
+              const side = sideOf(r.account, r.house);
+              return (
+                <li key={r.id}>
+                  <i className="swatch" style={{ background: hex(r.color) }} />
+                  {r.name}
+                  <span className="num">{((100 * r.live) / total).toFixed(1)}%</span>
+                  {side !== "player" && <em title={side === "house" ? "A house strain: never fed, wins no tides" : "A team bench colony, played from the team's own testnet NEAR"}>{side}</em>}
+                </li>
+              );
+            })}
+            {legend.length > 12 && <li className={s.legendMore}>and {int(legend.length - 12)} more</li>}
+          </ul>
+        )}
         <p className={s.shareText}>
           <span className="num">{ready ? int(d.totalLive) : "—"}</span> living cells across{" "}
           <span className="num">{alive.length}</span> of <span className="num">{rows.length}</span> colonies.
@@ -157,6 +216,22 @@ export function Ledger() {
       </div>
 
       <ol className={s.list}>
+        {ready && outside.length === 0 && (
+          // Every colony so far is the team's: say so first, and invite the first outside player in.
+          <li className={`${s.row} ${s.pinned}`}>
+            <span className={`num ${s.rank}`} aria-hidden="true">·</span>
+            <div className={s.who}>
+              <span className={s.terrEmpty} aria-hidden="true" />
+              <div>
+                <p className={s.name}>No player colonies yet. Be the first.</p>
+                <p className={s.joined}>Every colony below belongs to the team: the house strains{d.colonies.some((c) => sideOf(c.account) === "bench") ? " and the bench" : ""}.</p>
+              </div>
+            </div>
+            <div className={s.pinnedCta}>
+              <Link className="btn btn-amber btn-small" href="/dish">Start a colony on the dish</Link>
+            </div>
+          </li>
+        )}
         {rows.map((r, i) => {
           const ai = strainOf(r.account);
           const preFeed = !fedYet || r.earned === 0;
@@ -183,7 +258,9 @@ export function Ledger() {
                   <dt>Net</dt>
                   <dd className={`num ${preFeed ? s.flat : r.net >= 0 ? s.pos : s.neg}`}><span className={s.sign} aria-hidden="true">{r.net >= 0 ? "+" : "−"}</span><span className="sr">{r.net >= 0 ? "plus " : "minus "}</span>{petri(Math.abs(r.net), 2)}</dd>
                   {preFeed &&
-                    (r.house ? (
+                    (sideOf(r.account, r.house) === "bench" ? (
+                      <em title="A team bench colony; nothing has been fed to it yet">bench</em>
+                    ) : r.house ? (
                       <em title="A house strain: the contract never feeds it and never pays it at a tide">house</em>
                     ) : (
                       <em title="Nothing has been fed to this colony yet; its cells start earning with the next feed">pre-feed</em>

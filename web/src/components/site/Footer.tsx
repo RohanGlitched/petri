@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useDocsHref } from "@/lib/use-docs";
 import { REPO } from "@/lib/config";
 import { useDish } from "@/lib/dish-store";
 import { useNet } from "@/lib/use-net";
@@ -9,8 +11,11 @@ import { Mark } from "./Mark";
 export function Footer() {
   const d = useDish();
   const net = useNet();
+  const docs = useDocsHref();
+  // The play page fills the window from 800 px up, so it carries no document footer there.
+  const onDish = usePathname() === "/dish";
   return (
-    <footer className="footer">
+    <footer className={`footer${onDish ? " footer-dish" : ""}`}>
       <div className="wrap">
         <div className="foot-top">
           <div className="foot-brand">
@@ -29,6 +34,7 @@ export function Footer() {
               <li><Link href="/dish">The live dish</Link></li>
               <li><Link href="/colonies">Colonies</Link></li>
               <li><Link href="/specimens">Specimens</Link></li>
+              <li><Link href="/records">Records</Link></li>
               <li><Link href="/strains">AI strains</Link></li>
             </ul>
           </div>
@@ -38,7 +44,7 @@ export function Footer() {
               <li><Link href="/rules">How it works</Link></li>
               <li><Link href="/rules#coin">The coin</Link></li>
               <li><Link href="/verify">Verify the dish</Link></li>
-              <li><a href="https://docs.playpetri.xyz">Documentation</a></li>
+              <li><a href={docs}>Documentation</a></li>
             </ul>
           </div>
           <div className="foot-col">

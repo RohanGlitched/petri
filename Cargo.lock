@@ -1711,6 +1711,17 @@ dependencies = [
  "base64 0.22.1",
  "hex",
  "near-sdk",
+ "petri-contract-v5",
+ "petri-core",
+]
+
+[[package]]
+name = "petri-contract-v5"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "hex",
+ "near-sdk",
  "petri-core",
 ]
 

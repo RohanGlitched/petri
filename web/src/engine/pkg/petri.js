@@ -209,6 +209,32 @@ export class Engine {
         }
     }
     /**
+     * Whether `cells` are exactly a specimen slide's pattern (its `bitmap`, `w` × `h`, as a Slide entry holds it) moved
+     * to another place on this dish, as the contract requires of a planting under the slide's licence.
+     * @param {Uint32Array | number[]} cells
+     * @param {Uint8Array | number[]} bitmap
+     * @param {number} w
+     * @param {number} h
+     * @returns {boolean}
+     */
+    fits_slide(cells, bitmap, w, h) {
+        const val3 = +w;
+        const val4 = +h;
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passArray32ToWasm0(cells, wasm.__wbindgen_malloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passArray8ToWasm0(bitmap, wasm.__wbindgen_malloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 4, 4); }
+            throw e;
+        }
+        const ret = wasm.engine_fits_slide(this.__wbg_ptr, ptr0, len0, ptr1, len1, val3, val4);
+        return ret !== 0;
+    }
+    /**
      * @returns {number}
      */
     generation() {
@@ -520,6 +546,31 @@ export function buy_quote(near, agar, petri_price, max_supply) {
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
+ * What a planting that would cost `cost` PETRI units costs under a specimen slide's licence (`slide_discount_bps`
+ * off), and the royalty (`slide_royalty_bps` of that) anyone but the slide's holder pays its holder: "cost,royalty".
+ * @param {string} cost
+ * @param {number} discount_bps
+ * @param {number} royalty_bps
+ * @returns {string}
+ */
+export function licence(cost, discount_bps, royalty_bps) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const val2 = +discount_bps;
+        const val3 = +royalty_bps;
+        const ptr0 = passStringToWasm0(cost, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.licence(ptr0, len0, val2, val3);
+        deferred4_0 = ret[0];
+        deferred4_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
     }
 }
 

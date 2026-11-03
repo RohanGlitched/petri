@@ -153,6 +153,8 @@
   border-left: 6px solid var(--amber);
   border-right: 0;
 }
+.fee { margin: 8px 0 0; font-size: 13px; line-height: 1.45; color: var(--dim); }
+.fee b { color: var(--text-2); font-weight: 600; }
 .buys { margin: 10px 0 0; font-size: 14px; color: var(--text-2); }
 .buys b { color: var(--bone); font-weight: 600; }
 

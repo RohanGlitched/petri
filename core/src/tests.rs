@@ -486,3 +486,53 @@ fn a_slide_image_is_small_and_draws_every_cell() {
     // An odd by even rectangle sits centred on half cells.
     assert!(slide_svg(&[0b1], 5, 4, 0, 0).contains("M2.5 3h0"));
 }
+
+#[test]
+fn sparse_tides_and_feeds_match_the_dense_ones() {
+    let window = [0u64, 300, 0, 100, 600, 7];
+    let sparse: Vec<(ColonyId, u64)> = window.iter().enumerate().skip(1).filter(|(_, &w)| w > 0).map(|(c, &w)| (c as ColonyId, w)).collect();
+    for house in [&[][..], &[4][..], &[1, 3, 4, 5][..]] {
+        assert_eq!(tide_split(1_000_003, &window, house), tide_split_sparse(1_000_003, &sparse, house));
+        assert_eq!(tide_due(&window, house), tide_due_sparse(&sparse, house));
+    }
+    assert!(!tide_due_sparse(&[(0, 9)], &[]), "index 0 is not a colony");
+    let live = [(1, 40), (2, 3), (4, 900), (5, 12)];
+    let stake = [0u64, 2_000, 0, 9, 80_000, 1_000];
+    let a = feed_sparse(1_000_000_000_000, 3, 200, 8, 1_000, &live, &stake, &[5]);
+    let b = feed_with(1_000_000_000_000, 3, 200, 8, 1_000, &live, |c| stake[c as usize], &[5]);
+    assert_eq!(a, b);
+    assert!(!a.shares.is_empty());
+}
+
+#[test]
+fn a_slide_licence_is_the_same_shape_anywhere() {
+    let mut d = Dish::new(16, 16);
+    place(&mut d, 1, 2, 2, patterns::GLIDER);
+    let (bits, n) = d.region_bitmap(1, 1, 1, 5, 5);
+    assert_eq!(n, 5);
+    let empty = Dish::new(16, 16);
+    let at = |x: i32, y: i32, shape: &[(i32, i32)]| shape.iter().map(|&(dx, dy)| empty.index(x + dx, y + dy) as u32).collect::<Vec<u32>>();
+    assert!(empty.fits_slide(&at(9, 9, patterns::GLIDER), &bits, 5, 5));
+    // Across the wrapped corner, and in any order.
+    let mut wrapped = at(14, 15, patterns::GLIDER);
+    wrapped.reverse();
+    assert!(empty.fits_slide(&wrapped, &bits, 5, 5));
+    // Another shape, a rotation, a missing or extra cell, or a cell twice: refused.
+    assert!(!empty.fits_slide(&at(9, 9, patterns::R_PENTOMINO), &bits, 5, 5));
+    let turned: Vec<(i32, i32)> = patterns::GLIDER.iter().map(|&(x, y)| (y, x)).collect();
+    assert!(!empty.fits_slide(&at(9, 9, &turned), &bits, 5, 5));
+    assert!(!empty.fits_slide(&at(9, 9, &patterns::GLIDER[..4]), &bits, 5, 5));
+    let mut doubled = at(9, 9, patterns::GLIDER);
+    doubled[4] = doubled[3];
+    assert!(!empty.fits_slide(&doubled, &bits, 5, 5));
+    assert!(!empty.fits_slide(&[], &[0], 4, 4), "an empty slide licenses nothing");
+    // A slide wider than the dish cannot be planted on it: its cells would fold onto each other.
+    let small = Dish::new(8, 8);
+    let mut wide = alloc::vec![0u8; 2];
+    wide[0] = 1;
+    wide[1] = 1; // cells 0 and 8 of a 9 x 1 rectangle: eight apart, the same column on an 8-wide dish
+    assert!(!small.fits_slide(&[0, 0], &wide, 9, 1));
+    assert_eq!(licensed_cost(1_000, 2_500), 750);
+    assert_eq!(royalty(750, 1_000), 75);
+    assert_eq!(licensed_cost(3, 2_500), 3, "rounding favours the dish");
+}

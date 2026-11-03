@@ -14,7 +14,7 @@ initSync({ module: fs.readFileSync(path.join(PKG, "petri_bg.wasm")) });
 
 export { Engine, pattern_cells, quote };
 
-export const CONTRACT = process.env.PETRI_CONTRACT ?? (process.env.PETRI_NETWORK === "mainnet" ? "petri-dish.near" : "petri-v5.testnet");
+export const CONTRACT = process.env.PETRI_CONTRACT ?? (process.env.PETRI_NETWORK === "mainnet" ? "petri-dish.near" : "petri-v6.testnet");
 export const NETWORK = process.env.PETRI_NETWORK ?? "testnet";
 export const RPCS =
   NETWORK === "mainnet"

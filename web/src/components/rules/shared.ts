@@ -1,6 +1,6 @@
 import type { Rules } from "@/lib/chain";
 
-/** The launch values the testnet dish (petri-v5.testnet) returns from `rules`, used only until the real view has loaded. */
+/** The launch values the testnet dish (petri-v6.testnet) returns from `rules`, used only until the real view has loaded. */
 export const LAUNCH: Rules = {
   width: 128,
   height: 128,
@@ -29,8 +29,11 @@ export const LAUNCH: Rules = {
   max_catchup: 120,
   max_lag: 480,
   house: ["petri-violet.testnet", "petri-safranin.testnet", "petri-methylene.testnet", "petri-malachite.testnet", "petri-congo.testnet"],
+  keepers: ["petri-keeper.testnet"],
   slide_cells_price: "1000000",
   slide_min_cells: 5,
+  slide_discount_bps: 2500,
+  slide_royalty_bps: 1000,
   wnear: "wrap.testnet",
 };
 

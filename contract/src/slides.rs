@@ -4,7 +4,15 @@
 //! A colony mints a slide of its own cells only: rivals' cells inside the rectangle are left out. The PETRI it costs is
 //! burned and the capture goes into the ledger, so both replays recompute it from the board. The image is drawn on chain
 //! from the stored bitmap every time a wallet asks (`petri_core::slide_svg`), and the name comes from the colony at view
-//! time. Owning or moving a slide changes nothing in the dish.
+//! time.
+//!
+//! A slide is a pattern licence. Anyone may plant its exact pattern, moved anywhere on the dish, under its licence
+//! (`plant` with `slide`): the planting costs `slide_discount_bps` less, and a planter that does not hold the slide pays
+//! the holder `slide_royalty_bps` of that cost in PETRI. The ledger records each licensed planting with the slide, how
+//! many times it had changed hands (`moves`, counted on the slide by every transfer) and the holder paid, so both
+//! replays check the shape, the price and the royalty, and that the holder is the minter until the first move and the
+//! slide's current owner after the last. Moves themselves are not logged: a transfer carries exactly one yoctoNEAR
+//! and could not pay for an entry.
 //!
 //! Storage: the minter pays for everything the slide stores, plus `SLIDE_RESERVE` for whatever its later owners can add
 //! (a longer account and a list of slides for an owner who had none), so no transfer can make the contract's storage
@@ -22,8 +30,8 @@ const MAX_APPROVALS: usize = 16;
 /// Bytes each slide sets aside for its later owners: an owner of 64 characters (up to 62 bytes more than the shortest)
 /// and a new entry in the owners' lists (at most 40 + 69 key bytes + 8 value bytes). Rounded up.
 const SLIDE_RESERVE: u64 = 64 + 120;
-/// Most slides one enumeration call returns: each carries its image.
-const MAX_PAGE: u64 = 50;
+/// Most slides one NEP-181 enumeration call returns: each carries its image, drawn on chain.
+const MAX_PAGE: u64 = 10;
 const GAS_FOR_NFT_RESOLVE: Gas = Gas::from_tgas(15);
 const GAS_FOR_NFT_ON_TRANSFER_MIN: Gas = Gas::from_tgas(10);
 
@@ -49,6 +57,10 @@ pub struct Slide {
     pub minted_ms: u64,
     pub next_approval: u64,
     pub approvals: Vec<(AccountId, u64)>,
+    /// Times the slide has changed hands (a transfer and a return each count).
+    pub moves: u32,
+    /// PETRI its holders have been paid in royalties.
+    pub royalties: u128,
 }
 
 /// A slide as the `slides` views return it: everything but the image, which the browser draws from the bitmap.
@@ -70,6 +82,9 @@ pub struct SlideView {
     pub title: Option<String>,
     pub bitmap: Base64VecU8,
     pub minted_ms: U64,
+    pub moves: u32,
+    /// PETRI its holders have been paid in royalties.
+    pub royalties: U128,
 }
 
 /// NEP-177 token metadata.
@@ -173,13 +188,24 @@ impl Petri {
             minted_ms: env::block_timestamp_ms(),
             next_approval: 0,
             approvals: Vec::new(),
+            moves: 0,
+            royalties: 0,
         });
         self.add_owned(&account, index);
-        self.ledger.push(Entry::Slide { generation: U64(self.generation), colony: id, token: U64(token), x, y, w, h, cells, bitmap: Base64VecU8(bitmap), cost: U128(cost) });
+        let want = credit.map(|c| c.0).unwrap_or(0);
+        let generation = U64(self.generation);
+        let entry = |spent: Option<U128>, bitmap: Vec<u8>| Entry::Slide { generation, colony: id, token: U64(token), x, y, w, h, cells, bitmap: Base64VecU8(bitmap), cost: U128(cost), spent };
+        // The entry has the same size whatever credit it records.
+        let entry_index = self.ledger.len();
+        self.ledger.push(entry((want > 0).then_some(U128(0)), bitmap.clone()));
         self.flush();
         let storage = self.storage_cost_since(before) + SLIDE_RESERVE as u128 * byte_cost();
-        let from_credit = self.take_credit(&account, Some(id), Some(U128(credit.map(|c| c.0).unwrap_or(0).min(storage))));
+        let from_credit = self.take_credit(&account, Some(id), Some(U128(want.min(storage))));
         require!(attached + from_credit >= storage, format!("this slide needs {} NEAR for its storage", fmt_near(storage)));
+        if want > 0 {
+            self.ledger.set(entry_index, entry(Some(U128(from_credit)), bitmap));
+        }
+        self.flush();
         let (refund, _) = split_after_storage(attached, from_credit, storage);
         if refund > 0 {
             let _ = Promise::new(account.clone()).transfer(NearToken::from_yoctonear(refund));
@@ -194,9 +220,9 @@ impl Petri {
     /// 64-character owner. What is not used is sent back.
     pub fn slide_deposit(&self, w: u16, h: u16, title_bytes: Option<u32>) -> U128 {
         let bitmap = (w as u64 * h as u64 + 7) / 8;
-        // The slide record and its ledger entry (each with its key and the 40 bytes every record costs), the owner's
-        // list, and the reserve.
-        let bytes = 240 + 64 + 2 * bitmap + title_bytes.map(|b| b as u64 + 5).unwrap_or(0) + 120 + SLIDE_RESERVE;
+        // The slide record and its ledger entry (each with its key and the 40 bytes every record costs; the record's
+        // move count and royalties and the entry's credit field take 21 more), the owner's list, and the reserve.
+        let bytes = 240 + 21 + 64 + 2 * bitmap + title_bytes.map(|b| b as u64 + 5).unwrap_or(0) + 120 + SLIDE_RESERVE;
         U128(bytes as u128 * byte_cost())
     }
 
@@ -259,6 +285,7 @@ impl Petri {
         }
         let theirs = std::mem::replace(&mut slide.approvals, old);
         slide.owner = previous_owner_id.clone();
+        slide.moves += 1;
         self.slides.set(index, slide);
         self.remove_owned(&receiver_id, index);
         self.add_owned(&previous_owner_id, index);
@@ -367,7 +394,7 @@ impl Petri {
         U128(self.slides.len() as u128)
     }
 
-    /// At most 50 slides a call, each with its image.
+    /// At most 10 slides a call, each with its image (the `slides` view returns 500 without).
     pub fn nft_tokens(&self, from_index: Option<U128>, limit: Option<u64>) -> Vec<Token> {
         let from = from_index.map(|f| f.0).unwrap_or(0).min(u32::MAX as u128) as u32;
         let limit = limit.unwrap_or(MAX_PAGE).min(MAX_PAGE) as u32;
@@ -396,6 +423,11 @@ impl Petri {
         self.slide_index_of(&token_id).map(|i| self.slide_view(i))
     }
 
+    /// PETRI the slide's holders have been paid in royalties for plantings under its licence, in all.
+    pub fn slide_royalties(&self, token_id: String) -> U128 {
+        U128(self.slides.get(self.slide_index(&token_id)).unwrap().royalties)
+    }
+
     pub fn slides_for(&self, account_id: AccountId, from: Option<u32>, limit: Option<u32>) -> Vec<SlideView> {
         let from = from.unwrap_or(0) as usize;
         let limit = limit.unwrap_or(100).min(500) as usize;
@@ -405,7 +437,7 @@ impl Petri {
 
 impl Petri {
     /// The slide index of a token id ("1" is the first slide), if it exists.
-    fn slide_index_of(&self, token_id: &str) -> Option<u32> {
+    pub(crate) fn slide_index_of(&self, token_id: &str) -> Option<u32> {
         // Only plain decimal ids: "01" or "+1" name no slide.
         if token_id.is_empty() || token_id.len() > 10 || !token_id.bytes().all(|b| b.is_ascii_digit()) || token_id.starts_with('0') {
             return None;
@@ -414,7 +446,7 @@ impl Petri {
         (n >= 1 && n <= self.slides.len() as u64).then(|| (n - 1) as u32)
     }
 
-    fn slide_index(&self, token_id: &str) -> u32 {
+    pub(crate) fn slide_index(&self, token_id: &str) -> u32 {
         self.slide_index_of(token_id).unwrap_or_else(|| env::panic_str("there is no slide with that id"))
     }
 
@@ -434,6 +466,7 @@ impl Petri {
         require!(*receiver != env::current_account_id(), "the dish does not hold slides");
         let approvals = std::mem::take(&mut slide.approvals);
         slide.owner = receiver.clone();
+        slide.moves += 1;
         self.slides.set(index, slide);
         self.remove_owned(&owner, index);
         self.add_owned(receiver, index);
@@ -490,6 +523,8 @@ impl Petri {
             title: s.title.clone(),
             bitmap: Base64VecU8(s.bitmap.clone()),
             minted_ms: U64(s.minted_ms),
+            moves: s.moves,
+            royalties: U128(s.royalties),
         }
     }
 

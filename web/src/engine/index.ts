@@ -1,10 +1,10 @@
 // Loads petri-core (compiled to WebAssembly) once per page.
 
-import init, { Engine, buy_quote, pattern_cells, quote, sell_quote, slide_svg } from "./pkg/petri";
+import init, { Engine, buy_quote, licence, pattern_cells, quote, sell_quote, slide_svg } from "./pkg/petri";
 
 let ready: Promise<void> | null = null;
 /** First 12 hex digits of sha256(public/petri_bg.wasm); update when the engine is rebuilt (scripts/build-engine.sh does). */
-export const ENGINE_HASH = "65c712ba522d";
+export const ENGINE_HASH = "1f8828e73bea";
 
 export function loadEngine(): Promise<void> {
   if (!ready) {
@@ -14,7 +14,7 @@ export function loadEngine(): Promise<void> {
   return ready;
 }
 
-export { Engine, buy_quote, pattern_cells, quote, sell_quote, slide_svg };
+export { Engine, buy_quote, licence, pattern_cells, quote, sell_quote, slide_svg };
 
 export type PatternName =
   | "block"

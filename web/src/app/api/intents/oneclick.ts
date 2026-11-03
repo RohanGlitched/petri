@@ -57,6 +57,31 @@ export async function dishDeployed(): Promise<boolean> {
   return deployed.ok;
 }
 
+/** The least wNEAR (yocto, as a bigint) a payment for `account` must deliver for its order to run, from the dish's own
+ * `intent_minimum` view. The dish never refunds wNEAR, so a delivery below this would only wait as pending NEAR (or,
+ * far below it, go to the vault); quotes that may deliver less are refused before anyone pays. If the view cannot be
+ * read, a margin above what the launched rules need (0.01 NEAR to join, and the records a payment writes) is used. */
+export async function dishMinimum(what: "join" | "buy", account: string): Promise<bigint> {
+  const fallback = what === "join" ? 13n * 10n ** 21n : 4n * 10n ** 21n;
+  try {
+    const args = Buffer.from(JSON.stringify({ what, account_id: account })).toString("base64");
+    const res = await fetch("https://rpc.mainnet.fastnear.com", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "petri", method: "query", params: { request_type: "call_function", finality: "final", account_id: MAINNET_DISH, method_name: "intent_minimum", args_base64: args } }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    const body = (await res.json()) as { result?: { result?: number[] } };
+    const bytes = body.result?.result;
+    if (!bytes) return fallback;
+    const v = JSON.parse(Buffer.from(bytes).toString("utf8"));
+    return typeof v === "string" && /^\d+$/.test(v) ? BigInt(v) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /** True when a quote, as 1Click echoes it, pays wNEAR to the mainnet dish and nobody else. */
 export function paysTheDish(q: unknown): boolean {
   const r = (q as { quoteRequest?: { recipient?: string; destinationAsset?: string; recipientType?: string } })?.quoteRequest;

@@ -135,7 +135,7 @@ export function ArchitectureFlow() {
           </desc>
           <Markers />
           <Box x={20} y={30} w={270} h={160} title="Browser" lines={["the site (Next.js 16)", "petri-core as WebAssembly", "a NEAR Connect wallet, or", "a guest key in the browser"]} note={{ text: "/dish  /verify  /specimens", color: AMBER }} />
-          <Box x={345} y={30} w={270} h={160} title="Site server (Vercel)" lines={["/api/guest, /api/relay", "/api/intents/*", "/api/strains?net=…", "the testnet relayer key"]} />
+          <Box x={345} y={30} w={270} h={160} title="Site server, on the VM" lines={["/api/guest, /api/relay", "/api/intents/*", "/api/strains?net=…", "the testnet relayer key"]} />
           <Box x={670} y={30} w={270} h={160} title="NEAR Intents (1Click)" lines={["quotes, deposit addresses;", "solvers swap into wNEAR"]} />
 
           <Box x={20} y={340} w={270} h={130} title="petri-v5.testnet" lines={["free play: guests, relayer,", "sponsored credit, the bench"]} note={{ text: "code hash Foo3au6a…", color: DIM }} accent="rgba(159,216,168,0.6)" />

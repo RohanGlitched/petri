@@ -19,6 +19,9 @@ import { useNet } from "@/lib/use-net";
 import { STAINS, firstFreeStain } from "@/lib/stains";
 import { strainOf } from "@/lib/strains";
 import { actionIndex, useStrainLog } from "@/lib/strain-log";
+import { forecast, type Forecast } from "./forecast";
+import { readDishCache, writeDishCache, type DishCache } from "./cache";
+import { useSlideLicence } from "@/components/specimens/licence";
 import s from "./dish.module.css";
 
 type Cell = { x: number; y: number };
@@ -84,6 +87,124 @@ function explain(v: string | null, w: number, names: Map<number, string>, siegeX
   }
 }
 
+function ago(at: number) {
+  const m = Math.max(0, (Date.now() - at) / 60_000);
+  if (m < 1.5) return "a minute ago";
+  if (m < 90) return `${Math.round(m)} minutes ago`;
+  if (m < 36 * 60) return `${Math.round(m / 60)} hours ago`;
+  return `${Math.round(m / 1440)} days ago`;
+}
+
+/** Generations as the dish counts them, and roughly in wall time. */
+function gens(n: number, genMs: number) {
+  const min = (n * genMs) / 60_000;
+  const t = min < 90 ? `${Math.max(1, Math.round(min))} min` : min < 48 * 60 ? `${(min / 60).toFixed(min < 600 ? 1 : 0).replace(/\.0$/, "")} h` : `${Math.round(min / 1440)} days`;
+  return `${int(n)} gens (${t})`;
+}
+
+/** What the stamp would do where it points, from two copies of the dish stepped forward (forecast.ts). */
+function ForecastView({ f, cost, genMs, at }: { f: Forecast; cost: number; genMs: number; at: Cell | null }) {
+  const max = Math.max(1, ...f.alive);
+  const W = 112;
+  const H = 26;
+  const last = Math.max(1, f.alive.length - 1);
+  const pts = f.alive.map((a, i) => `${((i / last) * W).toFixed(1)},${(H - 2 - (a / max) * (H - 4)).toFixed(1)}`).join(" ");
+  const tideX = ((f.tideIn - 1) / last) * W;
+  const pay =
+    cost <= 0
+      ? "free"
+      : f.payback === null
+        ? f.survives
+          ? "not at today's rate"
+          : "dies first"
+        : f.payback > 40 * 5760
+          ? "over 40 days"
+          : `${f.extrapolated ? "about " : ""}${gens(f.payback, genMs)}`;
+  return (
+    <div className={s.forecast} aria-live="polite">
+      <div className={s.fcHead}>
+        <p>
+          <b>Forecast</b>
+          {at ? ` at ${at.x}, ${at.y}` : ""}: the next {int(f.horizon)} generations on a copy of the dish, if nobody else plants
+        </p>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Cells this planting adds, generation by generation; the dashed line is the next tide`}>
+          <line x1={tideX} y1="0" x2={tideX} y2={H} stroke="rgba(242,180,90,0.5)" strokeDasharray="2 3" />
+          <polyline points={pts} fill="none" stroke={f.survives ? "#9fd8a8" : "#ff8f7f"} strokeWidth="1.6" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <dl className={s.fcStats}>
+        <div>
+          <dt>Survives</dt>
+          <dd className={f.survives ? s.ok : s.bad}>{f.survives ? `yes, ${int(f.alive[f.alive.length - 1])} cells` : `gone by gen ${int(f.diedAt ?? f.horizon)}`}</dd>
+        </div>
+        <div>
+          <dt>At the next tide</dt>
+          <dd className="num">
+            {int(f.atTide)} <small>cells</small>
+          </dd>
+        </div>
+        <div>
+          <dt>Pays back</dt>
+          <dd className="num">{pay}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+/** A specimen's licence terms for the planter, once the contract has slide licences (licence.ts). */
+function LicenceLine({ licence, cost, licensed }: { licence: ReturnType<typeof useSlideLicence>; cost: number; licensed: boolean }) {
+  if (!licence.live) return null;
+  if (!licensed) return <p className={s.hint}>Turned or flipped, this is no longer the slide&apos;s pattern: it plants as an ordinary planting, with no licence discount and no royalty.</p>;
+  return (
+    <p className={s.hint}>
+      {licence.holder
+        ? `You hold this slide, so you plant its pattern on the holder's terms${licence.perk ? `: ${licence.perk}` : ""}.`
+        : licence.royaltyBps !== null
+          ? `Planting this slide's pattern pays its holder a ${licence.royaltyBps / 100}% royalty, about ${petri((cost * licence.royaltyBps) / 10_000, 2)} PETRI on this planting.`
+          : "This slide's pattern carries a licence; the contract sets its terms."}
+    </p>
+  );
+}
+
+/** /dish?tool=fossil before there is a colony: say what Fossilize needs instead of opening an empty frame. */
+function FossilNeedsColony({ onClose }: { onClose: () => void }) {
+  return (
+    <section className={`${s.card} ${s.fossilAsk}`} aria-labelledby="fossil-ask">
+      <div className={s.plantHead}>
+        <div>
+          <h2 id="fossil-ask">Fossilize</h2>
+          <span>Needs a colony: a slide keeps your own living cells, so some must be on the dish first.</span>
+        </div>
+        <button className={s.close} aria-label="Close" onClick={onClose}>
+          ×
+        </button>
+      </div>
+      <div className={s.lockedGlass} aria-hidden="true">
+        <SlideGlass size="mini" src={null} placeholder="Your colony's cells go here" />
+        <span className={s.lock}>
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <rect x="3.5" y="8" width="11" height="8" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M6 8V5.8a3 3 0 0 1 6 0V8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        </span>
+      </div>
+      <p className={s.hint}>Start a colony below and plant a still life. The frame opens over your cells as soon as they are on the dish.</p>
+    </section>
+  );
+}
+
+function FoldButton({ onFold }: { onFold: () => void }) {
+  return (
+    <button type="button" className={s.fold} onClick={onFold} aria-expanded="true" aria-controls="start-panel" title="Fold the panel away to see more of the dish">
+      <span className="sr">Fold the start panel</span>
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        <path d="M3 9l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
 function Countdown({ ms, total }: { ms: number; total: number }) {
   const r = 15;
   const c = 2 * Math.PI * r;
@@ -98,6 +219,8 @@ function Countdown({ ms, total }: { ms: number; total: number }) {
 
 export function DishStage() {
   const { d, rules, palette, perCell, warming, ready, colonies, w, h, secs, vault, tideIn } = useLive();
+  // The dish as this browser last saw it, drawn at once while the live one is read from NEAR.
+  const [cache, setCache] = useState<DishCache | null>(null);
   const player = usePlayer();
   const net = useNet();
   const offsets = usePatternOffsets();
@@ -126,6 +249,10 @@ export function DishStage() {
   const [done, setDone] = useState<{ text: string; hash?: string; link?: { href: string; label: string } } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [logOpen, setLogOpen] = useState(true);
+  // Below 1025 px the panels share the window with the dish: the log starts closed and the start panel can fold away.
+  const [startFolded, setStartFolded] = useState(false);
+  /** /dish?tool=fossil reached before the visitor has a colony: the panel says what Fossilize needs. */
+  const [fossilAsk, setFossilAsk] = useState(false);
   const [snapped, setSnapped] = useState(false);
   const [custom, setCustom] = useState<Custom | null>(null);
   // Fossilize: the frame being drawn over the player's own colony, and the slide's title.
@@ -170,6 +297,31 @@ export function DishStage() {
     const t = setInterval(loadMe, 8000);
     return () => clearInterval(t);
   }, [loadMe]);
+
+  useEffect(() => {
+    setCache(readDishCache(net.network));
+    if (window.innerWidth <= 1024) setLogOpen(false);
+  }, [net.network]);
+  // Keep the cache fresh: at most every half minute, and only from a dish read live.
+  const cacheWritten = useRef(0);
+  useEffect(() => {
+    if (!ready || !d.cells || Date.now() - cacheWritten.current < 30_000) return;
+    cacheWritten.current = Date.now();
+    writeDishCache(net.network, {
+      generation: d.generation,
+      at: Date.now(),
+      w,
+      h,
+      cells: d.cells,
+      colors: d.colonies.map((c) => [c.id, c.color] as [number, number]),
+      totalLive: d.totalLive,
+      agar: d.agar,
+      perCell,
+    });
+  }, [ready, d.cells, d.generation, d.colonies, d.totalLive, d.agar, perCell, net.network, w, h]);
+  const stale = !ready && !!cache && cache.w === w && cache.h === h;
+  const shownCells = d.cells ?? (stale ? cache!.cells : undefined);
+  const cachePalette = useMemo(() => new Map(cache?.colors ?? []), [cache]);
 
   // R rotates, F flips, Escape puts the stamp down.
   useEffect(() => {
@@ -273,7 +425,7 @@ export function DishStage() {
   const info: StampInfo | undefined =
     PATTERNS.find((p) => p.name === pattern) ??
     (custom
-      ? { name: null, label: custom.label, cells: custom.offsets.length, note: `The cells of specimen ${custom.id}, as its slide fixed them. Planting them is an ordinary planting at the normal price.` }
+      ? { name: null, label: custom.label, cells: custom.offsets.length, note: `The cells of specimen ${custom.id}, as its slide fixed them. Planted as they are (moved, not turned), they plant under the slide's licence at a discount; a planter that does not hold the slide pays its holder a royalty.` }
       : undefined);
   const infoOffsets = info?.name ? offsets[info.name] : custom?.offsets;
   // The contract's own price formula, from the same crate.
@@ -282,6 +434,33 @@ export function DishStage() {
   // What 0.02 NEAR buys a newcomer right now, after about 0.006 NEAR of colony storage.
   const joinPetri = rules && ready ? Number(buy_quote(String(JOIN_NEAR - 6n * 10n ** 21n), String(d.agar), rules.petri_price, rules.max_supply)) : 0;
   const cost = info ? costOf(stamp?.length ?? info.cells, siege) : 0;
+  // The skill made visible: where the stamp is pointed, step a copy of the dish forward and show what it would do.
+  const [fc, setFc] = useState<Forecast | null>(null);
+  const fcKey = stamp && legal && ready && !fossilOn ? `${stamp.join(",")}|${d.generation}|${me?.id ?? 0}|${cost}` : "";
+  useEffect(() => {
+    if (!fcKey || !stamp || !rules) {
+      setFc(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      const e = currentEngine();
+      if (!e) return;
+      try {
+        setFc(forecast(e, { colony: me?.id ?? d.colonies.length + 1, colonies: d.colonies.length, cells: new Uint32Array(stamp), tideIn, perCell, cost, reach: rules.reach }));
+      } catch {
+        setFc(null);
+      }
+    }, 120);
+    return () => clearTimeout(t);
+    // fcKey carries everything the forecast depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fcKey]);
+  // A specimen's pattern loaded as the stamp: what its licence asks, when the contract has slide licences.
+  const licence = useSlideLicence(custom?.id ?? null, player?.accountId ?? null);
+  // A specimen planted as its slide fixed it (moved, not turned or flipped) is planted under the slide's licence:
+  // slide_discount_bps off the price, and a planter that does not hold the slide pays its holder a royalty on top.
+  const licensed = !!custom && licence.live && rotate === 0 && !flip;
+  const licensedCost = licensed && rules ? Math.floor((cost * (10_000 - (rules.slide_discount_bps ?? 0))) / 10_000) : cost;
   const myLive = me ? d.liveCounts[me.id] ?? 0 : 0;
   const myPending = me ? d.pending[me.id] ?? 0 : 0;
   const plantedThisGen = me?.last_plant_generation != null && Number(me.last_plant_generation) >= d.generation;
@@ -295,7 +474,7 @@ export function DishStage() {
   const canSell = !!d.state && (balance ?? 0) >= SELL_UNITS && sellNear > 0 && sellNear <= Number(d.state.sell_left);
   // Planting claims a colony's waiting earnings first, so they count towards the price.
   const spendable = (balance ?? 0) + claimable.petri + Math.max(0, myPending);
-  const canAfford = balance !== null && spendable >= cost;
+  const canAfford = balance !== null && spendable >= licensedCost + (licensed && !licence.holder && licence.royaltyBps ? Math.ceil((licensedCost * licence.royaltyBps) / 10_000) : 0);
   const myColor = me ? hex(me.color) : "#f2b45a";
   /** What the player can spend: their balance and earnings once joined, what a 0.02 NEAR stake buys before. */
   const budget = me ? spendable : joinPetri;
@@ -364,9 +543,11 @@ export function DishStage() {
     setPending({ cells, label: info.label, at: Date.now() });
     try {
       const trimmed = note.trim();
-      const deposit = BigInt(await getPlantDeposit(cells.length, trimmed ? new TextEncoder().encode(trimmed).length : null));
-      const r = await plantCells(cells, trimmed, deposit);
-      setDone({ text: `Planted a ${info.label.toLowerCase()}: ${cells.length} cells for ${petri(cost, 2)} PETRI, half burned and half back to the agar.`, hash: r.hash });
+      const slide = licensed && custom ? custom.id : null;
+      const deposit = BigInt(await getPlantDeposit(cells.length, trimmed ? new TextEncoder().encode(trimmed).length : null, slide));
+      const r = await plantCells(cells, trimmed, deposit, slide);
+      const how = slide ? ` under specimen ${slide}'s licence` : "";
+      setDone({ text: `Planted a ${info.label.toLowerCase()}${how}: ${cells.length} cells for ${petri(licensedCost, 2)} PETRI, half burned and half back to the agar.`, hash: r.hash });
       setPending({ cells, label: info.label, at: Date.now(), hash: r.hash });
       setTarget(null);
       setNote("");
@@ -473,7 +654,7 @@ export function DishStage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     asked.current = { fossil: q.get("tool") === "fossil" };
-    if (asked.current.fossil) setDone({ text: "Fossilize frames your own living cells, so it opens as soon as your colony is on the dish." });
+    if (asked.current.fossil) setFossilAsk(true);
     const id = q.get("replant");
     if (!id) return;
     getSlide(id).then(
@@ -494,6 +675,7 @@ export function DishStage() {
   useEffect(() => {
     if (!me || !d.cells || !asked.current?.fossil) return;
     asked.current.fossil = false;
+    setFossilAsk(false);
     openFossil();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me, d.cells]);
@@ -646,7 +828,7 @@ export function DishStage() {
       const r = el?.getBoundingClientRect();
       if (r && r.height) top = Math.max(top, r.bottom - c.top + 10);
     }
-    const desktop = window.matchMedia("(min-width: 901px)").matches;
+    const desktop = window.matchMedia("(min-width: 800px)").matches;
     const dock = dockBox.current?.getBoundingClientRect();
     // On a desktop the cell inspector chip sits just above the dock.
     if (dock && dock.top < c.bottom) bottom = Math.min(bottom, dock.top - c.top - (desktop ? 46 : 8));
@@ -662,10 +844,9 @@ export function DishStage() {
   }
 
   /** Open on the living: the densest cluster of cells, fitted into the agar the panels leave free. */
-  function fitLiving(): boolean {
+  function fitLiving(cells: Uint16Array | undefined): boolean {
     const L = lens.current;
     const v = L?.view();
-    const cells = d.cells;
     const area = freeArea();
     if (!L || !v?.w || !cells || !area) return false;
     const B = 24;
@@ -720,16 +901,21 @@ export function DishStage() {
 
   // On the first frame with cells, open on the living colonies in the uncovered agar; an empty dish opens on open agar.
   const opened = useRef(false);
+  // A cached board is fitted the same way, so the view does not jump when the live one arrives.
   useEffect(() => {
-    if (opened.current || !d.cells || !rules || !currentEngine()) return;
+    if (opened.current || !shownCells) return;
     const z = mediumZoom();
     if (!z) return;
+    if (fitLiving(shownCells)) {
+      opened.current = true;
+      return;
+    }
+    if (!d.cells || !rules || !currentEngine()) return;
     opened.current = true;
-    if (fitLiving()) return;
     const sp = openSpot((x, y) => pattern_cells("block", x, y, w, h, 0, false));
     if (sp) lens.current?.centerOn(sp.at.x, sp.at.y, z);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [d.cells, rules]);
+  }, [shownCells, rules]);
 
   const hovered = hover && d.cells ? d.cells[hover.y * w + hover.x] : 0;
   const hoveredColony = hovered ? colonies.find((c) => c.id === hovered) : null;
@@ -755,17 +941,17 @@ export function DishStage() {
   const genMs = rules ? Number(rules.generation_ms) : 15000;
 
   return (
-    <div className={s.app}>
+    <div className={`${s.app} ${startFolded && !me && !info && !fossilAsk && !busy && !error && !done ? s.folded : ""}`}>
       <h1 className="sr">The live Petri dish</h1>
       <div ref={canvasBox} className={s.canvas}>
         <Culture
           ref={lens}
           width={w}
           height={h}
-          cells={d.cells}
+          cells={shownCells}
           prevCells={d.prevCells}
           changedAt={d.changedAt}
-          palette={palette}
+          palette={d.cells ? palette : cachePalette}
           look="macro"
           fit="cover"
           zoomScale={1.15}
@@ -804,27 +990,45 @@ export function DishStage() {
         <div className={s.hudGen}>
           <Countdown ms={d.nextInMs} total={genMs} />
           <div>
-            <span>Generation</span>
-            <b className="num">{ready ? int(d.generation) : "—"}</b>
+            <span>{stale ? "Last seen" : "Generation"}</span>
+            <b className="num">{ready ? int(d.generation) : stale ? int(cache!.generation) : "—"}</b>
           </div>
         </div>
         <div><span>Next in</span><b className="num">{ready ? `${secs}s` : "—"}</b></div>
-        <div><span>Living cells</span><b className="num">{ready ? int(d.totalLive) : "—"}</b></div>
-        <div><span>Each cell earns</span><b className="num">{ready ? petri(perCell, 4) : "—"}</b></div>
-        <div><span>Agar</span><b className="num">{ready ? petri(d.agar) : "—"}</b></div>
+        <div><span>Living cells</span><b className="num">{ready ? int(d.totalLive) : stale ? int(cache!.totalLive) : "—"}</b></div>
+        <div title="What one more counted cell would earn each generation at today's feed">
+          <span>A new cell earns</span>
+          <b className="num">{ready ? petri(perCell, 4) : stale ? petri(cache!.perCell, 4) : "—"}</b>
+        </div>
+        <div><span>Agar</span><b className="num">{ready ? petri(d.agar) : stale ? petri(cache!.agar) : "—"}</b></div>
       </div>
       {ready && warming && (
         <div ref={warmBox} className={s.warmChip}>
           <WarmUp />
         </div>
       )}
+      {stale && d.status !== "error" && (
+        <div ref={warmBox} className={`${s.warmChip} ${s.staleChip}`} role="status">
+          <i className={s.spin} aria-hidden="true" />
+          The dish as this browser last saw it, {ago(cache!.at)}. Reading the live one from NEAR…
+        </div>
+      )}
 
       <aside ref={leftBox} className={s.left}>
+        {!me && fossilAsk && <FossilNeedsColony onClose={() => setFossilAsk(false)} />}
+        {!me && startFolded && (
+          <button className={s.startPill} onClick={() => setStartFolded(false)} aria-expanded="false" aria-controls="start-panel">
+            <i className="swatch" style={{ background: "#f2b45a", width: 12, height: 12 }} />
+            Start a colony
+            <span>Open</span>
+          </button>
+        )}
         {!me &&
+          !startFolded &&
           (net.freePlay || player ? (
-            <JoinForm onStart={start} onConnect={connect} onPay={net.freePlay ? undefined : () => setPayOpen(true)} busy={!!busy} player={player} grant={ready ? petri(joinPetri) : "…"} colonies={d.colonies} />
+            <JoinForm onStart={start} onConnect={connect} onPay={net.freePlay ? undefined : () => setPayOpen(true)} onFold={() => setStartFolded(true)} busy={!!busy} player={player} grant={ready ? petri(joinPetri) : "…"} colonies={d.colonies} />
           ) : (
-            <MainnetStart onConnect={connect} onPay={() => setPayOpen(true)} busy={!!busy} />
+            <MainnetStart onConnect={connect} onPay={() => setPayOpen(true)} onFold={() => setStartFolded(true)} busy={!!busy} />
           ))}
 
         {player && pendingNear > 0n && (
@@ -842,10 +1046,13 @@ export function DishStage() {
         )}
 
         {info && !me && (
-          <section className={`${s.card} ${s.stampLine}`}>
-            <Specimen offsets={infoOffsets} color={myColor} size={30} />
-            <p>{info.label} selected. Start a colony to plant it.</p>
-            <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setCustom(null); setTarget(null); }}>×</button>
+          <section className={`${s.card} ${fc ? s.stampCard : s.stampLine}`}>
+            <div className={s.stampLine}>
+              <Specimen offsets={infoOffsets} color={myColor} size={30} />
+              <p>{info.label} selected. Start a colony to plant it.</p>
+              <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setCustom(null); setTarget(null); }}>×</button>
+            </div>
+            {fc && <ForecastView f={fc} cost={cost} genMs={genMs} at={anchor} />}
           </section>
         )}
 
@@ -855,7 +1062,7 @@ export function DishStage() {
               <Specimen offsets={infoOffsets} color={myColor} size={48} />
               <div>
                 <h2>{info.label}</h2>
-                <span className="num">{stamp?.length ?? info.cells} cells, {petri(cost, 2)} PETRI{siege ? ` (siege, ${rules?.siege_x ?? 3}×)` : ""}</span>
+                <span className="num">{stamp?.length ?? info.cells} cells, {petri(licensedCost, 2)} PETRI{licensed ? " (licensed)" : ""}{siege ? ` (siege, ${rules?.siege_x ?? 3}×)` : ""}</span>
               </div>
               <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setCustom(null); setTarget(null); }}>×</button>
             </div>
@@ -867,6 +1074,8 @@ export function DishStage() {
             <p className={`${s.verdict} ${verdict === "" ? s.ok : siege ? s.warn : verdict ? s.bad : ""}`}>
               {!anchor ? "Point at the dish, then click where it should grow." : verdict === "" ? `${snapped && target ? "That spot was taken, so the stamp moved to the nearest one that fits: " : "Fits at "}${anchor.x}, ${anchor.y}.${target ? "" : " Click to place it."}` : explain(verdict, w, names, rules?.siege_x)}
             </p>
+            {fc && <ForecastView f={fc} cost={cost} genMs={genMs} at={anchor} />}
+            {custom && licence.live && <LicenceLine licence={licence} cost={licensedCost} licensed={licensed} />}
             {me && (
               <label className={s.noteField}>
                 <span>Lab note, stored on chain with the planting (optional)</span>
@@ -874,19 +1083,21 @@ export function DishStage() {
                 <em className="num">{note.length}/140</em>
               </label>
             )}
+            <div className={s.stickyCta}>
             <button className="btn btn-amber" disabled={!me || !target || !legal || !!busy || !canAfford || plantedThisGen} onClick={plant}>
               {!me
                 ? "Start a colony to plant"
                 : !target
                   ? "Click the dish to place it"
                   : !canAfford
-                    ? `You need ${petri(cost, 2)} PETRI`
+                    ? `You need ${petri(licensedCost, 2)} PETRI`
                     : plantedThisGen
                       ? "One planting per generation. Next one soon"
                       : siege
-                        ? `Lay siege here for ${petri(cost, 2)} PETRI`
+                        ? `Lay siege here for ${petri(licensedCost, 2)} PETRI`
                         : `Plant the ${info.label.toLowerCase()} here`}
             </button>
+            </div>
           </section>
         )}
 
@@ -1013,9 +1224,11 @@ export function DishStage() {
               {fossilBlock ??
                 "Ready. The contract keeps your cells as they are when the transaction lands, which may be a generation after this preview: still lifes stay put, gliders move on."}
             </p>
-            <button className="btn btn-amber" disabled={!!fossilBlock || !!busy} onClick={mintFossil}>
-              Mint this specimen
-            </button>
+            <div className={s.stickyCta}>
+              <button className="btn btn-amber" disabled={!!fossilBlock || !!busy} onClick={mintFossil}>
+                Mint this specimen
+              </button>
+            </div>
             <p className={s.hint}>
               {isWallet
                 ? "Your wallet also attaches the NEAR for the token's storage, a few thousandths, as the contract quotes it; anything over comes back."
@@ -1130,7 +1343,12 @@ export function DishStage() {
                         className={`${s.stamp} ${pattern === p.name ? s.on : ""} ${short ? s.short : ""}`}
                         aria-pressed={pattern === p.name}
                         aria-label={`${p.label}, ${p.cells} cells${price ? `, ${price}` : ""}${short ? `, ${gap} PETRI more than ${whose}` : ""}`}
+                        // A pointer press does not focus the stamp, so the browser never scrolls the dock or the page to it;
+                        // keyboard users still tab to it as usual.
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
+                          const y = window.scrollY;
+                          requestAnimationFrame(() => window.scrollY !== y && window.scrollTo({ top: y, behavior: "instant" }));
                           setPattern(pattern === p.name ? null : p.name);
                           setCustom(null);
                           setFossilOn(false);
@@ -1196,17 +1414,22 @@ function Rename({ current, busy, onRename }: { current: string; busy: boolean; o
 }
 
 /** The mainnet dish has no guests: a colony starts from a wallet, or from any token through NEAR Intents. */
-function MainnetStart({ onConnect, onPay, busy }: { onConnect: () => void; onPay: () => void; busy: boolean }) {
+function MainnetStart({ onConnect, onPay, onFold, busy }: { onConnect: () => void; onPay: () => void; onFold: () => void; busy: boolean }) {
   return (
-    <section className={s.card}>
-      <h2 className={s.joinTitle}>Start a colony</h2>
+    <section className={s.card} id="start-panel">
+      <div className={s.joinHead}>
+        <h2 className={s.joinTitle}>Start a colony</h2>
+        <FoldButton onFold={onFold} />
+      </div>
       <p className={s.hint}>
         This is the mainnet dish: the NEAR is real, and every move is signed by your own wallet. Joining stakes 0.02 NEAR; a little
         pays for your colony&rsquo;s storage and the rest buys PETRI from the agar.
       </p>
-      <button className="btn btn-amber" onClick={onConnect} disabled={busy} style={{ width: "100%", marginTop: 16 }}>
-        Connect a NEAR wallet
-      </button>
+      <div className={s.stickyCta}>
+        <button className="btn btn-amber" onClick={onConnect} disabled={busy} style={{ width: "100%", marginTop: 16 }}>
+          Connect a NEAR wallet
+        </button>
+      </div>
       <button className="btn btn-ghost" onClick={onPay} style={{ width: "100%", marginTop: 10 }}>
         Pay with any token
       </button>
@@ -1218,7 +1441,7 @@ function MainnetStart({ onConnect, onPay, busy }: { onConnect: () => void; onPay
   );
 }
 
-function JoinForm({ onStart, onConnect, onPay, busy, player, grant, colonies }: { onStart: (name: string, color: number) => void; onConnect: () => void; onPay?: () => void; busy: boolean; player: Player; grant: string; colonies: Colony[] }) {
+function JoinForm({ onStart, onConnect, onPay, onFold, busy, player, grant, colonies }: { onStart: (name: string, color: number) => void; onConnect: () => void; onPay?: () => void; onFold: () => void; busy: boolean; player: Player; grant: string; colonies: Colony[] }) {
   const [name, setName] = useState("");
   const taken = useMemo(() => {
     const m = new Map<number, string>();
@@ -1233,8 +1456,11 @@ function JoinForm({ onStart, onConnect, onPay, busy, player, grant, colonies }: 
   const valid = name.trim().length > 0 && name.trim().length <= 24;
   const takenStains = STAINS.flatMap((st) => (taken.has(st.color) ? [{ name: st.name, owner: taken.get(st.color)! }] : []));
   return (
-    <section className={s.card}>
-      <h2 className={s.joinTitle}>Start a colony</h2>
+    <section className={s.card} id="start-panel">
+      <div className={s.joinHead}>
+        <h2 className={s.joinTitle}>Start a colony</h2>
+        <FoldButton onFold={onFold} />
+      </div>
       <p className={s.hint}>
         Name it and choose its stain. Joining stakes 0.02 NEAR: a little pays for your colony's storage and the rest buys about {grant} PETRI from the agar to plant with.
         {player?.kind === "wallet"
@@ -1279,9 +1505,11 @@ function JoinForm({ onStart, onConnect, onPay, busy, player, grant, colonies }: 
             </p>
           </>
         )}
-        <button className="btn btn-amber" type="submit" disabled={!valid || busy} style={{ width: "100%" }}>
-          {valid ? "Start my colony" : "Name your colony to start"}
-        </button>
+        <div className={s.stickyCta}>
+          <button className="btn btn-amber" type="submit" disabled={!valid || busy} style={{ width: "100%" }}>
+            {valid ? "Start my colony" : "Name your colony to start"}
+          </button>
+        </div>
       </form>
       {player?.kind !== "wallet" && (
         <button className="btn btn-ghost btn-small" type="button" onClick={onConnect} disabled={busy} style={{ width: "100%", marginTop: 10 }}>

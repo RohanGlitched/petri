@@ -1,6 +1,7 @@
 .scene {
   position: relative;
-  height: 290vh;
+  /* One viewport of scrolling pulls back from the close-up to the whole dish. */
+  height: 200vh;
   margin-top: -68px;
 }
 .stage {
@@ -143,13 +144,37 @@
   align-items: center;
   gap: 10px;
 }
-.cue::before {
+.cueText { display: inline-flex; align-items: center; gap: 10px; }
+.cueText::before {
   content: "";
   width: 1px;
   height: 22px;
   background: linear-gradient(var(--amber), transparent);
   animation: cue 2.2s ease-in-out infinite;
 }
+.skip {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(243, 233, 218, 0.06);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text-2);
+  font: 600 12.5px/1 var(--body);
+  cursor: pointer;
+}
+.skip:hover { color: var(--bone); background: rgba(243, 233, 218, 0.1); }
+/* A young dish's progress towards the full feed, under its count. */
+.of { font-size: 0.6em; color: var(--dim); }
+.warmTrack {
+  display: block;
+  margin-top: 8px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(243, 233, 218, 0.12);
+  overflow: hidden;
+}
+.warmTrack i { display: block; height: 100%; border-radius: inherit; background: var(--amber); }
 @keyframes cue {
   0%, 100% { transform: scaleY(0.4); transform-origin: top; }
   50% { transform: scaleY(1); transform-origin: top; }
@@ -223,7 +248,8 @@
   .loupe { display: none; }
   .row { margin-bottom: 20px; }
   .lede { font-size: 16px; }
-  .cue { display: none; }
+  .cue { margin-top: 14px; }
+  .cueText { display: none; }
   .caption, .capEnd { left: 16px; right: 16px; bottom: 24px; top: auto; translate: none; max-width: none; }
   /* The copy fills the lower half of a phone: keep the agar under it near solid, so no bead sits behind the headline. */
   .scrim {
@@ -238,5 +264,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .reveal, .title, .row, .stats, .loupe > *, .skel { animation: none; }
-  .cue::before { animation: none; }
+  .cueText::before { animation: none; }
 }

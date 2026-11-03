@@ -26,7 +26,10 @@
   "max_catchup": 120,
   "max_lag": 480,
   "house": ["petri-violet.testnet", "petri-safranin.testnet", "petri-methylene.testnet", "petri-malachite.testnet", "petri-congo.testnet"],
+  "keepers": ["petri-keeper.testnet"],
   "slide_cells_price": "1000000",
   "slide_min_cells": 5,
+  "slide_discount_bps": 2500,
+  "slide_royalty_bps": 1000,
   "wnear": "wrap.testnet"
 }

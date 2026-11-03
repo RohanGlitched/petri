@@ -217,6 +217,7 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   padding: 0;
 }
 .nav-links a {
+  white-space: nowrap;
   color: var(--dim);
   text-decoration: none;
   font-size: 15px;
@@ -336,11 +337,12 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
 .netswitch-opt em, .netsheet-opt em { display: block; font-style: normal; font-size: 13px; line-height: 1.4; color: var(--text-2); margin-top: 3px; }
 .netsheet { display: grid; gap: 6px; margin-top: 22px; }
 .netsheet-opt { padding: 14px; }
-/* The switch names the dish, so on narrower desktops the generation pill and then the button make room for it. */
-@media (max-width: 1280px) and (min-width: 901px) {
+/* The switch names the dish, so on narrower desktops the generation pill and then the button make room for it, and
+   below 1100 px the links move into the menu. */
+@media (max-width: 1500px) {
   .net { display: none; }
 }
-@media (max-width: 1100px) and (min-width: 901px) {
+@media (max-width: 1240px) and (min-width: 1101px) {
   .nav-in { gap: 24px; }
   .nav-links { gap: 18px; }
   .nav-end .btn { display: none; }
@@ -379,9 +381,11 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   border-bottom: 1px solid var(--line);
 }
 .sheet .btn { margin-top: 24px; font-family: var(--body); font-size: 16px; border: 0; }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .nav-links, .net { display: none; }
   .menu-btn { display: inline-grid; place-items: center; }
+}
+@media (max-width: 900px) {
   .nav-end .btn { display: none; }
 }
 
@@ -433,6 +437,9 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   gap: 12px;
   color: var(--dim);
   font-size: 13.5px;
+}
+@media (min-width: 800px) {
+  .footer-dish { display: none; }
 }
 @media (max-width: 900px) {
   .foot-top { grid-template-columns: 1fr 1fr; }

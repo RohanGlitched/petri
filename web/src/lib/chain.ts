@@ -34,11 +34,18 @@ export type Rules = {
   max_catchup: number;
   /** When the dish is this far behind the clock, the clock skips ahead. */
   max_lag: number;
+  /** The dish's own strains: never fed, no tide share, never sell PETRI back or hand it to players. */
   house: string[];
+  /** The dish's own keepers: like the house, they take no tide bounty and no keeper pot. */
+  keepers: string[];
   /** PETRI units a specimen slide costs per living cell it captures, all burned. */
   slide_cells_price: string;
   /** A slide must capture at least this many of the colony's own living cells. */
   slide_min_cells: number;
+  /** A planting of a slide's exact pattern under its licence costs this share less (basis points). */
+  slide_discount_bps: number;
+  /** Anyone but the slide's holder pays the holder this share of a licensed planting's cost, in PETRI (basis points). */
+  slide_royalty_bps: number;
   /** The wNEAR contract whose `ft_transfer_call` joins or buys for the account its message names (NEAR Intents). */
   wnear: string | null;
 };
@@ -54,6 +61,8 @@ export type DishState = {
   /** cells the last feed counted; prices are set against this */
   counted: number;
   colonies: number;
+  /** colonies with stake (planted in the last few days), whose numbers the contract keeps in its hot table */
+  playing: number;
   ledger: string;
   plants: string;
   total_supply: string;
@@ -68,6 +77,7 @@ export type DishState = {
   keeper_paid: string;
   /** yoctoNEAR waiting in the tide vault */
   vault: string;
+  /** NEAR that reached the vault: attached by players, and wNEAR too small for a pending record (`Dust`) */
   near_in: string;
   /** NEAR the tides made claimable (shares of colonies that have attached NEAR) */
   near_tides: string;
@@ -75,6 +85,7 @@ export type DishState = {
   near_as_credit: string;
   near_bounties: string;
   near_sold: string;
+  /** failed bounty payouts that went back to the vault */
   near_refunded: string;
   /** NEAR tide winnings not yet claimed */
   tides_owed: string;
@@ -98,9 +109,13 @@ export type DishState = {
   /** specimen slides minted, and the PETRI they burned (counted in `burned` too) */
   slides: string;
   slides_burned: string;
-  /** yoctoNEAR waiting for accounts to claim (wNEAR that could not join or buy), and wNEAR held, not yet unwrapped */
+  /** PETRI paid to slide holders in royalties */
+  royalties: string;
+  /** yoctoNEAR waiting for accounts to claim (wNEAR whose order has not run, failed payouts), wNEAR held and not yet
+   * unwrapped, and how much of that is being unwrapped */
   pending: string;
   wrapped: string;
+  unwrapping: string;
   wnear_ready: boolean;
   /** PETRI units per cell right now */
   cell_price: string;
@@ -127,20 +142,39 @@ export type Colony = {
   near_sold: string;
   /** credit won at the tides, from the credit pool and as vault shares (and bounties, for a guest that ran a tide) */
   credit_won: string;
-  /** started by someone else's payment (wNEAR through NEAR Intents); the account may `rename` it once */
+  /** started by someone else's payment (wNEAR through NEAR Intents) under a neutral name ("Culture" and hex digits of
+   * its account's hash); the account may `rename` it once */
   proxy: boolean;
 };
 
-export type PlantRecord = { index: string; generation: string; colony: number; cells: number[]; cost: string; siege: boolean; note: string | null };
+export type PlantRecord = { index: string; generation: string; colony: number; cells: number[]; cost: string; siege: boolean; note: string | null; slide: string | null };
+/** A planting under a slide's licence: the slide, how many times it had changed hands, the holder paid (none when the
+ * planter held it) and the royalty. */
+export type Licence = { token: string; moves: number; holder: string | null; royalty: string };
+/** A Refund's `kind`: what the failed payout was (0 a claim, 1 a sale, 2 a bounty, 3 a sponsor's reclaim, 4 a pending
+ * claim). */
+export type PayoutKind = 0 | 1 | 2 | 3 | 4;
 export type Entry =
   | { Join: { generation: string; colony: number } }
-  | { Buy: { generation: string; colony: number; petri: string; near: string; credit: string } }
-  | { Plant: { generation: string; colony: number; cells: number[]; cost: string; near: string; credit: string; siege: boolean } }
+  | { Buy: { generation: string; colony: number; petri: string; near: string; credit: string; spent: string | null } }
+  | { Plant: { generation: string; colony: number; cells: number[]; cost: string; near: string; credit: string; siege: boolean; spent: string | null; licence: Licence | null } }
   | { Sell: { generation: string; colony: number; petri: string; near: string; paid: string; as_credit: boolean } }
   | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string; as_credit: string; credit_pay: string; credit_paid: string; by: number } }
   | { Skip: { generation: string; skipped: string } }
-  | { Refund: { generation: string; colony: number; near: string } }
-  | { Slide: { generation: string; colony: number; token: string; x: number; y: number; w: number; h: number; cells: number; bitmap: string; cost: string } };
+  | { Refund: { generation: string; colony: number; kind: PayoutKind; of: string; near: string; storage: string } }
+  | { Slide: { generation: string; colony: number; token: string; x: number; y: number; w: number; h: number; cells: number; bitmap: string; cost: string; spent: string | null } }
+  | { Sponsor: { generation: string; account: string; sponsor: string; amount: string } }
+  | { Unsponsor: { generation: string; account: string; sponsor: string; amount: string } }
+  | { Claim: { generation: string; colony: number; petri: string; near: string; paid: string } }
+  | { Pending: { generation: string; account: string; near: string } }
+  | { Unpend: { generation: string; account: string; near: string; paid: string } }
+  | { Dust: { generation: string; near: string } }
+  | { Burn: { generation: string; account: string; petri: string } };
+
+/** One sponsor's credit for an account (the `credit_grants` view, oldest first, which is the order it is spent in). */
+export type Grant = { sponsor: string; amount: string; at: string };
+/** An account's pending NEAR and the order still waiting on it (the `pending_record` view). */
+export type PendingRecord = { near: string; order_near: string; order: { join: boolean; name: string | null; color: number | null } | null };
 
 /** A specimen slide as the `slides`, `slide` and `slides_for` views return it (no image: draw it with `slide_svg`
  * from the engine, which is exactly what the contract serves as the NFT's media). `bitmap` is base64: bit i of the
@@ -162,6 +196,10 @@ export type SlideView = {
   title: string | null;
   bitmap: string;
   minted_ms: string;
+  /** times the slide has changed hands */
+  moves: number;
+  /** PETRI its holders have been paid in royalties */
+  royalties: string;
 };
 
 export const entryGeneration = (e: Entry): number => Number(Object.values(e)[0].generation);
@@ -241,17 +279,23 @@ export const getBoard = async () => {
 export const getColonies = (from = 0, limit = 500) => view<Colony[]>("colonies", { from, limit });
 export const getPlants = (from = 0, limit = 1000) => view<PlantRecord[]>("plants", { from, limit });
 export const getLedger = (from = 0, limit = 1000) => view<Entry[]>("ledger", { from, limit });
-export const getEarnings = (from = 0, limit = 2000) => view<string[]>("earnings", { from, limit });
-export const getTideWinnings = (from = 0, limit = 2000) => view<string[]>("tide_winnings", { from, limit });
+/** At most 500 a call; see getAllEarnings. */
+export const getEarnings = (from = 0, limit = 500) => view<string[]>("earnings", { from, limit });
+/** At most 500 a call; see getAllTideWinnings. */
+export const getTideWinnings = (from = 0, limit = 500) => view<string[]>("tide_winnings", { from, limit });
 export const getStakes = (from = 0, limit = 2000) => view<string[]>("stakes", { from, limit });
 export const getCredit = (account_id: string) => view<string>("credit_of", { account_id });
+export const getCreditGrants = (account_id: string) => view<Grant[]>("credit_grants", { account_id });
 export const getSellQuote = (petri: string) => view<string>("sell_quote", { petri });
 export const getCheckpoints = (from = 0, limit = 2000) => view<Checkpoint[]>("checkpoints", { from, limit });
 export const getBalance = (account_id: string) => view<string>("ft_balance_of", { account_id });
 export const getClaimable = (account_id: string) => view<Claimable>("claimable", { account_id });
-export const getQuote = (cells: number, siege = false) => view<string>("quote", { cells, siege });
+/** PETRI units a planting costs now; `licensed` for one under a slide's licence (`slide_discount_bps` off). */
+export const getQuote = (cells: number, siege = false, licensed = false) => view<string>("quote", { cells, siege, licensed });
 export const getBuyQuote = (near: string) => view<string>("buy_quote", { near });
-export const getPlantDeposit = (cells: number, note_bytes: number | null) => view<string>("plant_deposit", { cells, note_bytes });
+/** yoctoNEAR to bring to a planting; with `slide`, enough for one under that slide's licence (and for registering its
+ * holder for PETRI if it has no registration). What storage does not use goes to the vault or credit pool with the fee. */
+export const getPlantDeposit = (cells: number, note_bytes: number | null, slide: string | null = null) => view<string>("plant_deposit", { cells, note_bytes, slide });
 export const getColonyOf = (account_id: string) => view<Colony | null>("colony_of", { account_id });
 /** Slides in mint order (token "1" is the first), at most 500 a call. */
 export const getSlides = (from = 0, limit = 100) => view<SlideView[]>("slides", { from, limit });
@@ -261,6 +305,11 @@ export const getSlidesFor = (account_id: string, from = 0, limit = 100) => view<
 export const getSlideDeposit = (w: number, h: number, title_bytes: number | null) => view<string>("slide_deposit", { w, h, title_bytes });
 /** yoctoNEAR waiting for an account to claim with `claim_pending` (wNEAR sent for it that could not join or buy). */
 export const getPending = (account_id: string) => view<string>("pending_of", { account_id });
+export const getPendingRecord = (account_id: string) => view<PendingRecord | null>("pending_record", { account_id });
+/** The least wNEAR a payment for `account_id` must deliver for its order ("join" or "buy") to run. */
+export const getIntentMinimum = (what: "join" | "buy", account_id: string) => view<string>("intent_minimum", { what, account_id });
+/** PETRI a slide's holders have been paid in royalties, in all. */
+export const getSlideRoyalties = (token_id: string) => view<string>("slide_royalties", { token_id });
 
 /** Decode a slide's base64 bitmap for `slide_svg` or for drawing cells yourself. */
 export function slideBits(b64: string): Uint8Array {
@@ -279,15 +328,22 @@ export function slideBits(b64: string): Uint8Array {
  *   first). Returns the token id. It needs at least rules.slide_min_cells of the caller's own living cells inside the
  *   rectangle at the stored generation and burns rules.slide_cells_price PETRI per cell (unclaimed earnings count).
  * claimPending: method "claim_pending", args {}, no deposit, 30 TGas. Sends the caller its pending NEAR.
+ * settlePending: method "settle_pending", args { account_id }, no deposit, 100 TGas. Anyone may call it: it runs the
+ *   order waiting with that account's pending NEAR (a join, or a purchase for a colony), with only the NEAR that came
+ *   with the order. Fails, changing nothing, while the order cannot run.
+ * plant with a licence: method "plant", args { cells, note, credit, slide: "<token id>" }: the cells must be exactly the
+ *   slide's pattern moved anywhere (not turned); it costs slide_discount_bps less, and a planter that does not hold the
+ *   slide also pays its holder slide_royalty_bps of that cost in PETRI. Attach getPlantDeposit(n, bytes, slide).
  * rename: method "rename", args { name, color }, no deposit. Only for a colony started by someone else's payment
- *   (`proxy`), once.
+ *   (`proxy`), once. Names "Culture <hex digits>" are reserved for such colonies.
  * NEP-171: "nft_transfer" { receiver_id, token_id, approval_id: null, memo: null } with exactly 1 yoctoNEAR attached.
  *
  * Paying with NEAR Intents: 1Click's `customRecipientMsg` (wNEAR delivered to the dish with ft_transfer_call) is the
  * JSON string {"for": "<account>", "do": "join" | "buy", "name": "<colony name>", "color": <0xRRGGBB as a number>}.
- * At least 0.01 NEAR; "join" for an account that already has a colony buys instead; anything that cannot be done
- * waits as pending NEAR for "for" (see getPending). Give the delivery as much gas as 1Click allows: below about
- * 100 TGas the join may not fit and the NEAR waits as pending.
+ * Nothing is refunded: at least getIntentMinimum(do, for) runs the order; "join" for an account that already has a
+ * colony buys instead; a colony started for an account by someone else's payment gets a neutral name (the name in the
+ * message is used only when the account sends its own wNEAR); anything that cannot be done waits as pending NEAR with
+ * its order for "for" (see getPendingRecord), which settle_pending completes and claim_pending takes back.
  */
 
 /** An account's NEAR balance in yoctoNEAR (what a guest has left for deposits). */
@@ -312,6 +368,15 @@ async function paged<T>(total: number, page: (from: number, limit: number) => Pr
 }
 export const getAllPlants = (total: number) => paged(total, getPlants);
 export const getAllLedger = (total: number) => paged(total, getLedger);
+async function paged500<T>(total: number, page: (from: number, limit: number) => Promise<T[]>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; from < total; from += 500) out.push(...(await page(from, 500)));
+  return out.slice(0, total);
+}
+/** Every colony's lifetime earnings, in colony order (the view returns at most 500 a call). */
+export const getAllEarnings = (total: number) => paged500(total, getEarnings);
+export const getAllTideWinnings = (total: number) => paged500(total, getTideWinnings);
+export const getAllSlides = (total: number) => paged500(total, getSlides);
 export async function getAllColonies(total: number): Promise<Colony[]> {
   const out: Colony[] = [];
   for (let from = 0; from < total; from += 500) out.push(...(await getColonies(from, 500)));

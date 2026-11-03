@@ -71,7 +71,7 @@ function Cycle({ agar, fed, back, burned, sold, perGen }: { agar: string; fed: s
         <circle key={i} cx={470 + (i % 4) * 20 + (i > 3 ? 10 : 0)} cy={146 + Math.floor(i / 4) * 20} r="9" fill="url(#cy-cell)" />
       ))}
       <text x="530" y="112" textAnchor="middle" className={s.cyLabel}>Living cells</text>
-      <text x="500" y="204" textAnchor="middle" className={s.cySmall}>{perGen} PETRI a cell, a generation</text>
+      <text x="500" y="204" textAnchor="middle" className={s.cySmall}>{perGen} PETRI a new cell, a generation</text>
 
       <rect x="430" y="282" width="140" height="56" rx="28" fill="#1d1208" />
       <text x="500" y="316" textAnchor="middle" className={s.cyBtn}>Planting</text>
@@ -196,8 +196,8 @@ export function CoinBand() {
               The price of planting follows the feed: one cell costs what an average living cell earns in{" "}
               {rules ? int(rules.payback) : "480"} generations at today&rsquo;s rate (counting at least{" "}
               {rules ? int(rules.live_floor) : "1,000"} cells, never under {rules ? petri(Number(rules.min_cell_price), 1) : "0.5"}{" "}
-              PETRI). Right now a cell costs <b className="num">{ready ? petri(cellPrice, 2) : "—"} PETRI</b> and earns{" "}
-              <b className="num">{ready ? petri(perCell, 4) : "—"}</b> a generation. So planting only pays if your cells live
+              PETRI). Right now a cell costs <b className="num">{ready ? petri(cellPrice, 2) : "—"} PETRI</b> and a new cell would earn{" "}
+              <b className="num">{ready ? petri(perCell, 4) : "—"}</b> a generation at today&rsquo;s feed. So planting only pays if your cells live
               longer than two hours, and the dish decides that, not the price.
             </p>
             <WarmUp tone="paper" className={s.warm} />

@@ -37,7 +37,7 @@ const skel = (
 );
 
 export function HeroScene() {
-  const { d, palette, perCell, ready, colonies, supply, w, h, secs } = useLive();
+  const { d, rules, palette, perCell, warming, warmth, ready, colonies, supply, w, h, secs } = useLive();
   const scene = useRef<HTMLDivElement>(null);
   const lens = useRef<CultureHandle>(null);
   const mask = useRef<HTMLDivElement>(null);
@@ -45,6 +45,7 @@ export function HeroScene() {
   const rim = useRef<HTMLDivElement>(null);
   const layers = useRef<(HTMLElement | null)[]>([]);
   const centred = useRef(false);
+  const floor = rules?.live_floor ?? 1000;
   const alive = colonies.filter((c) => c.live > 0);
   const lead = alive[0];
 
@@ -81,7 +82,9 @@ export function HeroScene() {
       last = p;
       const v = L.view();
       if (!v.w) return;
-      const close = (Math.max(v.w, v.h) / w) * 2.4 / v.roundFit;
+      // The close-up fills the longer side, but never shows fewer than about 32 cells across the shorter one (a phone held
+      // upright would otherwise open on a couple of dozen beads).
+      const close = Math.min((Math.max(v.w, v.h) / w) * 2.4, Math.min(v.w, v.h) / 32) / v.roundFit;
       const z = band(p, 0.18, 0.9);
       const k = Math.exp(Math.log(close) * (1 - ease(z)));
       L.setZoomFit(k);
@@ -179,9 +182,9 @@ export function HeroScene() {
           <h1 id="hero-title" className={s.title}>A coin that is alive.</h1>
           <div className={s.row}>
             <p className={s.lede}>
-              Every bead of colour here is a living cell on NEAR, owned by a real account. A shared agar feeds the living
-              a share of what it holds every fifteen seconds; bringing new cells to life pays half back to it and burns
-              the other half.
+              Every bead of colour here is a living cell on NEAR, owned by a real account. A shared agar feeds players&rsquo;
+              living cells a share of what it holds every fifteen seconds{ready && warming ? (d.counted === 0 ? `, from the first player's cell, in full once ${int(floor)} are counted` : `, in full once ${int(floor)} of them are counted`) : ""};
+              bringing new cells to life pays half back to it and burns the other half.
             </p>
             <div className={s.actions}>
               <Link className="btn btn-amber" href="/dish">Start a colony</Link>
@@ -190,11 +193,36 @@ export function HeroScene() {
           </div>
           <dl className={s.stats} aria-live="polite" aria-busy={!ready}>
             <div><dt>Living cells</dt><dd className="num">{ready ? int(d.totalLive) : skel}</dd></div>
-            <div><dt>Each cell earns, per generation</dt><dd className="num">{ready ? petri(perCell, 4) : skel}</dd></div>
+            {ready && warming ? (
+              // A young dish feeds a fraction of the ration (none at all before a player cell is counted), so the
+              // first screen shows how far it has to go rather than a rate nobody is being paid yet.
+              <div title={`Counted cells are players' living cells, each colony up to its reach. Until ${int(floor)} are counted the agar releases that fraction of its ration; the house strains are never counted.`}>
+                <dt>{d.counted === 0 ? `Not feeding yet: full feed at ${int(floor)} counted cells` : `Feeding in part: full at ${int(floor)} counted cells`}</dt>
+                <dd className="num">{int(d.counted)} <small className={s.of}>/ {int(floor)}</small></dd>
+                <span className={s.warmTrack} aria-hidden="true"><i style={{ width: `${Math.max(0.6, warmth * 100)}%` }} /></span>
+              </div>
+            ) : (
+              <div title="What one more living cell would earn each generation at today's feed, before its colony's reach cap">
+                <dt>A new cell would earn, per generation</dt>
+                <dd className="num">{ready ? petri(perCell, 4) : skel}</dd>
+              </div>
+            )}
             <div><dt>PETRI still in the agar</dt><dd className="num">{ready ? petri(d.agar) : skel}</dd></div>
             <div><dt>Next generation in</dt><dd className="num">{ready ? `${secs}s` : skel}</dd></div>
           </dl>
-          <p className={s.cue} aria-hidden="true">Scroll to pull back</p>
+          <p className={s.cue}>
+            <span className={s.cueText} aria-hidden="true">Scroll to pull back</span>
+            <button
+              type="button"
+              className={s.skip}
+              onClick={() => {
+                const el = scene.current;
+                if (el) window.scrollTo({ top: el.offsetTop + el.offsetHeight - 68, behavior: "smooth" });
+              }}
+            >
+              Skip the zoom
+            </button>
+          </p>
         </section>
 
         <aside ref={(n) => { layers.current[1] = n; }} className={s.caption} style={{ opacity: 0, visibility: "hidden" }}>

@@ -20,6 +20,8 @@ export function useLive() {
   const perCell = rules ? (feed * (1 - keeperShare)) / Math.max(d.counted, rules.live_floor) : 0;
   /** A young dish: fewer counted cells than the floor, so part of each ration stays in the agar. */
   const warming = !!rules && d.counted < rules.live_floor;
+  /** How far a young dish is towards the full ration: counted cells over the floor, 0 to 1. */
+  const warmth = rules ? Math.min(1, d.counted / Math.max(1, rules.live_floor)) : 0;
   const ready = d.status === "ready";
   const colonies = useMemo(
     () => d.colonies.map((c) => ({ ...c, live: d.liveCounts[c.id] ?? 0 })).sort((a, b) => b.live - a.live),
@@ -38,6 +40,7 @@ export function useLive() {
     palette,
     perCell,
     warming,
+    warmth,
     feed,
     ready,
     colonies,

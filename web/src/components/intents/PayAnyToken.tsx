@@ -36,7 +36,8 @@ import s from "./intents.module.css";
 
 /** NEAR a join keeps for the new colony's storage before the rest buys PETRI (as on the join form). */
 const JOIN_STORAGE = 6n * 10n ** 21n;
-/** The least wNEAR the dish takes in one transfer (the contract's `MIN_INTENT`); less is sent back to NEAR Intents. */
+/** A floor for the form only: the deposit-address request is checked against the dish's own `intent_minimum` for the order
+ * (the server refuses a quote whose guaranteed output is below it; nothing that arrives is ever sent back). */
 const MIN_INTENT = 10n ** 22n;
 const NAME = /^[A-Za-z0-9 \-'.&!?_,:()]{1,24}$/;
 
@@ -96,6 +97,21 @@ function Copy({ text, label }: { text: string; label: string }) {
 }
 
 /** The quote and 1Click's signature as a file the payer keeps: the evidence if a swap ever needs disputing. */
+/** The app fee a 1Click quote carries, in basis points (1Click adds 20 to quotes made without an API key). */
+function appFeeBps(r: QuoteResponse | null | undefined): number {
+  const fees = r?.quoteRequest?.appFees;
+  return Array.isArray(fees) ? fees.reduce((n, f) => n + (Number.isFinite(Number(f?.fee)) ? Number(f.fee) : 0), 0) : 0;
+}
+
+/** The app fee in words, from the quote itself: "0.2% (20 bps), about 0.02 USDC". */
+function feeLine(r: QuoteResponse | null | undefined, symbol: string): string | null {
+  const bps = appFeeBps(r);
+  if (!r || bps <= 0) return null;
+  const amount = (Number(r.quote.amountInFormatted) * bps) / 10_000;
+  const pct = `${(bps / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}%`;
+  return `${pct}, or ${bps} bps${Number.isFinite(amount) && amount > 0 ? `, about ${amount.toLocaleString("en-US", { maximumSignificantDigits: 3 })} ${symbol}` : ""}`;
+}
+
 function receiptUrl(o: SavedOrder) {
   return URL.createObjectURL(new Blob([JSON.stringify(o, null, 2)], { type: "application/json" }));
 }
@@ -261,6 +277,7 @@ function PayForm({
   const priceOf = (id: string) => tokens.find((t) => t.assetId === id)?.price;
   const roughNear = base && priceOf(origin.id) && priceOf("nep141:wrap.near") ? (Number(amount) * priceOf(origin.id)!) / priceOf("nep141:wrap.near")! : null;
   const refundFee = q?.refundFee ? fromBase(q.refundFee, origin.decimals, 8) : null;
+  const appFee = feeLine(dry.q, origin.symbol);
 
   // No deposit address until the dish itself answers: NEAR sent to a contract that is not there would be stranded.
   const blocker = !rulesReady
@@ -366,6 +383,11 @@ function PayForm({
                   : <>That buys about <b className="num">{petri(petriFor(nearMin))}</b> PETRI for {known?.colony?.name ?? "the colony"} at the agar&rsquo;s price now.</>}{" "}
               Typical time {Math.max(10, Math.round(q.timeEstimate))} s after the deposit confirms.
             </p>
+            <p className={s.fee}>
+              {appFee
+                ? <>Includes NEAR Intents&rsquo; app fee on this quote: <b className="num">{appFee}</b>, already taken out of the NEAR above. This site adds no fee of its own.</>
+                : <>This quote carries no app fee. Swap and bridge costs are already taken out of the NEAR above.</>}
+            </p>
           </>
         ) : (
           <p className={dry.error ? s.bad : s.dim}>
@@ -441,7 +463,9 @@ function PayForm({
             account and whether to join or buy. The contract unwraps the wNEAR into NEAR and does exactly what a wallet attaching that NEAR would.
           </li>
           <li>
-            Fees: NEAR Intents takes about 0.2% of the swap, plus a bridge fee that depends on the chain; the quote above already has them taken out.
+            Fees: 1Click adds an app fee of its own to quotes made without an API key, read from each quote&rsquo;s <code>appFees</code>:{" "}
+            {appFee ? `${appFee} on the quote above` : "0.2%, or 20 bps, on such quotes today"}. A bridge fee that depends on the chain comes on top. The
+            quote already has both taken out, and this site asks for no fee.
             Slippage is capped at 1%, so you receive at least the smaller figure.
           </li>
           <li>
@@ -645,6 +669,7 @@ function Deposit({ order, onRestart, onLanded }: { order: SavedOrder; onRestart:
         NEAR Intents signed this quote at {new Date(order.response.timestamp).toLocaleString()}
         {q.deadline ? `; the address closes at ${new Date(q.deadline).toLocaleTimeString()}` : ""}. Quote{" "}
         <span className="num">{order.response.correlationId.slice(0, 8)}</span>, about {int(Math.round(q.timeEstimate))} s once the deposit confirms.
+        {feeLine(order.response, origin.symbol) ? ` It includes NEAR Intents' app fee of ${feeLine(order.response, origin.symbol)}.` : ""}
       </p>
     </div>
   );

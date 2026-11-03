@@ -28,8 +28,15 @@ export function useSpecimenRows() {
 export function FeaturedSlide() {
   const { all, rows } = useSpecimenRows();
   const first = rows[0];
-  if (all.status === "loading") return <SlideGlass src={null} size="large" placeholder="Reading the slide box…" />;
-  if (!first) return <SlideGlass src={null} size="large" placeholder="The first slide is still blank" />;
+  // Every state keeps the caption line, so the header (and its buttons, centred beside it) never moves when the slide
+  // box arrives.
+  if (all.status === "loading" || !first)
+    return (
+      <div className={s.feature}>
+        <SlideGlass src={null} size="large" placeholder={all.status === "loading" ? "Reading the slide box…" : "The first slide is still blank"} />
+        <p className={s.featureCap}>{all.status === "loading" ? "\u00a0" : "No specimen on this dish yet."}</p>
+      </div>
+    );
   return (
     <div className={s.feature}>
       <SlideGlass

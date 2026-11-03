@@ -1,10 +1,12 @@
 // A 1Click quote that pays the mainnet dish. The browser chooses the asset, the amount, the refund address and what
 // the NEAR is for; everything else is fixed here: wNEAR out, the dish as recipient, the exact-input swap, 1% slippage,
-// refunds on the origin chain, and the deadline. A dry quote has no deposit address and commits to nothing.
+// refunds on the origin chain, and the deadline. A dry quote has no deposit address and commits to nothing. The dish
+// never refunds wNEAR, so a quote that may deliver less than the dish needs for the order (its `intent_minimum`) is
+// refused, dry or real, before anyone pays.
 
 import { isAccountId } from "@/lib/config";
 import { ORIGINS, WNEAR, refundOk } from "@/lib/intents";
-import { MAINNET_DISH, dishDeployed, fail, oneClick, paysTheDish, upstreamError } from "../oneclick";
+import { MAINNET_DISH, dishDeployed, dishMinimum, fail, oneClick, paysTheDish, upstreamError } from "../oneclick";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,8 @@ export async function POST(req: Request) {
     refundTo = DRY_REFUND[origin.address];
   }
 
-  const msg: Record<string, unknown> = { for: forAccount, do: b.do };
+  const what = b.do as "join" | "buy";
+  const msg: Record<string, unknown> = { for: forAccount, do: what };
   if (b.do === "join") {
     const typed = typeof b.name === "string" ? b.name.split(/\s+/).filter(Boolean).join(" ") : "";
     const name = typed || (dry ? "Preview" : "");
@@ -69,8 +72,16 @@ export async function POST(req: Request) {
     if (status !== 200 && status !== 201) return fail(status === 400 ? 400 : 502, upstreamError(body, status));
     // Check 1Click quoted what was asked before the browser shows anyone a deposit address.
     if (!paysTheDish(body)) return fail(502, "NEAR Intents returned a quote for a different recipient; it was not shown.");
-    const q = body.quote as { depositAddress?: string } | undefined;
+    const q = body.quote as { depositAddress?: string; minAmountOut?: string; amountOut?: string } | undefined;
     if (!dry && !q?.depositAddress) return fail(502, "NEAR Intents returned no deposit address.");
+    // The least the swap can deliver after slippage must still run the order: the dish keeps whatever arrives.
+    const least = q?.minAmountOut ?? q?.amountOut;
+    const need = await dishMinimum(what, forAccount);
+    if (typeof least !== "string" || !/^\d+$/.test(least)) return fail(502, "NEAR Intents returned no amount out; the quote was not shown.");
+    if (BigInt(least) < need) {
+      const near = (y: bigint) => (Number(y / 10n ** 18n) / 1e6).toFixed(4);
+      return fail(400, `This payment could deliver as little as ${near(BigInt(least))} NEAR, and the dish needs at least ${near(need)} NEAR to ${what === "join" ? "start a colony" : "buy PETRI"} for ${forAccount}. Send a little more.`);
+    }
     return Response.json(body, { headers: { "cache-control": "no-store" } });
   } catch (e) {
     return fail(502, `NEAR Intents could not be reached: ${e instanceof Error ? e.message : String(e)}`);

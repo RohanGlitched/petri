@@ -54,6 +54,29 @@ export function RulesHeader() {
             </ul>
           </nav>
         </div>
+        <ol className={s.summary} aria-label="Petri in three steps">
+          <li>
+            <b>Buy in</b>
+            <p>
+              Pay NEAR to the agar and get PETRI back, at a price that rises as the agar empties. Past the storage it pays for,
+              the NEAR goes to the tide vault, not to anyone running the dish.
+            </p>
+          </li>
+          <li>
+            <b>Plant cells that last</b>
+            <p>
+              Spend PETRI to plant a pattern; half is burned, half returns to the agar. Life decides what survives, and your
+              living cells earn PETRI every {Number(r.generation_ms) / 1000} s, up to {r.reach} paid cells per cell of stake.
+            </p>
+          </li>
+          <li>
+            <b>Collect at the tide</b>
+            <p>
+              Every {r.tide_every} generations {r.tide_bps / 100}% of the vault is paid out in NEAR (as credit on free play), split by
+              the PETRI each colony earned since the last tide. Claim it, or sell PETRI back to the agar.
+            </p>
+          </li>
+        </ol>
         <dl className={s.glance}>
           {glance.map(([v, k]) => (
             <div key={k} className={s.glanceItem}>

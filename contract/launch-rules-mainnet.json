@@ -32,7 +32,10 @@
     "malachite.petri-dish.near",
     "congo.petri-dish.near"
   ],
+  "keepers": ["keeper.petri-dish.near"],
   "slide_cells_price": "1000000",
   "slide_min_cells": 5,
+  "slide_discount_bps": 2500,
+  "slide_royalty_bps": 1000,
   "wnear": "wrap.near"
 }

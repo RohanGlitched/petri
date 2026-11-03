@@ -2,6 +2,8 @@
   <img src="docs/cover.png" alt="Petri: a coin that is alive. Conway's Life with owners, run by a NEAR contract." width="100%" />
 </p>
 
+> **The site is changing hosts.** Until the playpetri.xyz DNS records point at its new server, the same live site is at **<https://136-64-100-170.sslip.io>**, with the docs at <https://136-64-100-170.sslip.io/docs/introduction>. Every `www.playpetri.xyz/<path>` link below works there with the same path, and every `docs.playpetri.xyz/<page>` link as `/docs/<page>`.
+
 <p align="center">
   <a href="https://www.playpetri.xyz"><img alt="Live site" src="https://img.shields.io/badge/live-playpetri.xyz-f2b45a?style=flat-square&labelColor=120a05" /></a>
   <a href="https://nearblocks.io/address/petri-dish.near"><img alt="Mainnet contract" src="https://img.shields.io/badge/mainnet-petri--dish.near-9fd8a8?style=flat-square&labelColor=120a05" /></a>
@@ -22,7 +24,7 @@
 
 **Petri is a coin that is alive.** One shared 128×128 dish runs Conway's Game of Life inside a NEAR smart contract, and every living cell belongs to a NEAR account. All 1,000,000 PETRI were minted once, into the dish's own reserve, the *agar*. You buy PETRI from the agar with NEAR, at a price that rises as it empties, and can sell it back at half that price. Every 15 seconds the agar feeds a sliver of itself to whatever is alive, but a colony is paid for at most 8 living cells per cell of stake (the cells it planted, of which 87.5% remains after each tide), so splitting into many colonies never earns more and holding ground means planting again now and then. Planting costs what a cell earns in two hours; half is burned and half goes back to the agar. Planting within three cells of a rival is allowed but costs three times as much, so nobody can close the dish to newcomers. The NEAR players attach collects in a tide vault, and every hour 5% of it is paid out by what each colony earned that hour. A colony can fix a patch of its living cells as a specimen slide, an NFT whose picture the contract draws itself, and on mainnet anyone can pay with other tokens through NEAR Intents. Five AI strains play around the clock without ever taking a share of the tides, and the browser runs the very same Rust engine as the contract, so anyone can rebuild the whole history, PETRI and NEAR, from the ledger and check it to the last unit.
 
-Built for the NEAR HACKATHON (November 2026). Tracks: Memecoins with mechanics, Games with real economies, AI swarms, Open. The full documentation is at <https://docs.playpetri.xyz>.
+Built for the NEAR HACKATHON (November 2026). Tracks: Memecoins With Mechanics, Games With Real Economies, NFTs That Do Something (the specimen slides), AI Swarms, Open Innovation. The full documentation is at <https://docs.playpetri.xyz>.
 
 ---
 
@@ -47,13 +49,14 @@ Each step says what to do and what you should see. Everything runs against the l
 
 1. **Watch the coin live.** Open <https://www.playpetri.xyz>. You see glossy colonies drifting across the agar and a generation counter that advances every 15 seconds. The switch in the navigation reads **Free play**; choose **Real NEAR** to read the mainnet dish instead.
 2. **Start a colony with no wallet.** Open [/dish](https://www.playpetri.xyz/dish), type a name, pick a stain and press **Start my colony**. Your browser makes a key, fetches a signed challenge and solves a small proof of work bound to it; the site creates a testnet guest account for that key and sponsors it with 0.05 NEAR, which the contract holds as credit. The panel then says your colony is on the dish and that its 0.02 NEAR stake bought PETRI from the agar, with a link to the transaction. The relayer paid the gas; no NEAR moved with the relayed call. To play with your own NEAR instead, press **Use my NEAR wallet instead** and connect through NEAR Connect; your wallet signs and pays for each move.
-3. **Plant something.** Pick **Block** in the dock and click the dish to place it. On a rival's hatched buffer the verdict turns amber and the button reads **Lay siege here for X PETRI** (three times the price); on open agar it reads **Plant the block here**. **Find open agar** centres the view on a spot where the stamp fits and says how far it is from the nearest rival. Type a lab note and press the button. The cells pulse until the chain confirms; the lab log shows your note, stored on chain.
+3. **Plant something.** Pick **Block** in the dock and click the dish to place it. On a rival's hatched buffer the verdict turns amber and the button reads **Lay siege here for X PETRI** (three times the price); on open agar it reads **Plant the block here**. **Find open agar** centres the view on a spot where the stamp fits and says how far it is from the nearest rival. While you point the stamp, the card shows a forecast: the site steps two copies of the dish 240 generations ahead with the same engine, one with the stamp and one without, and says whether it survives, how many cells it adds at the next tide and roughly when it earns back its price (assuming nobody else plants). Type a lab note and press the button. The cells pulse until the chain confirms; the lab log shows your note, stored on chain.
 4. **Claim, buy and sell.** Your colony card shows what your cells have earned. **Claim earnings** (or **Claim X NEAR and PETRI** once NEAR is waiting) moves PETRI to your balance and sends NEAR won at the tides, **Buy PETRI with 0.01 NEAR** buys more from the agar, and **Sell 20 back for X NEAR** sells PETRI to the agar from the tide vault, enabled once the first tide has opened the buy-back allowance. A guest's button reads **Sell 20 back for X credit**: a colony that has never attached NEAR is paid in credit, never in NEAR.
 5. **Make a specimen.** Press **Fossilize a patch**. A frame opens over your colony's densest patch; move or resize it (4 to 32 cells a side) and press **Mint this specimen**. The contract keeps only your own living cells in the frame (at least 5), burns 1 PETRI for each and mints the slide to your account; a guest pays its storage from credit. It appears at [/specimens](https://www.playpetri.xyz/specimens).
 6. **Rebuild the dish from nothing.** Open [/verify](https://www.playpetri.xyz/verify). Your browser pins one final block, downloads the whole ledger (every join, purchase, sale, planting, specimen slide, tide, clock skip and refund since generation 0), replays it with petri-core and shows 29 checks: the history chain, the board hash, living cells, every planting's legality, siege flag, price and fee, every purchase and sale on the curve, every tide, every slide, the PETRI counters, every colony's earnings, the vault, NEAR paid in and out, shares and sales paid as credit, every colony's NEAR and credit winnings, the credit pool, whether the contract's NEAR covers what it owes, and the contract's full-access keys. Until the team deletes the contract's last full-access key (see [The lock](#the-lock)), the page says **The whole history matches.** and that last check waits in amber.
 7. **Do the same from a terminal.** With Node 20 or later, see [Verify it yourself](#verify-it-yourself).
-8. **Read what the AI strains decided.** Open [/strains](https://www.playpetri.xyz/strains): each strain's temperament, its last move with the options it had, and its lab notes, each linked to its transaction and marked with the model that chose it or as written rules.
-9. **On mainnet, pay with any token.** With **Real NEAR** selected, the dish offers **Connect a NEAR wallet** and **Pay with any token**. The second asks for a colony name, the NEAR account it is for and a refund address on the paying chain, quotes a swap from USDC (on Base, Solana or Arbitrum), ETH on Base, SOL or BTC, and shows a deposit address. This step spends real money; the others do not.
+8. **Read what the AI strains decided.** Open [/strains](https://www.playpetri.xyz/strains): each strain's temperament, its last move with the options it had, and its lab notes, each linked to its transaction and marked with the model that chose it or as written rules. Its Runway note reads the mainnet strains' balances and recent spending from NEAR and says how long the house lasts at that pace.
+9. **See the records.** Open [/records](https://www.playpetri.xyz/records): the browser replays the ledger and names the longest-lived colony, the biggest colony and planting, the most PETRI burned, the biggest siege, the top earners and the first tide. [/colonies](https://www.playpetri.xyz/colonies) counts the outside colonies (not the house or the bench), the NEAR they have won at tides and the slides minted.
+10. **On mainnet, pay with any token.** With **Real NEAR** selected, the dish offers **Connect a NEAR wallet** and **Pay with any token**. The second asks for a colony name, the NEAR account it is for and a refund address on the paying chain, quotes a swap from USDC (on Base, Solana or Arbitrum), ETH on Base, SOL or BTC, and shows a deposit address. This step spends real money; the others do not.
 
 ## How it works
 
@@ -81,7 +84,7 @@ On mainnet, the site asks NEAR Intents (its 1Click API) for a quote, and the pay
 {"for": "<account>", "do": "join", "name": "<colony name>", "color": 16753242}
 ```
 
-`do` is `join` or `buy`. The contract unwraps the wNEAR and joins or buys for `for` exactly as if that account had attached the NEAR itself; an account that already has a colony buys. Whatever cannot be used that way (an unreadable message, a taken name, too little gas, a failed unwrap) waits as pending NEAR for that account, shown by `pending_of` and taken back with `claim_pending`. Anyone may call `unwrap_wnear` for wNEAR left waiting; the keeper does. Because anyone can pay for any account, a colony started by someone else's payment may choose its name and colour again, once, with `rename`.
+`do` is `join` or `buy`. The contract unwraps the wNEAR and joins or buys for `for` exactly as if that account had attached the NEAR itself; an account that already has a colony buys. Whatever cannot be used that way (an unreadable message, a taken name, too little gas, a failed unwrap) waits as pending NEAR for that account, shown by `pending_of` and taken back with `claim_pending`. Anyone may call `unwrap_wnear` for wNEAR left waiting; the keeper does. Because anyone can pay for any account, a colony started by someone else's payment may choose its name and colour again, once, with `rename`. 1Click adds a 0.2% app fee of its own to quotes made without an API key (the live site's quotes return `appFees` of 20 basis points today); the site asks for no fee of its own, and the payment dialog reads the fee from each quote and shows it with the amount.
 
 ### Specimens
 
@@ -157,12 +160,12 @@ It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b9
      - SHA-256 checksum hex : dc00659d95ca14f4202b84f96d71566298c37db1abc7230c862fefba771ee438
      - SHA-256 checksum bs58: Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j
 ```
- The contract's `contract_source_metadata` (NEP-330) names the same commit and image. To read the deployed hash yourself:
+ The contract's `contract_source_metadata` (NEP-330) names the same commit and image. Its `build_info.build_command` reads `cargo near build non-reproducible-wasm --locked`, and that is not a different build: it is the command cargo-near runs *inside* the pinned container when you run `cargo near build reproducible-wasm` outside it (`container_build_command` in `contract/Cargo.toml`). NEP-330 records the command that ran in the container, so a verifier reruns exactly that command in exactly that image and must get the same bytes. To read the deployed hash yourself:
 
 ```bash
-curl -s https://rpc.mainnet.near.org -H 'content-type: application/json' \
+curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_account","finality":"final","account_id":"petri-dish.near"}}'
-# "code_hash":"Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j"; use rpc.testnet.near.org and petri-v5.testnet for testnet
+# "code_hash":"Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j"; use https://rpc.testnet.fastnear.com and petri-v5.testnet for testnet
 
 near account view-account-summary petri-dish.near network-config mainnet now
 # near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": dc00659d95ca14f4202b84f96d71566298c37db1abc7230c862fefba771ee438
@@ -202,12 +205,12 @@ flowchart LR
     M[petri-dish.near<br/>real NEAR]
     W[wrap.near]
   end
-  subgraph Vercel
+  subgraph VM["Google Cloud VM (e2-micro)"]
+    C[Caddy<br/>automatic HTTPS]
+    N[Next.js standalone server<br/>site and docs]
     G[/api/guest<br/>challenge, PoW, sponsor/]
     R[/api/relay<br/>zero-deposit meta tx/]
     I[/api/intents<br/>quotes, deposit address/]
-  end
-  subgraph VM
     K[keeper]
     S[5 AI strains]
   end
@@ -218,6 +221,7 @@ flowchart LR
   CORE --> M
   CORE --> WASM
   UI --> WASM
+  UI -- HTTPS --> C --> N
   UI -- view calls --> T
   UI -- view calls --> M
   KEY -- proof of work --> G -- create account, sponsor credit --> T
@@ -238,7 +242,7 @@ flowchart LR
 - **Any token.** `/api/intents` passes quote, submit and status requests to NEAR Intents' 1Click API. It builds the transfer message itself from the checked form and pins the destination asset (wNEAR), the recipient (`petri-dish.near`), refunds on the origin chain and the deadline, and shows no deposit address unless 1Click's quote pays the dish.
 - **The strains.** Code reads the dish with the same WASM, lists up to six legal, non-siege plantings that suit the strain's temperament, and asks a language model to pick one and write the note, naming rivals only by number and size. Petri is integrated with both Claude Haiku (asked first, within a fixed dollar budget) and NEAR AI Cloud (its answers signed inside a TEE), which takes over when Claude does not answer and NEAR AI has credits. If neither answers, the strain takes its first option. Every move in the public log says which model, or the written rules, decided it.
 - **The renderer.** A WebGL2 shader turns the owner grid into stained colonies, and the browser steps the stored board to the due generation with the same engine.
-- **Hosting.** The site and relayer run on Vercel; the keeper, the strains and the bench run on one small VM, one process per dish.
+- **Hosting.** Everything off chain runs on one small Google Cloud VM (e2-micro, us-central1): the site, its API routes (guest faucet, relayer, intents) and the docs as a Next.js standalone server behind Caddy, which serves HTTPS with automatically renewed certificates, next to the keeper, the strains and the bench, one agent process per dish.
 
 ## Screens
 
@@ -259,7 +263,7 @@ flowchart LR
 | `wasm/` | wasm-bindgen wrapper around petri-core for the browser and Node. |
 | `sim/` | The economy simulator (`sim/out-v5/` for the current rules; `out-v3/`, `out-v2/` and `out/` are earlier runs). |
 | `agents/` | The keeper, the five AI strains and the bench (Node), plus the read-only action-log window. |
-| `web/` | The Next.js site: renderer, play page, any-token payment, verify, rules, colonies, specimens, strains, guest faucet and relayer. |
+| `web/` | The Next.js site: renderer, play page with the planting forecast, any-token payment, verify, rules, colonies, specimens, records, strains, guest faucet and relayer. |
 | `scripts/verify.mjs` | Replay a dish from genesis against the live contract, from a terminal. |
 | `RULES.md` | The complete rules, economics and known limits, checked against the code. |
 
@@ -294,7 +298,7 @@ The site reads `NEXT_PUBLIC_NEAR_NETWORK` (the dish a first visit reads, testnet
 - Entries in the same generation apply in execution order, so an earlier planting can take a cell a later one wanted.
 - The house strains are a subsidy run by the team: about 1.1 NEAR a strain a week in the simulator, paid to the other players. On mainnet it is the team's real NEAR.
 - The simulator estimates storage and gas, its players follow fixed habits, and its published runs predate three launched changes (5% tides, guests paid in credit, idle tides skipped).
-- The keeper, the strains and the bench run on one small VM. If it stops, any transaction still catches the dish up; a dish left alone for more than 480 generations skips the quiet stretch, and nothing is fed for the skipped generations.
+- The site, the relayer, the keeper, the strains and the bench all run on one small VM. If it stops, the site and free-play guests stop with it, but the contracts do not: any wallet transaction still catches the dish up, `scripts/verify.mjs` still replays it, and the site runs locally with `npm run dev`; a dish left alone for more than 480 generations skips the quiet stretch, and nothing is fed for the skipped generations.
 - The strains need a model to answer: Claude Haiku within a fixed budget, NEAR AI Cloud when it has credits. Without either they play by written rules, and the log says so.
 - Verification proves the board and balances follow from the ledger; it trusts the RPC provider you read the ledger from.
 

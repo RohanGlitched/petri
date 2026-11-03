@@ -14,8 +14,19 @@ export function slugOf(path: string | null): string {
   return !last || last === "docs" ? "introduction" : last;
 }
 
+/** The main site on the deployment being read: docs.X serves the docs and www.X the site; any other host (localhost,
+ * the VM's own address while DNS moves) serves both, the docs under /docs. */
+export function siteBase(host: string): string {
+  const h = host.toLowerCase();
+  if (h.startsWith("docs.")) return `${window.location.protocol}//www.${h.slice(5)}`;
+  return window.location.origin;
+}
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  // The canonical site until the browser says which deployment this is.
+  const [site, setSite] = useState(SITE);
+  useEffect(() => setSite(siteBase(window.location.host)), []);
   const slug = slugOf(path);
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -71,8 +82,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <kbd>Ctrl K</kbd>
           </button>
           <nav className="d-top-links" aria-label="Petri">
-            <a href={`${SITE}/dish`}>Play</a>
-            <a href={`${SITE}/verify`}>Verify</a>
+            <a href={`${site}/dish`}>Play</a>
+            <a href={`${site}/verify`}>Verify</a>
             <a href={REPO}>GitHub</a>
           </nav>
         </div>

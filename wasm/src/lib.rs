@@ -2,7 +2,7 @@
 //! run the dish ahead of the stored generation, replay its whole history from the plant log and check the result
 //! against the contract's history chain.
 
-use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, slide_svg as core_slide_svg, tide_due, tide_split, Dish, PlantError, STAKE_UNIT};
+use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, licensed_cost, petri_for_near, planting_cost, royalty, sell_back, slide_svg as core_slide_svg, tide_due, tide_split, Dish, PlantError, STAKE_UNIT};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -276,6 +276,12 @@ impl Engine {
         self.dish.region_bitmap(colony, x, y, w, h).0
     }
 
+    /// Whether `cells` are exactly a specimen slide's pattern (its `bitmap`, `w` × `h`, as a Slide entry holds it) moved
+    /// to another place on this dish, as the contract requires of a planting under the slide's licence.
+    pub fn fits_slide(&self, cells: &[u32], bitmap: &[u8], w: u16, h: u16) -> bool {
+        self.dish.fits_slide(cells, bitmap, w, h)
+    }
+
     /// Exact credit one colony won at the tides since this engine started, from the credit pool and as vault shares
     /// (yoctoNEAR, decimal string).
     pub fn credit_won_of(&self, colony: u16) -> String {
@@ -369,6 +375,14 @@ impl Engine {
 pub fn quote(agar: &str, feed_ppm: u32, keeper_bps: u16, total_live: u32, live_floor: u32, payback: u32, min_price: &str, cells: u32, siege: bool, siege_x: u32) -> String {
     let per = feed_per_cell(agar.parse().unwrap_or(0), feed_ppm, keeper_bps, total_live, live_floor);
     planting_cost(per, payback, min_price.parse().unwrap_or(0), cells, siege, siege_x).to_string()
+}
+
+/// What a planting that would cost `cost` PETRI units costs under a specimen slide's licence (`slide_discount_bps`
+/// off), and the royalty (`slide_royalty_bps` of that) anyone but the slide's holder pays its holder: "cost,royalty".
+#[wasm_bindgen]
+pub fn licence(cost: &str, discount_bps: u16, royalty_bps: u16) -> String {
+    let c = licensed_cost(cost.parse().unwrap_or(0), discount_bps);
+    format!("{},{}", c, royalty(c, royalty_bps))
 }
 
 /// yoctoNEAR the agar pays for `petri` units handed back (before the sale's record): `sell_bps` of the curve, but never

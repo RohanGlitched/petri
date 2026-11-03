@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLive, petri, int, hex } from "@/lib/live";
 import { getAllPlants, type PlantRecord } from "@/lib/chain";
@@ -8,6 +8,7 @@ import { strainsOn, keeperOn, CLAUDE_MODEL, NEARAI_MODEL } from "@/lib/strains";
 import { useNet } from "@/lib/use-net";
 import { accountUrl, txUrl } from "@/lib/config";
 import { useStrainLog, modelStatus, actionIndex } from "@/lib/strain-log";
+import { readRunway, nearOf, type Runway } from "@/lib/house-runway";
 import s from "./strains.module.css";
 
 function ago(iso: string) {
@@ -126,7 +127,7 @@ export function StrainsView() {
                   const a = index.find(st.account, Number(p.generation));
                   return (
                     <li key={i}>
-                      <q>{p.note}</q>
+                      <Note text={p.note ?? ""} />
                       <span className={`num ${s.meta}`}>
                         <span>Generation {int(Number(p.generation))}</span>
                         <span>{p.cells.length} cells</span>
@@ -160,6 +161,7 @@ export function StrainsView() {
           <a className={s.acct} href={accountUrl(KEEPER)}>{KEEPER}</a>
         </li>
       </ul>
+      <RunwayNote />
       <p className={s.cta}>
         <Link className="btn btn-amber" href="/dish">Play against them</Link>
       </p>
@@ -170,5 +172,76 @@ export function StrainsView() {
         shown with the strain&rsquo;s last move. Each move says which model chose it.
       </p>
     </>
+  );
+}
+
+/** A lab note, two lines until opened: the strains write whole sentences now. */
+function Note({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  const ref = useRef<HTMLQuoteElement>(null);
+  // The toggle appears only when the clamp actually hides something at this width.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => !open && setLong(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, open]);
+  return (
+    <div className={s.note}>
+      <q ref={ref} className={!open ? s.clamp : undefined}>{text}</q>
+      {(long || open) && (
+        <button type="button" className={s.more} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {open ? "Show less" : "Read the whole note"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** What the house holds on mainnet and how long it lasts at its recent pace, read from NEAR mainnet itself. */
+function RunwayNote() {
+  const [r, setR] = useState<Runway | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let stop = false;
+    readRunway().then(
+      (x) => !stop && setR(x),
+      () => !stop && setFailed(true),
+    );
+    return () => {
+      stop = true;
+    };
+  }, []);
+  const hrs = r ? Math.max(1, Math.round(r.hours)) : 0;
+  const span = !r ? "" : r.young ? `the dish's first ${hrs} ${hrs === 1 ? "hour" : "hours"} (so the pace is rough)` : r.hours >= 23.5 ? "the last 24 hours" : `the last ${hrs} hours`;
+  return (
+    <section className={s.runway} aria-labelledby="runway-title">
+      <div>
+        <h2 id="runway-title" className="h3">Runway</h2>
+        <p>
+          {failed
+            ? "NEAR mainnet did not answer just now, so the house's balances are not shown."
+            : !r
+              ? "Reading the house's balances from NEAR mainnet…"
+              : r.perDay
+                ? `On mainnet the five strains hold ${nearOf(r.total)} NEAR of the team's money. Over ${span} their purchases and plantings put ${nearOf(r.spent, 4)} NEAR into the tide vault, about ${nearOf(r.perDay, 4)} a day, which the tides pay out to the other players. At that pace the house lasts about ${r.days !== null && r.days > 365 ? "more than a year" : `${Math.max(1, Math.round(r.days ?? 0))} days`}, before storage and gas, which come on top; when it runs low the strains stop and the dish carries on without them.`
+                : `On mainnet the five strains hold ${nearOf(r.total)} NEAR of the team's money and put nothing into the tide vault over ${span}. What they do put in, the tides pay out to the other players.`}
+        </p>
+      </div>
+      {r && (
+        <ul className={s.runwayList}>
+          {r.strains.map((x) => (
+            <li key={x.account}>
+              <a href={accountUrl(x.account, "mainnet")}>{x.name}</a>
+              <span className="num">{x.balance !== null ? `${nearOf(x.balance)} NEAR` : "—"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
+import { Amount } from "./Amount";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Culture } from "@/components/Culture";
 import { loadEngine } from "@/engine";
-import { getAllColonies, getAllLedger, getEarnings, getLock, getRules, getState, getTideWinnings, pinFinalBlock } from "@/lib/chain";
+import { getAllColonies, getAllEarnings, getAllLedger, getAllSlides, getAllTideWinnings, getLock, getRules, getState, pinFinalBlock } from "@/lib/chain";
 import { Replayer, type Check } from "@/lib/replay";
 import { CONTRACT, NETWORK, REPO, accountUrl } from "@/lib/config";
 import s from "./verify.module.css";
@@ -28,19 +29,20 @@ export function VerifyRun() {
     setPhase("fetching");
     setChecks([]);
     setLog([]);
-    setMsg("Reading the contract at one final block: rules, state, colonies and the whole ledger…");
+    setMsg("Reading the contract at one final block: rules, state, colonies, slides and the whole ledger…");
     try {
       await loadEngine();
       // Every read below comes from the same final block, so nothing can land between them.
       await pinFinalBlock();
-      let rules, state, colonies, ledger, earnings, winnings, lock;
+      let rules, state, colonies, ledger, earnings, winnings, slides, lock;
       try {
         [rules, state] = await Promise.all([getRules(), getState()]);
-        [colonies, ledger, earnings, winnings, lock] = await Promise.all([
+        [colonies, ledger, earnings, winnings, slides, lock] = await Promise.all([
           getAllColonies(state.colonies),
           getAllLedger(Number(state.ledger)),
-          getEarnings(0, 2000),
-          getTideWinnings(0, 2000),
+          getAllEarnings(state.colonies),
+          getAllTideWinnings(state.colonies),
+          getAllSlides(Number(state.slides)),
           getLock().catch(() => null),
         ]);
       } finally {
@@ -51,7 +53,7 @@ export function VerifyRun() {
       if (id !== runId.current) return;
       setPalette(new Map(colonies.map((c) => [c.id, c.color])));
       setCounts({ plants: plants.length, colonies: colonies.length, checkpoints: tides.length + 1 });
-      const r = new Replayer({ rules, state, colonies, ledger, earnings: earnings.slice(0, colonies.length), winnings: winnings.slice(0, colonies.length), lock });
+      const r = new Replayer({ rules, state, colonies, ledger, earnings: earnings.slice(0, colonies.length), winnings: winnings.slice(0, colonies.length), slides, lock });
       setTarget(r.target);
       setPhase("replaying");
       setMsg("Replaying from generation zero with petri-core…");
@@ -181,8 +183,8 @@ export function VerifyRun() {
                 <div>
                   <b>{c.label}</b>
                   <dl>
-                    <div><dt>On chain</dt><dd>{c.expected || "—"}</dd></div>
-                    <div><dt>Replay or rule</dt><dd>{c.got ?? "waiting for the replay"}</dd></div>
+                    <div><dt>On chain</dt><dd>{c.expected ? <Amount text={c.expected} /> : "—"}</dd></div>
+                    <div><dt>Replay or rule</dt><dd>{c.got !== null && c.got !== undefined ? <Amount text={c.got} /> : "waiting for the replay"}</dd></div>
                   </dl>
                 </div>
               </li>
@@ -212,13 +214,19 @@ const PLACEHOLDER: Check[] = [
   ["live", "Living cells"],
   ["legal", "Every planting was legal, sieges marked"],
   ["prices", "Every planting paid the formula's price"],
+  ["fees", "Every planting paid its cell fee"],
+  ["licences", "Every licensed planting was its slide's pattern and paid the holder of the day"],
   ["buys", "Every purchase followed the agar's curve"],
-  ["sells", "Every sale back followed the curve"],
+  ["sells", "Every sale back followed the curve and the allowance, and none was the house's"],
   ["specimens", "Specimens: every slide is its colony's own cells as the dish stood"],
-  ["tides", "Every tide: ran when due, chain, share of the vault and split"],
+  ["slide_holders", "Every slide's holder and the royalties it was paid"],
+  ["tides", "Every tide: ran when due, chain, share of the vault and split, bounty (none to the house)"],
+  ["claims", "Every claim took exactly what its colony was owed"],
+  ["refunds", "Every refund is for exactly the payout it names, once"],
   ["agar", "PETRI left in the agar"],
   ["sold", "PETRI sold from the agar for NEAR"],
-  ["burned", "PETRI burned by planting and by specimen slides"],
+  ["burned", "PETRI burned by planting, by specimen slides and by unregistering"],
+  ["royalties", "PETRI paid to slide holders in royalties"],
   ["returned", "PETRI returned to the agar by planting"],
   ["bought_back", "PETRI bought back by the agar"],
   ["keeper", "PETRI set aside for keepers"],
@@ -227,5 +235,11 @@ const PLACEHOLDER: Check[] = [
   ["near_in", "NEAR paid in by players"],
   ["near_tides", "NEAR paid out at tides"],
   ["won", "Every colony's NEAR won at tides"],
+  ["credit_given", "Credit sponsored, from the ledger"],
+  ["credit_spent", "Credit spent in the dish, from the ledger"],
+  ["credit_reclaimed", "Credit taken back by its sponsors, from the ledger"],
+  ["tides_owed", "NEAR won and not yet claimed, from the ledger"],
+  ["pending", "Pending NEAR, from the ledger"],
+  ["solvent", "The contract's NEAR covers everything it owes, as the ledger counts it"],
   ["lock", "Nobody can change the contract: no full-access key"],
 ].map(([id, label]) => ({ id, label, expected: "", got: null, ok: null }));

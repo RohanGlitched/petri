@@ -7,7 +7,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Engine, loadEngine } from "@/engine";
-import { getAllColonies, getBoard, getEarnings, getPlants, getRules, getStakes, getState, type Colony, type DishState, type PlantRecord, type Rules } from "./chain";
+import { getAllColonies, getAllEarnings, getBoard, getPlants, getRules, getStakes, getState, type Colony, type DishState, type PlantRecord, type Rules } from "./chain";
 
 export type Snapshot = {
   status: "loading" | "ready" | "error";
@@ -88,7 +88,10 @@ function dueFor(rules: Rules, state: DishState): number {
 }
 
 async function loadStored(rules: Rules, state: DishState, colonies: Colony[]) {
-  const [board, stakes] = await Promise.all([getBoard(), getStakes(0, 2000)]);
+  const board = await getBoard();
+  const stakes: string[] = [];
+  // The view returns at most 2,000 a call.
+  for (let from = 0; from < colonies.length; from += 2000) stakes.push(...(await getStakes(from, 2000)));
   const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor, rules.stake_keep_bps);
   e.set_counted(state.counted);
   e.set_colonies(colonies.length);
@@ -141,7 +144,7 @@ async function sync(first = false) {
     const total = Number(state.plants);
     const [recent, earned] = await Promise.all([
       total > 0 ? getPlants(Math.max(0, total - 24), 24) : Promise.resolve([] as PlantRecord[]),
-      getEarnings(0, 2000),
+      getAllEarnings(state.colonies),
     ]);
     emit({ recentPlants: recent.reverse(), earnings: [0, ...earned.map(Number)] });
     knownPlants = plantKey;

@@ -475,6 +475,42 @@ impl Dish {
         }
         (out, count)
     }
+
+    /// `fits_slide` on this dish's size.
+    pub fn fits_slide(&self, cells: &[u32], bitmap: &[u8], w: u16, h: u16) -> bool {
+        fits_slide(self.width, self.height, cells, bitmap, w, h)
+    }
+}
+
+/// Whether `cells` (flat indices on a `width` × `height` dish) are exactly a specimen slide's pattern moved to another
+/// place: the set cells of `bitmap` (a `w` × `h` rectangle, as `Dish::region_bitmap` returns it) shifted by one offset,
+/// wrapping at the dish's edges. Same shape, same orientation, every cell once. The contract checks a licensed planting
+/// with this and both replays repeat it.
+pub fn fits_slide(width: u16, height: u16, cells: &[u32], bitmap: &[u8], w: u16, h: u16) -> bool {
+    let (dw, dh) = (width as i32, height as i32);
+    let at = |x: i32, y: i32| (y.rem_euclid(dh) * dw + x.rem_euclid(dw)) as u32;
+    let n = w as usize * h as usize;
+    let shape: Vec<(i32, i32)> = (0..n).filter(|&i| bitmap.get(i / 8).map_or(false, |b| b >> (i % 8) & 1 == 1)).map(|i| ((i % w as usize) as i32, (i / w as usize) as i32)).collect();
+    if shape.is_empty() || shape.len() != cells.len() || cells.iter().any(|&c| c >= width as u32 * height as u32) {
+        return false;
+    }
+    let mut want: Vec<u32> = cells.to_vec();
+    want.sort_unstable();
+    want.dedup();
+    if want.len() != cells.len() {
+        return false;
+    }
+    // The slide's first cell lands on one of the planted cells; try each.
+    let (fx, fy) = shape[0];
+    for &c in cells {
+        let (cx, cy) = ((c % width as u32) as i32, (c / width as u32) as i32);
+        let mut got: Vec<u32> = shape.iter().map(|&(dx, dy)| at(cx - fx + dx, cy - fy + dy)).collect();
+        got.sort_unstable();
+        if got == want {
+            return true;
+        }
+    }
+    false
 }
 
 /// A specimen slide as an SVG image: a dark agar disc, each live cell of the bitmap (see `Dish::region_bitmap`) a small
@@ -630,13 +666,19 @@ pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: 
 /// `feed` with living cells given as `(colony, cells)` pairs, as `Dish::step_sparse` returns them. `stake` is indexed by
 /// colony id. Both forms give identical results.
 pub fn feed_sparse(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32, live: &[(ColonyId, u32)], stake: &[u64], house: &[ColonyId]) -> Feed {
+    feed_with(agar, feed_ppm, keeper_bps, reach, live_floor, live, |c| stake.get(c as usize).copied().unwrap_or(0), house)
+}
+
+/// `feed_sparse` with each colony's stake looked up by `stake_of`, so a caller that keeps stakes only for the colonies
+/// that have any (the contract) never builds an array as long as every colony that ever joined. Identical results.
+pub fn feed_with<F: Fn(ColonyId) -> u64>(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32, live: &[(ColonyId, u32)], stake_of: F, house: &[ColonyId]) -> Feed {
     let mut weights: Vec<(ColonyId, u128)> = Vec::new();
     let mut total_w = 0u128;
     for &(c, n) in live {
         if n == 0 || c == EMPTY || house.contains(&c) {
             continue;
         }
-        let w = feed_weight(n, stake.get(c as usize).copied().unwrap_or(0), reach);
+        let w = feed_weight(n, stake_of(c), reach);
         if w > 0 {
             weights.push((c as ColonyId, w));
             total_w += w;
@@ -660,9 +702,16 @@ pub fn feed_sparse(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live_
 /// (the dish's own players) take no share. Returns `(colony id, NEAR)` pairs and the total paid; rounding dust stays
 /// in the vault.
 pub fn tide_split(pay: u128, window: &[u64], house: &[ColonyId]) -> (Vec<(ColonyId, u128)>, u128) {
+    tide_split_sparse(pay, &dense_window(window), house)
+}
+
+/// `tide_split` with the window given as `(colony, earned since the last tide)` pairs in increasing colony order, only
+/// for colonies that have any. Identical results; the work grows with the colonies that earned, not with every colony
+/// that ever joined.
+pub fn tide_split_sparse(pay: u128, window: &[(ColonyId, u64)], house: &[ColonyId]) -> (Vec<(ColonyId, u128)>, u128) {
     let mut total = 0u128;
-    for (c, &w) in window.iter().enumerate().skip(1) {
-        if w > 0 && !house.contains(&(c as ColonyId)) {
+    for &(c, w) in window {
+        if w > 0 && c != EMPTY && !house.contains(&c) {
             total += w as u128;
         }
     }
@@ -671,13 +720,13 @@ pub fn tide_split(pay: u128, window: &[u64], house: &[ColonyId]) -> (Vec<(Colony
     }
     let mut out = Vec::new();
     let mut paid = 0u128;
-    for (c, &w) in window.iter().enumerate().skip(1) {
-        if w == 0 || house.contains(&(c as ColonyId)) {
+    for &(c, w) in window {
+        if w == 0 || c == EMPTY || house.contains(&c) {
             continue;
         }
         let s = mul_div(pay, w as u128, total);
         if s > 0 {
-            out.push((c as ColonyId, s));
+            out.push((c, s));
             paid += s;
         }
     }
@@ -687,7 +736,16 @@ pub fn tide_split(pay: u128, window: &[u64], house: &[ColonyId]) -> (Vec<(Colony
 /// Whether a tide has anyone to pay: some colony outside `house` earned from the feed since the last tide. A tide that
 /// does not is skipped altogether (no ledger entry, no decay, the buy-back allowance unchanged).
 pub fn tide_due(window: &[u64], house: &[ColonyId]) -> bool {
-    window.iter().enumerate().skip(1).any(|(c, &w)| w > 0 && !house.contains(&(c as ColonyId)))
+    tide_due_sparse(&dense_window(window), house)
+}
+
+/// `tide_due` on `(colony, window)` pairs, as `tide_split_sparse` takes them.
+pub fn tide_due_sparse(window: &[(ColonyId, u64)], house: &[ColonyId]) -> bool {
+    window.iter().any(|&(c, w)| w > 0 && c != EMPTY && !house.contains(&c))
+}
+
+fn dense_window(window: &[u64]) -> Vec<(ColonyId, u64)> {
+    window.iter().enumerate().skip(1).filter(|(_, &w)| w > 0).map(|(c, &w)| (c as ColonyId, w)).collect()
 }
 
 /// `a * b / d` without overflowing when `a` is large and `b < d`.
@@ -708,6 +766,17 @@ pub fn feed_per_cell(agar: u128, feed_ppm: u32, keeper_bps: u16, counted: u32, l
 /// fills, and a planting only pays for itself if its cells survive about `payback` generations.
 pub fn plant_price(per_cell_feed: u128, payback: u32, floor: u128, cells: u32) -> u128 {
     (per_cell_feed * payback as u128).max(floor) * cells as u128
+}
+
+/// A planting made under a specimen slide's licence (its exact pattern, translated) costs `discount_bps` less.
+pub fn licensed_cost(cost: u128, discount_bps: u16) -> u128 {
+    cost - cost * discount_bps as u128 / 10_000
+}
+
+/// The royalty a licensed planting by anyone but the slide's holder pays the holder: `royalty_bps` of what the
+/// planting cost.
+pub fn royalty(cost: u128, royalty_bps: u16) -> u128 {
+    cost * royalty_bps as u128 / 10_000
 }
 
 /// The price of a planting, with the siege surcharge: a planting that reaches into a rival's buffer costs `siege_x`

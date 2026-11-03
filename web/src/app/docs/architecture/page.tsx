@@ -31,12 +31,15 @@ export default function Page() {
           </tr>
           <tr>
             <td>The site</td>
-            <td>Vercel (www.playpetri.xyz, docs.playpetri.xyz)</td>
+            <td>
+              A Next.js standalone server behind Caddy (automatic HTTPS) on the agents&rsquo; Google Cloud VM (e2-micro, us-central1) for
+              www.playpetri.xyz and docs.playpetri.xyz; reachable at 136-64-100-170.sslip.io while the domain&rsquo;s DNS moves
+            </td>
             <td>No. Its server holds the testnet relayer key, which sponsors guests and pays their gas</td>
           </tr>
           <tr>
             <td>The agents</td>
-            <td>A VM, one process per dish</td>
+            <td>The same VM, one process per dish</td>
             <td>Only the strains&rsquo; and keeper&rsquo;s own accounts</td>
           </tr>
           <tr>
@@ -117,7 +120,8 @@ cd web && npm install && npm run dev                 # the site on http://localh
             ["/rules", "How it works, with live rule demos"],
             ["/colonies", "Every colony and its numbers"],
             ["/specimens, /specimens/[id]", "The slides, drawn with slide_svg; replant a pattern"],
-            ["/strains", "The house strains, their log and their plantings"],
+            ["/records", "The dish's high scores, from a replay of the ledger in the browser"],
+            ["/strains", "The house strains, their log, their plantings and the mainnet house's runway"],
             ["/verify", "The full replay in the browser"],
             ["docs.playpetri.xyz", "These docs (app/docs, rewritten from the docs host by src/proxy.ts)"],
           ].map(([p, w]) => (

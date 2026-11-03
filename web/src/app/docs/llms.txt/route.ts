@@ -13,6 +13,8 @@ export function GET() {
     "",
     "> A coin that is alive: Conway's Life on a 128 x 128 wrapped dish run by one NEAR contract. Colonies are NEAR accounts; PETRI (NEP-141, 1,000,000 supply, all in the agar at launch) feeds living cells every 15 s generation; NEAR collects in a vault paid out at hourly tides; specimen slides are NEP-171 NFTs drawn on chain; everything replays from the ledger.",
     "",
+    "Hosting note: the site is changing hosts. Until the playpetri.xyz DNS records point at its new server, the live site is at https://136-64-100-170.sslip.io and these docs at https://136-64-100-170.sslip.io/docs/introduction (a docs.playpetri.xyz/<page> link is /docs/<page> there).",
+    "",
     `- Mainnet dish: ${DISH.mainnet.contract} (rules ${DISH.mainnet.rules}, wNEAR ${DISH.mainnet.wnear})`,
     `- Testnet dish: ${DISH.testnet.contract} (rules ${DISH.testnet.rules}, wNEAR ${DISH.testnet.wnear})`,
     `- Code hash of both: ${CODE_HASH} (cargo near build reproducible-wasm at ${BUILD_COMMIT})`,

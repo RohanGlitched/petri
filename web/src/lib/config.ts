@@ -6,7 +6,7 @@
 export type Network = "testnet" | "mainnet";
 
 export const CONTRACTS: Record<Network, string> = {
-  testnet: process.env.NEXT_PUBLIC_PETRI_CONTRACT_TESTNET ?? process.env.NEXT_PUBLIC_PETRI_CONTRACT ?? "petri-v5.testnet",
+  testnet: process.env.NEXT_PUBLIC_PETRI_CONTRACT_TESTNET ?? process.env.NEXT_PUBLIC_PETRI_CONTRACT ?? "petri-v6.testnet",
   mainnet: process.env.NEXT_PUBLIC_PETRI_CONTRACT_MAINNET ?? "petri-dish.near",
 };
 const RPCS: Record<Network, string[]> = {

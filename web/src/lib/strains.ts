@@ -64,3 +64,13 @@ const ALL = [...strainsOn("testnet"), ...strainsOn("mainnet")];
 export function strainOf(account: string) {
   return ALL.find((s) => s.account === account) ?? null;
 }
+
+/** The bench: three testnet colonies the team plays from its own testnet NEAR (agents/run.mjs). None on mainnet. */
+export const BENCH_ACCOUNTS = ["petri-bench-a.testnet", "petri-bench-b.testnet", "petri-bench-c.testnet"];
+
+/** Who an account plays for: the house strains, the team's bench, or an outside player. */
+export function sideOf(account: string, house = false): "house" | "bench" | "player" {
+  if (house || strainOf(account)) return "house";
+  if (BENCH_ACCOUNTS.includes(account)) return "bench";
+  return "player";
+}

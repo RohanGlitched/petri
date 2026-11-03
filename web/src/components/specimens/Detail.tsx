@@ -6,14 +6,18 @@ import { accountUrl, nftUrl, shareUrl, shortAccount } from "@/lib/config";
 import { useLive, hex, int, petri } from "@/lib/live";
 import { slideOffsets, slideRules } from "@/lib/slides";
 import { useNet } from "@/lib/use-net";
+import { usePlayer } from "@/lib/wallet";
+import { Specimen } from "@/components/site/Specimen";
 import { readableReadError, SpecimenCard } from "./Gallery";
+import { useSlideLicence } from "./licence";
 import { SlideGlass } from "./SlideGlass";
 import { order, pictureOf, useAllSlides, useColonyOf, useSlide } from "./data";
 import s from "./specimens.module.css";
 
 export function SpecimenDetail({ id }: { id: string }) {
   const net = useNet();
-  const { rules } = useLive();
+  const { rules, ready, cellPrice } = useLive();
+  const player = usePlayer();
   const one = useSlide(id);
   const colonyOf = useColonyOf();
   const sl = one.data;
@@ -21,6 +25,7 @@ export function SpecimenDetail({ id }: { id: string }) {
   const maker = c?.account ?? null;
   const all = useAllSlides();
   const [copied, setCopied] = useState(false);
+  const licence = useSlideLicence(sl ? sl.id : null, player?.accountId ?? null, sl?.owner ?? null);
 
   if (one.status === "loading")
     return (
@@ -71,9 +76,9 @@ export function SpecimenDetail({ id }: { id: string }) {
               </p>
               <div className={s.actions}>
                 {offsets && !tooBig ? (
-                  <Link className="btn btn-amber" href={`/dish?replant=${encodeURIComponent(sl.id)}`}>Replant this pattern</Link>
+                  <Link className="btn btn-amber" href={`/dish?replant=${encodeURIComponent(sl.id)}`}>Plant this pattern</Link>
                 ) : (
-                  <button className="btn btn-amber" disabled>Replant this pattern</button>
+                  <button className="btn btn-amber" disabled>Plant this pattern</button>
                 )}
                 <a className="btn btn-ghost" href={nftUrl(net.contract, sl.id, net.network)}>See it on NearBlocks</a>
                 <button
@@ -93,8 +98,23 @@ export function SpecimenDetail({ id }: { id: string }) {
                   ? "The cells could not be read back from this slide, so it cannot be loaded as a stamp."
                   : tooBig
                     ? `This slide holds ${int(offsets.length)} cells and a planting takes at most ${maxCells}, so it cannot be replanted in one go.`
-                    : `Replanting loads these ${int(offsets.length)} cells into the dish's stamp. It is an ordinary planting at the normal price, wherever it fits; holding the slide changes nothing about that.`}
+                    : licence.live
+                      ? `Planting loads these ${int(offsets.length)} cells into the dish's stamp, wherever they fit, on the licence terms below.`
+                      : `Planting loads these ${int(offsets.length)} cells into the dish's stamp. It is an ordinary planting at the normal price, wherever it fits; holding the slide changes nothing about that.`}
               </p>
+              {offsets && !tooBig && (
+                <PatternLicence
+                  offsets={offsets}
+                  color={c?.color ?? 0xf2b45a}
+                  live={licence.live}
+                  bps={licence.royaltyBps}
+                  holder={licence.holder}
+                  perk={licence.perk}
+                  lifetime={licence.lifetime}
+                  price={ready ? cellPrice * offsets.length : null}
+                  owner={sl.owner}
+                />
+              )}
             </div>
             <dl className={s.facts}>
               <div>
@@ -194,5 +214,55 @@ export function SpecimenDetail({ id }: { id: string }) {
         </div>
       </section>
     </>
+  );
+}
+
+/** "Plant this pattern": what planting a slide's cells costs its holder and everyone else, and what the slide has earned.
+ * The licence comes with the next contract version (licence.ts); until a dish has it, the block says plainly that both
+ * sides pay the normal price and the slide earns nothing. */
+function PatternLicence({ offsets, color, live, bps, holder, perk, lifetime, price, owner }: {
+  offsets: [number, number][];
+  color: number;
+  live: boolean;
+  bps: number | null;
+  holder: boolean;
+  perk: string | null;
+  lifetime: number | null;
+  price: number | null;
+  owner: string | null;
+}) {
+  const royalty = live && bps !== null && price !== null ? (price * bps) / 10_000 : null;
+  return (
+    <section className={s.licence} aria-labelledby="licence-title">
+      <div className={s.licenceHead}>
+        <Specimen offsets={offsets} color={hex(color)} size={44} />
+        <div>
+          <h2 id="licence-title">Plant this pattern</h2>
+          <p>
+            {int(offsets.length)} cells{price !== null ? `, ${petri(price, 2)} PETRI at today's price` : ""}.{" "}
+            {live ? "The slide is a licence for its pattern." : "Slides are not pattern licences on this dish."}
+          </p>
+        </div>
+        <span className={`${s.licenceTag} ${live ? s.licenceLive : ""}`}>{live ? "Licence live" : "No licence"}</span>
+      </div>
+      <dl className={s.licenceTerms}>
+        <div className={holder ? s.you : ""}>
+          <dt>The holder{owner ? `, ${shortAccount(owner, 22)}` : ""}{holder ? " (you)" : ""}</dt>
+          <dd>{live ? perk ?? "Plants it with the holder's perk the contract grants" : "Pays the normal price"}</dd>
+        </div>
+        <div className={!holder ? s.you : ""}>
+          <dt>Anyone else{!holder ? " (you)" : ""}</dt>
+          <dd>
+            {live && bps !== null
+              ? `Pays the normal price plus a ${bps / 100}% royalty to the holder${royalty !== null ? `, about ${petri(royalty, 2)} PETRI` : ""}`
+              : "Pays the normal price; no royalty"}
+          </dd>
+        </div>
+        <div>
+          <dt>Royalties this slide has earned</dt>
+          <dd className="num">{live ? (lifetime !== null ? `${petri(lifetime, 2)} PETRI` : "—") : "None: no royalties on this dish"}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }

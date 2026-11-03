@@ -212,7 +212,7 @@ node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
   }
 }`}</Code>
       <p>
-        <C>build_command</C> is the command the reproducible build runs inside the container; you run <C>reproducible-wasm</C> outside it. near-sdk is pinned to <C>={NEAR_SDK}</C>: version 5.30 links host functions (gas keys, universal state init) that mainnet&rsquo;s protocol version 86 does not have yet, and pinning lets one build run on both networks.
+        <C>build_command</C> reads <C>cargo near build non-reproducible-wasm --locked</C>, and that is not a second, unverifiable build. When you run <C>cargo near build reproducible-wasm</C>, cargo-near starts the pinned image and runs its <C>container_build_command</C> inside it, which is exactly that command. NEP-330 records the command that ran in the container, so a verifier (SourceScan, or you) reruns that command in that image at that commit and must get the same bytes. near-sdk is pinned to <C>={NEAR_SDK}</C>: version 5.30 links host functions (gas keys, universal state init) that mainnet&rsquo;s protocol version 86 does not have yet, and pinning lets one build run on both networks.
       </p>
 
       <H2 id="keys">Check the keys</H2>
