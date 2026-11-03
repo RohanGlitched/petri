@@ -1,6 +1,6 @@
 import type { Rules } from "@/lib/chain";
 
-/** The launch values the live dish (petri-v3.testnet) returns from `rules`, used only until the real view has loaded. */
+/** The launch values the live dish (petri-v4.testnet) returns from `rules`, used only until the real view has loaded. */
 export const LAUNCH: Rules = {
   width: 128,
   height: 128,

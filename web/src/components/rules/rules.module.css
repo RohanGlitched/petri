@@ -716,3 +716,6 @@
   .fold > summary { padding: 12px 14px; }
   .foldBody { padding: 0 14px 14px; }
 }
+.foldBody .refusals { grid-template-columns: 1fr; }
+.foldBody .changeList { margin-top: 0; }
+.foldBody .change { grid-template-columns: 1fr; gap: 6px; }

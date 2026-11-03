@@ -124,7 +124,8 @@ function useDeposits(ready: boolean) {
 export function PlantingSection() {
   const { d, rules, ready, cellPrice } = useLive();
   const r = rules ?? LAUNCH;
-  const live = ready ? d.totalLive : 0;
+  // Prices count the cells the last feed counted (living cells of fed colonies, capped by reach), as the contract does.
+  const live = ready ? d.counted : 0;
   const agar = ready ? BigInt(Math.round(d.agar)) : BigInt(r.max_supply);
   const now = priceSteps(agar, r, live);
   const hive = now.price * 6n;
@@ -194,15 +195,17 @@ export function PlantingSection() {
           <div className={s.card}>
             <h3 className="h3">A cell costs what a cell earns in {int(r.payback)} generations</h3>
             <pre className={s.formula}>
-              {`feed per cell = agar × ${r.feed_ppm} ÷ 1,000,000 × (1 − ${keeperPct}%) ÷ max(live cells, ${int(r.live_floor)})
+              {`feed per cell = agar × ${r.feed_ppm} ÷ 1,000,000 × (1 − ${keeperPct}%) ÷ max(counted cells, ${int(r.live_floor)})
 price of a cell = max(feed per cell × ${int(r.payback)}, ${fmtPetri(r.min_cell_price)} PETRI)
 cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
             </pre>
             <p>
               An average cell, left alone, earns back its price in {int(r.payback)} generations, about{" "}
-              {Math.round((r.payback * Number(r.generation_ms)) / 3_600_000)} hours. The price counts at least {int(r.live_floor)}{" "}
-              living cells, so a nearly empty dish is not almost free, and never falls below {fmtPetri(r.min_cell_price)} PETRI a
-              cell. It falls as the agar shrinks and as the dish fills past {int(r.live_floor)} cells. The contract computes it
+              {Math.round((r.payback * Number(r.generation_ms)) / 3_600_000)} hours. Counted cells are the living cells of fed colonies, each colony
+              capped by its reach. The price counts at least {int(r.live_floor)} of them, and below that the agar releases only
+              that fraction of its ration, so on a nearly empty dish a cell still earns exactly what its price assumes. The price
+              never falls below {fmtPetri(r.min_cell_price)} PETRI a cell, and falls as the agar shrinks and as more than{" "}
+              {int(r.live_floor)} cells are counted. The contract computes it
               after the planting&rsquo;s own catch-up, in millionths of a PETRI, rounding down at every step. Of every cost,{" "}
               {burnPct}% is burned and {100 - burnPct}% goes back into the agar. Planting first claims the colony&rsquo;s waiting
               earnings, so they count towards the price.
@@ -221,7 +224,7 @@ cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
                 <div>
                   <dt>
                     Divided by {ready ? int(now.counted) : "—"}
-                    {ready && live < r.live_floor ? ` (${int(live)} alive, the price counts ${int(r.live_floor)})` : " living cells"}
+                    {ready && live < r.live_floor ? ` (${int(live)} counted, the price counts ${int(r.live_floor)})` : " counted cells"}
                   </dt>
                   <dd className="num">{ready ? fmtPetri(now.perCell, 6) : "—"}</dd>
                 </div>
@@ -245,7 +248,7 @@ cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
                 Burned: <b>{ready ? fmtPetri(burn, 6) : "—"}</b>. Back to the agar: <b>{ready ? fmtPetri(back, 6) : "—"}</b>.
               </p>
               <p className={s.note}>
-                Using the {ready ? int(live) : "—"} live cells your browser counts at generation {ready ? int(d.generation) : "—"}.{" "}
+                Using the {ready ? int(live) : "—"} counted cells your browser has at generation {ready ? int(d.generation) : "—"}.{" "}
                 {ready ? (matches ? "The engine's own quote for one cell agrees to the unit." : "The engine's own quote for one cell is " + fmtPetri(cellPrice, 6) + " PETRI.") : ""}
               </p>
             </div>
@@ -303,7 +306,7 @@ cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
                   <table className={s.table}>
                     <thead>
                       <tr>
-                        <th scope="col">Live cells</th>
+                        <th scope="col">Counted cells</th>
                         <th scope="col">Today&rsquo;s agar</th>
                         <th scope="col">Half the agar</th>
                       </tr>
@@ -325,7 +328,7 @@ cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
                   </table>
                 </div>
                 <p className={s.note}>
-                  PETRI per cell, before any siege surcharge. Below {int(r.live_floor)} live cells the price does not move; far
+                  PETRI per cell, before any siege surcharge. Below {int(r.live_floor)} counted cells the price does not move; far
                   above it the floor of {fmtPetri(r.min_cell_price)} PETRI takes over.
                 </p>
               </div>

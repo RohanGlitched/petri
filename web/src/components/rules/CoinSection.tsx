@@ -92,7 +92,10 @@ export function CoinSection() {
   const st = d.state;
   const keeperPct = r.keeper_bps / 100;
   const burnPct = r.burn_bps / 100;
-  const keeperCut = feed * (r.keeper_bps / 10000);
+  // The agar releases its full ration only for at least `live_floor` counted cells; below that, that fraction of it.
+  const counted = d.counted;
+  const released = counted > 0 ? (feed * Math.min(counted, r.live_floor)) / Math.max(r.live_floor, 1) : 0;
+  const keeperCut = released * (r.keeper_bps / 10000);
   const launchPrice = Number(r.petri_price);
   const maxPetri = Number(r.max_supply) / 1e6;
   const k = (launchPrice * maxPetri) / 1e24;
@@ -125,7 +128,7 @@ export function CoinSection() {
     .filter((c) => c.live > 0)
     .map((c) => ({ ...c, w: weightOf(c.live, Number(c.cells_planted), r.reach, c.house) }));
   const wsum = alive.reduce((a, c) => a + c.w, 0);
-  const toColonies = feed - keeperCut;
+  const toColonies = released - keeperCut;
   const shown = alive.slice(0, 8);
   const rest = alive.slice(8);
   const restW = rest.reduce((a, c) => a + c.w, 0);
@@ -235,22 +238,28 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
           <article className={s.paperCard}>
             <h3 className="h3">Every generation</h3>
             <p>
-              If any paid colony is alive after the step, the agar pays {r.feed_ppm} parts per million of its balance.{" "}
-              {keeperPct}% goes to the keeper pot, paid to whoever next calls <code className={s.codePaper}>advance</code> and
+              The agar&rsquo;s ration is {r.feed_ppm} parts per million of its balance. It releases the whole ration only when
+              at least {int(r.live_floor)} cells are counted (living cells of fed colonies, capped by reach); with fewer, it
+              releases that fraction and keeps the rest, so a lone block earns 4/{int(r.live_floor)} of the ration, what its
+              price assumes. {keeperPct}% of what is released goes to the keeper pot, paid to whoever next calls <code className={s.codePaper}>advance</code> and
               runs at least one generation. The rest is split by each colony&rsquo;s paid cells (see the reach, below). House
               colonies are never fed. Rounding remainders stay in the agar.
             </p>
             <dl className={s.sums}>
               <div>
-                <dt>Feed: agar × {r.feed_ppm} ÷ 1,000,000</dt>
+                <dt>Ration: agar × {r.feed_ppm} ÷ 1,000,000</dt>
                 <dd className="num">{ready ? petri(feed, 4) : "—"}</dd>
+              </div>
+              <div>
+                <dt>Released for {ready ? int(counted) : "—"} counted cells</dt>
+                <dd className="num">{ready ? petri(released, 4) : "—"}</dd>
               </div>
               <div>
                 <dt>To the keeper pot</dt>
                 <dd className="num">{ready ? petri(keeperCut, 4) : "—"}</dd>
               </div>
               <div>
-                <dt>Average per live cell, of {ready ? int(total) : "—"}</dt>
+                <dt>Per counted cell</dt>
                 <dd className="num">{ready ? petri(perCell, 5) : "—"}</dd>
               </div>
               <div>
@@ -305,7 +314,8 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
             </p>
             <pre className={s.formulaPaper}>
               {`paid cells = min(a colony's living cells, ${r.reach} × cells it ever planted)   (0 for the house)
-share = this generation's feed × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
+released = ration × min(all paid cells, ${int(r.live_floor)}) ÷ ${int(r.live_floor)}
+share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
             </pre>
             <ReachDemo reach={r.reach} />
           </div>

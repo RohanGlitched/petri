@@ -8,7 +8,7 @@
 //! - All PETRI is minted once into the agar (the contract's own reserve). The agar sells PETRI for NEAR at a price
 //!   that rises as it empties, feeds a share of itself to living cells every generation, and buys PETRI back at half
 //!   the curve's price, up to a tenth of the vault each tide.
-//! - Planting costs PETRI at a price that tracks what a cell earns (four times that inside a rival's buffer); half is
+//! - Planting costs PETRI at a price that tracks what a cell earns (`siege_x` times that inside a rival's buffer); half is
 //!   burned, half goes back to the agar.
 //! - A colony is paid for at most `reach` living cells per cell it has planted, so splitting into many colonies never
 //!   earns more.

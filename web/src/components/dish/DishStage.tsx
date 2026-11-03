@@ -26,7 +26,7 @@ const DOCK_GROUPS: { title: string; kinds: PatternInfo["kind"][] }[] = [
 ];
 type Pending = { cells: number[]; label: string; at: number; hash?: string };
 
-function explain(v: string | null, w: number, names: Map<number, string>): string {
+function explain(v: string | null, w: number, names: Map<number, string>, siegeX = 3): string {
   if (!v) return "";
   const [kind, a, b] = v.split(":");
   const at = (i: string) => `${Number(i) % w}, ${Math.floor(Number(i) / w)}`;
@@ -34,7 +34,7 @@ function explain(v: string | null, w: number, names: Map<number, string>): strin
     case "occupied":
       return `Cell ${at(a)} is already alive. Move the stamp onto empty agar.`;
     case "siege":
-      return `Inside ${names.get(Number(a)) ?? `colony ${a}`}’s buffer, the hatched zone: allowed, but a siege costs four times the price. Plant further out to pay the normal price, or send a glider.`;
+      return `Inside ${names.get(Number(a)) ?? `colony ${a}`}’s buffer, the hatched zone: allowed, but a siege costs ${siegeX} times the price. Plant further out to pay the normal price, or send a glider.`;
     case "too_many":
       return `At most ${a} cells in one planting.`;
     default:
@@ -496,7 +496,7 @@ export function DishStage() {
               <Specimen offsets={offsets[info.name]} color={myColor} size={48} />
               <div>
                 <h2>{info.label}</h2>
-                <span className="num">{stamp?.length ?? info.cells} cells, {petri(cost, 2)} PETRI{siege ? ` (siege, ${rules?.siege_x ?? 4}×)` : ""}</span>
+                <span className="num">{stamp?.length ?? info.cells} cells, {petri(cost, 2)} PETRI{siege ? ` (siege, ${rules?.siege_x ?? 3}×)` : ""}</span>
               </div>
               <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setTarget(null); }}>×</button>
             </div>
@@ -506,7 +506,7 @@ export function DishStage() {
               <button className="btn btn-ghost btn-small" onClick={() => setFlip((f) => !f)}>Flip <kbd>F</kbd></button>
             </div>
             <p className={`${s.verdict} ${verdict === "" ? s.ok : siege ? s.warn : verdict ? s.bad : ""}`}>
-              {!anchor ? "Point at the dish, then click where it should grow." : verdict === "" ? `${snapped && target ? "That spot was taken, so the stamp moved to the nearest one that fits: " : "Fits at "}${anchor.x}, ${anchor.y}.${target ? "" : " Click to place it."}` : explain(verdict, w, names)}
+              {!anchor ? "Point at the dish, then click where it should grow." : verdict === "" ? `${snapped && target ? "That spot was taken, so the stamp moved to the nearest one that fits: " : "Fits at "}${anchor.x}, ${anchor.y}.${target ? "" : " Click to place it."}` : explain(verdict, w, names, rules?.siege_x)}
             </p>
             {me && (
               <label className={s.noteField}>

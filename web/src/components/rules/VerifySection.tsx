@@ -9,8 +9,8 @@ import s from "./rules.module.css";
 
 const CHAIN_EVERY = 16;
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit (as in scripts/verify.mjs). */
-const BUILD_HASH = "Ajaiqj7wSMZ4hirScct5hKB4VvjB62xXeNVNAkjSKgcU";
-const LOCK_COMMAND = `near account delete-keys ${CONTRACT} public-keys ed25519:HmnE76rnEHccKGvz5kh1ryLD8YtUnQNkx9G1nkHeVcjR network-config testnet sign-with-legacy-keychain send`;
+const BUILD_HASH = "7GNyLTrzbFSmSxVp92Ne7bVXaKpUtxPsMYGqtx9ULuaS";
+const LOCK_COMMAND = `near account delete-keys ${CONTRACT} public-keys ed25519:CDu2wUQhzNN3JKwHcduXqjS5TLSM78WVhowgPByum4LE network-config testnet sign-with-legacy-keychain send`;
 
 const CHECKS = [
   "History chain",

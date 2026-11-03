@@ -5,7 +5,7 @@ import { Engine, loadEngine, pattern_cells, PATTERNS, type PatternName } from "@
 import { Specimen } from "@/components/site/Specimen";
 import { useLive, usePatternOffsets, petri, int } from "@/lib/live";
 import { fmtPetri } from "@/lib/config";
-import { LAUNCH, genTime, weightOf } from "./shared";
+import { LAUNCH, genTime } from "./shared";
 import s from "./rules.module.css";
 
 const FAMILIES: { title: string; color: string; patterns: PatternName[]; body: string }[] = [
@@ -54,7 +54,7 @@ function useYields(w: number, h: number) {
     loadEngine().then(() => {
       const m: Partial<Record<PatternName, Yield>> = {};
       for (const p of MEASURE) {
-        const e = new Engine(w, h, 0, 0, 1_000_000);
+        const e = new Engine(w, h, 0, 0, 1_000_000, 1);
         e.set_colonies(1);
         const cells = pattern_cells(p, Math.floor(w / 3), Math.floor(h / 3), w, h, 0, false);
         e.plant(1, cells);
@@ -76,15 +76,16 @@ function useYields(w: number, h: number) {
 }
 
 export function StrategySection() {
-  const { d, rules, ready, feed, cellPrice, colonies } = useLive();
+  const { d, rules, ready, perCell, cellPrice } = useLive();
   const r = rules ?? LAUNCH;
   const offsets = usePatternOffsets();
   const yields = useYields(r.width, r.height);
   const genMs = Number(r.generation_ms);
   const label = (p: PatternName) => PATTERNS.find((x) => x.name === p)?.label ?? p;
-  // What one paid cell is fed right now: the feed less the keeper's share, over every colony's paid cells.
-  const counted = colonies.reduce((a, c) => a + weightOf(c.live, Number(c.cells_planted), r.reach, c.house), 0);
-  const perCounted = counted > 0 ? (feed * (1 - r.keeper_bps / 10000)) / counted : 0;
+  // What one counted cell is fed right now. Below `live_floor` counted cells the agar releases only that fraction of its
+  // ration, so a counted cell earns the same either way: the ration, less the keeper's share, over max(counted, floor).
+  const counted = d.counted;
+  const perCounted = perCell;
   const payback = ready && perCounted > 0 ? cellPrice / perCounted : NaN;
   return (
     <section id="strategies" className={`band band-2 ${s.section}`} aria-labelledby="strategies-title">
@@ -119,17 +120,18 @@ export function StrategySection() {
             <h3 className="h3">The payback sum</h3>
             <p>
               The price of a cell is what an average cell earns in {int(r.payback)} generations, counting at least{" "}
-              {int(r.live_floor)} living cells. Right now one cell costs{" "}
+              {int(r.live_floor)} counted cells. Right now one cell costs{" "}
               <b className="num">{ready ? petri(cellPrice, 3) : "—"} PETRI</b>, and each paid cell is fed{" "}
-              <b className="num">{ready ? petri(perCounted, 5) : "—"} PETRI</b> a generation: the feed, less the keeper&rsquo;s
-              share, divided by the {ready ? int(counted) : "—"} paid cells across every colony. So a still life that nothing
+              <b className="num">{ready ? petri(perCounted, 5) : "—"} PETRI</b> a generation: the ration, less the keeper&rsquo;s
+              share, divided by the {ready ? int(Math.max(counted, r.live_floor)) : "—"} cells it is released for,{" "}
+              {ready ? int(counted) : "—"} of them counted now. So a still life that nothing
               disturbs pays for itself in about <b className="num">{isFinite(payback) ? int(payback) : "—"}</b> generations,
               roughly {isFinite(payback) ? genTime(payback, genMs) : "—"}.
             </p>
             <p className="muted">
-              {ready && d.totalLive < r.live_floor
-                ? `With ${int(d.totalLive)} cells alive, fewer than the ${int(r.live_floor)} the price counts, every cell earns more than the price assumes, so planting pays back faster than ${int(r.payback)} generations. As the dish fills past ${int(r.live_floor)}, the price falls with each cell's share and payback settles near ${int(r.payback)}.`
-                : `With ${ready ? int(d.totalLive) : "—"} cells alive, the price falls as each cell's share of the feed falls, so an average cell pays back in about ${int(r.payback)} generations whatever the crowding, until the floor of ${fmtPetri(r.min_cell_price)} PETRI a cell takes over.`}{" "}
+              {ready && counted < r.live_floor
+                ? `With ${int(counted)} counted cells, fewer than ${int(r.live_floor)}, the agar releases only ${int(counted)}/${int(r.live_floor)} of its ration and keeps the rest, so a cell earns exactly what its price assumes and pays back in ${int(r.payback)} generations, not sooner. Past ${int(r.live_floor)} counted cells the price falls with each cell's share.`
+                : `With ${ready ? int(counted) : "—"} counted cells, the price falls as each cell's share of the feed falls, so an average cell pays back in about ${int(r.payback)} generations whatever the crowding, until the floor of ${fmtPetri(r.min_cell_price)} PETRI a cell takes over.`}{" "}
               Both sides shrink slowly with the agar.
             </p>
             <p className="muted">

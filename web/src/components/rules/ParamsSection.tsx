@@ -5,117 +5,132 @@ import { REPO, fmtPetri } from "@/lib/config";
 import { LAUNCH, nearPer } from "./shared";
 import s from "./rules.module.css";
 
-// sim/out-v2/summary.txt, as written by `cargo run --release -p petri-sim -- sim/out-v2` (7 days each).
-const SOCIETY: Record<string, string> = {
-  A: "6 builders, 3 raiders, 2 defenders, 4 late",
-  B: "The same, plus 1 methuselah",
-  C: "The same as the first, plus 1 whale and 30 sybils",
-};
+// sim/out-v3/summary.txt, as written by sim/src/main.rs (7 days; 20 seeds at 15 players, 10 at 150 and 1,500).
+// Net NEAR = tides + sold + PETRI held at the sell-back price − everything paid, for the kind's mean player:
+// [min, median, max] over seeds. These runs use reach 4 and siege ×3 as launched, but tides of 50%, a fed house and an
+// uncapped bounty, which the launched contract changed (see FIXES).
+type Net = [number, number, number];
+const KINDS: { kind: string; stake: string; net: [Net, Net, Net] }[] = [
+  { kind: "Builder", stake: "0.05 NEAR, still lifes near home", net: [[-0.2267, -0.0169, 1.7052], [-0.146, -0.1282, -0.0949], [-0.0591, -0.0561, -0.049]] },
+  { kind: "Raider", stake: "0.05, gliders at rivals, one move in three a siege", net: [[-0.2191, -0.1396, 0.1379], [-0.1385, -0.1045, -0.077], [-0.0862, -0.0824, -0.0766]] },
+  { kind: "Defender", stake: "0.05, eaters and beehives", net: [[-0.2467, -0.1086, 2.8928], [-0.1177, -0.098, -0.0472], [-0.0355, -0.0251, -0.0196]] },
+  { kind: "Methuselah", stake: "0.1, one R-pentomino an hour", net: [[3.3633, 9.513, 13.7593], [1.2711, 1.8176, 2.0621], [0.0308, 0.0853, 0.1204]] },
+  { kind: "Late", stake: "0.05, a builder joining on day 2 or 3", net: [[-0.1949, 0.28, 1.9726], [-0.2023, -0.1664, -0.1313], [-0.0765, -0.0717, -0.0623]] },
+  { kind: "Whale", stake: "2 NEAR in one colony", net: [[-2.7371, -1.1119, 3.6826], [-1.4652, -1.1479, -0.8745], [-0.7257, -0.6096, -0.5181]] },
+  { kind: "Split whale", stake: "the same 2 NEAR over 10 colonies (20 at 1,500)", net: [[-1.0354, 3.0438, 8.1421], [-1.4746, -0.8901, -0.5932], [-0.7845, -0.6815, -0.4962]] },
+  { kind: "Sniper", stake: "0.05, plants only just before tides, sells after", net: [[-0.2071, -0.0579, 0.0563], [-0.0556, -0.0219, 0.1208], [-0.0385, -0.0183, 0.0109]] },
+  { kind: "Locker", stake: "1.5, a lattice of 256 blocks putting every empty cell in its buffer", net: [[-0.7314, 1.6646, 2.3601], [2.8569, 3.5628, 4.2829], [8.8846, 11.1225, 12.7054]] },
+  { kind: "Racer", stake: "0.01, never plants, races the keeper to advance", net: [[0.311, 0.341, 0.5375], [0.4432, 0.459, 0.4957], [0.9644, 1.0299, 1.0731]] },
+  { kind: "Seller", stake: "0.2, buys and sells back as fast as allowed", net: [[-0.1042, -0.1042, -0.1033], [-0.1043, -0.1038, -0.1033], [-0.0964, -0.0955, -0.0945]] },
+  { kind: "House strain", stake: "0.05 + 0.02 top-ups, 1 NEAR budget, no tide share", net: [[-0.921, -0.8202, -0.69], [-0.9759, -0.9645, -0.9386], [-0.9937, -0.9909, -0.9872]] },
+];
 
-type Kind = { kind: string; n: number; earned: number; pct: number; spent: number; ratio: number; paid: number; won: number };
-const V2: { society: keyof typeof SOCIETY; kinds: Kind[] }[] = [
+// The fix experiments in the same file: one rule changed at a time, median net NEAR.
+const FIX_KINDS = ["Builder", "Late", "Methuselah", "Whale", "Split whale", "Sniper", "Locker", "Racer"];
+const FIXES: { society: string; rows: { rule: string; net: number[]; lock: number; launched?: boolean }[] }[] = [
   {
-    society: "A",
-    kinds: [
-      { kind: "Builder", n: 6, earned: 29494, pct: 52, spent: 16785, ratio: 1.76, paid: 0.4952, won: 0.4911 },
-      { kind: "Raider", n: 3, earned: 29568, pct: 26, spent: 13436, ratio: 2.2, paid: 0.4072, won: 0.5048 },
-      { kind: "Defender", n: 2, earned: 32820, pct: 19, spent: 20258, ratio: 1.62, paid: 0.5859, won: 0.5602 },
-      { kind: "Late", n: 4, earned: 2401, pct: 3, spent: 1704, ratio: 1.41, paid: 0.1017, won: 0.0398 },
+    society: "15 players",
+    rows: [
+      { rule: "Simulator baseline: tides 50%, house fed, bounty uncapped", net: [-0.017, 0.28, 9.513, -1.112, 3.044, -0.058, 1.665, 0.341], lock: 34.0 },
+      { rule: "Tides of 10% (launched)", net: [-0.077, 0.204, 9.578, -0.223, 3.208, -0.068, 0.13, 0.312], lock: 19.9 },
+      { rule: "The house is never fed (launched)", net: [0.103, 0.183, 7.825, -0.427, 3.09, -0.049, 1.441, 0.356], lock: 34.6 },
+      { rule: "Bounty capped at 0.001 NEAR (launched)", net: [0.061, 0.141, 9.192, 0.34, 3.341, -0.058, 1.522, 0.254], lock: 32.8 },
+      { rule: "All three, with a smaller ledger estimate", net: [0.078, -0.001, 2.976, 0.89, 0.58, -0.034, 0.856, 0.475], lock: 20.0, launched: true },
     ],
   },
   {
-    society: "B",
-    kinds: [
-      { kind: "Builder", n: 6, earned: 21946, pct: 39, spent: 11666, ratio: 1.88, paid: 0.4011, won: 0.4363 },
-      { kind: "Raider", n: 3, earned: 22096, pct: 19, spent: 10705, ratio: 2.06, paid: 0.3731, won: 0.4281 },
-      { kind: "Defender", n: 2, earned: 17382, pct: 10, spent: 10386, ratio: 1.67, paid: 0.3634, won: 0.3439 },
-      { kind: "Methuselah", n: 1, earned: 78602, pct: 23, spent: 56313, ratio: 1.4, paid: 1.781, won: 1.5998 },
-      { kind: "Late", n: 4, earned: 7488, pct: 9, spent: 4368, ratio: 1.71, paid: 0.193, won: 0.1448 },
-    ],
-  },
-  {
-    society: "C",
-    kinds: [
-      { kind: "Builder", n: 6, earned: 20422, pct: 36, spent: 13581, ratio: 1.5, paid: 0.4185, won: 0.5824 },
-      { kind: "Raider", n: 3, earned: 23208, pct: 21, spent: 9879, ratio: 2.35, paid: 0.3198, won: 0.5105 },
-      { kind: "Defender", n: 2, earned: 22699, pct: 13, spent: 10888, ratio: 2.08, paid: 0.3462, won: 0.5925 },
-      { kind: "Whale", n: 1, earned: 51097, pct: 15, spent: 50780, ratio: 1.01, paid: 3.3574, won: 1.4486 },
-      { kind: "Sybil", n: 30, earned: 215, pct: 2, spent: 19, ratio: 11.5, paid: 0.0254, won: 0.0246 },
-      { kind: "Late", n: 4, earned: 10832, pct: 13, spent: 6832, ratio: 1.59, paid: 0.2476, won: 0.2092 },
+    society: "150 players",
+    rows: [
+      { rule: "Simulator baseline: tides 50%, house fed, bounty uncapped", net: [-0.128, -0.166, 1.818, -1.148, -0.89, -0.022, 3.563, 0.459], lock: 11.8 },
+      { rule: "Tides of 10% (launched)", net: [-0.107, -0.178, 1.828, -1.197, -0.825, -0.062, -0.152, 0.408], lock: 4.5 },
+      { rule: "The house is never fed (launched)", net: [-0.127, -0.164, 1.736, -1.225, -0.785, -0.009, 3.672, 0.463], lock: 12.3 },
+      { rule: "Bounty capped at 0.001 NEAR (launched)", net: [-0.123, -0.18, 1.78, -1.283, -0.861, -0.022, 3.619, 0.273], lock: 11.7 },
+      { rule: "All three, with a smaller ledger estimate", net: [-0.006, -0.09, 1.023, -0.728, -0.206, -0.019, 0.137, 0.345], lock: 6.2, launched: true },
     ],
   },
 ];
 
-type Run = {
-  variant: string;
-  society: keyof typeof SOCIETY;
-  live: number;
-  peak: number;
-  supply: number;
-  agar: number;
-  burned: number;
-  largest: number;
-  gini: number;
-  big: string;
-  sybil: number | null;
-  late: number;
-};
-const RUNS: Run[] = [
-  { variant: "launch-like", society: "A", live: 1130, peak: 1807, supply: 944568, agar: 484869, burned: 55432, largest: 18, gini: 0.3, big: "—", sybil: null, late: 3.42 },
-  { variant: "launch-like", society: "B", live: 1180, peak: 1852, supply: 941435, agar: 486739, burned: 58565, largest: 35, gini: 0.56, big: "Methuselah 8.20", sybil: null, late: 3.05 },
-  { variant: "launch-like", society: "C", live: 994, peak: 1803, supply: 930929, agar: 493447, burned: 69071, largest: 19, gini: 0.74, big: "Whale 3.32", sybil: 25.08, late: 3.69 },
-  { variant: "v2", society: "A", live: 962, peak: 1639, supply: 905825, agar: 742662, burned: 94175, largest: 22, gini: 0.34, big: "—", sybil: null, late: 1.41 },
-  { variant: "v2", society: "B", live: 1253, peak: 1846, supply: 901664, agar: 745951, burned: 98336, largest: 66, gini: 0.36, big: "Methuselah 1.40", sybil: null, late: 1.71 },
-  { variant: "v2", society: "C", live: 1142, peak: 1616, supply: 894216, agar: 743930, burned: 105784, largest: 14, gini: 0.75, big: "Whale 1.01", sybil: 11.5, late: 1.59 },
-  { variant: "v2-uncapped", society: "A", live: 1430, peak: 1511, supply: 917295, agar: 733153, burned: 82705, largest: 37, gini: 0.45, big: "—", sybil: null, late: 1.7 },
-  { variant: "v2-uncapped", society: "B", live: 1037, peak: 1752, supply: 935493, agar: 717620, burned: 64507, largest: 83, gini: 0.79, big: "Methuselah 3.57", sybil: null, late: 2.33 },
-  { variant: "v2-uncapped", society: "C", live: 1083, peak: 1617, supply: 898914, agar: 739852, burned: 101086, largest: 41, gini: 0.81, big: "Whale 1.48", sybil: 5.1, late: 1.54 },
-  { variant: "v2-cap-10", society: "A", live: 908, peak: 1620, supply: 910316, agar: 738943, burned: 89684, largest: 19, gini: 0.34, big: "—", sybil: null, late: 2.27 },
-  { variant: "v2-cap-10", society: "B", live: 1130, peak: 1827, supply: 903035, agar: 744736, burned: 96965, largest: 53, gini: 0.34, big: "Methuselah 1.09", sybil: null, late: 1.93 },
-  { variant: "v2-cap-10", society: "C", live: 1245, peak: 1648, supply: 885690, agar: 750133, burned: 114310, largest: 21, gini: 0.73, big: "Whale 0.82", sybil: 5.89, late: 1.59 },
-  { variant: "v2-payback-240", society: "A", live: 1477, peak: 1681, supply: 949940, agar: 706798, burned: 50060, largest: 33, gini: 0.21, big: "—", sybil: null, late: 3.69 },
-  { variant: "v2-payback-240", society: "B", live: 966, peak: 1827, supply: 951410, agar: 705210, burned: 48590, largest: 32, gini: 0.33, big: "Methuselah 2.85", sybil: null, late: 3.34 },
-  { variant: "v2-payback-240", society: "C", live: 1277, peak: 1686, supply: 940700, agar: 705593, burned: 59300, largest: 21, gini: 0.73, big: "Whale 1.96", sybil: 14.72, late: 2.78 },
-  { variant: "v2-payback-960", society: "A", live: 1114, peak: 1504, supply: 873379, agar: 768479, burned: 126621, largest: 45, gini: 0.56, big: "—", sybil: null, late: 0.65 },
-  { variant: "v2-payback-960", society: "B", live: 1378, peak: 1757, supply: 867760, agar: 773241, burned: 132240, largest: 58, gini: 0.66, big: "Methuselah 1.00", sybil: null, late: 0.85 },
-  { variant: "v2-payback-960", society: "C", live: 1000, peak: 1547, supply: 869161, agar: 763428, burned: 130839, largest: 34, gini: 0.87, big: "Whale 0.88", sybil: 3.07, late: 1.44 },
-  { variant: "v2-20ppm", society: "A", live: 778, peak: 1561, supply: 841390, agar: 550276, burned: 158610, largest: 19, gini: 0.39, big: "—", sybil: null, late: 1.16 },
-  { variant: "v2-20ppm", society: "B", live: 1247, peak: 1790, supply: 857207, agar: 538806, burned: 142793, largest: 56, gini: 0.56, big: "Methuselah 1.48", sybil: null, late: 0.72 },
-  { variant: "v2-20ppm", society: "C", live: 937, peak: 1672, supply: 809090, agar: 565377, burned: 190910, largest: 20, gini: 0.8, big: "Whale 0.99", sybil: 9.87, late: 1.89 },
+// Newcomer lockout with the carpet locker: a colony with no cells looking for its cheapest 2 × 2 block.
+// mNEAR is the block's cost in NEAR, PETRI and deposit together. Without siege (the v2 rule) some seeds had no legal spot.
+const LOCKOUT: { society: string; rows: [string, string, string, string, string, string][] }[] = [
+  {
+    society: "15 players, 20 seeds",
+    rows: [
+      ["1 h", "1.7 (0.6–9.0)", "6.63", "12.62", "0.6 (0.0–1.8)", "5 of 20"],
+      ["6 h", "22.4 (16.9–31.0)", "6.48", "12.17", "18.5 (0.0–30.8)", "2 of 20"],
+      ["day 1", "32.6 (19.7–44.0)", "7.19", "14.30", "30.8 (0.0–40.8)", "2 of 20"],
+      ["day 7", "50.0 (40.3–57.4)", "7.40", "14.93", "46.2 (0.0–57.6)", "2 of 20"],
+    ],
+  },
+  {
+    society: "150 players, 10 seeds",
+    rows: [
+      ["1 h", "3.4 (0.8–8.7)", "6.32", "11.67", "0.4 (0.0–2.1)", "2 of 10"],
+      ["6 h", "19.2 (10.9–28.6)", "6.19", "11.28", "11.7 (6.0–19.9)", "0 of 10"],
+      ["day 1", "17.9 (12.3–25.4)", "6.13", "11.12", "13.3 (9.8–17.3)", "0 of 10"],
+      ["day 7", "37.1 (27.5–45.1)", "7.29", "14.60", "39.1 (28.5–45.8)", "0 of 10"],
+    ],
+  },
 ];
 
-const VARIANT: Record<string, string> = {
-  "launch-like": "Close to the first dish",
-  v2: "Launch values",
-  "v2-uncapped": "No cap",
-  "v2-cap-10": "Cap at 10%",
-  "v2-payback-240": "Payback 240",
-  "v2-payback-960": "Payback 960",
-  "v2-20ppm": "Feed 20 ppm",
-};
+const EMPTY: [string, string, string, string][] = [
+  ["Only the 5 house strains, house fed (the rule before the fix)", "179,035", "0", "0.51 NEAR left; the house was fed 828,726 PETRI"],
+  ["Only the 5 house strains, house never fed (launched)", "994,026", "0", "1.56 NEAR left; nothing fed"],
+  ["Nobody at all", "1,000,000", "0", "The contract pays 1.728 NEAR for 720 tide entries"],
+];
 
-const CHANGES: [string, string][] = [
+const CHANGES_V3: [string, string][] = [
   [
-    "The first dish paid players about 2.8 times the PETRI they spent. Its cell price had no link to what a cell earned, and every new colony got PETRI for free.",
-    "Now a cell costs what an average cell earns in 480 generations, the feed is half as fast, and PETRI has to be bought from the agar with NEAR.",
+    "The relayer attached the guest's deposits itself. A guest could sign calls that fail inside the contract, and each failure refunded the deposit to the guest, draining the relayer.",
+    "The relayer relays only calls with no deposit. Guests pay from credit the relayer gives them on chain with sponsor, spendable only in the dish, and their keys are function-call keys for the dish, which cannot attach or move NEAR.",
   ],
   [
-    "A planter of methuselahs, small seeds that grow for a long time, took 45% of the dish and earned 12.8 times what it spent.",
-    "Now no colony is counted for more than 15% of the living cells, in the feed or at the tides. In the simulator the same grower covered 66% of the cells, took 23% of the earnings and earned 1.40 times its spend.",
+    "The guest proof of work was not bound to anything, so one solution could be replayed for many guests.",
+    "A guest needs a challenge the server signed in the last ten minutes, an 18-bit proof of work bound to that challenge and its key, and the account name comes from the key: one guest per key.",
   ],
   [
-    "Every new account got 64 PETRI free, so many accounts meant many grants.",
-    "Now there is no grant. Joining takes at least 0.01 NEAR and buys PETRI at the curve's price. In the simulator 30 one-shot accounts each paid 0.0254 NEAR and won back 0.0246 at the tides.",
+    "The 15% cap counted living cells, so splitting into colonies just under the cap earned more.",
+    "The reach: a colony is paid for at most 4 living cells per cell it ever planted, and the parts of a split never weigh more than the whole.",
   ],
   [
-    "The feed logged one event per colony per generation. NEAR caps the logs of one call at 16 KB, so at about 115 colonies a catch-up could no longer fit, and the dish would have stopped.",
-    "Now earnings accrue in one record and each colony claims its own. A catch-up logs one summary line; the contract test with 25 living colonies logs at most three lines and under 1,500 bytes.",
+    "A carpet of blocks could put every empty cell inside someone's buffer and close the dish to newcomers.",
+    "Sieges: planting inside a rival's buffer is allowed at 3× the price. In the simulator the locker left no legal spot in 5 of 20 seeds without siege; with it every seed has one.",
   ],
   [
-    "The contract account could send PETRI to itself and mint it.",
-    "Now the contract refuses itself as the caller of join, buy, plant, claim, advance and every transfer, refuses transfers to its own account, and will not register itself. Two contract tests check it.",
+    "Tides split by cells alive at the tide generation, so a colony planted just before a tide took a full share.",
+    "Window tides: each tide splits by the PETRI each colony earned since the previous one.",
+  ],
+  [
+    "advance paid the keeper pot even when it ran no generation.",
+    "The pot is paid only by a call that ran at least one generation.",
+  ],
+  [
+    "The strains' model read colony names, so a name written as an instruction could steer it.",
+    "Rivals reach the model by number and size only, and names are plain ASCII; notes refuse hidden and tag characters.",
+  ],
+  [
+    "NEAR moved through counters the replay could not rebuild.",
+    "Every purchase, planting, sale and tide records its NEAR in the ledger, and the replay checks the vault, NEAR in, tide payouts and every colony's winnings.",
+  ],
+  [
+    "The contract was not a reproducible build and the account kept a full-access key.",
+    "Built with cargo near build reproducible-wasm, with NEP-330 metadata linking the commit; the key is to be deleted before judging, and /verify fails that check until it is.",
+  ],
+  [
+    "The simulator's claims were ratios of PETRI earned to PETRI spent.",
+    "Every result is now net NEAR per player, with PETRI held valued at the sell-back price and labelled as paper.",
+  ],
+  [
+    "On a sparse dish the price counted 1,000 cells but the whole ration went to the few alive, so early cells paid back far faster than the price assumed.",
+    "The agar releases its ration for at least 1,000 counted cells and never more per cell; with fewer, it releases that fraction and keeps the rest. This rule came after the simulator runs below.",
+  ],
+  [
+    "The house strains were fed like players, so on a quiet dish they slowly ate the agar.",
+    "House colonies are never fed and take no tide share; the NEAR they pay in goes to the other players.",
   ],
 ];
+
+const sign = (x: number, dp = 3) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(dp)}`;
 
 export function ParamsSection() {
   const { rules } = useLive();
@@ -126,8 +141,7 @@ export function ParamsSection() {
     ["max_supply", `${fmtPetri(r.max_supply, 0)} PETRI`, "Minted once, into the agar."],
     ["feed_ppm", String(r.feed_ppm), "Parts per million of the agar fed to the living each generation."],
     ["keeper_bps", `${r.keeper_bps} (${r.keeper_bps / 100}%)`, "Share of the feed set aside in the keeper pot."],
-    ["cap_bps", `${r.cap_bps} (${r.cap_bps / 100}%)`, "Most of the living cells one colony counts for, in the feed and the tides."],
-    ["cap_min", int(r.cap_min), "The cap is never below this many cells."],
+    ["reach", String(r.reach), "Most living cells a colony is paid for, per cell it ever planted."],
     ["burn_bps", `${r.burn_bps} (${r.burn_bps / 100}%)`, "Share of a planting burned; the rest returns to the agar."],
     ["payback", int(r.payback), "Generations of an average cell's feed that a cell costs."],
     ["min_cell_price", `${fmtPetri(r.min_cell_price)} PETRI`, "The lowest price of one cell."],
@@ -137,9 +151,15 @@ export function ParamsSection() {
     ["cell_fee", `${near(Number(r.cell_fee), 4)} NEAR`, "NEAR per planted cell, on top of storage, to the tide vault."],
     ["tide_every", int(r.tide_every), "Generations between tides."],
     ["tide_bps", `${r.tide_bps} (${r.tide_bps / 100}%)`, "Share of the vault paid out at each tide."],
-    ["buffer", String(r.buffer), "Clear cells required around every rival's live cell."],
+    ["tide_bounty_bps", `${r.tide_bounty_bps} (${r.tide_bounty_bps / 100}%)`, "Share of a tide paid to the caller whose transaction runs it."],
+    ["max_bounty", `${near(Number(r.max_bounty), 3)} NEAR`, "The most a tide bounty pays."],
+    ["sell_bps", `${r.sell_bps} (${r.sell_bps / 100}%)`, "Share of the curve's price the agar pays when it buys PETRI back."],
+    ["sell_cap_bps", `${r.sell_cap_bps} (${r.sell_cap_bps / 100}%)`, "Most of the vault the agar buys back with between two tides."],
+    ["siege_x", String(r.siege_x), "Price multiple of a planting inside a rival's buffer."],
+    ["buffer", String(r.buffer), "Cells around a rival's live cell where a planting is a siege."],
     ["max_plant_cells", String(r.max_plant_cells), "Most cells in one planting."],
     ["max_catchup", String(r.max_catchup), "Most generations one call advances."],
+    ["house", r.house.join(", "), "The dish's own players: never fed, no tide share."],
   ];
   return (
     <section id="parameters" className={`band ${s.section}`} aria-labelledby="params-title">
@@ -147,187 +167,261 @@ export function ParamsSection() {
         <div className="section-head">
           <h2 id="params-title" className={s.h2}>How the parameters were chosen</h2>
           <p className="lede">
-            The numbers were set once, when the contract was created, and no method can change them. They are the second set:
-            a review of the first dish found real problems, and the economy was rebuilt and tested in a simulator before this
-            dish launched.
+            The numbers were set once, when the contract was created, and no method changes them. This is the fourth dish. Two
+            rounds of review found real problems; each time the rules were changed, tested in the simulator, and launched on a
+            new contract that started again from an empty board. The last relaunch added one rule after the simulator runs below.
           </p>
-        </div>
-
-        <div className={s.changes}>
-          <h3 className="h3">What changed after review</h3>
-          <p className="muted">
-            The first dish ran on a different contract. This one, with the rules on this page, started again from an empty
-            board at generation zero.
-          </p>
-          <dl className={s.changeList}>
-            {CHANGES.map(([was, now]) => (
-              <div key={was} className={s.change}>
-                <dt>{was}</dt>
-                <dd>{now}</dd>
-              </div>
-            ))}
-          </dl>
         </div>
 
         <div className={s.paramsGrid}>
-          <div className={s.card}>
-            <h3 className="h3">The dish&rsquo;s parameters, read now</h3>
-            <p className="muted small">From the contract&rsquo;s <code className={s.code}>rules</code> view.</p>
-            <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Contract parameters">
-              <table className={s.table}>
-                <thead>
-                  <tr>
-                    <th scope="col">Field</th>
-                    <th scope="col">Value</th>
-                    <th scope="col">Meaning</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {params.map(([k, val, m]) => (
-                    <tr key={k}>
-                      <th scope="row">
-                        <code className={s.code}>{k}</code>
-                      </th>
-                      <td className="num">{val}</td>
-                      <td className={s.cellDim}>{m}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
           <div className={s.prose}>
             <h3 className="h3">The simulator</h3>
             <p>
               <a className={s.link} href={`${REPO}/tree/main/sim`}>sim/src/main.rs</a> runs <code className={s.code}>petri-core</code>
-              &rsquo;s own Life step, feed, cap, price and purchase curve on a 128 by 128 dish for 40,320 generations, seven days
-              at 15 seconds each, under seven parameter sets and three societies. Each player buys its PETRI at join: 0.05 NEAR
-              for most, 0.1 for the methuselah, 2 for the whale and 0.02 for each sybil.
-            </p>
-            <p>
-              Builders plant still lifes near home, raiders mostly gliders, defenders eaters and beehives, every 20 to 119
-              generations, and skip a planting that would cost more than half of what they hold. The methuselah plants an
-              R-pentomino every 12 generations whenever it can pay. The whale plants pulsars and beehives. Each sybil plants its
-              stake once as blocks and stops. Late players join on day two and play like builders. A tide pays half the vault
-              every 240 generations.
+              &rsquo;s own Life step, feed, reach, price, curve, sell-back and window tides on a 128 by 128 dish for 7 and 30 days,
+              with 15, 150 and 1,500 scripted players and the five house strains, and counts every yoctoNEAR: what each player
+              paid, won at tides, got for sales, and the PETRI it still holds valued at the sell-back price. It estimates storage
+              and gas rather than measuring them on chain, and it predates the rule that releases only part of the ration on a
+              sparse dish, so it shows early colonies earning more than they now would. A sweep over reach 4, 8 and 16 and siege 3×, 4× and 6× chose reach 4
+              and siege 3×: net results barely moved, a reach of 4 left under 1% of any kind&rsquo;s cell-generations unpaid, and
+              a day-7 siege block costs 14.9 mNEAR at 3× against 26.2 at 6×.
             </p>
             <h3 className="h3">What the runs show</h3>
             <ul className={s.findings}>
               <li>
-                Close to the first dish&rsquo;s rules, every kind of player earned at least 3.05 times the PETRI it spent, the
-                sybils 25.08 times, and the methuselah took 49% of all earnings at 8.20.
+                Ordinary players lose a little NEAR: builders, raiders, defenders and late joiners end between −0.17 and −0.10
+                NEAR at 150 players and −0.08 to −0.03 at 1,500 (medians). Their stakes go to the tides and to storage.
               </li>
               <li>
-                At the launch values, ordinary players earned 1.41 to 2.35 times their spend. The methuselah covered 66% of the
-                cells but took 23% of the earnings, at 1.40. The whale earned 1.01 and paid 3.36 NEAR to win back 1.45.
-              </li>
-              <li>Late joiners stayed ahead at 1.41, 1.71 and 1.59, and the 30 sybils together took 2% of all earnings.</li>
-              <li>Without the cap the methuselah held 83% of the cells, took 63% of the earnings and earned 3.57 times its spend.</li>
-              <li>
-                A payback of 240 generations let ordinary players earn 2.61 to 4.67 times their spend. A payback of 960 left
-                late joiners at 0.65 and 0.85.
+                The methuselah is the outlier: +9.51 NEAR median at 15 players, +1.82 at 150, but nearly all of it is PETRI valued
+                at the sell-back price. Its cash, NEAR actually back, is −0.01 and +0.30. At the end players hold PETRI worth 13 to
+                22 NEAR at that price against under 0.06 NEAR in the vault, so held PETRI is paper.
               </li>
               <li>
-                A feed of 20 ppm paid out 599,951 to 609,108 PETRI in seven days, against 345,344 to 348,249 at 10 ppm, and left
-                late joiners at 0.72 in one society.
+                The carpet locker won NEAR in cash in the baseline (+1.66, +3.56, +11.12). Tides of 10% cut that to +0.13 and −0.15;
+                with all three launched fixes it is +0.86 and +0.14. It is the biggest weakness the simulator found.
               </li>
+              <li>
+                Splitting a whale into colonies did not pay at 150 and 1,500 players. In the 15-player society the split whale did
+                better in the baseline (+3.04 against −1.11), and worse once all three fixes were in (+0.58 against +0.89).
+              </li>
+              <li>
+                Sellers always lose (−0.10 NEAR on a 0.2 stake). Snipers lose a little with the locker present; in the 15-player
+                society without it the sniper&rsquo;s median was +0.53. The racer makes +0.34 to +1.03 before gas, +0.07 to +0.87
+                after.
+              </li>
+              <li>Each house strain costs the team 0.82 to 0.99 NEAR a week, all of it paid to the other players.</li>
             </ul>
-            <p className="muted small">
-              Earned over spent compares PETRI fed to a player with PETRI it spent planting. It is not profit: there is no way to
-              sell PETRI back to the agar, and the ratio leaves out the NEAR a player paid for its PETRI, which the NEAR columns
-              show. The scripted players do not react to prices beyond keeping a reserve, never buy more after joining, and pay a
-              flat 0.005 NEAR into the vault at join instead of paying for storage. The simulator shows how PETRI and NEAR move under each rule set, not how people would change their
-              play.
-            </p>
           </div>
-        </div>
-
-        <div className={`${s.card} ${s.simBlock}`}>
-          <h3 className="h3">The launch values, by kind of player, after seven days</h3>
-          <p className="muted small">
-            From <a className={s.link} href={`${REPO}/blob/main/sim/out-v2/summary.txt`}>sim/out-v2/summary.txt</a>. PETRI and
-            NEAR per player of that kind. Share is of all PETRI earned in that society.
-          </p>
-          <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Simulator results by kind of player">
-            <table className={`${s.table} ${s.simTable}`}>
-              <thead>
-                <tr>
-                  <th scope="col">Society</th>
-                  <th scope="col">Player</th>
-                  <th scope="col">Earned</th>
-                  <th scope="col">Share</th>
-                  <th scope="col">Spent planting</th>
-                  <th scope="col">Earned over spent</th>
-                  <th scope="col">NEAR paid</th>
-                  <th scope="col">NEAR won</th>
-                </tr>
-              </thead>
-              <tbody>
-                {V2.flatMap(({ society, kinds }) =>
-                  kinds.map((k, i) => (
-                    <tr key={society + k.kind} className={["Methuselah", "Whale", "Sybil"].includes(k.kind) ? s.nowRow : undefined}>
-                      <td className={s.cellDim}>{i === 0 ? SOCIETY[society] : ""}</td>
-                      <th scope="row">
-                        {k.kind}
-                        {k.n > 1 ? `, ${k.n} of them` : ""}
-                      </th>
-                      <td className="num">{int(k.earned)}</td>
-                      <td className="num">{k.pct}%</td>
-                      <td className="num">{int(k.spent)}</td>
-                      <td className="num">{k.ratio.toFixed(2)}</td>
-                      <td className="num">{k.paid.toFixed(4)}</td>
-                      <td className="num">{k.won.toFixed(4)}</td>
-                    </tr>
-                  )),
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className={`${s.card} ${s.simBlock}`}>
-          <h3 className="h3">Every run, after seven days</h3>
-          <p className="muted small">
-            Supply, agar and burned in PETRI. Largest colony is its share of the living cells; Gini is across players&rsquo;
-            earnings. The last three columns are earned over spent.
-          </p>
-          <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Simulator results by parameter set">
-            <table className={`${s.table} ${s.simTable}`}>
-              <thead>
-                <tr>
-                  <th scope="col">Parameters</th>
-                  <th scope="col">Society</th>
-                  <th scope="col">Living cells</th>
-                  <th scope="col">Supply</th>
-                  <th scope="col">Agar left</th>
-                  <th scope="col">Burned</th>
-                  <th scope="col">Largest colony</th>
-                  <th scope="col">Gini</th>
-                  <th scope="col">Methuselah or whale</th>
-                  <th scope="col">Sybils</th>
-                  <th scope="col">Late joiners</th>
-                </tr>
-              </thead>
-              <tbody>
-                {RUNS.map((x) => (
-                  <tr key={x.variant + x.society} className={x.variant === "v2" ? s.nowRow : undefined}>
-                    <th scope="row">{VARIANT[x.variant]}</th>
-                    <td className={s.cellDim}>{SOCIETY[x.society]}</td>
-                    <td className="num">
-                      {int(x.live)}, peak {int(x.peak)}
-                    </td>
-                    <td className="num">{int(x.supply)}</td>
-                    <td className="num">{int(x.agar)}</td>
-                    <td className="num">{int(x.burned)}</td>
-                    <td className="num">{x.largest}%</td>
-                    <td className="num">{x.gini.toFixed(2)}</td>
-                    <td className="num">{x.big}</td>
-                    <td className="num">{x.sybil === null ? "—" : x.sybil.toFixed(2)}</td>
-                    <td className="num">{x.late.toFixed(2)}</td>
-                  </tr>
+          <div>
+            <details className={s.fold}>
+              <summary>
+                What changed after the second review <small>{CHANGES_V3.length} findings, v2 to v4</small>
+              </summary>
+              <div className={s.foldBody}>
+                <dl className={s.changeList}>
+                  {CHANGES_V3.map(([was, now]) => (
+                    <div key={was} className={s.change}>
+                      <dt>{was}</dt>
+                      <dd>{now}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="muted small">
+                  The first review (v1 to v2) found free 64-PETRI grants that could be farmed, a cell price unrelated to what a
+                  cell earns, a methuselah taking 45% of the dish, one log line per colony per catch-up (the dish would stop at
+                  about 115 colonies), and a contract that could mint by sending PETRI to itself. v2 fixed those with the NEAR
+                  buy-in, the payback price, accrued earnings and the self-call guard; the current dish keeps all of it.
+                </p>
+              </div>
+            </details>
+            <details className={s.fold}>
+              <summary>
+                The dish&rsquo;s parameters, read now <small>{params.length} fields of rules</small>
+              </summary>
+              <div className={s.foldBody}>
+                <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Contract parameters">
+                  <table className={s.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Field</th>
+                        <th scope="col">Value</th>
+                        <th scope="col">Meaning</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {params.map(([k, val, m]) => (
+                        <tr key={k}>
+                          <th scope="row">
+                            <code className={s.code}>{k}</code>
+                          </th>
+                          <td className="num">{val}</td>
+                          <td className={s.cellDim}>{m}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="muted small">
+                  From the contract&rsquo;s <code className={s.code}>rules</code> view. Fixed in code: names of 1 to 24 ASCII
+                  characters, notes of at most 140 characters, the chain folded every 16 generations, catch-up stopping at 180
+                  TGas.
+                </p>
+              </div>
+            </details>
+            <details className={s.fold}>
+              <summary>
+                Net NEAR per player after 7 days <small>12 kinds, 3 societies</small>
+              </summary>
+              <div className={s.foldBody}>
+                <p>
+                  Median, with the lowest and highest over seeds below. Tides + sales + PETRI held at the sell-back price − all
+                  NEAR paid, gas not included. These runs have reach 4 and siege 3× as launched, but tides of 50%, a fed house
+                  and an uncapped bounty; the next table shows the launched changes.
+                </p>
+                <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Net NEAR by kind of player">
+                  <table className={`${s.table} ${s.simSmall}`}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Player</th>
+                        <th scope="col">15 players</th>
+                        <th scope="col">150</th>
+                        <th scope="col">1,500</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {KINDS.map((k) => (
+                        <tr key={k.kind}>
+                          <th scope="row">
+                            {k.kind}
+                            <span className={s.range}>{k.stake}</span>
+                          </th>
+                          {k.net.map(([lo, med, hi], i) => (
+                            <td key={i} className={`num ${med > 0 ? s.pos : ""}`}>
+                              {sign(med)}
+                              <span className={s.range}>
+                                {sign(lo, 2)} to {sign(hi, 2)}
+                              </span>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
+            <details className={s.fold}>
+              <summary>
+                The launched fixes, one at a time <small>median net NEAR</small>
+              </summary>
+              <div className={s.foldBody}>
+                <p>
+                  The launched contract has all three. No run has exactly the launched rules: the combined row also assumes a
+                  planting stores about 20 bytes, where the contract stores at most 200 + 4 a cell. The last column is the
+                  locker&rsquo;s share of all tide NEAR.
+                </p>
+                {FIXES.map((f) => (
+                  <div key={f.society} className={s.tableWrap} tabIndex={0} role="region" aria-label={`Fix experiments, ${f.society}`}>
+                    <table className={`${s.table} ${s.simTable}`}>
+                      <thead>
+                        <tr>
+                          <th scope="col">{f.society}</th>
+                          {FIX_KINDS.map((k) => (
+                            <th key={k} scope="col">{k}</th>
+                          ))}
+                          <th scope="col">Locker tides</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {f.rows.map((row) => (
+                          <tr key={row.rule} className={row.launched ? s.nowRow : undefined}>
+                            <th scope="row">{row.rule}</th>
+                            {row.net.map((x, i) => (
+                              <td key={i} className="num">{sign(x)}</td>
+                            ))}
+                            <td className="num">{row.lock.toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </details>
+            <details className={s.fold}>
+              <summary>
+                The lockout, with and without sieges <small>a newcomer&rsquo;s first block</small>
+              </summary>
+              <div className={s.foldBody}>
+                <p>
+                  A locker lays 256 blocks 8 cells apart at launch so every empty cell is inside its buffer. Free spots are 2 × 2
+                  blocks a newcomer could plant at the normal price (median, range). Without the locker, 59.5% of spots are free
+                  after 1 h at 15 players.
+                </p>
+                {LOCKOUT.map((l) => (
+                  <div key={l.society} className={s.tableWrap} tabIndex={0} role="region" aria-label={`Lockout, ${l.society}`}>
+                    <table className={`${s.table} ${s.simTable}`}>
+                      <thead>
+                        <tr>
+                          <th scope="col">{l.society}</th>
+                          <th scope="col">Free spots %, siege allowed</th>
+                          <th scope="col">Cheapest block, mNEAR</th>
+                          <th scope="col">Siege block, mNEAR</th>
+                          <th scope="col">Free spots %, siege forbidden</th>
+                          <th scope="col">Seeds with no legal spot</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {l.rows.map((row) => (
+                          <tr key={row[0]}>
+                            <th scope="row">{row[0]}</th>
+                            {row.slice(1).map((c, i) => (
+                              <td key={i} className="num">{c}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+                <p className="muted small">With sieges allowed, every empty cell can be planted, so no seed is ever without a legal spot.</p>
+              </div>
+            </details>
+            <details className={s.fold}>
+              <summary>
+                A dish with no players, 30 days <small>3 runs</small>
+              </summary>
+              <div className={s.foldBody}>
+                <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Zero-player runs">
+                  <table className={`${s.table} ${s.simSmall}`}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Run</th>
+                        <th scope="col">Agar after 30 days, PETRI</th>
+                        <th scope="col">NEAR paid at tides</th>
+                        <th scope="col">Vault</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {EMPTY.map((row) => (
+                        <tr key={row[0]} className={row[0].includes("launched") ? s.nowRow : undefined}>
+                          <th scope="row">{row[0]}</th>
+                          <td className="num">{row[1]}</td>
+                          <td className="num">{row[2]}</td>
+                          <td className={s.cellDim}>{row[3]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="muted small">
+                  From <a className={s.link} href={`${REPO}/blob/main/sim/out-v3/summary.txt`}>sim/out-v3/summary.txt</a>. The
+                  scripted players follow fixed habits and do not adapt to prices, so the runs show how NEAR moves under each
+                  rule set, not how people would change their play.
+                </p>
+              </div>
+            </details>
           </div>
         </div>
       </div>

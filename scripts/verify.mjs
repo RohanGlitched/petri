@@ -25,7 +25,7 @@ const { initSync, Engine, quote, buy_quote, sell_quote } = await import(pathToFi
 initSync({ module: fs.readFileSync(path.join(pkg, "petri_bg.wasm")) });
 
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit. */
-const BUILD_HASH = "Ajaiqj7wSMZ4hirScct5hKB4VvjB62xXeNVNAkjSKgcU";
+const BUILD_HASH = "7GNyLTrzbFSmSxVp92Ne7bVXaKpUtxPsMYGqtx9ULuaS";
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
