@@ -7,7 +7,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Engine, loadEngine } from "@/engine";
-import { getBoard, getColonies, getRules, getState, type Colony, type DishState, type Rules } from "./chain";
+import { getBoard, getColonies, getPlants, getRules, getState, type Colony, type DishState, type PlantRecord, type Rules } from "./chain";
 
 export type Snapshot = {
   status: "loading" | "ready" | "error";
@@ -31,6 +31,10 @@ export type Snapshot = {
   syncedAt: number;
   /** Generations the browser is ahead of the stored board. */
   ahead: number;
+  /** PETRI units each colony has earned since the stored board (index = colony id); paid when the dish next advances. */
+  pending: number[];
+  /** The latest plantings, newest first. */
+  recentPlants: PlantRecord[];
 };
 
 const empty: Snapshot = {
@@ -47,6 +51,8 @@ const empty: Snapshot = {
   nextInMs: 0,
   syncedAt: 0,
   ahead: 0,
+  pending: [],
+  recentPlants: [],
 };
 
 let snap: Snapshot = empty;
@@ -103,6 +109,7 @@ function advanceTo(due: number, force = false) {
     deaths: Array.from(engine.last_deaths()),
     chain: engine.chain_hex(),
     ahead: engine.generation() - storedGeneration,
+    pending: Array.from(engine.earned()),
   });
 }
 
@@ -114,6 +121,9 @@ async function sync(first = false) {
   const plantKey = `${state.plants}:${state.colonies}`;
   if (first || plantKey !== knownPlants || !engine) {
     await loadStored(rules, state, colonies);
+    const total = Number(state.plants);
+    const recentPlants = total > 0 ? (await getPlants(Math.max(0, total - 24), 24)).reverse() : [];
+    emit({ recentPlants });
     knownPlants = plantKey;
     knownColonies = state.colonies;
     const due = dueFor(rules, state);

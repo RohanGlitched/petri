@@ -9,10 +9,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "borsh": "2.0.0",
+    "near-api-js": "7.4.0",
     "next": "16.4.4",
     "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "near-api-js": "7.4.0"
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@types/node": "22.10.0",
