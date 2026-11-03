@@ -16,7 +16,8 @@ export class Engine {
     cells(): Uint16Array;
     chain_hex(): string;
     /**
-     * Check a planting the way the contract will. Returns "" when it would be accepted.
+     * Check a planting the way the contract will. Returns "" when it would be accepted, "siege:<rival>" when it is
+     * accepted inside a rival's buffer at the siege price, and an error code otherwise.
      */
     check_plant(colony: number, cells: Uint32Array | number[], buffer: number, max_cells: number): string;
     clone_engine(): Engine;
@@ -40,7 +41,7 @@ export class Engine {
     last_deaths(): Uint32Array;
     live_counts(): Uint32Array;
     load_compact(bytes: Uint8Array | number[], generation: number, chain_hex: string): boolean;
-    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number, cap_bps: number, cap_min: number);
+    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number, reach: number);
     /**
      * Plant without checks (replaying the contract's log).
      */
@@ -51,11 +52,28 @@ export class Engine {
     set_agar(units: string): void;
     set_colonies(n: number): void;
     /**
+     * Cells each colony has planted, as the contract counts them (when the engine starts mid-history).
+     */
+    set_planted(planted: Uint32Array | number[]): void;
+    /**
      * Advance `n` generations, tracking the chain and the agar's feed exactly as the contract does.
      */
     step(n: number): void;
+    /**
+     * Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping `house`, add it to each colony's winnings
+     * and reset the window. Returns the total paid to colonies, as a decimal string.
+     */
+    tide(pay: string, house: Uint16Array | number[]): string;
     total_live(): number;
     width(): number;
+    /**
+     * One colony's earnings since the last tide (PETRI units), for showing a tide's likely split.
+     */
+    window_of(colony: number): string;
+    /**
+     * Exact NEAR one colony won at the tides since this engine started (yoctoNEAR, decimal string).
+     */
+    won_of(colony: number): string;
 }
 
 /**
@@ -70,9 +88,15 @@ export function buy_quote(near: string, agar: string, petri_price: string, max_s
 export function pattern_cells(name: string, x: number, y: number, width: number, height: number, rotate: number, flip: boolean): Uint32Array;
 
 /**
- * What planting `cells` costs in PETRI units (decimal string), given the agar and the living population.
+ * What planting `cells` costs in PETRI units (decimal string), given the agar and the living population; a siege
+ * (a planting inside a rival's buffer) costs `siege_x` times as much.
  */
-export function quote(agar: string, feed_ppm: number, keeper_bps: number, total_live: number, live_floor: number, payback: number, min_price: string, cells: number): string;
+export function quote(agar: string, feed_ppm: number, keeper_bps: number, total_live: number, live_floor: number, payback: number, min_price: string, cells: number, siege: boolean, siege_x: number): string;
+
+/**
+ * yoctoNEAR the agar pays for `petri` units handed back (before the sale's record), at `sell_bps` of the curve.
+ */
+export function sell_quote(petri: string, agar: string, petri_price: string, max_supply: string, sell_bps: number): string;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -98,15 +122,20 @@ export interface InitOutput {
     readonly engine_last_deaths: (a: number) => [number, number];
     readonly engine_live_counts: (a: number) => [number, number];
     readonly engine_load_compact: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
-    readonly engine_new: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
+    readonly engine_new: (a: number, b: number, c: number, d: number, e: number) => number;
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
     readonly engine_set_agar: (a: number, b: number, c: number) => void;
     readonly engine_set_colonies: (a: number, b: number) => void;
+    readonly engine_set_planted: (a: number, b: number, c: number) => void;
     readonly engine_step: (a: number, b: number) => void;
+    readonly engine_tide: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly engine_total_live: (a: number) => number;
     readonly engine_width: (a: number) => number;
+    readonly engine_window_of: (a: number, b: number) => [number, number];
+    readonly engine_won_of: (a: number, b: number) => [number, number];
     readonly pattern_cells: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
-    readonly quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
+    readonly quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number];
+    readonly sell_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

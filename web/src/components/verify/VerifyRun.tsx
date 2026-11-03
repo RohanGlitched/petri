@@ -206,4 +206,5 @@ const PLACEHOLDER: Check[] = [
   { id: "returned", label: "PETRI returned to the agar", expected: "", got: null, ok: null },
   { id: "keeper", label: "PETRI set aside for keepers", expected: "", got: null, ok: null },
   { id: "earned", label: "Every colony's lifetime earnings", expected: "", got: null, ok: null },
+  { id: "live", label: "Living cells", expected: "", got: null, ok: null },
 ];

@@ -7,7 +7,7 @@ import { Loupe } from "@/components/site/Loupe";
 import { Specimen } from "@/components/site/Specimen";
 import { currentEngine, refreshDish } from "@/lib/dish-store";
 import { useLive, usePatternOffsets, petri, int, hex, near } from "@/lib/live";
-import { BUY_NEAR, GUEST_BUDGET, JOIN_NEAR, buyPetri, claimAll, createGuest, joinDish, plantCells, usePlayer, forgetGuest } from "@/lib/wallet";
+import { BUY_NEAR, GUEST_BUDGET, JOIN_NEAR, buyPetri, claimAll, connectWallet, createGuest, disconnectWallet, joinDish, plantCells, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
 import { buy_quote, pattern_cells, quote, PATTERNS, type PatternInfo, type PatternName } from "@/engine";
 import { getBalance, getClaimable, getColonyOf, getNearBalance, getPlantDeposit, type Colony } from "@/lib/chain";
 import { accountUrl, shortAccount, txUrl } from "@/lib/config";
@@ -173,8 +173,10 @@ export function DishStage() {
   const myLive = me ? d.liveCounts[me.id] ?? 0 : 0;
   const myPending = me ? d.pending[me.id] ?? 0 : 0;
   const plantedThisGen = me?.last_plant_generation != null && Number(me.last_plant_generation) >= d.generation;
-  // The relayer pays a guest's deposits up to a budget, counted on chain as the colony's near_paid.
+  // The relayer pays a guest's deposits up to a budget, counted on chain as the colony's near_paid. A wallet pays its own.
+  const isWallet = player?.kind === "wallet";
   const sponsoredLeft = me ? GUEST_BUDGET - BigInt(me.near_paid) : GUEST_BUDGET;
+  const canBuy = isWallet ? nearLeft === null || nearLeft >= BUY_NEAR + 3n * 10n ** 21n : sponsoredLeft >= BUY_NEAR;
   // Planting claims a colony's waiting earnings first, so they count towards the price.
   const spendable = (balance ?? 0) + claimable.petri + Math.max(0, myPending);
   const canAfford = balance !== null && spendable >= cost;
@@ -199,6 +201,17 @@ export function DishStage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function connect() {
+    setError(null);
+    setDone(null);
+    try {
+      await connectWallet();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/reject|cancel|closed/i.test(msg)) setError(`The wallet did not connect: ${msg}`);
     }
   }
 
@@ -435,7 +448,7 @@ export function DishStage() {
 
       <aside className={s.left}>
         {!me && (
-          <JoinForm onStart={start} busy={!!busy} hasGuest={!!player} grant={petri(joinPetri)} colonies={d.colonies} />
+          <JoinForm onStart={start} onConnect={connect} busy={!!busy} player={player} grant={petri(joinPetri)} colonies={d.colonies} />
         )}
 
         {info && !me && (
@@ -517,19 +530,34 @@ export function DishStage() {
               <button className="btn btn-amber btn-small" onClick={claim} disabled={!!busy || (claimable.petri <= 0 && claimable.near <= 0)}>
                 {claimable.near > 0 ? `Claim ${near(claimable.near, 4)} NEAR and PETRI` : "Claim earnings"}
               </button>
-              <button className="btn btn-ghost btn-small" onClick={buy} disabled={!!busy || sponsoredLeft < BUY_NEAR}>
+              <button className="btn btn-ghost btn-small" onClick={buy} disabled={!!busy || !canBuy}>
                 Buy PETRI with 0.01 NEAR
               </button>
             </div>
-            <p className={s.hint}>The site sponsors up to {near(Number(GUEST_BUDGET), 2)} testnet NEAR of deposits for each guest; {near(Number(sponsoredLeft), 4)} NEAR of that is left.</p>
+            {isWallet ? (
+              <p className={s.hint}>Your wallet signs each move and pays its own gas and deposits{nearLeft !== null ? `; it holds ${near(Number(nearLeft), 3)} NEAR` : ""}.</p>
+            ) : (
+              <p className={s.hint}>The site sponsors up to {near(Number(GUEST_BUDGET), 2)} testnet NEAR of deposits for each guest; {near(Number(sponsoredLeft), 4)} NEAR of that is left. Connect a wallet to play with your own.</p>
+            )}
             <div className={s.row}>
               <button className="btn btn-ghost btn-small" onClick={findMine} disabled={myLive === 0}>Find my colony</button>
-              <button
-                className={s.linkish}
-                onClick={() => confirm("Forget this guest? The colony stays on the dish, but this browser loses its key and cannot plant for it again.") && forgetGuest()}
-              >
-                Forget this guest
-              </button>
+              {isWallet ? (
+                <button className={s.linkish} onClick={() => disconnectWallet().catch(() => {})}>
+                  Disconnect wallet
+                </button>
+              ) : (
+                <>
+                <button className={s.linkish} onClick={connect} disabled={!!busy}>
+                  Use my NEAR wallet
+                </button>
+                <button
+                  className={s.linkish}
+                  onClick={() => confirm("Forget this guest? The colony stays on the dish, but this browser loses its key and cannot plant for it again.") && forgetGuest()}
+                >
+                  Forget this guest
+                </button>
+                </>
+              )}
             </div>
           </section>
         )}
@@ -659,7 +687,7 @@ export function DishStage() {
   );
 }
 
-function JoinForm({ onStart, busy, hasGuest, grant, colonies }: { onStart: (name: string, color: number) => void; busy: boolean; hasGuest: boolean; grant: string; colonies: Colony[] }) {
+function JoinForm({ onStart, onConnect, busy, player, grant, colonies }: { onStart: (name: string, color: number) => void; onConnect: () => void; busy: boolean; player: Player; grant: string; colonies: Colony[] }) {
   const [name, setName] = useState("");
   const taken = useMemo(() => {
     const m = new Map<number, string>();
@@ -677,7 +705,11 @@ function JoinForm({ onStart, busy, hasGuest, grant, colonies }: { onStart: (name
       <h2 className={s.joinTitle}>Start a colony</h2>
       <p className={s.hint}>
         Name it and choose its stain. Joining stakes 0.02 NEAR: a little pays for your colony's storage and the rest buys about {grant} PETRI from the agar to plant with.
-        {hasGuest ? "" : " You get a guest account on NEAR testnet: no wallet, no gas."}
+        {player?.kind === "wallet"
+          ? ` You are joining as ${shortAccount(player.accountId, 28)}: your wallet signs and pays.`
+          : player
+            ? ""
+            : " You get a guest account on NEAR testnet: no wallet, no gas."}
       </p>
       <form
         onSubmit={(e) => {
@@ -710,6 +742,11 @@ function JoinForm({ onStart, busy, hasGuest, grant, colonies }: { onStart: (name
           Start my colony
         </button>
       </form>
+      {player?.kind !== "wallet" && (
+        <button className="btn btn-ghost btn-small" type="button" onClick={onConnect} disabled={busy} style={{ width: "100%", marginTop: 10 }}>
+          Use my NEAR wallet instead
+        </button>
+      )}
       <p className={s.hint} style={{ marginTop: 12 }}>
         New here? <Link href="/rules">Read how it works</Link> first, or just plant a block and watch.
       </p>

@@ -1,6 +1,6 @@
 [package]
 name = "petri-contract"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 description = "The Petri dish on NEAR: Life with colony ownership, and the PETRI token it mints."
@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [package.metadata.near.reproducible_build]
 image = "sourcescan/cargo-near:0.22.0-rust-1.99.1"
-image_digest = ""
+image_digest = "sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb"
 passed_env = []
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]
 

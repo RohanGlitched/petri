@@ -24,7 +24,7 @@ const PARTS = [
   {
     name: "The keeper and the strains",
     where: "NEAR AI Cloud, in a TEE",
-    text: "A keeper advances the clock when nobody else does. Five strains choose their moves with a model whose answers come back signed by the enclave.",
+    text: "A keeper advances the clock when nobody else does. Five strains ask a model for each move, and its answers come back signed by the enclave; while the model is unavailable they play by written rules, and every move says which.",
   },
 ];
 

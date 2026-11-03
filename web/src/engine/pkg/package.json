@@ -1,5 +1,1 @@
-{
-  "name": "petri-wasm",
-  "type": "module",
-  "private": true
-}
+{ "type": "module" }

@@ -54,8 +54,15 @@ pub enum PlantError {
     OutOfRange { index: u32 },
     Duplicate { index: u32 },
     Occupied { index: u32 },
-    /// Another colony's live cell sits within the buffer of a planted cell.
-    TooClose { index: u32, rival: ColonyId },
+}
+
+/// A legal planting. `siege` is set when a planted cell has another colony's live cell within the buffer: the planting
+/// is allowed but costs the siege surcharge (see `planting_cost`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlantCheck {
+    pub siege: bool,
+    /// The first rival found inside the buffer, if any.
+    pub rival: Option<ColonyId>,
 }
 
 impl Dish {
@@ -250,8 +257,9 @@ impl Dish {
         stats
     }
 
-    /// Check a planting without changing the dish. `cells` are flat indices.
-    pub fn check_plant(&self, colony: ColonyId, cells: &[u32], buffer: u16, max_cells: u32) -> Result<(), PlantError> {
+    /// Check a planting without changing the dish. `cells` are flat indices. A planting inside a rival's buffer is
+    /// legal; the result says so, because it costs more.
+    pub fn check_plant(&self, colony: ColonyId, cells: &[u32], buffer: u16, max_cells: u32) -> Result<PlantCheck, PlantError> {
         if cells.is_empty() {
             return Err(PlantError::Empty);
         }
@@ -259,6 +267,7 @@ impl Dish {
             return Err(PlantError::TooMany { max: max_cells });
         }
         let len = self.len() as u32;
+        let mut rival: Option<ColonyId> = None;
         let mut seen: Vec<u32> = Vec::with_capacity(cells.len());
         for &i in cells {
             if i >= len {
@@ -271,18 +280,22 @@ impl Dish {
             if self.cells[i as usize] != EMPTY {
                 return Err(PlantError::Occupied { index: i });
             }
+            if rival.is_some() {
+                continue;
+            }
             let (x, y) = self.xy(i as usize);
             let b = buffer as i32;
-            for dy in -b..=b {
+            'scan: for dy in -b..=b {
                 for dx in -b..=b {
                     let c = self.cells[self.index(x + dx, y + dy)];
                     if c != EMPTY && c != colony {
-                        return Err(PlantError::TooClose { index: i, rival: c });
+                        rival = Some(c);
+                        break 'scan;
                     }
                 }
             }
         }
-        Ok(())
+        Ok(PlantCheck { siege: rival.is_some(), rival })
     }
 
     /// Plant without checks. Call `check_plant` first.
@@ -464,46 +477,18 @@ fn plurality(p: [ColonyId; 3]) -> Option<ColonyId> {
     }
 }
 
-/// What planting `cells` costs when `total_live` cells are already alive: `base` per cell, scaled up by crowding,
-/// `base * cells * (capacity + total_live) / capacity`. The dish has a carrying capacity: life gets dearer as it fills.
-pub fn plant_cost(base: u128, cells: u32, total_live: u32, capacity: u32) -> u128 {
-    let capacity = capacity.max(1) as u128;
-    base * cells as u128 * (capacity + total_live as u128) / capacity
-}
-
-/// Split `emission` between colonies in proportion to their live cells. Remainders from integer division are not
-/// minted. Index 0 of the result is always 0.
-/// Each colony's claim on the feed: its living cells, but never more than `cap_bps` of all living cells (and the cap
-/// is never below `cap_min` cells). One runaway grower cannot take the whole feed, and splitting into many small
-/// accounts gains nothing, because small colonies are counted cell for cell like everyone else.
-pub fn feed_weights(live: &[u32], cap_bps: u16, cap_min: u32) -> Vec<u128> {
-    let total: u128 = live.iter().skip(1).map(|&n| n as u128).sum();
-    let cap = (total * cap_bps as u128 / 10_000).max(cap_min as u128);
-    let mut w: Vec<u128> = live.iter().map(|&n| (n as u128).min(cap)).collect();
-    if let Some(first) = w.first_mut() {
-        *first = 0;
-    }
-    w
-}
-
-/// Split `amount` in proportion to `weights` (index 0 gets nothing). Rounding dust is not paid out.
-pub fn split_by_weight(amount: u128, weights: &[u128]) -> Vec<u128> {
-    let mut out = vec![0u128; weights.len()];
-    let total: u128 = weights.iter().skip(1).sum();
-    if total == 0 {
-        return out;
-    }
-    for c in 1..weights.len() {
-        out[c] = amount * weights[c] / total;
-    }
-    out
+/// A colony's claim on the feed and the tides: its living cells, but never more than `reach` cells for every cell it
+/// has ever planted. The cap grows only with what a colony has paid for, so splitting into many colonies never raises
+/// it: the sum of capped weights is at most the capped weight of the sum.
+pub fn feed_weight(live: u32, planted: u64, reach: u32) -> u128 {
+    (live as u128).min(planted as u128 * reach as u128)
 }
 
 /// One generation's feed from the agar.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Feed {
-    /// What each colony earns (index = colony id).
-    pub shares: Vec<u128>,
+    /// What each paid colony earns, as `(colony id, PETRI units)`, only for colonies that earn something.
+    pub shares: Vec<(ColonyId, u128)>,
     /// The keeper's cut, which goes to the keeper pot.
     pub keeper: u128,
     /// Everything that leaves the agar this generation: the shares plus the keeper's cut.
@@ -511,18 +496,65 @@ pub struct Feed {
 }
 
 /// The agar pays `feed_ppm` parts per million of itself; `keeper_bps` of that goes to the keeper pot and the rest is
-/// split across living colonies by capped weight (see `feed_weights`). An empty dish is fed nothing. The contract,
-/// the browser and the simulator all call this, so their books cannot drift apart.
-pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, cap_bps: u16, cap_min: u32, live: &[u32]) -> Feed {
-    let weights = feed_weights(live, cap_bps, cap_min);
-    if weights.iter().all(|&w| w == 0) {
-        return Feed { shares: vec![0; live.len()], keeper: 0, paid: 0 };
+/// split across living colonies by `feed_weight`. `live` and `planted` are indexed by colony id (index 0 unused).
+/// Only living colonies are visited for the arithmetic. An unpaid dish is fed nothing. The contract, the browser and
+/// the simulator all call this, so their books cannot drift apart.
+pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live: &[u32], planted: &[u64]) -> Feed {
+    let mut weights: Vec<(ColonyId, u128)> = Vec::new();
+    let mut total_w = 0u128;
+    for (c, &n) in live.iter().enumerate().skip(1) {
+        if n == 0 {
+            continue;
+        }
+        let w = feed_weight(n, planted.get(c).copied().unwrap_or(0), reach);
+        if w > 0 {
+            weights.push((c as ColonyId, w));
+            total_w += w;
+        }
+    }
+    if total_w == 0 {
+        return Feed::default();
     }
     let total = agar * feed_ppm as u128 / 1_000_000;
     let keeper = total * keeper_bps as u128 / 10_000;
-    let shares = split_by_weight(total - keeper, &weights);
-    let paid = keeper + shares.iter().sum::<u128>();
+    let pool = total - keeper;
+    let shares: Vec<(ColonyId, u128)> = weights.iter().map(|&(c, w)| (c, pool * w / total_w)).filter(|&(_, s)| s > 0).collect();
+    let paid = keeper + shares.iter().map(|&(_, s)| s).sum::<u128>();
     Feed { shares, keeper, paid }
+}
+
+/// One tide. `pay` (NEAR) is split by what each colony earned from the feed since the last tide (`window`, indexed by
+/// colony id), so a colony that appears just before a tide gets only its few generations' worth. Colonies in `house`
+/// (the dish's own players) take no share. Returns `(colony id, NEAR)` pairs and the total paid; rounding dust stays
+/// in the vault.
+pub fn tide_split(pay: u128, window: &[u64], house: &[ColonyId]) -> (Vec<(ColonyId, u128)>, u128) {
+    let mut total = 0u128;
+    for (c, &w) in window.iter().enumerate().skip(1) {
+        if w > 0 && !house.contains(&(c as ColonyId)) {
+            total += w as u128;
+        }
+    }
+    if total == 0 || pay == 0 {
+        return (Vec::new(), 0);
+    }
+    let mut out = Vec::new();
+    let mut paid = 0u128;
+    for (c, &w) in window.iter().enumerate().skip(1) {
+        if w == 0 || house.contains(&(c as ColonyId)) {
+            continue;
+        }
+        let s = mul_div(pay, w as u128, total);
+        if s > 0 {
+            out.push((c as ColonyId, s));
+            paid += s;
+        }
+    }
+    (out, paid)
+}
+
+/// `a * b / d` without overflowing when `a` is large and `b < d`.
+fn mul_div(a: u128, b: u128, d: u128) -> u128 {
+    a / d * b + (a % d) * b / d
 }
 
 /// What a single living cell earns per generation on average at today's feed, counting at least `live_floor` cells
@@ -540,6 +572,17 @@ pub fn plant_price(per_cell_feed: u128, payback: u32, floor: u128, cells: u32) -
     (per_cell_feed * payback as u128).max(floor) * cells as u128
 }
 
+/// The price of a planting, with the siege surcharge: a planting that reaches into a rival's buffer costs `siege_x`
+/// times as much. Ground near a rival is never closed, only dearer.
+pub fn planting_cost(per_cell_feed: u128, payback: u32, floor: u128, cells: u32, siege: bool, siege_x: u32) -> u128 {
+    let base = plant_price(per_cell_feed, payback, floor, cells);
+    if siege {
+        base * siege_x.max(1) as u128
+    } else {
+        base
+    }
+}
+
 /// PETRI bought from the agar for `deposit` yoctoNEAR. The price per PETRI is `k / agar` (where `k` is the launch
 /// price times the full supply), so it rises as the agar empties; the purchase is priced at the midpoint of the
 /// curve it moves along. Returns PETRI units.
@@ -554,15 +597,19 @@ pub fn petri_for_near(deposit: u128, agar: u128, k: u128) -> u128 {
     (whole + rest).min(agar)
 }
 
-pub fn split_emission(emission: u128, live: &[u32], total_live: u32) -> Vec<u128> {
-    let mut out = vec![0u128; live.len()];
-    if total_live == 0 {
-        return out;
+/// NEAR the agar pays for `units` PETRI handed back to it: `sell_bps` of the curve's price at the midpoint of the move
+/// (the agar grows by `units`), so a round trip through the agar always loses. In yoctoNEAR.
+pub fn near_for_petri(units: u128, agar: u128, k: u128, sell_bps: u16) -> u128 {
+    if units == 0 {
+        return 0;
     }
-    for (c, &n) in live.iter().enumerate().skip(1) {
-        out[c] = emission * n as u128 / total_live as u128;
+    let mid = agar + units / 2;
+    if mid == 0 {
+        return 0;
     }
-    out
+    // k * units / mid, without overflow.
+    let gross = k / mid * units + (k % mid) * units / mid;
+    gross * sell_bps as u128 / 10_000
 }
 
 /// Named patterns, as (dx, dy) offsets. Used by the browser's stamp tool, the strains and the tests.

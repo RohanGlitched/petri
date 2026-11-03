@@ -1,7 +1,7 @@
 //! PETRI as a NEP-141 token, with NEP-148 metadata and NEP-145 storage registration.
 //!
 //! An account must be registered (by joining the dish or with `storage_deposit`) before it can receive PETRI, and it
-//! pays for its own balance record. The contract's own balance is the agar: it never sends or receives PETRI through
+//! pays for its own balance record. The contract's own balance is what the dish holds (the agar, unclaimed earnings and the keeper pot): it never sends or receives PETRI through
 //! the token methods.
 
 use crate::*;
@@ -117,7 +117,7 @@ impl Petri {
 
     pub fn ft_balance_of(&self, account_id: AccountId) -> U128 {
         if account_id == env::current_account_id() {
-            return U128(self.agar);
+            return U128(self.held_by_dish());
         }
         U128(self.balance(&account_id))
     }
@@ -195,7 +195,7 @@ impl Petri {
 impl Petri {
     fn internal_transfer(&mut self, from: &AccountId, to: &AccountId, amount: u128, memo: Option<&str>) {
         require!(amount > 0, "amount must be positive");
-        require!(*to != env::current_account_id(), "PETRI goes back to the agar only by planting");
+        require!(*to != env::current_account_id(), "PETRI goes back to the agar only by planting or selling");
         require!(from != to, "sender and receiver are the same account");
         require!(self.balances.contains_key(to), "the receiver is not registered; it needs storage_deposit first");
         let b = self.balance(from);

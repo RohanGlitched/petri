@@ -1,15 +1,18 @@
 "use client";
-// The player's account. By default a guest: a key made in this browser and a testnet account the site creates for
-// it. The key never leaves the browser; the server only sees the public half.
+// The player's account. Either a NEAR wallet connected through NEAR Connect, which signs and pays for its own
+// transactions, or a guest: a key made in this browser and a testnet account the site creates for it. A guest's key
+// never leaves the browser; the server only sees the public half and relays what the guest signs.
 
 import { Account, JsonRpcProvider, KeyPair, type KeyPairString } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { useSyncExternalStore } from "react";
-import { CONTRACT, RPC_URLS } from "./config";
+import type { NearConnector } from "@hot-labs/near-connect";
+import { CONTRACT, NETWORK, RPC_URLS } from "./config";
 
 const STORE = "petri.guest.v1";
+const WALLET_STORE = "petri.wallet.v1";
 
-export type Player = { accountId: string; kind: "guest" } | null;
+export type Player = { accountId: string; kind: "guest" | "wallet" } | null;
 
 type Saved = { accountId: string; secretKey: KeyPairString };
 
@@ -17,18 +20,69 @@ let player: Player = null;
 let loaded = false;
 const listeners = new Set<() => void>();
 
+function guestPlayer(): Player {
+  const s = saved();
+  return s ? { accountId: s.accountId, kind: "guest" } : null;
+}
+
 function load() {
   if (loaded || typeof window === "undefined") return;
   loaded = true;
+  player = guestPlayer();
+  // A wallet connected on an earlier visit comes back without a popup.
+  let hadWallet = false;
   try {
-    const raw = localStorage.getItem(STORE);
-    if (raw) {
-      const s = JSON.parse(raw) as Saved;
-      if (s.accountId && s.secretKey) player = { accountId: s.accountId, kind: "guest" };
-    }
+    hadWallet = localStorage.getItem(WALLET_STORE) === "1";
   } catch {
-    /* storage blocked: the player can still make a guest for this visit */
+    /* storage blocked */
   }
+  if (hadWallet) {
+    connector()
+      .then((c) => c.getConnectedWallet())
+      .then(({ accounts }) => accounts[0] && set({ accountId: accounts[0].accountId, kind: "wallet" }))
+      .catch(() => {
+        /* the wallet session ended; stay a guest */
+      });
+  }
+}
+
+let connecting: Promise<NearConnector> | null = null;
+
+/** NEAR Connect, loaded only when a wallet is wanted. Wallet code runs in its own sandboxed iframe. */
+function connector(): Promise<NearConnector> {
+  connecting ??= import("@hot-labs/near-connect").then(({ NearConnector }) => {
+    const c = new NearConnector({ network: NETWORK, providers: { [NETWORK]: RPC_URLS } });
+    c.on("wallet:signIn", ({ accounts }) => {
+      if (!accounts[0]) return;
+      try {
+        localStorage.setItem(WALLET_STORE, "1");
+      } catch {
+        /* remembered for this visit only */
+      }
+      set({ accountId: accounts[0].accountId, kind: "wallet" });
+    });
+    c.on("wallet:signOut", () => {
+      try {
+        localStorage.removeItem(WALLET_STORE);
+      } catch {
+        /* nothing stored */
+      }
+      set(guestPlayer());
+    });
+    return c;
+  });
+  return connecting;
+}
+
+/** Opens the wallet picker. The player becomes the wallet's account once it signs in. */
+export async function connectWallet(): Promise<void> {
+  const c = await connector();
+  await c.connect();
+}
+
+export async function disconnectWallet(): Promise<void> {
+  const c = await connector();
+  await c.disconnect();
 }
 
 function set(p: Player) {
@@ -107,7 +161,7 @@ export function forgetGuest() {
     /* nothing stored */
   }
   memoryKey = null;
-  set(null);
+  if (player?.kind === "guest") set(null);
 }
 
 function account(): Account {
@@ -119,8 +173,30 @@ function account(): Account {
 
 export type TxResult = { hash: string };
 
+type Outcome = { transaction: { hash: string }; status: unknown; receipts_outcome?: { outcome: { status: unknown } }[] };
+
+function failureOf(o: Outcome): unknown {
+  const bad = (st: unknown) => st && typeof st === "object" && "Failure" in st ? (st as { Failure: unknown }).Failure : null;
+  return bad(o.status) ?? (o.receipts_outcome ?? []).map((r) => bad(r.outcome.status)).find(Boolean) ?? null;
+}
+
+// A wallet signs the call itself and pays its own gas and deposit.
+async function walletCall(methodName: string, args: Record<string, unknown>, tgas: number, deposit: bigint): Promise<TxResult> {
+  const w = await (await connector()).wallet();
+  const out = (await w.signAndSendTransaction({
+    signerId: player?.accountId,
+    receiverId: CONTRACT,
+    actions: [{ type: "FunctionCall", params: { methodName, args, gas: String(BigInt(tgas) * 10n ** 12n), deposit: String(deposit) } }],
+  })) as unknown as Outcome;
+  const f = failureOf(out);
+  if (f) throw new Error(readableFailure(f));
+  return { hash: out.transaction.hash };
+}
+
 // Guests sign a delegate action (NEP-366) and the site's relayer submits it and pays the gas.
 async function call(methodName: string, args: Record<string, unknown>, tgas: number, deposit: bigint = 0n): Promise<TxResult> {
+  load();
+  if (player?.kind === "wallet") return walletCall(methodName, args, tgas, deposit);
   const a = account();
   const { actions, encodeSignedDelegate } = await import("near-api-js");
   const { signedDelegate } = await a.createSignedMetaTransaction({
