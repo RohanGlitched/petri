@@ -88,9 +88,11 @@ export function candidates(world, me, balance, rng, limit = 6) {
   const h = rules.height;
   const centres = colonyCentres(cells, w, h);
   const mine = centres.get(me.id);
-  const rivals = [...centres.entries()].filter(([c]) => c !== me.id).map(([c, v]) => ({ id: c, ...v, name: colonies.find((x) => x.id === c)?.name ?? `colony ${c}` }));
+  // Rivals are named by number only. Colony names are written by players, and a model reading them could be steered
+  // by a name written as an instruction, so no player-written text ever reaches the prompt.
+  const rivals = [...centres.entries()].filter(([c]) => c !== me.id).map(([c, v]) => ({ id: c, ...v, name: `colony ${c}` }));
   const totalLive = world.totalLive;
-  const price = (n) => Number(quote(engine.agar(), rules.feed_ppm, rules.keeper_bps, totalLive, rules.live_floor, rules.payback, rules.min_cell_price, n));
+  const price = (n) => Number(quote(engine.agar(), rules.feed_ppm, rules.keeper_bps, totalLive, rules.live_floor, rules.payback, rules.min_cell_price, n, false, rules.siege_x));
   const out = [];
   const seen = new Set();
 
@@ -98,6 +100,7 @@ export function candidates(world, me, balance, rng, limit = 6) {
     const idx = Array.from(pattern_cells(pattern, x, y, w, h, rot, false));
     const key = idx.slice().sort((a, b) => a - b).join(",");
     if (seen.has(key)) return false;
+    // The house never lays siege: strains plant only outside every rival's buffer.
     if (engine.check_plant(me.id, new Uint32Array(idx), rules.buffer, rules.max_plant_cells) !== "") return false;
     const cost = price(idx.length);
     if (cost > balance * 0.6) return false;

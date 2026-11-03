@@ -25,7 +25,7 @@ export function useLive() {
   const supply = st ? Number(st.total_supply) : 0;
   const burned = st ? Number(st.burned) : 0;
   /** PETRI units to plant one cell right now, by the contract's formula at the browser's generation. */
-  const cellPrice = rules && ready ? Number(quote(String(d.agar), rules.feed_ppm, rules.keeper_bps, d.totalLive, rules.live_floor, rules.payback, rules.min_cell_price, 1)) : st ? Number(st.cell_price) : 0;
+  const cellPrice = rules && ready ? Number(quote(String(d.agar), rules.feed_ppm, rules.keeper_bps, d.totalLive, rules.live_floor, rules.payback, rules.min_cell_price, 1, false, rules.siege_x)) : st ? Number(st.cell_price) : 0;
   /** yoctoNEAR the agar asks for one PETRI right now. */
   const petriPrice = rules && d.agar > 0 ? (Number(rules.petri_price) * Number(rules.max_supply)) / d.agar : 0;
   return {

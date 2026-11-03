@@ -7,9 +7,9 @@ import { Loupe } from "@/components/site/Loupe";
 import { Specimen } from "@/components/site/Specimen";
 import { currentEngine, refreshDish } from "@/lib/dish-store";
 import { useLive, usePatternOffsets, petri, int, hex, near } from "@/lib/live";
-import { BUY_NEAR, GUEST_BUDGET, JOIN_NEAR, buyPetri, claimAll, connectWallet, createGuest, disconnectWallet, joinDish, plantCells, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
-import { buy_quote, pattern_cells, quote, PATTERNS, type PatternInfo, type PatternName } from "@/engine";
-import { getBalance, getClaimable, getColonyOf, getNearBalance, getPlantDeposit, type Colony } from "@/lib/chain";
+import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, connectWallet, createGuest, disconnectWallet, joinDish, plantCells, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
+import { buy_quote, pattern_cells, quote, sell_quote, PATTERNS, type PatternInfo, type PatternName } from "@/engine";
+import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPlantDeposit, type Colony } from "@/lib/chain";
 import { accountUrl, shortAccount, txUrl } from "@/lib/config";
 import { STAINS, firstFreeStain } from "@/lib/stains";
 import { strainOf } from "@/lib/strains";
@@ -32,8 +32,8 @@ function explain(v: string | null, w: number, names: Map<number, string>): strin
   switch (kind) {
     case "occupied":
       return `Cell ${at(a)} is already alive. Move the stamp onto empty agar.`;
-    case "too_close":
-      return `Cell ${at(a)} is inside ${names.get(Number(b)) ?? `colony ${b}`}’s buffer, the hatched zone. Plant further out, or send a glider.`;
+    case "siege":
+      return `Inside ${names.get(Number(a)) ?? `colony ${a}`}’s buffer, the hatched zone: allowed, but a siege costs four times the price. Plant further out to pay the normal price, or send a glider.`;
     case "too_many":
       return `At most ${a} cells in one planting.`;
     default:
@@ -63,6 +63,7 @@ export function DishStage() {
   const [balance, setBalance] = useState<number | null>(null);
   const [claimable, setClaimable] = useState<{ petri: number; near: number }>({ petri: 0, near: 0 });
   const [nearLeft, setNearLeft] = useState<bigint | null>(null);
+  const [credit, setCredit] = useState<bigint | null>(null);
   const [hover, setHover] = useState<Cell | null>(null);
   const [pattern, setPattern] = useState<PatternName | null>(null);
   const [rotate, setRotate] = useState(0);
@@ -85,16 +86,18 @@ export function DishStage() {
       return;
     }
     try {
-      const [c, b, cl, n] = await Promise.all([
+      const [c, b, cl, n, cr] = await Promise.all([
         getColonyOf(player.accountId),
         getBalance(player.accountId),
         getClaimable(player.accountId),
         getNearBalance(player.accountId).catch(() => null),
+        getCredit(player.accountId).catch(() => "0"),
       ]);
       setMe(c);
       setBalance(Number(b));
       setClaimable({ petri: Number(cl.petri), near: Number(cl.near) });
       setNearLeft(n);
+      setCredit(BigInt(cr));
     } catch {
       /* the next poll retries */
     }
@@ -136,6 +139,10 @@ export function DishStage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stamp, rules, d.generation, me]);
 
+  // A planting inside a rival's buffer is legal but costs the siege price.
+  const siege = !!verdict && verdict.startsWith("siege:");
+  const legal = verdict === "" || siege;
+
   const overlay = useMemo(() => {
     const o = new Uint8Array(w * h);
     if (pattern && d.cells && rules) {
@@ -152,10 +159,10 @@ export function DishStage() {
         }
       }
     }
-    if (stamp) for (const i of stamp) o[i] = verdict === "" ? 1 : 2;
+    if (stamp) for (const i of stamp) o[i] = legal ? 1 : 2;
     if (pending) for (const i of pending.cells) o[i] = 4;
     return o;
-  }, [pattern, d.cells, rules, me, stamp, verdict, pending, w, h]);
+  }, [pattern, d.cells, rules, me, stamp, legal, pending, w, h]);
 
   useEffect(() => {
     if (!pending) return;
@@ -165,18 +172,22 @@ export function DishStage() {
 
   const info = PATTERNS.find((p) => p.name === pattern);
   // The contract's own price formula, from the same crate.
-  const costOf = (n: number) =>
-    rules && ready ? Number(quote(String(d.agar), rules.feed_ppm, rules.keeper_bps, d.totalLive, rules.live_floor, rules.payback, rules.min_cell_price, n)) : 0;
+  const costOf = (n: number, besieging = false) =>
+    rules && ready ? Number(quote(String(d.agar), rules.feed_ppm, rules.keeper_bps, d.totalLive, rules.live_floor, rules.payback, rules.min_cell_price, n, besieging, rules.siege_x)) : 0;
   // What 0.02 NEAR buys a newcomer right now, after about 0.006 NEAR of colony storage.
   const joinPetri = rules && ready ? Number(buy_quote(String(JOIN_NEAR - 6n * 10n ** 21n), String(d.agar), rules.petri_price, rules.max_supply)) : 0;
-  const cost = info ? costOf(stamp?.length ?? info.cells) : 0;
+  const cost = info ? costOf(stamp?.length ?? info.cells, siege) : 0;
   const myLive = me ? d.liveCounts[me.id] ?? 0 : 0;
   const myPending = me ? d.pending[me.id] ?? 0 : 0;
   const plantedThisGen = me?.last_plant_generation != null && Number(me.last_plant_generation) >= d.generation;
-  // The relayer pays a guest's deposits up to a budget, counted on chain as the colony's near_paid. A wallet pays its own.
+  // A guest spends the credit the relayer sponsored on chain; a wallet pays its own NEAR.
   const isWallet = player?.kind === "wallet";
-  const sponsoredLeft = me ? GUEST_BUDGET - BigInt(me.near_paid) : GUEST_BUDGET;
+  const sponsoredLeft = credit ?? 0n;
   const canBuy = isWallet ? nearLeft === null || nearLeft >= BUY_NEAR + 3n * 10n ** 21n : sponsoredLeft >= BUY_NEAR;
+  // Selling back: the agar pays half the curve's price, up to what is left of this tide's allowance.
+  const SELL_UNITS = 20_000_000;
+  const sellNear = rules && ready && d.state ? Number(sell_quote(String(SELL_UNITS), String(d.agar), rules.petri_price, rules.max_supply, rules.sell_bps)) : 0;
+  const canSell = !!d.state && (balance ?? 0) >= SELL_UNITS && sellNear > 0 && sellNear <= Number(d.state.sell_left);
   // Planting claims a colony's waiting earnings first, so they count towards the price.
   const spendable = (balance ?? 0) + claimable.petri + Math.max(0, myPending);
   const canAfford = balance !== null && spendable >= cost;
@@ -247,6 +258,22 @@ export function DishStage() {
     try {
       const r = await claimAll();
       setDone({ text: "Claimed. Your PETRI is in your balance and any NEAR from the tides is on its way to your account.", hash: r.hash });
+      await loadMe();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sell() {
+    setError(null);
+    setDone(null);
+    setBusy("Selling PETRI back to the agar…");
+    try {
+      const r = await sellPetri(BigInt(SELL_UNITS));
+      setDone({ text: `Sold ${petri(SELL_UNITS)} PETRI back to the agar for about ${near(sellNear, 4)} NEAR, paid from the tide vault.`, hash: r.hash });
+      await refreshDish();
       await loadMe();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -465,7 +492,7 @@ export function DishStage() {
               <Specimen offsets={offsets[info.name]} color={myColor} size={48} />
               <div>
                 <h2>{info.label}</h2>
-                <span className="num">{stamp?.length ?? info.cells} cells, {petri(cost, 2)} PETRI</span>
+                <span className="num">{stamp?.length ?? info.cells} cells, {petri(cost, 2)} PETRI{siege ? ` (siege, ${rules?.siege_x ?? 4}×)` : ""}</span>
               </div>
               <button className={s.close} aria-label="Put the stamp down" onClick={() => { setPattern(null); setTarget(null); }}>×</button>
             </div>
@@ -474,7 +501,7 @@ export function DishStage() {
               <button className="btn btn-ghost btn-small" onClick={() => setRotate((r) => (r + 1) % 4)}>Rotate <kbd>R</kbd></button>
               <button className="btn btn-ghost btn-small" onClick={() => setFlip((f) => !f)}>Flip <kbd>F</kbd></button>
             </div>
-            <p className={`${s.verdict} ${verdict === "" ? s.ok : verdict ? s.bad : ""}`}>
+            <p className={`${s.verdict} ${verdict === "" ? s.ok : siege ? s.warn : verdict ? s.bad : ""}`}>
               {!anchor ? "Point at the dish, then click where it should grow." : verdict === "" ? `${snapped && target ? "That spot was taken, so the stamp moved to the nearest one that fits: " : "Fits at "}${anchor.x}, ${anchor.y}.${target ? "" : " Click to place it."}` : explain(verdict, w, names)}
             </p>
             {me && (
@@ -484,7 +511,7 @@ export function DishStage() {
                 <em className="num">{note.length}/140</em>
               </label>
             )}
-            <button className="btn btn-amber" disabled={!me || !target || verdict !== "" || !!busy || !canAfford || plantedThisGen} onClick={plant}>
+            <button className="btn btn-amber" disabled={!me || !target || !legal || !!busy || !canAfford || plantedThisGen} onClick={plant}>
               {!me
                 ? "Start a colony to plant"
                 : !target
@@ -493,7 +520,9 @@ export function DishStage() {
                     ? `You need ${petri(cost, 2)} PETRI`
                     : plantedThisGen
                       ? "One planting per generation. Next one soon"
-                      : `Plant the ${info.label.toLowerCase()} here`}
+                      : siege
+                        ? `Lay siege here for ${petri(cost, 2)} PETRI`
+                        : `Plant the ${info.label.toLowerCase()} here`}
             </button>
           </section>
         )}
@@ -533,11 +562,14 @@ export function DishStage() {
               <button className="btn btn-ghost btn-small" onClick={buy} disabled={!!busy || !canBuy}>
                 Buy PETRI with 0.01 NEAR
               </button>
+              <button className="btn btn-ghost btn-small" onClick={sell} disabled={!!busy || !canSell} title={d.state && sellNear > Number(d.state.sell_left) ? "The agar has bought back all it will until the next tide." : undefined}>
+                Sell {petri(SELL_UNITS)} back for {near(sellNear, 4)} NEAR
+              </button>
             </div>
             {isWallet ? (
               <p className={s.hint}>Your wallet signs each move and pays its own gas and deposits{nearLeft !== null ? `; it holds ${near(Number(nearLeft), 3)} NEAR` : ""}.</p>
             ) : (
-              <p className={s.hint}>The site sponsors up to {near(Number(GUEST_BUDGET), 2)} testnet NEAR of deposits for each guest; {near(Number(sponsoredLeft), 4)} NEAR of that is left. Connect a wallet to play with your own.</p>
+              <p className={s.hint}>The site sponsored {near(Number(GUEST_CREDIT), 2)} testnet NEAR of credit for this guest, held by the dish contract and spendable only on joining, buying and planting; {near(Number(sponsoredLeft), 4)} NEAR of it is left. Connect a wallet to play with your own.</p>
             )}
             <div className={s.row}>
               <button className="btn btn-ghost btn-small" onClick={findMine} disabled={myLive === 0}>Find my colony</button>

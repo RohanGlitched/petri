@@ -103,10 +103,10 @@ function saved(): Saved | null {
 }
 
 /** The small proof of work the guest faucet asks for, bound to this key (see /api/guest). About a second. */
-async function proofOfWork(publicKey: string, bits = 18): Promise<string> {
+async function proofOfWork(challenge: string, publicKey: string, bits: number): Promise<string> {
   const enc = new TextEncoder();
   for (let n = 0; ; n++) {
-    const h = sha256(enc.encode(`petri-guest:${publicKey}:${n}`));
+    const h = sha256(enc.encode(`petri-guest:${challenge}:${publicKey}:${n}`));
     let z = 0;
     for (const b of h) {
       if (b === 0) {
@@ -125,11 +125,14 @@ async function proofOfWork(publicKey: string, bits = 18): Promise<string> {
 export async function createGuest(): Promise<string> {
   const kp = KeyPair.fromRandom("ed25519");
   const publicKey = kp.getPublicKey().toString();
-  const nonce = await proofOfWork(publicKey);
+  // The server hands out a signed, short-lived challenge; the proof of work is bound to it and to this key.
+  const ch = await fetch("/api/guest").then((r) => r.json()).catch(() => ({}));
+  if (!ch.challenge) throw new Error(ch.error ?? "The guest faucet did not answer.");
+  const nonce = await proofOfWork(ch.challenge, publicKey, ch.bits ?? 18);
   const res = await fetch("/api/guest", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ publicKey, nonce }),
+    body: JSON.stringify({ publicKey, nonce, challenge: ch.challenge }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.accountId) throw new Error(body.error ?? "The guest account could not be made.");
@@ -193,10 +196,16 @@ async function walletCall(methodName: string, args: Record<string, unknown>, tga
   return { hash: out.transaction.hash };
 }
 
-// Guests sign a delegate action (NEP-366) and the site's relayer submits it and pays the gas.
+// Guests sign a delegate action (NEP-366) and the site's relayer submits it and pays the gas. A guest's key may only
+// call the dish and cannot attach NEAR, so whatever the call needs comes from the credit the relayer sponsored on
+// chain when it made the guest: `deposit` is sent as `credit` in the arguments instead.
 async function call(methodName: string, args: Record<string, unknown>, tgas: number, deposit: bigint = 0n): Promise<TxResult> {
   load();
   if (player?.kind === "wallet") return walletCall(methodName, args, tgas, deposit);
+  if (deposit > 0n) {
+    args = { ...args, credit: deposit.toString() };
+    deposit = 0n;
+  }
   const a = account();
   const { actions, encodeSignedDelegate } = await import("near-api-js");
   const { signedDelegate } = await a.createSignedMetaTransaction({
@@ -226,14 +235,15 @@ export function readableFailure(f: unknown): string {
   return "NEAR rejected the transaction.";
 }
 
-/** A guest stakes 0.02 NEAR when it joins: storage for its colony, and the rest buys its first PETRI. */
+/** A colony stakes 0.02 NEAR when it joins: storage for its colony, and the rest buys its first PETRI. */
 export const JOIN_NEAR = 2n * 10n ** 22n;
 export const BUY_NEAR = 10n ** 22n;
-/** NEAR of deposits the site's relayer sponsors per guest (kept in step with /api/relay). */
-export const GUEST_BUDGET = 6n * 10n ** 22n;
+/** NEAR of credit the site's relayer sponsors on chain for each guest (kept in step with /api/guest). */
+export const GUEST_CREDIT = 5n * 10n ** 22n;
 export const joinDish = (name: string, color: number, deposit: bigint = JOIN_NEAR) => call("join", { name, color }, 200, deposit);
 export const plantCells = (cells: number[], note: string | undefined, deposit: bigint) => call("plant", { cells, note: note?.trim() || null }, 200, deposit);
 export const buyPetri = (deposit: bigint = BUY_NEAR) => call("buy", {}, 150, deposit);
+export const sellPetri = (units: bigint) => call("sell", { petri: units.toString() }, 150);
 export const claimAll = () => call("claim", {}, 150);
 export const advanceDish = () => call("advance", {}, 250);
 

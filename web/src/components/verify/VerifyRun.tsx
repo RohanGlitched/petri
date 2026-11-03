@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Culture } from "@/components/Culture";
 import { loadEngine } from "@/engine";
-import { getAllColonies, getAllLedger, getCheckpoints, getEarnings, getRules, getState } from "@/lib/chain";
+import { getAllColonies, getAllLedger, getEarnings, getLock, getRules, getState, getTideWinnings, pinFinalBlock } from "@/lib/chain";
 import { Replayer, type Check } from "@/lib/replay";
 import { CONTRACT, NETWORK, REPO, accountUrl } from "@/lib/config";
 import s from "./verify.module.css";
@@ -28,23 +28,30 @@ export function VerifyRun() {
     setPhase("fetching");
     setChecks([]);
     setLog([]);
-    setMsg("Reading the contract: rules, state, colonies, every planting and every checkpoint…");
+    setMsg("Reading the contract at one final block: rules, state, colonies and the whole ledger…");
     try {
       await loadEngine();
-      const [rules, state] = await Promise.all([getRules(), getState()]);
-      // Read everything up to the counts in this one state, so a planting that lands mid-read cannot skew the replay.
-      const [colonies, ledger, allCheckpoints, earnings] = await Promise.all([
-        getAllColonies(state.colonies),
-        getAllLedger(Number(state.ledger)),
-        getCheckpoints(0, 2000),
-        getEarnings(0, 2000),
-      ]);
+      // Every read below comes from the same final block, so nothing can land between them.
+      await pinFinalBlock();
+      let rules, state, colonies, ledger, earnings, winnings, lock;
+      try {
+        [rules, state] = await Promise.all([getRules(), getState()]);
+        [colonies, ledger, earnings, winnings, lock] = await Promise.all([
+          getAllColonies(state.colonies),
+          getAllLedger(Number(state.ledger)),
+          getEarnings(0, 2000),
+          getTideWinnings(0, 2000),
+          getLock().catch(() => null),
+        ]);
+      } finally {
+        await pinFinalBlock(false);
+      }
       const plants = ledger.filter((e) => "Plant" in e);
-      const checkpoints = allCheckpoints.filter((c) => Number(c.generation) <= Number(state.generation));
+      const tides = ledger.filter((e) => "Tide" in e);
       if (id !== runId.current) return;
       setPalette(new Map(colonies.map((c) => [c.id, c.color])));
-      setCounts({ plants: plants.length, colonies: colonies.length, checkpoints: checkpoints.length });
-      const r = new Replayer({ rules, state, colonies, ledger, checkpoints, earnings: earnings.slice(0, colonies.length) });
+      setCounts({ plants: plants.length, colonies: colonies.length, checkpoints: tides.length + 1 });
+      const r = new Replayer({ rules, state, colonies, ledger, earnings: earnings.slice(0, colonies.length), winnings: winnings.slice(0, colonies.length), lock });
       setTarget(r.target);
       setPhase("replaying");
       setMsg("Replaying from generation zero with petri-core…");
@@ -94,7 +101,7 @@ export function VerifyRun() {
 
   const allOk = checks.length > 0 && checks.every((c) => c.ok);
   const pct = target > 0 ? Math.min(100, (100 * gen) / target) : 0;
-  const checkpointLog = useMemo(() => log.filter((l) => l.text.startsWith("Checkpoint")).reverse(), [log]);
+  const checkpointLog = useMemo(() => log.filter((l) => l.text.startsWith("Tide")).reverse(), [log]);
 
   return (
     <section className={s.run} aria-labelledby="run-title">
@@ -137,7 +144,7 @@ export function VerifyRun() {
             <p className={s.inputs}>
               <span className="num">{counts.plants.toLocaleString("en-US")}</span> plantings,{" "}
               <span className="num">{counts.colonies}</span> colonies and{" "}
-              <span className="num">{counts.checkpoints}</span> checkpoints read from{" "}
+              <span className="num">{counts.checkpoints}</span> checkpoints (generation zero and every tide) read from{" "}
               <a href={accountUrl(CONTRACT)}>{CONTRACT}</a> on NEAR {NETWORK}.
             </p>
           )}
@@ -187,7 +194,7 @@ export function VerifyRun() {
                 {l.ok ? "chain matches" : "chain differs"}
               </li>
             ))}
-            {checkpointLog.length === 0 && <li className="muted">Checkpoints appear here as the replay reaches them.</li>}
+            {checkpointLog.length === 0 && <li className="muted">Tides appear here as the replay reaches them: each one checks the history chain and the NEAR it paid.</li>}
           </ol>
         </div>
       </div>
@@ -196,15 +203,24 @@ export function VerifyRun() {
 }
 
 const PLACEHOLDER: Check[] = [
-  { id: "chain", label: "History chain", expected: "", got: null, ok: null },
-  { id: "board", label: "Board hash: every cell and its owner", expected: "", got: null, ok: null },
-  { id: "checkpoints", label: "Checkpoints every 240 generations", expected: "", got: null, ok: null },
-  { id: "prices", label: "Every planting paid the formula's price", expected: "", got: null, ok: null },
-  { id: "agar", label: "PETRI left in the agar", expected: "", got: null, ok: null },
-  { id: "sold", label: "PETRI sold from the agar for NEAR", expected: "", got: null, ok: null },
-  { id: "burned", label: "PETRI burned by planting", expected: "", got: null, ok: null },
-  { id: "returned", label: "PETRI returned to the agar", expected: "", got: null, ok: null },
-  { id: "keeper", label: "PETRI set aside for keepers", expected: "", got: null, ok: null },
-  { id: "earned", label: "Every colony's lifetime earnings", expected: "", got: null, ok: null },
-  { id: "live", label: "Living cells", expected: "", got: null, ok: null },
-];
+  ["chain", "History chain"],
+  ["board", "Board hash: every cell and its owner"],
+  ["live", "Living cells"],
+  ["legal", "Every planting was legal, sieges marked"],
+  ["prices", "Every planting paid the formula's price"],
+  ["buys", "Every purchase followed the agar's curve"],
+  ["sells", "Every sale back followed the curve"],
+  ["tides", "Every tide: chain, share of the vault and split"],
+  ["agar", "PETRI left in the agar"],
+  ["sold", "PETRI sold from the agar for NEAR"],
+  ["burned", "PETRI burned by planting"],
+  ["returned", "PETRI returned to the agar by planting"],
+  ["bought_back", "PETRI bought back by the agar"],
+  ["keeper", "PETRI set aside for keepers"],
+  ["earned", "Every colony's lifetime PETRI earnings"],
+  ["vault", "NEAR in the tide vault"],
+  ["near_in", "NEAR paid in by players"],
+  ["near_tides", "NEAR paid out at tides"],
+  ["won", "Every colony's NEAR won at tides"],
+  ["lock", "Nobody can change the contract: no full-access key"],
+].map(([id, label]) => ({ id, label, expected: "", got: null, ok: null }));

@@ -86,8 +86,10 @@ function dueFor(rules: Rules, state: DishState): number {
 
 async function loadStored(rules: Rules, state: DishState, colonies: Colony[]) {
   const board = await getBoard();
-  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.cap_bps, rules.cap_min);
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach);
   e.set_colonies(colonies.length);
+  // Each colony's pay cap grows with the cells it has planted, so the browser's feed needs those counts.
+  e.set_planted(new Uint32Array(colonies.map((c) => Number(c.cells_planted))));
   e.set_agar(state.agar);
   if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("The stored board could not be read");
   engine?.free();
@@ -124,9 +126,10 @@ function advanceTo(due: number, force = false) {
 async function sync(first = false) {
   const [rules, state] = await Promise.all([snap.rules ? Promise.resolve(snap.rules) : getRules(), getState()]);
   if (first) clockOffset = Number(state.now_ms) - Date.now();
-  const coloniesChanged = state.colonies !== knownColonies;
-  const colonies = coloniesChanged ? await getAllColonies(state.colonies) : snap.colonies;
   const plantKey = `${state.ledger}:${state.colonies}`;
+  // Colonies are re-read whenever the ledger moves: a planting changes the planter's pay cap.
+  const coloniesChanged = state.colonies !== knownColonies || plantKey !== knownPlants;
+  const colonies = coloniesChanged ? await getAllColonies(state.colonies) : snap.colonies;
   if (first || plantKey !== knownPlants || !engine) {
     await loadStored(rules, state, colonies);
     const total = Number(state.plants);

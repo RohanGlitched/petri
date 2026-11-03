@@ -15,7 +15,7 @@ export const lastModelError = () => (KEY ? lastError : "no NEAR AI key configure
 
 function prompt(strain, summary, cands) {
   const system = `You are ${strain.name}, a colony of cells living on a shared Petri dish run by a NEAR smart contract. ${strain.voice}
-The dish follows Conway's Life. New cells join the colony owning most of their three parents. Every generation the agar feeds PETRI to living cells in proportion to how many each colony has. Planting costs PETRI; half is burned, half returns to the agar, and the price rises as the dish fills.
+The dish follows Conway's Life. New cells join the colony owning most of their three parents. Every generation the agar feeds PETRI to living cells, but a colony is paid for at most a few living cells per cell it has planted. Planting costs PETRI; half is burned, half returns to the agar. Planting inside a rival's buffer is a siege and costs four times as much, so you never do it. Rivals are known only by number.
 Choose exactly one of the numbered plantings, all of which the contract will accept. Then write a lab note of at most 120 characters, in your own voice, saying why. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
   const user = `Generation ${summary.generation}. You hold ${summary.balance} PETRI and ${summary.myCells} living cells. The dish has ${summary.totalLive} living cells; ${summary.agar} PETRI remain in the agar.
 Rivals: ${summary.rivals || "none yet"}.

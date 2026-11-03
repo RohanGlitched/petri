@@ -109,9 +109,10 @@ async function act(s) {
     return;
   }
   const counts = world.engine.live_counts();
+  // Rivals by number and size only: no player-written text reaches the model.
   const rivals = world.colonies
     .filter((c) => c.id !== me.id && (counts[c.id] ?? 0) > 0)
-    .map((c) => `${c.name} ${counts[c.id]} cells`)
+    .map((c) => `colony ${c.id} with ${counts[c.id]} cells`)
     .join(", ");
   const summary = {
     generation: world.due,
@@ -124,7 +125,7 @@ async function act(s) {
   for (const c of cands) c.costText = (c.cost / 1e6).toFixed(2);
   const pick = await choose(s, summary, cands);
   const chosen = pick ? cands[pick.index] : cands[0];
-  const note = pick?.note || chosen.why.charAt(0).toUpperCase() + chosen.why.slice(1) + ".";
+  const note = cleanNote(pick?.note) || chosen.why.charAt(0).toUpperCase() + chosen.why.slice(1) + ".";
   try {
     const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
     const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 200, BigInt(deposit));
@@ -153,11 +154,26 @@ async function act(s) {
   }
 }
 
+/** A model's lab note, kept to plain text: no links, no account names, nothing invisible. */
+function cleanNote(n) {
+  if (!n) return "";
+  const t = String(n)
+    .normalize("NFKC")
+    .replace(/[^ -~À-ɏ]/g, "")
+    .replace(/\S+\.(near|testnet|com|org|io|xyz|app)/gi, "")
+    .replace(/https?:\S*/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return t.slice(0, 120);
+}
+
 let keeperRegistered = false;
 async function keep() {
   if (!keeperRegistered) {
     const reg = await view("storage_balance_of", { account_id: KEEPER });
-    if (!reg) await callDish(KEEPER, "storage_deposit", {}, 30, (YOCTO * 2n) / 1000n);
+    // The keeper's key can only call the dish without NEAR, so registering it for PETRI is a one-off done by hand
+    // (`storage_deposit` from its full-access key). Unregistered, it still advances the dish and earns tide bounties.
+    if (!reg) log("keeper is not registered for PETRI; the keeper pot waits for whoever is");
     keeperRegistered = true;
   }
   const st = await view("state");

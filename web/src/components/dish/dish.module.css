@@ -54,6 +54,7 @@
 }
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }
+.warn { color: var(--amber, #f2b45a); }
 .ok a, .bad a { color: inherit; }
 
 /* HUD */

@@ -113,7 +113,7 @@ function PriceCurve({ live, agar, feedPpm, keeperBps, liveFloor, payback, minPri
 export function CoinBand() {
   const { d, rules, ready, perCell, supply, cellPrice, petriPrice, vault, tideIn } = useLive();
   const st = d.state;
-  const v = (k: "agar" | "sold" | "fed" | "returned" | "burned" | "near_tides" | "near_in" | "tides" | "keeper_pot" | "keeper_paid") => (st ? Number(st[k]) : 0);
+  const v = (k: "agar" | "sold" | "fed" | "returned" | "burned" | "near_tides" | "near_in" | "tides" | "keeper_pot" | "keeper_paid" | "bought_back") => (st ? Number(st[k]) : 0);
   const max = rules ? Number(rules.max_supply) : 1e12;
   const rows: [string, string, string][] = [
     ["Created, once, at launch", petri(max), "No mint function exists after this."],
@@ -121,6 +121,7 @@ export function CoinBand() {
     ["Sold from the agar for NEAR", petri(v("sold")), "Every colony buys in. The price rises as the agar empties."],
     ["Fed to the living so far", petri(v("fed")), `${rules ? rules.feed_ppm : 10} parts per million of the agar, every generation.`],
     ["Paid back by planting", petri(v("returned")), "Half of every planting returns to the agar."],
+    ["Bought back by the agar", petri(v("bought_back")), "Sold back for NEAR at half the curve's price."],
     ["Burned for good", petri(v("burned")), `The other half. PETRI in existence: ${petri(supply)}.`],
   ];
   const tideMinutes = rules ? Math.ceil((tideIn * Number(rules.generation_ms)) / 60_000) : 0;
@@ -164,15 +165,18 @@ export function CoinBand() {
             <p className="muted">
               Every NEAR that comes in, from buying PETRI and from the small fee on each planting, waits in the tide vault
               (minus the storage it pays for). Every {rules ? rules.tide_every : 240} generations, about an hour, half of the
-              vault is paid out to colonies in proportion to their living cells, with no colony counted for more than{" "}
-              {rules ? rules.cap_bps / 100 : 15}% of the dish. You claim it whenever you like.
+              vault is paid out to colonies in proportion to the PETRI each earned since the last tide, so arriving just before
+              a tide wins almost nothing. The dish&rsquo;s own AI strains take no share. Between tides the agar also buys
+              PETRI back at half the curve&rsquo;s price, up to a tenth of the vault, so what you earn always has a NEAR floor.
+              You claim it whenever you like.
             </p>
           </div>
           <dl className={s.tideNums} aria-live="polite">
             <div><dt>In the vault now</dt><dd className="num">{st ? near(vault, 4) : "—"} <small>NEAR</small></dd></div>
             <div><dt>Next tide</dt><dd className="num">{ready ? `${int(tideIn)} gens` : "—"}</dd><p>about {tideMinutes} minutes</p></div>
-            <div><dt>Paid at {st ? int(v("tides")) : "—"} tides so far</dt><dd className="num">{st ? near(v("near_tides"), 4) : "—"} <small>NEAR</small></dd></div>
-            <div><dt>One PETRI from the agar</dt><dd className="num">{ready ? near(petriPrice * 1e6, 6) : "—"} <small>NEAR</small></dd></div>
+            <div><dt>Paid at {st ? `${int(v("tides"))} ${v("tides") === 1 ? "tide" : "tides"}` : "tides"} so far</dt><dd className="num">{st ? near(v("near_tides"), 4) : "—"} <small>NEAR</small></dd></div>
+            <div><dt>One PETRI from the agar</dt><dd className="num">{ready ? near(petriPrice, 6) : "—"} <small>NEAR</small></dd></div>
+            <div><dt>The agar buys back, until the next tide</dt><dd className="num">{st ? near(Number(st.sell_left), 4) : "—"} <small>NEAR</small></dd><p>at half the curve&rsquo;s price</p></div>
           </dl>
         </div>
 

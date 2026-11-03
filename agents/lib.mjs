@@ -14,7 +14,7 @@ initSync({ module: fs.readFileSync(path.join(PKG, "petri_bg.wasm")) });
 
 export { Engine, pattern_cells, quote };
 
-export const CONTRACT = process.env.PETRI_CONTRACT ?? "petri-v2.testnet";
+export const CONTRACT = process.env.PETRI_CONTRACT ?? "petri-v3.testnet";
 export const NETWORK = process.env.PETRI_NETWORK ?? "testnet";
 export const RPCS =
   NETWORK === "mainnet"
@@ -65,8 +65,9 @@ export async function nearBalance(accountId) {
 export async function liveDish() {
   const [rules, state, colonies] = await Promise.all([view("rules"), view("state"), view("colonies", { from: 0, limit: 500 })]);
   const board = Buffer.from(await view("board"), "base64");
-  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.cap_bps, rules.cap_min);
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach);
   e.set_colonies(colonies.length);
+  e.set_planted(new Uint32Array(colonies.map((c) => Number(c.cells_planted))));
   e.set_agar(state.agar);
   if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("board did not load");
   const due = Math.floor((Number(state.now_ms) - Number(state.epoch_ms)) / Number(rules.generation_ms));
@@ -91,9 +92,17 @@ export function failureText(f) {
   return m ? m[1] : s.slice(0, 200);
 }
 
-/** Call the dish as `accountId`, attaching `deposit` yoctoNEAR. Returns { hash } or throws with the contract's own words. */
+/**
+ * Call the dish as `accountId`. The strains and the keeper sign with function-call keys that may only call the dish and
+ * cannot attach NEAR, so whatever a call needs (`deposit` yoctoNEAR) is paid from the account's sponsored credit in
+ * the dish instead. Returns { hash } or throws with the contract's own words.
+ */
 export async function callDish(accountId, methodName, args, tgas = 150, deposit = 0n) {
   const a = account(accountId);
+  if (BigInt(deposit) > 0n) {
+    args = { ...args, credit: BigInt(deposit).toString() };
+    deposit = 0n;
+  }
   const res = await a.signAndSendTransaction({
     receiverId: CONTRACT,
     actions: [actions.functionCall(methodName, args, BigInt(tgas) * 10n ** 12n, BigInt(deposit))],

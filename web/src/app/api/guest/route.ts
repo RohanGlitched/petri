@@ -1,22 +1,30 @@
-// Creates a guest account for a visitor's browser key: g-<random>.<relayer>, holding only what its own storage needs.
-// The visitor never sees a wallet popup, a seed phrase or a gas prompt: /api/relay pays for their transactions and,
-// up to a per-guest budget, for the NEAR the dish asks them to attach.
+// Creates a guest account for a visitor's browser key: g-<hash of the key>.<relayer>, holding only what its own storage
+// needs, with a function-call key that can call the dish and nothing else (such a key cannot attach NEAR or transfer
+// it). The relayer then sponsors the guest on chain: `sponsor` gives it GUEST_CREDIT of credit that can only be spent
+// joining, buying and planting. The visitor never sees a wallet popup, a seed phrase or a gas prompt, and /api/relay
+// never has to attach NEAR to anything it relays.
 //
-// Making a guest costs the relayer NEAR, so a request must carry a small proof of work bound to its key: the browser
-// finds a nonce such that sha256("petri-guest:" + publicKey + ":" + nonce) starts with DIFFICULTY zero bits. It takes
-// a browser about a second and makes scripted farming of guests slow.
+// Making a guest costs the relayer NEAR, so a request must carry a proof of work bound to a challenge this server
+// signed in the last ten minutes and to the key: the browser finds a nonce such that
+// sha256("petri-guest:" + challenge + ":" + publicKey + ":" + nonce) starts with DIFFICULTY zero bits. The account name
+// comes from the key, so one key makes at most one guest.
 
 import { NextResponse } from "next/server";
-import { Account, JsonRpcProvider, nearToYocto } from "near-api-js";
+import { Account, JsonRpcProvider, PublicKey, actions, nearToYocto } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { NETWORK, RPC_URLS } from "@/lib/config";
+import { hmac } from "@noble/hashes/hmac.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
+import { CONTRACT, NETWORK, RPC_URLS } from "@/lib/config";
 
 export const runtime = "nodejs";
 
-const GUEST_NEAR = "0.002";
+const GUEST_NEAR = "0.003";
+const GUEST_CREDIT = "0.05";
 const DIFFICULTY = 18;
+const CHALLENGE_MS = 10 * 60_000;
 const PER_IP_PER_HOUR = 4;
 const PER_HOUR = 120;
+const METHODS = ["join", "buy", "plant", "sell", "claim", "advance"];
 const hits = new Map<string, number[]>();
 let global: number[] = [];
 
@@ -46,45 +54,86 @@ function leadingZeroBits(h: Uint8Array): number {
   return n;
 }
 
-export async function POST(req: Request) {
-  if (NETWORK !== "testnet") return NextResponse.json({ error: "Guest accounts exist only on testnet. Connect a NEAR wallet instead." }, { status: 400 });
+/** The challenge secret is derived from the relayer's key, so no extra secret has to be configured. */
+function sign(ts: string, key: string): string {
+  return bytesToHex(hmac(sha256, sha256(new TextEncoder().encode(`petri-guest-challenge:${key}`)), new TextEncoder().encode(ts))).slice(0, 32);
+}
+
+function config() {
   const relayer = process.env.PETRI_RELAYER_ACCOUNT;
   const key = process.env.PETRI_RELAYER_KEY;
-  if (!relayer || !key) return NextResponse.json({ error: "Guest accounts are not configured on this server." }, { status: 503 });
+  return relayer && key ? { relayer, key } : null;
+}
+
+/** A fresh challenge: `<timestamp>.<signature>`. */
+export async function GET() {
+  const c = config();
+  if (NETWORK !== "testnet") return NextResponse.json({ error: "Guest accounts exist only on testnet. Connect a NEAR wallet instead." }, { status: 400 });
+  if (!c) return NextResponse.json({ error: "Guest accounts are not configured on this server." }, { status: 503 });
+  const ts = String(Date.now());
+  return NextResponse.json({ challenge: `${ts}.${sign(ts, c.key)}`, bits: DIFFICULTY }, { headers: { "cache-control": "no-store" } });
+}
+
+export async function POST(req: Request) {
+  if (NETWORK !== "testnet") return NextResponse.json({ error: "Guest accounts exist only on testnet. Connect a NEAR wallet instead." }, { status: 400 });
+  const c = config();
+  if (!c) return NextResponse.json({ error: "Guest accounts are not configured on this server." }, { status: 503 });
 
   let publicKey = "";
   let nonce = "";
+  let challenge = "";
   try {
     const body = await req.json();
     publicKey = String(body?.publicKey ?? "");
     nonce = String(body?.nonce ?? "");
+    challenge = String(body?.challenge ?? "");
   } catch {
-    return NextResponse.json({ error: "Send JSON: { publicKey, nonce }" }, { status: 400 });
+    return NextResponse.json({ error: "Send JSON: { publicKey, nonce, challenge }" }, { status: 400 });
   }
   if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(publicKey)) {
     return NextResponse.json({ error: "publicKey must be an ed25519 public key in NEAR's base58 form." }, { status: 400 });
   }
-  if (!/^\d{1,12}$/.test(nonce) || leadingZeroBits(sha256(new TextEncoder().encode(`petri-guest:${publicKey}:${nonce}`))) < DIFFICULTY) {
+  const [ts, mac] = challenge.split(".");
+  if (!ts || !mac || mac !== sign(ts, c.key) || Date.now() - Number(ts) > CHALLENGE_MS || Number(ts) > Date.now() + 60_000) {
+    return NextResponse.json({ error: "The challenge is missing or expired. Reload the page and try again." }, { status: 400 });
+  }
+  if (!/^\d{1,12}$/.test(nonce) || leadingZeroBits(sha256(new TextEncoder().encode(`petri-guest:${challenge}:${publicKey}:${nonce}`))) < DIFFICULTY) {
     return NextResponse.json({ error: "The proof of work for this key is missing or too weak. Reload the page and try again." }, { status: 400 });
   }
   const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
   const why = limited(ip);
   if (why) return NextResponse.json({ error: why }, { status: 429 });
 
-  const suffix = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => b.toString(16).padStart(2, "0")).join("");
-  const accountId = `g-${suffix}.${relayer}`;
+  // One key, one guest: the name is derived from the key.
+  const suffix = bytesToHex(sha256(new TextEncoder().encode(publicKey))).slice(0, 10);
+  const accountId = `g-${suffix}.${c.relayer}`;
+  const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
+  const relayer = new Account(c.relayer, provider, c.key as `ed25519:${string}`);
   try {
-    const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
-    const acct = new Account(relayer, provider, key as `ed25519:${string}`);
-    await acct.createSubAccount({ accountOrPrefix: `g-${suffix}`, publicKey, nearToTransfer: nearToYocto(GUEST_NEAR) });
-    return NextResponse.json({ accountId });
+    await relayer.signAndSendTransaction({
+      receiverId: accountId,
+      actions: [actions.createAccount(), actions.transfer(nearToYocto(GUEST_NEAR)), actions.addFunctionCallAccessKey(PublicKey.fromString(publicKey), CONTRACT, METHODS)],
+      waitUntil: "FINAL",
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("guest creation failed", msg);
+    if (/AccountAlreadyExists|already exists/i.test(msg)) return NextResponse.json({ error: "A guest for this key already exists. Reload the page to use it." }, { status: 409 });
     const funds = /balance|NotEnoughBalance|LackBalance/i.test(msg);
     return NextResponse.json(
       { error: funds ? "The guest faucet is empty. Connect a NEAR wallet, or try again after it is topped up." : "NEAR did not create the guest account. Try again in a moment." },
       { status: 502 },
     );
   }
+  try {
+    await relayer.signAndSendTransaction({
+      receiverId: CONTRACT,
+      actions: [actions.functionCall("sponsor", { account_id: accountId }, 30n * 10n ** 12n, nearToYocto(GUEST_CREDIT))],
+      waitUntil: "EXECUTED_OPTIMISTIC",
+    });
+  } catch (e) {
+    console.error("guest sponsorship failed", e instanceof Error ? e.message : String(e));
+    return NextResponse.json({ accountId, warning: "The guest exists but its credit did not arrive yet." });
+  }
+  return NextResponse.json({ accountId });
 }

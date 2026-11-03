@@ -9,8 +9,8 @@ export type Rules = {
   max_supply: string;
   feed_ppm: number;
   keeper_bps: number;
-  cap_bps: number;
-  cap_min: number;
+  /** A colony is paid for at most this many living cells per cell it has planted. */
+  reach: number;
   burn_bps: number;
   payback: number;
   min_cell_price: string;
@@ -21,9 +21,14 @@ export type Rules = {
   cell_fee: string;
   tide_every: number;
   tide_bps: number;
+  tide_bounty_bps: number;
+  sell_bps: number;
+  sell_cap_bps: number;
+  siege_x: number;
   buffer: number;
   max_plant_cells: number;
   max_catchup: number;
+  house: string[];
 };
 
 export type DishState = {
@@ -43,13 +48,22 @@ export type DishState = {
   fed: string;
   returned: string;
   burned: string;
+  bought_back: string;
+  unclaimed: string;
   keeper_pot: string;
   keeper_paid: string;
   /** yoctoNEAR waiting in the tide vault */
   vault: string;
   near_in: string;
   near_tides: string;
+  near_bounties: string;
+  near_sold: string;
+  /** yoctoNEAR the agar may still pay for PETRI before the next tide */
+  sell_left: string;
+  credit_given: string;
+  credit_spent: string;
   tides: string;
+  house: number[];
   /** PETRI units per cell right now */
   cell_price: string;
   /** yoctoNEAR per PETRI right now */
@@ -61,21 +75,29 @@ export type Colony = {
   account: string;
   name: string;
   color: number;
+  house: boolean;
   joined_generation: string;
   last_plant_generation: string | null;
   cells_planted: string;
   petri_spent: string;
   petri_burned: string;
   petri_claimed: string;
+  petri_sold: string;
   near_paid: string;
   near_claimed: string;
+  near_sold: string;
 };
 
-export type PlantRecord = { index: string; generation: string; colony: number; cells: number[]; cost: string; note: string | null };
+export type PlantRecord = { index: string; generation: string; colony: number; cells: number[]; cost: string; siege: boolean; note: string | null };
 export type Entry =
   | { Join: { generation: string; colony: number } }
   | { Buy: { generation: string; colony: number; petri: string; near: string } }
-  | { Plant: { generation: string; colony: number; cells: number[]; cost: string } };
+  | { Plant: { generation: string; colony: number; cells: number[]; cost: string; near: string; siege: boolean } }
+  | { Sell: { generation: string; colony: number; petri: string; near: string; paid: string } }
+  | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string } };
+
+export const entryGeneration = (e: Entry): number =>
+  Number("Join" in e ? e.Join.generation : "Buy" in e ? e.Buy.generation : "Plant" in e ? e.Plant.generation : "Sell" in e ? e.Sell.generation : e.Tide.generation);
 export type Checkpoint = { generation: string; chain: string };
 export type Claimable = { petri: string; near: string };
 
@@ -112,11 +134,25 @@ async function rpc<T>(method: string, params: unknown, timeoutMs = 8000): Promis
   throw lastErr instanceof Error ? lastErr : new Error("Every NEAR RPC provider failed");
 }
 
+/** Reads can be pinned to one block so a replay compares numbers from a single moment. */
+let pinned: number | null = null;
+
+/** Pin every following read to the latest final block (or unpin with `null`). Returns the block height. */
+export async function pinFinalBlock(on = true): Promise<number | null> {
+  if (!on) {
+    pinned = null;
+    return null;
+  }
+  const b = await rpc<{ header: { height: number } }>("block", { finality: "final" });
+  pinned = b.header.height;
+  return pinned;
+}
+
 export async function view<T>(method: string, args: Record<string, unknown> = {}, contract = CONTRACT): Promise<T> {
   const argsB64 = btoa(JSON.stringify(args));
   const r = await rpc<{ result: number[]; logs: string[] } & { error?: string }>("query", {
     request_type: "call_function",
-    finality: "optimistic",
+    ...(pinned !== null ? { block_id: pinned } : { finality: "optimistic" }),
     account_id: contract,
     method_name: method,
     args_base64: argsB64,
@@ -139,10 +175,13 @@ export const getColonies = (from = 0, limit = 500) => view<Colony[]>("colonies",
 export const getPlants = (from = 0, limit = 1000) => view<PlantRecord[]>("plants", { from, limit });
 export const getLedger = (from = 0, limit = 1000) => view<Entry[]>("ledger", { from, limit });
 export const getEarnings = (from = 0, limit = 2000) => view<string[]>("earnings", { from, limit });
+export const getTideWinnings = (from = 0, limit = 2000) => view<string[]>("tide_winnings", { from, limit });
+export const getCredit = (account_id: string) => view<string>("credit_of", { account_id });
+export const getSellQuote = (petri: string) => view<string>("sell_quote", { petri });
 export const getCheckpoints = (from = 0, limit = 2000) => view<Checkpoint[]>("checkpoints", { from, limit });
 export const getBalance = (account_id: string) => view<string>("ft_balance_of", { account_id });
 export const getClaimable = (account_id: string) => view<Claimable>("claimable", { account_id });
-export const getQuote = (cells: number) => view<string>("quote", { cells });
+export const getQuote = (cells: number, siege = false) => view<string>("quote", { cells, siege });
 export const getBuyQuote = (near: string) => view<string>("buy_quote", { near });
 export const getPlantDeposit = (cells: number, note_bytes: number | null) => view<string>("plant_deposit", { cells, note_bytes });
 export const getColonyOf = (account_id: string) => view<Colony | null>("colony_of", { account_id });
@@ -151,6 +190,15 @@ export const getColonyOf = (account_id: string) => view<Colony | null>("colony_o
 export async function getNearBalance(account_id: string): Promise<bigint> {
   const r = await rpc<{ amount: string }>("query", { request_type: "view_account", finality: "optimistic", account_id });
   return BigInt(r.amount);
+}
+
+/** The contract account's deployed code hash and access keys, to show that nobody can change the code. */
+export async function getLock(account_id = CONTRACT): Promise<{ codeHash: string; fullAccessKeys: number; keys: number }> {
+  const at = pinned !== null ? { block_id: pinned } : { finality: "final" };
+  const acct = await rpc<{ code_hash: string }>("query", { request_type: "view_account", account_id, ...at });
+  const list = await rpc<{ keys: { access_key: { permission: unknown } }[] }>("query", { request_type: "view_access_key_list", account_id, ...at });
+  const full = list.keys.filter((k) => k.access_key.permission === "FullAccess").length;
+  return { codeHash: acct.code_hash, fullAccessKeys: full, keys: list.keys.length };
 }
 
 async function paged<T>(total: number, page: (from: number, limit: number) => Promise<T[]>): Promise<T[]> {
