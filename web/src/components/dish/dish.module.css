@@ -238,6 +238,7 @@
   box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--bone);
   font: 600 14px var(--body);
+  white-space: nowrap;
   cursor: pointer;
 }
 .zoom button:hover { background: rgba(43, 26, 14, 0.95); }
