@@ -46,8 +46,8 @@ function Cycle({ agar, fed, back, burned, sold, perGen }: { agar: string; fed: s
           <path d="M0 0L10 5L0 10z" fill="#6f5c47" />
         </marker>
       </defs>
-      <path id="cy-buy" d="M40 52 C 70 70, 90 92, 104 112" fill="none" stroke="#7fb5a6" strokeWidth="2" markerEnd="url(#cy-arrow)" />
-      <path id="cy-feed" d="M222 150 C 300 80, 380 80, 452 122" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
+      <path id="cy-buy" d="M40 66 C 70 80, 90 98, 104 114" fill="none" stroke="#7fb5a6" strokeWidth="2" markerEnd="url(#cy-arrow)" />
+      <path id="cy-feed" d="M222 150 C 300 80, 380 80, 448 132" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
       <path id="cy-spend" d="M500 206 L 500 278" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
       <path id="cy-back" d="M446 334 C 360 376, 260 346, 208 282" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
       <path id="cy-burn" d="M556 334 C 590 356, 600 376, 600 392" fill="none" stroke="#b8a58e" strokeWidth="2" strokeDasharray="4 5" />
@@ -57,8 +57,8 @@ function Cycle({ agar, fed, back, burned, sold, perGen }: { agar: string; fed: s
       <Dots path="cy-back" n={3} dur={3.4} color="#e29a3a" r={3.5} on={on} />
       <Dots path="cy-burn" n={2} dur={2.2} color="#4e3d2c" r={3} on={on} />
 
-      <text x="20" y="34" className={s.cyLabel}>NEAR in</text>
-      <text x="20" y="50" className={s.cySmall}>sold so far: {sold}</text>
+      <text x="20" y="28" className={s.cyLabel}>NEAR in</text>
+      <text x="20" y="46" className={s.cySmall}>sold so far: {sold}</text>
 
       <circle cx="150" cy="210" r="104" fill="url(#cy-agar)" />
       <circle cx="150" cy="210" r="104" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
@@ -69,7 +69,7 @@ function Cycle({ agar, fed, back, burned, sold, perGen }: { agar: string; fed: s
       {[0, 1, 2, 3, 4, 5, 6].map((i) => (
         <circle key={i} cx={470 + (i % 4) * 20 + (i > 3 ? 10 : 0)} cy={146 + Math.floor(i / 4) * 20} r="9" fill="url(#cy-cell)" />
       ))}
-      <text x="500" y="112" textAnchor="middle" className={s.cyLabel}>Living cells</text>
+      <text x="530" y="112" textAnchor="middle" className={s.cyLabel}>Living cells</text>
       <text x="500" y="204" textAnchor="middle" className={s.cySmall}>{perGen} PETRI a cell, a generation</text>
 
       <rect x="430" y="282" width="140" height="56" rx="28" fill="#1d1208" />
@@ -139,7 +139,7 @@ export function CoinBand() {
         <div className={s.coinGrid}>
           <div className={s.coinFig}>
             <Cycle
-              agar={ready ? petri(d.agar) : "—"}
+              agar={st ? petri(v("agar")) : "—"}
               fed={st ? petri(v("fed")) : "—"}
               back={st ? petri(v("returned")) : "—"}
               burned={st ? petri(v("burned")) : "—"}
