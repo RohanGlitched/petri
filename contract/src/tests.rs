@@ -534,6 +534,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     let mut agar = MAX;
     let mut vault = 0u128;
     let mut burned = 0u128;
+    let mut counted = 0u32;
     let mut earned = vec![0u128; 4];
     let mut window = vec![0u64; 4];
     let mut won = vec![0u128; 4];
@@ -570,7 +571,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                     let cells = &cells;
                     let check = dish.check_plant(*colony, cells, r.buffer, r.max_plant_cells).expect("a legal planting");
                     assert_eq!(check.siege, *siege);
-                    let per = feed_per_cell(agar, r.feed_ppm, r.keeper_bps, dish.total_live(), r.live_floor);
+                    let per = feed_per_cell(agar, r.feed_ppm, r.keeper_bps, counted, r.live_floor);
                     assert_eq!(planting_cost(per, r.payback, r.min_cell_price.0, cells.len() as u32, *siege, r.siege_x), cost.0, "price at generation {}", g);
                     agar += cost.0 - cost.0 * r.burn_bps as u128 / 10_000;
                     burned += cost.0 * r.burn_bps as u128 / 10_000;
@@ -596,7 +597,8 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
         if chain_due(g) {
             chain = chain_next(&chain, g, &dish.hash());
         }
-        let f = feed(agar, r.feed_ppm, r.keeper_bps, r.reach, &stats.live, &planted, &house);
+        let f = feed(agar, r.feed_ppm, r.keeper_bps, r.reach, r.live_floor, &stats.live, &planted, &house);
+        counted = f.weight;
         agar -= f.paid;
         for &(i, v) in &f.shares {
             earned[i as usize] += v;
@@ -655,4 +657,20 @@ fn the_planting_deposit_covers_its_storage_without_overcharging() {
         assert!(d - fee <= used * 3 / 2, "{} cells: deposit {} asks much more than the storage {}", n, d - fee, used);
         assert_eq!(c.state().vault.0 - vault, d - used.min(d), "the rest goes to the vault");
     }
+}
+
+#[test]
+fn a_lone_block_earns_what_its_price_assumes() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 50);
+    let price = c.quote(4, None).0;
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    at("keeper.testnet", T0 + 10 * GEN_MS);
+    c.advance(None);
+    let earned = c.claimable(acct("alice.testnet")).petri.0;
+    // Ten generations of a 480-generation payback: about a 48th of the price, not the whole ration.
+    let want = price * 10 / 480;
+    assert!(earned.abs_diff(want) * 100 <= want, "earned {} vs {}", earned, want);
+    assert_eq!(c.state().counted, 4);
+    conserved(&c, &["alice.testnet", "keeper.testnet"]);
 }

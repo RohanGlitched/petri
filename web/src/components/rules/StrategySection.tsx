@@ -5,7 +5,7 @@ import { Engine, loadEngine, pattern_cells, PATTERNS, type PatternName } from "@
 import { Specimen } from "@/components/site/Specimen";
 import { useLive, usePatternOffsets, petri, int } from "@/lib/live";
 import { fmtPetri } from "@/lib/config";
-import { LAUNCH, capOf, genTime } from "./shared";
+import { LAUNCH, genTime, weightOf } from "./shared";
 import s from "./rules.module.css";
 
 const FAMILIES: { title: string; color: string; patterns: PatternName[]; body: string }[] = [
@@ -25,7 +25,7 @@ const FAMILIES: { title: string; color: string; patterns: PatternName[]; body: s
     title: "Ships and guns reach",
     color: "#c8431f",
     patterns: ["glider", "lwss", "gosper-gun"],
-    body: "The buffer stops anyone planting next to a rival. Something that travels gets past it. When a glider hits a colony, births in the wreck join whoever owns most of their parents, so territory changes hands. A gun keeps firing gliders, and every glider in flight earns.",
+    body: "Planting next to a rival costs three times the price. Something that travels gets there for the normal price. When a glider hits a colony, births in the wreck join whoever owns most of their parents, so territory changes hands. A gun keeps firing gliders, and every glider in flight earns, up to the gun's reach.",
   },
   {
     title: "Eaters defend",
@@ -37,7 +37,7 @@ const FAMILIES: { title: string; color: string; patterns: PatternName[]; body: s
     title: "Wild seeds gamble",
     color: "#c99a2e",
     patterns: ["r-pentomino"],
-    body: "Five cells that grow chaotically for a long time. On an empty dish the R-pentomino is all yours; near others, its births join whoever owns most of their parents, and contested ground stays empty. Growth past the cap covers ground but earns nothing more.",
+    body: "Five cells that grow chaotically for a long time. On an empty dish the R-pentomino is all yours; near others, its births join whoever owns most of their parents, and contested ground stays empty. A colony is paid for at most four cells per cell it planted, so growth past twenty cells covers ground but earns nothing more.",
   },
 ];
 
@@ -82,9 +82,8 @@ export function StrategySection() {
   const yields = useYields(r.width, r.height);
   const genMs = Number(r.generation_ms);
   const label = (p: PatternName) => PATTERNS.find((x) => x.name === p)?.label ?? p;
-  // What one counted cell is fed right now: the feed less the keeper's share, over every colony's capped cell count.
-  const cap = capOf(d.totalLive, r.cap_bps, r.cap_min);
-  const counted = colonies.reduce((a, c) => a + Math.min(c.live, cap), 0);
+  // What one paid cell is fed right now: the feed less the keeper's share, over every colony's paid cells.
+  const counted = colonies.reduce((a, c) => a + weightOf(c.live, Number(c.cells_planted), r.reach, c.house), 0);
   const perCounted = counted > 0 ? (feed * (1 - r.keeper_bps / 10000)) / counted : 0;
   const payback = ready && perCounted > 0 ? cellPrice / perCounted : NaN;
   return (
@@ -121,9 +120,9 @@ export function StrategySection() {
             <p>
               The price of a cell is what an average cell earns in {int(r.payback)} generations, counting at least{" "}
               {int(r.live_floor)} living cells. Right now one cell costs{" "}
-              <b className="num">{ready ? petri(cellPrice, 3) : "—"} PETRI</b>, and each cell the feed counts is fed{" "}
+              <b className="num">{ready ? petri(cellPrice, 3) : "—"} PETRI</b>, and each paid cell is fed{" "}
               <b className="num">{ready ? petri(perCounted, 5) : "—"} PETRI</b> a generation: the feed, less the keeper&rsquo;s
-              share, divided by the {ready ? int(counted) : "—"} cells counted across every colony. So a still life that nothing
+              share, divided by the {ready ? int(counted) : "—"} paid cells across every colony. So a still life that nothing
               disturbs pays for itself in about <b className="num">{isFinite(payback) ? int(payback) : "—"}</b> generations,
               roughly {isFinite(payback) ? genTime(payback, genMs) : "—"}.
             </p>
@@ -134,20 +133,24 @@ export function StrategySection() {
               Both sides shrink slowly with the agar.
             </p>
             <p className="muted">
-              Two things bend the sum. Cells beyond the cap, {ready ? int(cap) : "—"} cells right now, earn nothing more, so a
-              colony that grows past it is paying for ground it is not paid for. And every {r.tide_every} generations the tide
-              pays NEAR by the same counted cells, so ground held at the tide earns NEAR as well as PETRI.
+              Three things bend the sum. A colony is paid for at most {r.reach} living cells per cell it planted, so growth
+              past that is ground it is not paid for. A siege costs {r.siege_x} times the price, so its cells take{" "}
+              {r.siege_x} times as long to pay back. And every {r.tide_every} generations the tide pays NEAR by the PETRI each
+              colony earned that hour, so every generation a cell stays alive also earns a slice of NEAR.
             </p>
           </div>
         </div>
 
-        <div className={s.card}>
-          <h3 className="h3">Each pattern, priced now</h3>
+        <details className={s.fold}>
+          <summary>
+            Each pattern, priced now <small>{MEASURE.length} patterns</small>
+          </summary>
+          <div className={s.foldBody}>
           <p className="muted small">
             Average live cells over the first {HOUR} generations (one hour) after planting each pattern alone on an empty{" "}
             {r.width} by {r.height} dish, measured in your browser with <code className={s.code}>petri-core</code>. Earnings use
-            today&rsquo;s feed per counted cell, and count no more than today&rsquo;s cap. On the real dish neighbours, raids and
-            crowding change all of this.
+            today&rsquo;s feed per paid cell and count at most {r.reach} cells per cell planted. On the real dish neighbours,
+            raids and crowding change all of this.
           </p>
           <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Pattern payback">
             <table className={`${s.table} ${s.payTable}`}>
@@ -165,7 +168,7 @@ export function StrategySection() {
                 {MEASURE.map((p) => {
                   const y = yields[p];
                   const cost = y ? cellPrice * y.cells : 0;
-                  const earn = y ? Math.min(y.avg, cap) * perCounted : 0;
+                  const earn = y ? Math.min(y.avg, y.cells * r.reach) * perCounted : 0;
                   const gens = earn > 0 ? cost / earn : NaN;
                   return (
                     <tr key={p}>
@@ -185,7 +188,8 @@ export function StrategySection() {
             A glider gun&rsquo;s average climbs because every glider it fires keeps flying and earning; on a crowded dish those
             gliders soon hit something. The R-pentomino&rsquo;s figure is for an empty dish, where all of its growth is yours.
           </p>
-        </div>
+          </div>
+        </details>
       </div>
     </section>
   );

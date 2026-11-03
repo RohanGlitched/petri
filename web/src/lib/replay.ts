@@ -56,7 +56,7 @@ export class Replayer {
   constructor(input: ReplayInput) {
     const { rules, state, ledger } = input;
     this.input = input;
-    this.e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach);
+    this.e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor);
     this.e.set_colonies(0);
     this.e.set_agar(rules.max_supply);
     this.k = (BigInt(rules.petri_price) / 1_000_000n) * BigInt(rules.max_supply);
@@ -115,7 +115,7 @@ export class Replayer {
         const siege = legal.startsWith("siege:");
         if (legal !== "" && !siege) this.flag("plant", `colony ${p.colony}'s planting was not legal (${legal})`);
         else if (siege !== p.siege) this.flag("plant", `colony ${p.colony}'s planting was ${siege ? "" : "not "}a siege`);
-        const want = BigInt(quote(this.e.agar(), rules.feed_ppm, rules.keeper_bps, this.e.total_live(), rules.live_floor, rules.payback, rules.min_cell_price, p.cells.length, p.siege, rules.siege_x));
+        const want = BigInt(quote(this.e.agar(), rules.feed_ppm, rules.keeper_bps, this.e.counted(), rules.live_floor, rules.payback, rules.min_cell_price, p.cells.length, p.siege, rules.siege_x));
         const cost = BigInt(p.cost);
         if (want !== cost) this.flag("price", `paid ${cost}, the formula gives ${want}`);
         const burn = (cost * BigInt(rules.burn_bps)) / 10000n;

@@ -67,7 +67,8 @@ pub struct Rules {
     pub payback: u32,
     /// The lowest price of one cell, in PETRI units.
     pub min_cell_price: U128,
-    /// The price counts at least this many living cells, so it stays sane on a nearly empty dish.
+    /// The agar releases its ration for at least this many counted cells, and never more per cell; prices count at
+    /// least this many too, so a cell earns what its price assumes even on a nearly empty dish.
     pub live_floor: u32,
     /// Launch price of one PETRI in yoctoNEAR. The agar sells at this × max_supply / agar.
     pub petri_price: U128,
@@ -176,6 +177,8 @@ pub struct DishState {
     pub chain: String,
     pub board_hash: String,
     pub total_live: u32,
+    /// Cells the last feed counted: living cells of fed colonies, capped by reach. Prices are set against this.
+    pub counted: u32,
     pub colonies: u16,
     pub ledger: U64,
     pub plants: U64,
@@ -218,6 +221,8 @@ pub struct Petri {
     generation: u64,
     chain: [u8; 32],
     total_live: u32,
+    /// Cells the last feed counted (capped weights of fed colonies). Prices are set against this.
+    counted: u32,
     colonies: Vector<Colony>,
     colony_of: LookupMap<AccountId, u16>,
     names: LookupSet<String>,
@@ -275,6 +280,7 @@ impl Petri {
             generation: 0,
             chain: [0; 32],
             total_live: 0,
+            counted: 0,
             colonies: Vector::new(b"c"),
             colony_of: LookupMap::new(b"o"),
             names: LookupSet::new(b"m"),
@@ -625,6 +631,7 @@ impl Petri {
             chain: hex::encode(self.chain),
             board_hash: hex::encode(dish.hash()),
             total_live: self.total_live,
+            counted: self.counted,
             colonies: self.colonies.len() as u16,
             ledger: U64(self.ledger.len() as u64),
             plants: U64(self.plant_count),
@@ -757,7 +764,7 @@ impl Petri {
     }
 
     fn cell_cost(&self, cells: u32, siege: bool) -> u128 {
-        let per_cell = feed_per_cell(self.agar, self.rules.feed_ppm, self.rules.keeper_bps, self.total_live, self.rules.live_floor);
+        let per_cell = feed_per_cell(self.agar, self.rules.feed_ppm, self.rules.keeper_bps, self.counted, self.rules.live_floor);
         planting_cost(per_cell, self.rules.payback, self.rules.min_cell_price.0, cells, siege, self.rules.siege_x)
     }
 
@@ -901,7 +908,8 @@ impl Petri {
                 self.chain = chain_next(&self.chain, self.generation, &dish.hash());
             }
             self.total_live = stats.total_live;
-            let f = feed(self.agar, self.rules.feed_ppm, self.rules.keeper_bps, self.rules.reach, &stats.live, &planted, &self.house);
+            let f = feed(self.agar, self.rules.feed_ppm, self.rules.keeper_bps, self.rules.reach, self.rules.live_floor, &stats.live, &planted, &self.house);
+            self.counted = f.weight;
             if f.paid > 0 {
                 for &(c, s) in &f.shares {
                     earned[c as usize] += s as u64;

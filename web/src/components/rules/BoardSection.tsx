@@ -70,18 +70,21 @@ export function BoardSection() {
             <p>
               A NEAR contract cannot run on a timer. Petri&rsquo;s contract stores the board at the last generation someone
               advanced to. Every <code className={s.code}>join</code>, <code className={s.code}>buy</code>,{" "}
-              <code className={s.code}>plant</code>, <code className={s.code}>claim</code> and{" "}
-              <code className={s.code}>advance</code> call first steps that board through the generations the clock says are due,
-              up to {r.max_catchup} in one call. A planting is refused if the dish is still behind after that.
+              <code className={s.code}>sell</code>, <code className={s.code}>plant</code>, <code className={s.code}>claim</code>{" "}
+              and <code className={s.code}>advance</code> call first steps that board through the generations the clock says are
+              due, up to {r.max_catchup} in one call, and stops early once the call has used 180 TGas, so no backlog can push a
+              call past NEAR&rsquo;s gas limit. A planting is refused if the dish is still behind after that.
             </p>
             <h3 className="h3">A keeper pot pays for the steps</h3>
             <p>
               Each generation sets {r.keeper_bps / 100}% of its feed aside in a keeper pot. Whoever calls{" "}
-              <code className={s.code}>advance</code> takes the whole pot, as long as the account can hold PETRI (a colony, or an
-              account registered with <code className={s.code}>storage_deposit</code>). Any other caller still moves the dish
-              forward and leaves the pot where it is. The project&rsquo;s keeper,{" "}
-              <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, advances once the stored board is 20 generations
-              behind or the pot holds more than 5 PETRI. It has no special powers; anyone can advance and collect.
+              <code className={s.code}>advance</code> takes the whole pot, but only if that call ran at least one generation and
+              the account can hold PETRI (a colony, or an account registered with{" "}
+              <code className={s.code}>storage_deposit</code>). Calling <code className={s.code}>advance</code> on a dish that is
+              already current pays nothing. Whoever&rsquo;s call runs an hourly tide also gets a small NEAR bounty (see the
+              tides). The project&rsquo;s keeper, <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, advances once
+              the stored board is 20 generations behind or the pot holds more than 5 PETRI. Its key can only call the dish, and
+              it has no powers anyone else lacks.
             </p>
             <h3 className="h3">Your browser runs ahead</h3>
             <p>

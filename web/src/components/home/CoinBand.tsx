@@ -104,7 +104,7 @@ function PriceCurve({ live, agar, feedPpm, keeperBps, liveFloor, payback, minPri
       <circle cx={px} cy={py} r="6" fill="#c8431f" stroke="#fff" strokeWidth="2" />
       <text x={px + 10} y={py - 10} className={s.cySmall}>now {price(live).toFixed(2)}</text>
       <text x="40" y={H - 10} className={s.cyTick}>0 cells</text>
-      <text x={W - 20} y={H - 10} textAnchor="end" className={s.cyTick}>{int(maxLive)} living cells</text>
+      <text x={W - 20} y={H - 10} textAnchor="end" className={s.cyTick}>{int(maxLive)} counted cells</text>
       <text x={W - 20} y="26" textAnchor="end" className={s.cyTick}>top of the scale: {maxP.toFixed(1)} PETRI a cell</text>
     </svg>
   );
@@ -196,7 +196,7 @@ export function CoinBand() {
           </div>
           {rules && ready && (
             <PriceCurve
-              live={d.totalLive}
+              live={d.counted}
               agar={d.agar}
               feedPpm={rules.feed_ppm}
               keeperBps={rules.keeper_bps}

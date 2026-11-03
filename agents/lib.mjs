@@ -14,7 +14,7 @@ initSync({ module: fs.readFileSync(path.join(PKG, "petri_bg.wasm")) });
 
 export { Engine, pattern_cells, quote };
 
-export const CONTRACT = process.env.PETRI_CONTRACT ?? "petri-v3.testnet";
+export const CONTRACT = process.env.PETRI_CONTRACT ?? "petri-v4.testnet";
 export const NETWORK = process.env.PETRI_NETWORK ?? "testnet";
 export const RPCS =
   NETWORK === "mainnet"
@@ -65,7 +65,8 @@ export async function nearBalance(accountId) {
 export async function liveDish() {
   const [rules, state, colonies] = await Promise.all([view("rules"), view("state"), view("colonies", { from: 0, limit: 500 })]);
   const board = Buffer.from(await view("board"), "base64");
-  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach);
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor);
+  e.set_counted(state.counted);
   e.set_colonies(colonies.length);
   e.set_planted(new Uint32Array(colonies.map((c) => Number(c.cells_planted))));
   e.set_agar(state.agar);

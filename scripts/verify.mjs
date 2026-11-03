@@ -2,7 +2,7 @@
 // Replay the Petri dish from generation zero and check it against the contract.
 //
 //   node scripts/verify.mjs
-//   node scripts/verify.mjs --contract petri-v3.testnet --network testnet [--code-hash <base58>]
+//   node scripts/verify.mjs --contract petri-v4.testnet --network testnet [--code-hash <base58>]
 //
 // Every read is pinned to one finalized block, so a transaction landing mid-read cannot skew the result. The script
 // reads the rules, state, colonies, the whole ledger (every join, purchase, sale, planting and tide in order), every
@@ -32,7 +32,7 @@ const arg = (name, dflt) => {
   return i > 0 ? process.argv[i + 1] : dflt;
 };
 const NETWORK = arg("network", "testnet");
-const CONTRACT = arg("contract", NETWORK === "mainnet" ? "petri.near" : "petri-v3.testnet");
+const CONTRACT = arg("contract", NETWORK === "mainnet" ? "petri.near" : "petri-v4.testnet");
 const CODE_HASH = arg("code-hash", BUILD_HASH);
 const RPCS = NETWORK === "mainnet" ? ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"] : ["https://rpc.testnet.fastnear.com", "https://rpc.testnet.near.org"];
 
@@ -101,7 +101,7 @@ const tideCount = ledger.filter((x) => x.Tide).length;
 console.log(`Replaying ${CONTRACT} (${NETWORK}) at block ${block}: ${target.toLocaleString("en-US")} generations, ${ledger.length} ledger entries, ${colonies.length} colonies, ${tideCount} tides.`);
 
 const t0 = performance.now();
-const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach);
+const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor);
 e.set_colonies(0);
 e.set_agar(rules.max_supply);
 const genOf = (x) => Number((x.Join ?? x.Buy ?? x.Plant ?? x.Sell ?? x.Tide).generation);
@@ -148,7 +148,7 @@ for (;;) {
       const siege = legal.startsWith("siege:");
       if (legal !== "" && !siege) flag("legal", g, `colony ${p.colony}: ${legal}`);
       else if (siege !== p.siege) flag("legal", g, `colony ${p.colony}: siege flag ${p.siege}, replay ${siege}`);
-      const want = quote(e.agar(), rules.feed_ppm, rules.keeper_bps, e.total_live(), rules.live_floor, rules.payback, rules.min_cell_price, p.cells.length, p.siege, rules.siege_x);
+      const want = quote(e.agar(), rules.feed_ppm, rules.keeper_bps, e.counted(), rules.live_floor, rules.payback, rules.min_cell_price, p.cells.length, p.siege, rules.siege_x);
       if (want !== p.cost) flag("price", g, `paid ${p.cost}, formula gives ${want}`);
       const cost = BigInt(p.cost);
       const burn = (cost * BigInt(rules.burn_bps)) / 10000n;

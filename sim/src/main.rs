@@ -731,13 +731,13 @@ impl World {
         let n = self.accts.len() as u16;
         let s = self.d.step(n);
         let f = if self.r.house_fed {
-            feed(self.agar, self.r.feed_ppm, self.r.keeper_bps, self.r.reach, &s.live, &self.planted, &[])
+            feed(self.agar, self.r.feed_ppm, self.r.keeper_bps, self.r.reach, self.r.live_floor, &s.live, &self.planted, &[])
         } else {
             let mut live = s.live.clone();
             for &h in &self.house {
                 live[h as usize] = 0;
             }
-            feed(self.agar, self.r.feed_ppm, self.r.keeper_bps, self.r.reach, &live, &self.planted, &[])
+            feed(self.agar, self.r.feed_ppm, self.r.keeper_bps, self.r.reach, self.r.live_floor, &live, &self.planted, &[])
         };
         for &(c, amount) in &f.shares {
             let a = &mut self.accts[c as usize - 1];

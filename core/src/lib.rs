@@ -493,14 +493,18 @@ pub struct Feed {
     pub keeper: u128,
     /// Everything that leaves the agar this generation: the shares plus the keeper's cut.
     pub paid: u128,
+    /// The cells the feed counted: every paid colony's capped weight, summed. Prices are set against this.
+    pub weight: u32,
 }
 
 /// The agar pays `feed_ppm` parts per million of itself; `keeper_bps` of that goes to the keeper pot and the rest is
 /// split across living colonies by `feed_weight`. `live` and `planted` are indexed by colony id (index 0 unused).
-/// Colonies in `house` (the dish's own players) are never fed: on a quiet dish the house cannot eat the agar. Only
-/// living colonies are visited for the arithmetic. An unpaid dish is fed nothing. The contract, the browser and the
-/// simulator all call this, so their books cannot drift apart.
-pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live: &[u32], planted: &[u64], house: &[ColonyId]) -> Feed {
+/// Colonies in `house` (the dish's own players) are never fed: on a quiet dish the house cannot eat the agar. The
+/// agar releases its ration for at least `live_floor` counted cells, and never more per cell: with fewer counted cells
+/// the rest of the ration stays in the agar, so a cell never earns more than its price assumes. Only living colonies
+/// are visited for the arithmetic. An unpaid dish is fed nothing. The contract, the browser and the simulator all call
+/// this, so their books cannot drift apart.
+pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32, live: &[u32], planted: &[u64], house: &[ColonyId]) -> Feed {
     let mut weights: Vec<(ColonyId, u128)> = Vec::new();
     let mut total_w = 0u128;
     for (c, &n) in live.iter().enumerate().skip(1) {
@@ -516,12 +520,14 @@ pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live: &[u32]
     if total_w == 0 {
         return Feed::default();
     }
-    let total = agar * feed_ppm as u128 / 1_000_000;
+    let ration = agar * feed_ppm as u128 / 1_000_000;
+    let floor = (live_floor as u128).max(1);
+    let total = if total_w < floor { ration * total_w / floor } else { ration };
     let keeper = total * keeper_bps as u128 / 10_000;
     let pool = total - keeper;
     let shares: Vec<(ColonyId, u128)> = weights.iter().map(|&(c, w)| (c, pool * w / total_w)).filter(|&(_, s)| s > 0).collect();
     let paid = keeper + shares.iter().map(|&(_, s)| s).sum::<u128>();
-    Feed { shares, keeper, paid }
+    Feed { shares, keeper, paid, weight: total_w.min(u32::MAX as u128) as u32 }
 }
 
 /// One tide. `pay` (NEAR) is split by what each colony earned from the feed since the last tide (`window`, indexed by
@@ -558,12 +564,12 @@ fn mul_div(a: u128, b: u128, d: u128) -> u128 {
     a / d * b + (a % d) * b / d
 }
 
-/// What a single living cell earns per generation on average at today's feed, counting at least `live_floor` cells
-/// so the price stays sane on a nearly empty dish.
-pub fn feed_per_cell(agar: u128, feed_ppm: u32, keeper_bps: u16, total_live: u32, live_floor: u32) -> u128 {
+/// What one counted cell earns per generation at today's feed: the ration shared by `counted` cells (the last feed's
+/// `weight`), or by `live_floor` cells while fewer are counted, which is exactly what `feed` pays then.
+pub fn feed_per_cell(agar: u128, feed_ppm: u32, keeper_bps: u16, counted: u32, live_floor: u32) -> u128 {
     let total = agar * feed_ppm as u128 / 1_000_000;
     let to_cells = total - total * keeper_bps as u128 / 10_000;
-    to_cells / total_live.max(live_floor).max(1) as u128
+    to_cells / counted.max(live_floor).max(1) as u128
 }
 
 /// The price of planting `cells` cells: what that many average cells would earn in `payback` generations at today's

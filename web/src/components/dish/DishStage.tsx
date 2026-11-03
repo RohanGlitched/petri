@@ -177,7 +177,7 @@ export function DishStage() {
   const info = PATTERNS.find((p) => p.name === pattern);
   // The contract's own price formula, from the same crate.
   const costOf = (n: number, besieging = false) =>
-    rules && ready ? Number(quote(String(d.agar), rules.feed_ppm, rules.keeper_bps, d.totalLive, rules.live_floor, rules.payback, rules.min_cell_price, n, besieging, rules.siege_x)) : 0;
+    rules && ready ? Number(quote(String(d.agar), rules.feed_ppm, rules.keeper_bps, d.counted, rules.live_floor, rules.payback, rules.min_cell_price, n, besieging, rules.siege_x)) : 0;
   // What 0.02 NEAR buys a newcomer right now, after about 0.006 NEAR of colony storage.
   const joinPetri = rules && ready ? Number(buy_quote(String(JOIN_NEAR - 6n * 10n ** 21n), String(d.agar), rules.petri_price, rules.max_supply)) : 0;
   const cost = info ? costOf(stamp?.length ?? info.cells, siege) : 0;

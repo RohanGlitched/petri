@@ -1,7 +1,7 @@
 "use client";
 
 import { useLive, int, near, hex } from "@/lib/live";
-import { LAUNCH, capOf, genTime } from "./shared";
+import { LAUNCH, genTime, weightOf } from "./shared";
 import s from "./rules.module.css";
 
 export function TidesSection() {
@@ -9,26 +9,34 @@ export function TidesSection() {
   const r = rules ?? LAUNCH;
   const st = d.state;
   const tidePct = r.tide_bps / 100;
-  const capPct = r.cap_bps / 100;
   const genMs = Number(r.generation_ms);
-  const nextPay = (vault * r.tide_bps) / 10000;
+  const pay = (vault * r.tide_bps) / 10000;
+  const bounty = Math.min((pay * r.tide_bounty_bps) / 10000, Number(r.max_bounty));
   const nextAt = ready ? d.generation + tideIn : 0;
 
-  const cap = capOf(d.totalLive, r.cap_bps, r.cap_min);
-  const alive = colonies.filter((c) => c.live > 0);
-  const wsum = alive.reduce((a, c) => a + Math.min(c.live, cap), 0);
+  // What each colony adds to this tide's window right now: its share of the feed. The contract keeps the window itself.
+  const alive = colonies
+    .filter((c) => c.live > 0)
+    .map((c) => ({ ...c, w: weightOf(c.live, Number(c.cells_planted), r.reach, c.house) }));
+  const wsum = alive.reduce((a, c) => a + c.w, 0);
   const shown = alive.slice(0, 8);
   const rest = alive.slice(8);
-  const restW = rest.reduce((a, c) => a + Math.min(c.live, cap), 0);
+  const restW = rest.reduce((a, c) => a + c.w, 0);
 
-  const big = (k: "vault" | "near_in" | "near_tides") => (st ? BigInt(st[k]) : 0n);
-  const nearOk = st ? big("vault") + big("near_tides") === big("near_in") : null;
+  // NEAR in = vault + everything paid out. Tide and sale records are paid from the vault too, and are not counted in
+  // `state`, so the live counters can only show the gap they leave.
+  const big = (k: "vault" | "near_in" | "near_tides" | "near_bounties" | "near_sold") => (st ? BigInt(st[k]) : 0n);
+  const out = big("vault") + big("near_tides") + big("near_bounties") + big("near_sold");
+  const gap = big("near_in") - out;
+  const nearOk = st ? gap >= 0n : null;
 
   const stats: [string, string][] = [
     ["In the vault", st ? `${near(vault, 4)} NEAR` : "—"],
     ["Next tide", ready ? `${int(tideIn)} gen, ${genTime(tideIn, genMs)}` : "—"],
     ["Paid at the tides so far", st ? `${near(Number(st.near_tides), 4)} NEAR` : "—"],
-    ["Tides paid", st ? int(Number(st.tides)) : "—"],
+    ["Tides run", st ? int(Number(st.tides)) : "—"],
+    ["Credit sponsored", st ? `${near(Number(st.credit_given), 3)} NEAR` : "—"],
+    ["Of which spent in the dish", st ? `${near(Number(st.credit_spent), 3)} NEAR` : "—"],
   ];
 
   const ways: [string, string][] = [
@@ -36,59 +44,64 @@ export function TidesSection() {
       "Joining",
       `At least ${near(Number(r.min_join), 2)} NEAR. The contract keeps what the new colony's storage costs and spends the rest on PETRI from the agar. That NEAR goes to the vault.`,
     ],
-    ["Buying", "Everything attached buys PETRI from the agar, and all of it goes to the vault."],
+    ["Buying", "Everything brought, less the purchase record's storage, buys PETRI from the agar and goes to the vault."],
     [
       "Planting",
       `The storage the planting used, plus ${near(Number(r.cell_fee), 4)} NEAR for every cell. The contract keeps the storage; everything above it goes to the vault.`,
     ],
-    ["Registering to hold PETRI", "The storage of one balance record, kept by the contract and refunded by storage_unregister once the account is empty."],
-    ["Gas", "Every transaction pays its own gas, as on any NEAR contract. Guests on the site have theirs paid by the relayer."],
+    ["Selling back", "Comes out of the vault: the sale record's storage, and the rest to the seller."],
+    ["Registering to hold PETRI", "The storage of one balance record, refunded by storage_unregister once the account is empty."],
+    ["Gas", "Every transaction pays its own gas. Guests on the site have theirs paid by the relayer."],
   ];
 
   return (
     <section id="tides" className={`band band-2 ${s.section}`} aria-labelledby="tides-title">
       <div className="wrap">
         <div className="section-head">
-          <h2 id="tides-title" className={s.h2}>The NEAR goes back to whoever holds ground</h2>
+          <h2 id="tides-title" className={s.h2}>The NEAR goes back to whoever earned this hour</h2>
           <p className="lede">
-            The NEAR that colonies pay in does not stay with the contract or with the project. It collects in the tide vault,
-            and every {r.tide_every} generations ({genTime(r.tide_every, genMs)} of dish time), {tidePct}% of the
-            vault is paid out to colonies in proportion to their territory, counted with the same {capPct}% cap as the feed.
+            The NEAR that colonies pay in collects in the tide vault. Every {r.tide_every} generations (
+            {genTime(r.tide_every, genMs)}) {tidePct}% of the vault is paid out, split by the PETRI each colony earned from the
+            feed since the previous tide. A colony planted a minute before the tide gets a minute&rsquo;s worth.
           </p>
         </div>
 
         <div className={s.split}>
           <div className={s.prose}>
-            <h3 className="h3">The vault</h3>
-            <p>
-              Purchases from the agar, the NEAR a join spends on PETRI, and whatever a planting attaches above its storage all
-              go to the vault. Nothing else does, and nothing else comes out of it. The contract counts every yoctoNEAR that
-              went in, <code className={s.code}>near_in</code>, and every one paid out, <code className={s.code}>near_tides</code>.
-            </p>
             <h3 className="h3">The tide</h3>
             <pre className={s.formula}>
               {`at every generation that is a multiple of ${r.tide_every}:
-paid out = vault × ${tidePct}%
-a colony's share = paid out × counted cells ÷ all counted cells`}
+pay      = vault × ${tidePct}%
+bounty   = min(pay × ${r.tide_bounty_bps / 100}%, ${near(Number(r.max_bounty), 3)} NEAR)    to whoever's call ran the tide
+storage  = the tide's own ledger entry
+a colony's share = (pay − bounty − storage) × its window ÷ every window`}
             </pre>
             <p>
-              Counted cells are the colony&rsquo;s living cells at that generation, capped at {capPct}% of all living cells and
-              never capped below {int(r.cap_min)}, exactly as for the feed. A colony with no living cells at the tide gets
-              nothing. Rounding remainders stay in the vault, and so does the other {100 - tidePct}%, so the vault never empties
-              and each tide pays half of what is there.
+              A colony&rsquo;s window is the PETRI it was fed since the last tide, so it already carries the reach cap. The
+              windows reset at every tide. Rounding remainders and the other {100 - tidePct}% stay in the vault. If no colony
+              earned anything, nothing but the entry&rsquo;s storage leaves the vault and no bounty is paid. Every tide writes a{" "}
+              <code className={s.code}>Tide</code> entry to the ledger with the history chain and every figure above; those
+              entries are the dish&rsquo;s checkpoints.
             </p>
-            <h3 className="h3">Claiming it</h3>
             <p>
-              Tide winnings wait under the colony&rsquo;s name until it calls <code className={s.code}>claim</code>, which sends
-              the NEAR to the colony&rsquo;s account and moves its PETRI earnings into its balance in the same call. The{" "}
-              <code className={s.code}>claimable</code> view shows both. Winnings never expire.
+              Winnings wait under the colony&rsquo;s name until it calls <code className={s.code}>claim</code>. Each tide also
+              reopens the buy-back allowance: the agar may pay up to {r.sell_cap_bps / 100}% of the vault for PETRI before the
+              next tide.
             </p>
-            <h3 className="h3">Where the NEAR comes from</h3>
+            <h3 className="h3">The house takes nothing</h3>
             <p>
-              The vault only ever holds what players paid in. The tides move NEAR from those who bought and planted to those
-              who hold ground at the right moments. There is no outside yield. As a group, players get back less than they
-              paid: the contract keeps what their colonies and plantings store, and the vault always holds back part of what
-              came in.
+              The five AI strains are listed in <code className={s.code}>rules.house</code>
+              {r.house.length > 0 ? ` (${r.house.length} accounts)` : ""}. They plant like anyone and buy every PETRI they plant
+              with, but they are never fed and take no share of any tide. The NEAR they pay in goes to the other players. Without
+              this rule, a simulated dish with only the house on it fed the agar down from 1,000,000 to about 179,000 PETRI in 30
+              days, nearly all of it to the house; with it, the agar stays at about 994,000.
+            </p>
+            <h3 className="h3">Sponsored credit</h3>
+            <p>
+              Anyone can call <code className={s.code}>sponsor(account_id)</code> with NEAR attached. The contract keeps the
+              NEAR (less its record&rsquo;s storage) as credit for that account, spendable only on joining, buying and
+              planting, and never withdrawable. The site&rsquo;s relayer gives every guest 0.05 NEAR of credit this way, so it
+              never has to attach NEAR to a call it relays.
             </p>
           </div>
           <div className={s.hashes}>
@@ -101,73 +114,90 @@ a colony's share = paid out × counted cells ÷ all counted cells`}
               ))}
             </dl>
             <div className={s.card}>
-              <h3 className="h3">The next tide, if the dish stood still</h3>
+              <h3 className="h3">The next tide, if nothing more came in</h3>
               <p>
                 {ready && st
-                  ? `At generation ${int(nextAt)} the vault pays ${tidePct}% of what it holds then. If nothing more came in, that would be ${near(nextPay, 4)} NEAR, split like this by the cells alive now. The real split uses the cells alive at the tide.`
+                  ? `At generation ${int(nextAt)} the vault pays ${tidePct}% of what it holds then: ${near(pay, 4)} NEAR at today's vault, ${near(bounty, 5)} of it as the bounty. Each colony's share of the feed right now is how fast its window is growing.`
                   : "Reading the dish."}
               </p>
-              <div className={s.tableWrap} tabIndex={0} role="region" aria-label="The next tide by colony">
-                <table className={`${s.table} ${s.tideTable}`}>
-                  <thead>
-                    <tr>
-                      <th scope="col">Colony</th>
-                      <th scope="col">Counted cells</th>
-                      <th scope="col">NEAR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shown.map((c) => {
-                      const w = Math.min(c.live, cap);
-                      return (
-                        <tr key={c.id}>
-                          <th scope="row">
-                            <span className={s.who}>
-                              <i className="swatch" style={{ background: hex(c.color) }} />
-                              {c.name}
-                            </span>
-                          </th>
-                          <td className="num">{int(w)}</td>
-                          <td className="num">{wsum > 0 ? near((nextPay * w) / wsum, 5) : "—"}</td>
+              <details className={s.fold}>
+                <summary>
+                  Window growth by colony <small>{ready ? `${alive.length} alive` : "reading"}</small>
+                </summary>
+                <div className={s.foldBody}>
+                  <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Each colony's share of the feed now">
+                    <table className={`${s.table} ${s.tideTable}`}>
+                      <thead>
+                        <tr>
+                          <th scope="col">Colony</th>
+                          <th scope="col">Paid cells</th>
+                          <th scope="col">Share now</th>
                         </tr>
-                      );
-                    })}
-                    {rest.length > 0 && (
-                      <tr>
-                        <th scope="row">{rest.length} more</th>
-                        <td className="num">{int(restW)}</td>
-                        <td className="num">{wsum > 0 ? near((nextPay * restW) / wsum, 5) : "—"}</td>
-                      </tr>
-                    )}
-                    {ready && alive.length === 0 && (
-                      <tr>
-                        <td colSpan={3}>Nothing is alive, so a tide now would pay nothing.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody>
+                        {shown.map((c) => (
+                          <tr key={c.id}>
+                            <th scope="row">
+                              <span className={s.who}>
+                                <i className="swatch" style={{ background: hex(c.color) }} />
+                                {c.name}
+                                {c.house ? " (house)" : ""}
+                              </span>
+                            </th>
+                            <td className="num">{int(c.w)}</td>
+                            <td className="num">{wsum > 0 ? `${((100 * c.w) / wsum).toFixed(1)}%` : "—"}</td>
+                          </tr>
+                        ))}
+                        {rest.length > 0 && (
+                          <tr>
+                            <th scope="row">{rest.length} more</th>
+                            <td className="num">{int(restW)}</td>
+                            <td className="num">{wsum > 0 ? `${((100 * restW) / wsum).toFixed(1)}%` : "—"}</td>
+                          </tr>
+                        )}
+                        {ready && wsum === 0 && (
+                          <tr>
+                            <td colSpan={3}>No paid colony is alive, so no window is growing.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className={s.note}>
+                    The real split uses each colony&rsquo;s whole window since the last tide, which the contract keeps; this
+                    table shows only the rate at this generation.
+                  </p>
+                </div>
+              </details>
             </div>
             <div className={s.hashCard}>
-              <code className={s.hash}>vault + paid at the tides = all NEAR in</code>
+              <code className={s.hash}>vault + tides + bounties + sales ≤ all NEAR in</code>
               <span className={nearOk === false ? s.badDark : s.goodDark}>
-                {nearOk === null ? "Reading the contract" : nearOk ? "Holds on the live dish" : "Does not hold"}
+                {nearOk === null
+                  ? "Reading the contract"
+                  : nearOk
+                    ? `Holds on the live dish; the ${near(Number(gap), 5)} NEAR gap paid for tide and sale records`
+                    : "Does not hold"}
               </span>
             </div>
           </div>
         </div>
 
-        <div className={s.refuseBlock}>
-          <h3 className="h3">Every NEAR a player spends, and where it goes</h3>
-          <dl className={s.refusals}>
-            {ways.map(([k, val]) => (
-              <div key={k} className={s.refusal}>
-                <dt>{k}</dt>
-                <dd className={s.wayText}>{val}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
+        <details className={s.fold}>
+          <summary>
+            Every NEAR a player spends, and where it goes <small>{ways.length} ways</small>
+          </summary>
+          <div className={s.foldBody}>
+            <dl className={s.refusals}>
+              {ways.map(([k, val]) => (
+                <div key={k} className={s.refusal}>
+                  <dt>{k}</dt>
+                  <dd className={s.wayText}>{val}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </details>
       </div>
     </section>
   );

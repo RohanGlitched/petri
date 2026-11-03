@@ -41,6 +41,8 @@ export type DishState = {
   chain: string;
   board_hash: string;
   total_live: number;
+  /** cells the last feed counted; prices are set against this */
+  counted: number;
   colonies: number;
   ledger: string;
   plants: string;

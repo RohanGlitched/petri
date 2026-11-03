@@ -92,7 +92,7 @@ export function candidates(world, me, balance, rng, limit = 6) {
   // by a name written as an instruction, so no player-written text ever reaches the prompt.
   const rivals = [...centres.entries()].filter(([c]) => c !== me.id).map(([c, v]) => ({ id: c, ...v, name: `colony ${c}` }));
   const totalLive = world.totalLive;
-  const price = (n) => Number(quote(engine.agar(), rules.feed_ppm, rules.keeper_bps, totalLive, rules.live_floor, rules.payback, rules.min_cell_price, n, false, rules.siege_x));
+  const price = (n) => Number(quote(engine.agar(), rules.feed_ppm, rules.keeper_bps, engine.counted(), rules.live_floor, rules.payback, rules.min_cell_price, n, false, rules.siege_x));
   const out = [];
   const seen = new Set();
 

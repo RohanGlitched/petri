@@ -22,6 +22,8 @@ export type Snapshot = {
   changedAt: number;
   liveCounts: number[];
   totalLive: number;
+  /** Cells the last feed counted: prices and per-cell earnings use this. */
+  counted: number;
   births: number[];
   deaths: number[];
   chain: string;
@@ -49,6 +51,7 @@ const empty: Snapshot = {
   changedAt: 0,
   liveCounts: [],
   totalLive: 0,
+  counted: 0,
   births: [],
   deaths: [],
   chain: "",
@@ -86,7 +89,8 @@ function dueFor(rules: Rules, state: DishState): number {
 
 async function loadStored(rules: Rules, state: DishState, colonies: Colony[]) {
   const board = await getBoard();
-  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach);
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.reach, rules.live_floor);
+  e.set_counted(state.counted);
   e.set_colonies(colonies.length);
   // Each colony's pay cap grows with the cells it has planted, so the browser's feed needs those counts.
   e.set_planted(new Uint32Array(colonies.map((c) => Number(c.cells_planted))));
@@ -115,6 +119,7 @@ function advanceTo(due: number, force = false) {
     changedAt: performance.now(),
     liveCounts: Array.from(engine.live_counts()),
     totalLive: engine.total_live(),
+    counted: engine.counted(),
     births: Array.from(engine.last_births()),
     deaths: Array.from(engine.last_deaths()),
     chain: engine.chain_hex(),

@@ -224,8 +224,9 @@ export function LifeSection() {
         </div>
         <p className={s.footnote}>
           These dishes run <code className={s.code}>petri-core</code> compiled to WebAssembly, the code the contract runs. The
-          scenes were chosen by simulating them; nothing is drawn by hand. The trios could not be planted on the real dish, where
-          rivals must keep three cells apart. The three gliders could: each starts outside the others&rsquo; buffers.
+          scenes were chosen by simulating them; nothing is drawn by hand. On the real dish the trios would be sieges, since
+          each cell sits inside a rival&rsquo;s three-cell buffer and would cost three times the price. The three gliders
+          start outside each other&rsquo;s buffers, so they would pay the normal price.
         </p>
       </div>
     </section>

@@ -265,14 +265,14 @@ fn the_feed_is_capped_by_what_a_colony_planted() {
     // Colony 1 planted 10 cells and grew to 900: with reach 8 it is paid for at most 80. Colony 2 planted 100 and has 100.
     assert_eq!(feed_weight(900, 10, 8), 80);
     assert_eq!(feed_weight(100, 100, 8), 100);
-    let f = feed(1_000_000_000_000, 10, 200, 8, &[0, 900, 100], &[0, 10, 100], &[]);
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 900, 100], &[0, 10, 100], &[]);
     assert_eq!(f.keeper, 10_000_000 * 200 / 10_000);
     let s1 = f.shares.iter().find(|s| s.0 == 1).unwrap().1;
     let s2 = f.shares.iter().find(|s| s.0 == 2).unwrap().1;
     assert_eq!(s1 * 100 / (s1 + s2), 44, "{:?}", f.shares);
     assert!(f.paid <= 10_000_000);
     // A colony that never planted (it only received births) is paid nothing.
-    let f = feed(1_000_000_000_000, 10, 200, 8, &[0, 50, 50], &[0, 0, 50], &[]);
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50, 50], &[0, 0, 50], &[]);
     assert_eq!(f.shares.len(), 1);
     assert_eq!(f.shares[0].0, 2);
 }
@@ -283,7 +283,7 @@ proptest! {
     fn splitting_never_earns_more(parts in proptest::collection::vec((1u32..400, 1u64..100), 1..12), rival in 1u32..2000, rival_planted in 1u64..500) {
         let reach = 8;
         let (live_sum, planted_sum) = parts.iter().fold((0u32, 0u64), |a, p| (a.0 + p.0, a.1 + p.1));
-        let one = feed(1_000_000_000_000, 10, 200, reach, &[0, live_sum, rival], &[0, planted_sum, rival_planted], &[]);
+        let one = feed(1_000_000_000_000, 10, 200, reach, 1, &[0, live_sum, rival], &[0, planted_sum, rival_planted], &[]);
         let one_share = one.shares.iter().filter(|s| s.0 == 1).map(|s| s.1).sum::<u128>();
         let mut live = alloc::vec![0u32];
         let mut planted = alloc::vec![0u64];
@@ -293,7 +293,7 @@ proptest! {
         }
         live.push(rival);
         planted.push(rival_planted);
-        let split = feed(1_000_000_000_000, 10, 200, reach, &live, &planted, &[]);
+        let split = feed(1_000_000_000_000, 10, 200, reach, 1, &live, &planted, &[]);
         let split_share = split.shares.iter().filter(|s| (s.0 as usize) <= parts.len()).map(|s| s.1).sum::<u128>();
         // Integer rounding may move a few units either way.
         prop_assert!(split_share <= one_share + parts.len() as u128 + 1, "split {} vs one {}", split_share, one_share);
@@ -301,12 +301,27 @@ proptest! {
 }
 
 #[test]
+fn a_quiet_dish_releases_only_the_floor_share() {
+    // 4 counted cells against a floor of 1,000: the agar releases 4/1000 of its ration and keeps the rest.
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1_000, &[0, 4], &[0, 4], &[]);
+    assert_eq!(f.weight, 4);
+    assert_eq!(f.paid, 10_000_000 * 4 / 1_000);
+    // So a cell earns exactly what the price formula assumes.
+    let per = feed_per_cell(1_000_000_000_000, 10, 200, f.weight, 1_000);
+    let s1 = f.shares[0].1;
+    assert!(s1.abs_diff(per * 4) <= 4, "{} vs {}", s1, per * 4);
+    // Past the floor the whole ration is paid.
+    let g = feed(1_000_000_000_000, 10, 200, 8, 1_000, &[0, 1_500], &[0, 1_500], &[]);
+    assert_eq!(g.paid, 10_000_000 - 10_000_000 * 200 / 10_000 + 10_000_000 * 200 / 10_000);
+}
+
+#[test]
 fn the_house_is_never_fed() {
-    let f = feed(1_000_000_000_000, 10, 200, 8, &[0, 50, 50], &[0, 50, 50], &[1]);
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50, 50], &[0, 50, 50], &[1]);
     assert_eq!(f.shares.len(), 1);
     assert_eq!(f.shares[0].0, 2);
     // A dish with only the house alive feeds nothing, so the agar keeps its PETRI.
-    assert_eq!(feed(1_000_000_000_000, 10, 200, 8, &[0, 50], &[0, 50], &[1]).paid, 0);
+    assert_eq!(feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 50], &[0, 50], &[1]).paid, 0);
 }
 
 #[test]
@@ -323,7 +338,7 @@ fn the_sell_back_never_promises_more_than_the_vault() {
 
 #[test]
 fn an_empty_dish_is_fed_nothing() {
-    let f = feed(1_000_000_000_000, 10, 200, 8, &[0, 0, 0], &[0, 5, 5], &[]);
+    let f = feed(1_000_000_000_000, 10, 200, 8, 1, &[0, 0, 0], &[0, 5, 5], &[]);
     assert_eq!(f.paid, 0);
     assert_eq!(f.keeper, 0);
 }

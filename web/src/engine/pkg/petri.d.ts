@@ -9,7 +9,7 @@ export class Engine {
     /**
      * What one cell costs to plant now, in PETRI units, by the contract's formula.
      */
-    cell_price(payback: number, min_price: string, live_floor: number): string;
+    cell_price(payback: number, min_price: string): string;
     /**
      * The owner array (u16 per cell), copied out for rendering.
      */
@@ -22,6 +22,10 @@ export class Engine {
     check_plant(colony: number, cells: Uint32Array | number[], buffer: number, max_cells: number): string;
     clone_engine(): Engine;
     compact(): Uint8Array;
+    /**
+     * Cells the last feed counted (prices are set against this).
+     */
+    counted(): number;
     /**
      * PETRI units earned per colony since this engine started, approximate (f64), for display.
      */
@@ -41,7 +45,7 @@ export class Engine {
     last_deaths(): Uint32Array;
     live_counts(): Uint32Array;
     load_compact(bytes: Uint8Array | number[], generation: number, chain_hex: string): boolean;
-    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number, reach: number);
+    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number, reach: number, live_floor: number);
     /**
      * Plant without checks (replaying the contract's log).
      */
@@ -51,6 +55,10 @@ export class Engine {
      */
     set_agar(units: string): void;
     set_colonies(n: number): void;
+    /**
+     * Start from the contract's count when the engine starts mid-history.
+     */
+    set_counted(counted: number): void;
     /**
      * The dish's house colonies (the contract's `state().house`): they are never fed and win no tides.
      */
@@ -92,7 +100,8 @@ export function buy_quote(near: string, agar: string, petri_price: string, max_s
 export function pattern_cells(name: string, x: number, y: number, width: number, height: number, rotate: number, flip: boolean): Uint32Array;
 
 /**
- * What planting `cells` costs in PETRI units (decimal string), given the agar and the living population; a siege
+ * What planting `cells` costs in PETRI units (decimal string), given the agar and the cells the last feed counted
+ * (`counted`, the contract's `state().counted`; pass it as `total_live`); a siege
  * (a planting inside a rival's buffer) costs `siege_x` times as much.
  */
 export function quote(agar: string, feed_ppm: number, keeper_bps: number, total_live: number, live_floor: number, payback: number, min_price: string, cells: number, siege: boolean, siege_x: number): string;
@@ -111,12 +120,13 @@ export interface InitOutput {
     readonly buy_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly engine_agar: (a: number) => [number, number];
     readonly engine_board_hash_hex: (a: number) => [number, number];
-    readonly engine_cell_price: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly engine_cell_price: (a: number, b: number, c: number, d: number) => [number, number];
     readonly engine_cells: (a: number) => [number, number];
     readonly engine_chain_hex: (a: number) => [number, number];
     readonly engine_check_plant: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly engine_clone_engine: (a: number) => number;
     readonly engine_compact: (a: number) => [number, number];
+    readonly engine_counted: (a: number) => number;
     readonly engine_earned: (a: number) => [number, number];
     readonly engine_earned_of: (a: number, b: number) => [number, number];
     readonly engine_generation: (a: number) => number;
@@ -127,10 +137,11 @@ export interface InitOutput {
     readonly engine_last_deaths: (a: number) => [number, number];
     readonly engine_live_counts: (a: number) => [number, number];
     readonly engine_load_compact: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
-    readonly engine_new: (a: number, b: number, c: number, d: number, e: number) => number;
+    readonly engine_new: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
     readonly engine_set_agar: (a: number, b: number, c: number) => void;
     readonly engine_set_colonies: (a: number, b: number) => void;
+    readonly engine_set_counted: (a: number, b: number) => void;
     readonly engine_set_house: (a: number, b: number, c: number) => void;
     readonly engine_set_planted: (a: number, b: number, c: number) => void;
     readonly engine_step: (a: number, b: number) => void;

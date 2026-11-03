@@ -1,6 +1,6 @@
 import type { Rules } from "@/lib/chain";
 
-/** The launch values the live dish returns from `rules`, used only until the real view has loaded. */
+/** The launch values the live dish (petri-v3.testnet) returns from `rules`, used only until the real view has loaded. */
 export const LAUNCH: Rules = {
   width: 128,
   height: 128,
@@ -8,8 +8,7 @@ export const LAUNCH: Rules = {
   max_supply: "1000000000000",
   feed_ppm: 10,
   keeper_bps: 200,
-  cap_bps: 1500,
-  cap_min: 64,
+  reach: 4,
   burn_bps: 5000,
   payback: 480,
   min_cell_price: "500000",
@@ -18,10 +17,16 @@ export const LAUNCH: Rules = {
   min_join: "10000000000000000000000",
   cell_fee: "100000000000000000000",
   tide_every: 240,
-  tide_bps: 5000,
+  tide_bps: 1000,
+  tide_bounty_bps: 100,
+  max_bounty: "1000000000000000000000",
+  sell_bps: 5000,
+  sell_cap_bps: 1000,
+  siege_x: 3,
   buffer: 3,
   max_plant_cells: 64,
   max_catchup: 120,
+  house: ["petri-violet.testnet", "petri-safranin.testnet", "petri-methylene.testnet", "petri-malachite.testnet", "petri-congo.testnet"],
 };
 
 /** The colours the explanatory dishes use (the same stains as the home page demos). */
@@ -42,11 +47,11 @@ export function genTime(gens: number, generationMs: number): string {
 }
 
 /**
- * Each colony's claim on the feed and the tides, as the contract computes it (`feed_weights` in petri-core): its
- * living cells, but never more than `cap_bps` of all living cells, and the cap is never below `cap_min`.
+ * A colony's claim on the feed, as the contract computes it (`feed_weight` in petri-core): its living cells, but never
+ * more than `reach` cells for every cell it has ever planted. House colonies are never fed, so they weigh nothing.
  */
-export function capOf(totalLive: number, capBps: number, capMin: number): number {
-  return Math.max(Math.floor((totalLive * capBps) / 10000), capMin);
+export function weightOf(live: number, planted: number, reach: number, house = false): number {
+  return house ? 0 : Math.min(live, planted * reach);
 }
 
 /** A PETRI price in yoctoNEAR per PETRI, as NEAR with enough digits to see it move. */

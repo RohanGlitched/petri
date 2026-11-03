@@ -6,28 +6,26 @@ import { buy_quote } from "@/engine";
 import { useLive, petri, int, near, hex } from "@/lib/live";
 import { view } from "@/lib/chain";
 import { CONTRACT, accountUrl, fmtPetri } from "@/lib/config";
-import { LAUNCH, DEMO, YOCTO, capOf, nearPer } from "./shared";
+import { LAUNCH, DEMO, YOCTO, nearPer, weightOf } from "./shared";
 import s from "./rules.module.css";
 
-// A grower against two small colonies, on a 40 × 22 dish. The cap floor is scaled down to 8 cells for a dish this
-// small, as in the contract tests; the share is 15%, as on the real dish.
-const CAP_SEEDS: Seed[] = [
+// A grower against two small colonies, on a 40 × 22 dish. Each colony's planted count is what its seeds plant, so the
+// reach cap here is exactly the contract's: an R-pentomino planted as 5 cells is paid for at most 5 × reach.
+const REACH_SEEDS: Seed[] = [
   { colony: 1, pattern: "r-pentomino", x: 8, y: 9 },
   { colony: 2, pattern: "block", x: 28, y: 3 },
   { colony: 2, pattern: "block", x: 34, y: 3 },
   { colony: 2, pattern: "block", x: 31, y: 8 },
   { colony: 3, pattern: "beehive", x: 29, y: 15 },
 ];
-const CAP_COLORS = { 1: DEMO.red, 2: DEMO.green, 3: DEMO.blue };
-const CAP_NAMES: Record<number, string> = { 1: "Red", 2: "Green", 3: "Blue" };
-const DEMO_CAP_MIN = 8;
+const REACH_PLANTED: Record<number, number> = { 1: 5, 2: 12, 3: 6 };
+const REACH_COLORS = { 1: DEMO.red, 2: DEMO.green, 3: DEMO.blue };
+const REACH_NAMES: Record<number, string> = { 1: "Red", 2: "Green", 3: "Blue" };
 
-function CapDemo({ capBps }: { capBps: number }) {
+function ReachDemo({ reach }: { reach: number }) {
   const [g, setG] = useState(0);
   const [counts, setCounts] = useState<number[]>([]);
-  const total = counts.slice(1).reduce((a, b) => a + b, 0);
-  const cap = capOf(total, capBps, DEMO_CAP_MIN);
-  const weights = [1, 2, 3].map((c) => Math.min(counts[c] ?? 0, cap));
+  const weights = [1, 2, 3].map((c) => weightOf(counts[c] ?? 0, REACH_PLANTED[c], reach));
   const wsum = weights.reduce((a, b) => a + b, 0);
   return (
     <figure className={s.figure}>
@@ -35,12 +33,12 @@ function CapDemo({ capBps }: { capBps: number }) {
         <RuleDemo
           width={40}
           height={22}
-          seeds={CAP_SEEDS}
+          seeds={REACH_SEEDS}
           loop={160}
-          colors={CAP_COLORS}
+          colors={REACH_COLORS}
           stepMs={260}
           stillAt={60}
-          label="A growing R-pentomino beside two small colonies, with the cells the feed counts for each"
+          label="A growing R-pentomino beside two small colonies, with the cells the feed pays each for"
           onGeneration={(gen, c) => {
             setG(gen);
             setCounts(c);
@@ -49,22 +47,19 @@ function CapDemo({ capBps }: { capBps: number }) {
       </div>
       <figcaption className={s.caption}>
         <p>
-          Red plants an R-pentomino, which grows. Green holds three blocks and Blue a beehive. The table below
-          shows each colony&rsquo;s cells, the cells the feed counts for it, and its share of the feed. Red can cover as much ground as it
-          likes; past the cap, the extra cells earn nothing.
+          Red plants an R-pentomino, 5 cells, which grows. Green planted three blocks (12 cells) and Blue a beehive (6). Each is
+          paid for at most {reach} living cells per cell it planted, so Red can cover as much ground as it likes and is still
+          paid for {5 * reach} at most.
         </p>
         <p className={s.live} aria-live="off">
           <span className="num">Generation {g}</span>
-          <span>
-            Cap <b className="num">{cap}</b> cells
-          </span>
         </p>
         <table className={`${s.table} ${s.demoTable}`}>
           <thead>
             <tr>
               <th scope="col">Colony</th>
               <th scope="col">Cells</th>
-              <th scope="col">Counted</th>
+              <th scope="col">Paid for</th>
               <th scope="col">Share of the feed</th>
             </tr>
           </thead>
@@ -73,8 +68,8 @@ function CapDemo({ capBps }: { capBps: number }) {
               <tr key={c}>
                 <th scope="row">
                   <span className={s.who}>
-                    <i className="swatch" style={{ background: hex(CAP_COLORS[c as 1 | 2 | 3]) }} />
-                    {CAP_NAMES[c]}
+                    <i className="swatch" style={{ background: hex(REACH_COLORS[c as 1 | 2 | 3]) }} />
+                    {REACH_NAMES[c]}
                   </span>
                 </th>
                 <td className="num">{counts[c] ?? 0}</td>
@@ -97,7 +92,6 @@ export function CoinSection() {
   const st = d.state;
   const keeperPct = r.keeper_bps / 100;
   const burnPct = r.burn_bps / 100;
-  const capPct = r.cap_bps / 100;
   const keeperCut = feed * (r.keeper_bps / 10000);
   const launchPrice = Number(r.petri_price);
   const maxPetri = Number(r.max_supply) / 1e6;
@@ -125,21 +119,23 @@ export function CoinSection() {
     return { n, units, avg: units > 0 ? (n * 1e24 * 1e6) / units : NaN, after };
   });
 
-  // The capped split of this generation's feed, with the cells your browser counts.
+  // This generation's feed by colony, with the reach cap and the house left out, from the cells your browser counts.
   const total = d.totalLive;
-  const cap = capOf(total, r.cap_bps, r.cap_min);
-  const alive = colonies.filter((c) => c.live > 0);
-  const wsum = alive.reduce((a, c) => a + Math.min(c.live, cap), 0);
+  const alive = colonies
+    .filter((c) => c.live > 0)
+    .map((c) => ({ ...c, w: weightOf(c.live, Number(c.cells_planted), r.reach, c.house) }));
+  const wsum = alive.reduce((a, c) => a + c.w, 0);
   const toColonies = feed - keeperCut;
   const shown = alive.slice(0, 8);
   const rest = alive.slice(8);
-  const capped = alive.filter((c) => c.live > cap).length;
+  const restW = rest.reduce((a, c) => a + c.w, 0);
+  const capped = alive.filter((c) => !c.house && c.live > c.w).length;
 
   // Conservation, checked on the contract's own counters with exact integers.
   const big = (key: keyof NonNullable<typeof st>) => (st ? BigInt(st[key] as string) : 0n);
   const max = BigInt(r.max_supply);
   const supplyOk = st ? big("total_supply") === max - big("burned") : null;
-  const agarOk = st ? big("agar") === max - big("sold") - big("fed") + big("returned") : null;
+  const agarOk = st ? big("agar") === max - big("sold") - big("fed") + big("returned") + big("bought_back") : null;
   const held = st ? big("total_supply") - big("agar") - big("keeper_pot") : 0n;
   const v = (key: keyof NonNullable<typeof st>) => (st ? fmtPetri(st[key] as string, 2) : "—");
 
@@ -148,8 +144,9 @@ export function CoinSection() {
     ["Sold for NEAR", v("sold"), "Bought from the agar by colonies, at the curve's price."],
     ["Fed to the living", v("fed"), `Everything the agar has paid out each generation, the keeper's ${keeperPct}% included.`],
     ["Returned by planting", v("returned"), `${100 - burnPct}% of every planting goes back into the agar.`],
-    ["Still in the agar", v("agar"), "The contract's own balance: minted, less sold and fed, plus returned."],
-    ["Waiting in the keeper pot", v("keeper_pot"), "Set aside from the feed until someone calls advance."],
+    ["Bought back", v("bought_back"), "PETRI the agar bought back for NEAR from the vault."],
+    ["Still in the agar", v("agar"), "Minted, less sold and fed, plus returned and bought back."],
+    ["Waiting in the keeper pot", v("keeper_pot"), "Set aside from the feed until someone advances the dish."],
     ["Paid to keepers", v("keeper_paid"), "Pots already collected."],
     ["Burned", v("burned"), `The other ${burnPct}% of every planting. Gone for good.`],
     ["Total supply", v("total_supply"), "What ft_total_supply reports: minted less burned."],
@@ -166,8 +163,8 @@ export function CoinSection() {
           <p className="lede">
             All {fmtPetri(r.max_supply, 0)} PETRI were minted once, at launch, into the contract&rsquo;s own balance. That
             balance is the agar, and there is no other mint and no free grant. PETRI leaves the agar two ways: colonies buy it
-            with NEAR, and the agar feeds a sliver of itself to living cells every generation. It comes back one way: half of
-            every planting returns to it, and the other half is burned.
+            with NEAR, and the agar feeds a sliver of itself to living cells every generation. It comes back two ways: half of
+            every planting returns to it, and the agar buys PETRI back for NEAR at half its price.
           </p>
         </div>
 
@@ -175,19 +172,18 @@ export function CoinSection() {
           <article className={s.paperCard}>
             <h3 className="h3">Buying in</h3>
             <p>
-              A colony gets its first PETRI by joining with at least <b className="num">{near(Number(r.min_join), 2)} NEAR</b>. That
-              NEAR first pays for the colony&rsquo;s own storage, and the rest buys PETRI from the agar. After that,{" "}
-              <code className={s.codePaper}>buy</code> spends whatever NEAR is attached the same way. Only colonies can buy, so
-              every purchase is in the ledger with the NEAR paid and the PETRI received. All of that NEAR goes to the tide vault.
+              A colony gets its first PETRI by joining with at least <b className="num">{near(Number(r.min_join), 2)} NEAR</b>,
+              attached by a wallet or spent from sponsored credit. That NEAR first pays for the colony&rsquo;s storage and the
+              rest buys PETRI from the agar. After that, <code className={s.codePaper}>buy</code> spends NEAR the same way. Every
+              purchase is in the ledger with the NEAR paid and the PETRI received, and the NEAR goes to the tide vault.
             </p>
             <pre className={s.formulaPaper}>
               {`price of one PETRI = ${nearPer(launchPrice)} NEAR × ${int(maxPetri)} ÷ PETRI in the agar
 PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
             </pre>
             <p>
-              At launch one PETRI cost {nearPer(launchPrice)} NEAR. The price rises as the agar empties: with half of it left, a
-              PETRI costs twice as much. A purchase is priced at the midpoint of the stretch of curve it moves along, so a big
-              buy pays more for its last PETRI than its first. Splitting a purchase into smaller buys does not get more PETRI.
+              At launch one PETRI cost {nearPer(launchPrice)} NEAR. With half of the agar left, it costs twice as much. A purchase
+              is priced at the midpoint of the stretch of curve it moves along, so splitting a purchase does not get more PETRI.
             </p>
             <dl className={s.sums}>
               <div>
@@ -199,43 +195,50 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
                 <dd className="num">{ready ? `${nearPer(petriPrice)} NEAR` : "—"}</dd>
               </div>
             </dl>
-            <div className={s.tableWrap}>
-              <table className={`${s.paperTable}`}>
-                <thead>
-                  <tr>
-                    <th scope="col">NEAR paid</th>
-                    <th scope="col">PETRI received</th>
-                    <th scope="col">NEAR per PETRI</th>
-                    <th scope="col">Price after</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {BUYS.map((n, i) => {
-                    const b = buys[i];
-                    return (
-                      <tr key={n}>
-                        <td className="num">{n}</td>
-                        <td className="num">{b ? petri(b.units, 2) : "—"}</td>
-                        <td className="num">{b ? nearPer(b.avg) : "—"}</td>
-                        <td className="num">{b ? nearPer(b.after) : "—"}</td>
+            <details className={`${s.fold} ${s.foldPaper}`}>
+              <summary>
+                What NEAR buys now <small>5 amounts</small>
+              </summary>
+              <div className={s.foldBody}>
+                <div className={s.tableWrap}>
+                  <table className={s.paperTable}>
+                    <thead>
+                      <tr>
+                        <th scope="col">NEAR paid</th>
+                        <th scope="col">PETRI received</th>
+                        <th scope="col">NEAR per PETRI</th>
+                        <th scope="col">Price after</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className={s.paperNote}>
-              Computed in your browser with <code className={s.codePaper}>buy_quote</code> from petri-core, the function the
-              contract runs. A join buys with its NEAR less its storage, so it receives a little less than this table shows.
-              There is no sell-back: PETRI never turns back into NEAR through the agar.
-            </p>
+                    </thead>
+                    <tbody>
+                      {BUYS.map((n, i) => {
+                        const b = buys[i];
+                        return (
+                          <tr key={n}>
+                            <td className="num">{n}</td>
+                            <td className="num">{b ? petri(b.units, 2) : "—"}</td>
+                            <td className="num">{b ? nearPer(b.avg) : "—"}</td>
+                            <td className="num">{b ? nearPer(b.after) : "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className={s.paperNote}>
+                  Computed in your browser with <code className={s.codePaper}>buy_quote</code> from petri-core, the function the
+                  contract runs. A join buys with its NEAR less its storage, so it receives a little less.
+                </p>
+              </div>
+            </details>
           </article>
           <article className={s.paperCard}>
             <h3 className="h3">Every generation</h3>
             <p>
-              If anything is alive after the step, the agar pays {r.feed_ppm} parts per million of its balance. {keeperPct}% of
-              that goes to the keeper pot. The rest is split between colonies by their capped cell counts. Rounding remainders
-              stay in the agar. An empty dish pays nothing.
+              If any paid colony is alive after the step, the agar pays {r.feed_ppm} parts per million of its balance.{" "}
+              {keeperPct}% goes to the keeper pot, paid to whoever next calls <code className={s.codePaper}>advance</code> and
+              runs at least one generation. The rest is split by each colony&rsquo;s paid cells (see the reach, below). House
+              colonies are never fed. Rounding remainders stay in the agar.
             </p>
             <dl className={s.sums}>
               <div>
@@ -250,139 +253,129 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
                 <dt>Average per live cell, of {ready ? int(total) : "—"}</dt>
                 <dd className="num">{ready ? petri(perCell, 5) : "—"}</dd>
               </div>
+              <div>
+                <dt>Keeper pot now / paid so far</dt>
+                <dd className="num">{st ? `${fmtPetri(st.keeper_pot, 2)} / ${fmtPetri(st.keeper_paid, 2)}` : "—"}</dd>
+              </div>
             </dl>
           </article>
           <article className={s.paperCard}>
-            <h3 className="h3">The keeper pot</h3>
+            <h3 className="h3">Selling back</h3>
             <p>
-              The pot collects {keeperPct}% of every generation&rsquo;s feed, whichever call ran it. Only{" "}
-              <code className={s.codePaper}>advance</code> pays it out, all of it, to the caller, and only if the caller can
-              hold PETRI. That pays whoever keeps the dish close to the clock.
+              <code className={s.codePaper}>sell(petri)</code> hands PETRI back to the agar for NEAR from the tide vault, at{" "}
+              {r.sell_bps / 100}% of the curve&rsquo;s price, and never more than those units&rsquo; pro-rata share of the vault.
+              Between two tides the agar buys back at most {r.sell_cap_bps / 100}% of the vault, first come first served, and
+              nothing before the first tide. A round trip through the agar always loses.
             </p>
+            <pre className={s.formulaPaper}>
+              {`NEAR = min(curve price × ${r.sell_bps / 100}%, vault × PETRI sold ÷ PETRI outside the agar)`}
+            </pre>
             <dl className={s.sums}>
               <div>
-                <dt>In the pot now</dt>
-                <dd className="num">{st ? fmtPetri(st.keeper_pot, 4) : "—"}</dd>
+                <dt>The agar may still buy back, this tide</dt>
+                <dd className="num">{st ? `${near(Number(st.sell_left), 4)} NEAR` : "—"}</dd>
               </div>
               <div>
-                <dt>Paid to keepers so far</dt>
-                <dd className="num">{st ? fmtPetri(st.keeper_paid, 2) : "—"}</dd>
+                <dt>NEAR paid for PETRI so far</dt>
+                <dd className="num">{st ? `${near(Number(st.near_sold), 4)} NEAR` : "—"}</dd>
               </div>
             </dl>
           </article>
           <article className={s.paperCard}>
             <h3 className="h3">Claiming</h3>
             <p>
-              Earnings do not land in a balance on their own. Each colony&rsquo;s feed adds up in one shared record, so catching
-              the dish up reads and writes that one record and logs one summary line however many colonies are alive. A colony
-              moves its earnings into its balance with <code className={s.codePaper}>claim</code>, which also sends the NEAR it
-              has won at the tides. Planting claims the waiting PETRI first, so it always counts towards the price. The{" "}
-              <code className={s.codePaper}>claimable</code> view shows what is waiting, and{" "}
-              <code className={s.codePaper}>earnings</code> shows every colony&rsquo;s lifetime total, claimed or not.
+              Earnings do not land in a balance on their own. Each colony&rsquo;s feed adds up in one shared record, so a
+              catch-up reads and writes one record and logs one summary line however many colonies are alive. A colony moves its
+              earnings into its balance with <code className={s.codePaper}>claim</code>, which also sends the NEAR it has won at
+              the tides. If a NEAR payout fails, a callback owes it to the colony again, to claim later. Planting claims waiting
+              PETRI first. The <code className={s.codePaper}>claimable</code> view shows what is waiting.
             </p>
           </article>
         </div>
 
         <div className={s.capGrid}>
           <div>
-            <h3 className="h3">No colony is paid for more than {capPct}% of the living</h3>
+            <h3 className="h3">The reach: paid for {r.reach} living cells per cell planted</h3>
             <p className={s.paperMuted}>
-              Each colony&rsquo;s claim on the feed is its living cells, but never more than {capPct}% of all living cells, and
-              the cap is never below {int(r.cap_min)} cells. The feed is split in proportion to those capped counts, so what a
-              runaway grower is not paid for goes to everyone else. Small colonies are counted cell for cell, so splitting into
-              many accounts gains nothing. The tides use the same counts.
+              A colony&rsquo;s claim on the feed, and so on the tides, is its living cells, but never more than {r.reach} cells
+              for every cell it has ever planted. The cap grows only with what the colony paid for, so splitting into many
+              colonies never earns more: the capped weights of the parts add up to at most the capped weight of the whole, and a
+              property test in petri-core checks it. A growing pattern can still cover ground; past its reach that ground earns
+              nothing.
             </p>
             <pre className={s.formulaPaper}>
-              {`cap = max(all living cells × ${capPct}%, ${int(r.cap_min)})
-counted cells = min(a colony's living cells, cap)
-share = this generation's feed × (1 − ${keeperPct}%) × counted ÷ all counted cells`}
+              {`paid cells = min(a colony's living cells, ${r.reach} × cells it ever planted)   (0 for the house)
+share = this generation's feed × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
             </pre>
-            <CapDemo capBps={r.cap_bps} />
+            <ReachDemo reach={r.reach} />
           </div>
           <div>
             <h3 className="h3">The split on the live dish</h3>
             <p className={s.paperMuted}>
               {ready
-                ? `${int(total)} cells are alive at your browser's generation, so the cap is ${int(cap)} cells${total * r.cap_bps < r.cap_min * 10000 ? `, the floor, because ${capPct}% of the dish is fewer` : ""}. ${capped === 0 ? "No colony is over it right now." : `${capped} ${capped === 1 ? "colony is" : "colonies are"} over it right now.`}`
+                ? `${int(total)} cells are alive at your browser's generation. ${capped === 0 ? "No colony is past its reach right now." : `${capped} ${capped === 1 ? "colony is" : "colonies are"} past their reach right now.`}`
                 : "Reading the dish."}
             </p>
-            <div className={s.tableWrap} tabIndex={0} role="region" aria-label="This generation's feed by colony">
-              <table className={`${s.paperTable} ${s.splitTable}`}>
-                <thead>
-                  <tr>
-                    <th scope="col">Colony</th>
-                    <th scope="col">Living cells</th>
-                    <th scope="col">Counted</th>
-                    <th scope="col">Share</th>
-                    <th scope="col">PETRI a generation</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shown.map((c) => {
-                    const w = Math.min(c.live, cap);
-                    return (
-                      <tr key={c.id} className={c.live > cap ? s.paperNow : undefined}>
-                        <th scope="row">
-                          <span className={s.who}>
-                            <i className="swatch" style={{ background: hex(c.color) }} />
-                            {c.name}
-                          </span>
-                        </th>
-                        <td className="num">{int(c.live)}</td>
-                        <td className="num">{int(w)}</td>
-                        <td className="num">{wsum > 0 ? `${((100 * w) / wsum).toFixed(1)}%` : "—"}</td>
-                        <td className="num">{wsum > 0 ? petri((toColonies * w) / wsum, 4) : "—"}</td>
+            <details className={`${s.fold} ${s.foldPaper}`}>
+              <summary>
+                This generation&rsquo;s feed by colony <small>{ready ? `${alive.length} alive` : "reading"}</small>
+              </summary>
+              <div className={s.foldBody}>
+                <div className={s.tableWrap} tabIndex={0} role="region" aria-label="This generation's feed by colony">
+                  <table className={`${s.paperTable} ${s.splitTable}`}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Colony</th>
+                        <th scope="col">Living cells</th>
+                        <th scope="col">Paid for</th>
+                        <th scope="col">Share</th>
+                        <th scope="col">PETRI a generation</th>
                       </tr>
-                    );
-                  })}
-                  {rest.length > 0 && (
-                    <tr>
-                      <th scope="row">{rest.length} more</th>
-                      <td className="num">{int(rest.reduce((a, c) => a + c.live, 0))}</td>
-                      <td className="num">{int(rest.reduce((a, c) => a + Math.min(c.live, cap), 0))}</td>
-                      <td className="num">{wsum > 0 ? `${((100 * rest.reduce((a, c) => a + Math.min(c.live, cap), 0)) / wsum).toFixed(1)}%` : "—"}</td>
-                      <td className="num">{wsum > 0 ? petri((toColonies * rest.reduce((a, c) => a + Math.min(c.live, cap), 0)) / wsum, 4) : "—"}</td>
-                    </tr>
-                  )}
-                  {ready && alive.length === 0 && (
-                    <tr>
-                      <td colSpan={5}>Nothing is alive, so nothing is fed.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <p className={s.paperNote}>
-              Highlighted rows are over the cap. Figures are this generation&rsquo;s feed at your browser&rsquo;s generation,
-              rounded for display; the contract rounds each share down to a millionth of a PETRI.
-            </p>
-          </div>
-        </div>
-
-        <div className={s.coinGrid}>
-          <div>
-            <h3 className="h3">The ledger, from the contract</h3>
-            <p className={s.paperMuted}>
-              Read from the <code className={s.codePaper}>state</code> view of{" "}
-              <a className={s.linkPaper} href={accountUrl(CONTRACT)}>{CONTRACT}</a> at stored generation{" "}
-              {st ? int(Number(st.generation)) : "—"}. Feed for the generations since then is added when the dish next advances.
-            </p>
-            <dl className={s.ledger}>
-              {ledger.map(([key, val, note]) => (
-                <div key={key}>
-                  <dt>{key}</dt>
-                  <dd className="num">{val}</dd>
-                  <p>{note}</p>
+                    </thead>
+                    <tbody>
+                      {shown.map((c) => (
+                        <tr key={c.id} className={!c.house && c.live > c.w ? s.paperNow : undefined}>
+                          <th scope="row">
+                            <span className={s.who}>
+                              <i className="swatch" style={{ background: hex(c.color) }} />
+                              {c.name}
+                              {c.house ? " (house)" : ""}
+                            </span>
+                          </th>
+                          <td className="num">{int(c.live)}</td>
+                          <td className="num">{int(c.w)}</td>
+                          <td className="num">{wsum > 0 ? `${((100 * c.w) / wsum).toFixed(1)}%` : "—"}</td>
+                          <td className="num">{wsum > 0 ? petri((toColonies * c.w) / wsum, 4) : "—"}</td>
+                        </tr>
+                      ))}
+                      {rest.length > 0 && (
+                        <tr>
+                          <th scope="row">{rest.length} more</th>
+                          <td className="num">{int(rest.reduce((a, c) => a + c.live, 0))}</td>
+                          <td className="num">{int(restW)}</td>
+                          <td className="num">{wsum > 0 ? `${((100 * restW) / wsum).toFixed(1)}%` : "—"}</td>
+                          <td className="num">{wsum > 0 ? petri((toColonies * restW) / wsum, 4) : "—"}</td>
+                        </tr>
+                      )}
+                      {ready && wsum === 0 && (
+                        <tr>
+                          <td colSpan={5}>No paid colony is alive, so nothing is fed and the agar keeps its PETRI.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </dl>
-          </div>
-          <div>
-            <h3 className="h3">Nothing is created or lost</h3>
+                <p className={s.paperNote}>
+                  Highlighted rows are past their reach. Figures are this generation&rsquo;s feed at your browser&rsquo;s
+                  generation, rounded for display; the contract rounds each share down to a millionth of a PETRI.
+                </p>
+              </div>
+            </details>
+
+            <h3 className={`h3 ${s.spaced}`}>Nothing is created or lost</h3>
             <p className={s.paperMuted}>
               Every PETRI is in the agar, in an account, waiting to be claimed, in the keeper pot, or burned. The contract tests
-              assert these identities after every scenario. The first two are checked again here, on the live counters, with
-              exact integers.
+              assert these identities after every scenario; the first two are checked again here on the live counters.
             </p>
             <ul className={s.checks}>
               <li className={s.checkItem}>
@@ -390,7 +383,7 @@ share = this generation's feed × (1 − ${keeperPct}%) × counted ÷ all counte
                 <span className={supplyOk === false ? s.bad : s.good}>{check(supplyOk)}</span>
               </li>
               <li className={s.checkItem}>
-                <code className={s.codePaper}>agar = minted − sold − fed + returned</code>
+                <code className={s.codePaper}>agar = minted − sold − fed + returned + bought back</code>
                 <span className={agarOk === false ? s.bad : s.good}>{check(agarOk)}</span>
               </li>
               <li className={s.checkItem}>
@@ -398,44 +391,69 @@ share = this generation's feed × (1 − ${keeperPct}%) × counted ÷ all counte
                 <span className={s.paperMuted}>Checked in the tests by summing every holder</span>
               </li>
             </ul>
-
-            <h3 className={`h3 ${s.spaced}`}>A standard token that the dish never plays with</h3>
-            <ul className={s.standards}>
-              <li>
-                <b>NEP-141.</b> <code className={s.codePaper}>ft_transfer</code>, <code className={s.codePaper}>ft_transfer_call</code>{" "}
-                (with refunds through <code className={s.codePaper}>ft_resolve_transfer</code>),{" "}
-                <code className={s.codePaper}>ft_balance_of</code> and <code className={s.codePaper}>ft_total_supply</code>. Transfers
-                attach exactly 1 yoctoNEAR, as the standard asks, and any amount above zero may move.
-              </li>
-              <li>
-                <b>NEP-148.</b> Name Petri, symbol PETRI, 6 decimals and an inline icon.
-              </li>
-              <li>
-                <b>NEP-145, for real.</b> A receiver must be registered before it can hold PETRI. Joining registers a colony;
-                anyone else calls <code className={s.codePaper}>storage_deposit</code>, which costs{" "}
-                <b className="num">{reg ? `${near(Number(reg), 5)} NEAR` : "the storage of one balance record"}</b> and refunds
-                the rest. <code className={s.codePaper}>storage_unregister</code> refunds an empty account that is not a colony.
-              </li>
-              <li>
-                <b>The dish does not play on itself.</b> The contract account cannot join, buy, plant, claim, advance or send
-                PETRI, and a transfer to it is refused with &ldquo;PETRI goes back to the agar only by planting&rdquo;. Its{" "}
-                <code className={s.codePaper}>ft_balance_of</code> is the agar.
-              </li>
-              <li>
-                <b>Supply counts what no balance shows.</b> <code className={s.codePaper}>ft_total_supply</code> includes the agar,
-                unclaimed earnings and the keeper pot, so the balances of every account add up to less than it until those are
-                claimed.
-              </li>
-              <li>
-                <b>Events.</b> NEP-141 <code className={s.codePaper}>ft_mint</code> once at launch,{" "}
-                <code className={s.codePaper}>ft_transfer</code> for purchases, claims, keeper pots, planting returns, transfers
-                and refunds, and <code className={s.codePaper}>ft_burn</code> for planting. The dish&rsquo;s own events are{" "}
-                <code className={s.codePaper}>join</code>, <code className={s.codePaper}>plant</code>,{" "}
-                <code className={s.codePaper}>claim</code> and one <code className={s.codePaper}>generation</code> summary per
-                catch-up.
-              </li>
-            </ul>
           </div>
+        </div>
+
+        <div className={s.coinGrid}>
+          <details className={`${s.fold} ${s.foldPaper}`}>
+            <summary>
+              The PETRI ledger, from the contract <small>11 counters</small>
+            </summary>
+            <div className={s.foldBody}>
+              <p>
+                Read from the <code className={s.codePaper}>state</code> view of{" "}
+                <a className={s.linkPaper} href={accountUrl(CONTRACT)}>{CONTRACT}</a> at stored generation{" "}
+                {st ? int(Number(st.generation)) : "—"}. Feed for the generations since then is added when the dish next advances.
+              </p>
+              <dl className={s.ledger}>
+                {ledger.map(([key, val, note]) => (
+                  <div key={key}>
+                    <dt>{key}</dt>
+                    <dd className="num">{val}</dd>
+                    <p>{note}</p>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </details>
+          <details className={`${s.fold} ${s.foldPaper}`}>
+            <summary>
+              A standard token <small>NEP-141, 145, 148</small>
+            </summary>
+            <div className={s.foldBody}>
+              <ul className={s.standards}>
+                <li>
+                  <b>NEP-141.</b> <code className={s.codePaper}>ft_transfer</code>,{" "}
+                  <code className={s.codePaper}>ft_transfer_call</code> (with refunds through{" "}
+                  <code className={s.codePaper}>ft_resolve_transfer</code>), <code className={s.codePaper}>ft_balance_of</code> and{" "}
+                  <code className={s.codePaper}>ft_total_supply</code>. Transfers attach exactly 1 yoctoNEAR.
+                </li>
+                <li>
+                  <b>NEP-148.</b> Name Petri, symbol PETRI, 6 decimals and an inline icon.
+                </li>
+                <li>
+                  <b>NEP-145.</b> A receiver must be registered before it can hold PETRI. Joining registers a colony; anyone else
+                  calls <code className={s.codePaper}>storage_deposit</code>, which costs{" "}
+                  <b className="num">{reg ? `${near(Number(reg), 5)} NEAR` : "the storage of one balance record"}</b>.
+                </li>
+                <li>
+                  <b>The dish does not play on itself.</b> The contract account cannot join, buy, sell, plant, claim, advance or
+                  send PETRI, and a transfer to it is refused with &ldquo;PETRI goes back to the agar only by planting or
+                  selling&rdquo;. Its <code className={s.codePaper}>ft_balance_of</code> is the agar plus unclaimed earnings and
+                  the keeper pot.
+                </li>
+                <li>
+                  <b>Events.</b> NEP-141 <code className={s.codePaper}>ft_mint</code> once at launch,{" "}
+                  <code className={s.codePaper}>ft_transfer</code> for purchases, sales, claims, keeper pots, planting returns and
+                  transfers, <code className={s.codePaper}>ft_burn</code> for planting, and the dish&rsquo;s own{" "}
+                  <code className={s.codePaper}>sponsor</code>, <code className={s.codePaper}>join</code>,{" "}
+                  <code className={s.codePaper}>plant</code>, <code className={s.codePaper}>sell</code>,{" "}
+                  <code className={s.codePaper}>claim</code>, <code className={s.codePaper}>payout_failed</code> and one{" "}
+                  <code className={s.codePaper}>generation</code> summary per catch-up.
+                </li>
+              </ul>
+            </div>
+          </details>
         </div>
       </div>
     </section>

@@ -16,6 +16,9 @@ pub struct Engine {
     feed_ppm: u32,
     keeper_bps: u16,
     reach: u32,
+    live_floor: u32,
+    /// Cells the last feed counted, as the contract's `state().counted`.
+    counted: u32,
     /// PETRI earned per colony during this engine's run (index = colony id).
     earned: Vec<u128>,
     /// Cells each colony has planted (the base of its pay cap), and its earnings since the last tide.
@@ -36,7 +39,7 @@ pub struct Engine {
 #[wasm_bindgen]
 impl Engine {
     #[wasm_bindgen(constructor)]
-    pub fn new(width: u16, height: u16, feed_ppm: u32, keeper_bps: u16, reach: u32) -> Engine {
+    pub fn new(width: u16, height: u16, feed_ppm: u32, keeper_bps: u16, reach: u32, live_floor: u32) -> Engine {
         Engine {
             dish: Dish::new(width, height),
             generation: 0,
@@ -46,6 +49,8 @@ impl Engine {
             feed_ppm,
             keeper_bps,
             reach,
+            live_floor,
+            counted: 0,
             earned: vec![0],
             planted: vec![0],
             window: vec![0],
@@ -162,7 +167,8 @@ impl Engine {
             if chain_due(self.generation) {
                 self.chain = chain_next(&self.chain, self.generation, &self.dish.hash());
             }
-            let f = feed(self.agar, self.feed_ppm, self.keeper_bps, self.reach, &s.live, &self.planted, &self.house);
+            let f = feed(self.agar, self.feed_ppm, self.keeper_bps, self.reach, self.live_floor, &s.live, &self.planted, &self.house);
+            self.counted = f.weight;
             for &(c, v) in &f.shares {
                 let c = c as usize;
                 if c < self.earned.len() {
@@ -223,9 +229,19 @@ impl Engine {
         self.keeper.to_string()
     }
 
+    /// Cells the last feed counted (prices are set against this).
+    pub fn counted(&self) -> u32 {
+        self.counted
+    }
+
+    /// Start from the contract's count when the engine starts mid-history.
+    pub fn set_counted(&mut self, counted: u32) {
+        self.counted = counted;
+    }
+
     /// What one cell costs to plant now, in PETRI units, by the contract's formula.
-    pub fn cell_price(&self, payback: u32, min_price: &str, live_floor: u32) -> String {
-        let per = feed_per_cell(self.agar, self.feed_ppm, self.keeper_bps, self.dish.total_live(), live_floor);
+    pub fn cell_price(&self, payback: u32, min_price: &str) -> String {
+        let per = feed_per_cell(self.agar, self.feed_ppm, self.keeper_bps, self.counted, self.live_floor);
         planting_cost(per, payback, min_price.parse().unwrap_or(0), 1, false, 1).to_string()
     }
 
@@ -259,6 +275,8 @@ impl Engine {
             feed_ppm: self.feed_ppm,
             keeper_bps: self.keeper_bps,
             reach: self.reach,
+            live_floor: self.live_floor,
+            counted: self.counted,
             earned: self.earned.clone(),
             planted: self.planted.clone(),
             window: self.window.clone(),
@@ -273,7 +291,8 @@ impl Engine {
     }
 }
 
-/// What planting `cells` costs in PETRI units (decimal string), given the agar and the living population; a siege
+/// What planting `cells` costs in PETRI units (decimal string), given the agar and the cells the last feed counted
+/// (`counted`, the contract's `state().counted`; pass it as `total_live`); a siege
 /// (a planting inside a rival's buffer) costs `siege_x` times as much.
 #[wasm_bindgen]
 pub fn quote(agar: &str, feed_ppm: u32, keeper_bps: u16, total_live: u32, live_floor: u32, payback: u32, min_price: &str, cells: u32, siege: bool, siege_x: u32) -> String {

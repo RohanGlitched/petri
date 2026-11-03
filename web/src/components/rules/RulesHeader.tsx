@@ -8,13 +8,13 @@ import s from "./rules.module.css";
 export const TOC: [string, string][] = [
   ["board", "The board and the clock"],
   ["life", "Life with owners"],
-  ["planting", "Planting"],
-  ["coin", "The coin"],
-  ["tides", "NEAR and the tides"],
-  ["parameters", "Choosing the parameters"],
+  ["planting", "Planting and sieges"],
+  ["coin", "The coin and the reach"],
+  ["tides", "NEAR, tides and the house"],
   ["strategies", "Strategies"],
-  ["verify", "Verification"],
-  ["limits", "Limits and trade-offs"],
+  ["verify", "Verification and the lock"],
+  ["parameters", "Parameters and the simulator"],
+  ["limits", "Known limits"],
 ];
 
 export function RulesHeader() {
@@ -23,8 +23,8 @@ export function RulesHeader() {
   const glance: [string, string][] = [
     [`${r.width} × ${r.height}`, "cells, with edges that wrap"],
     [`${Number(r.generation_ms) / 1000} s`, "between generations"],
-    [petri(Number(r.max_supply)), "PETRI, all minted into the agar at launch"],
-    [`${r.feed_ppm} ppm`, "of the agar fed to the living each generation"],
+    [`× ${r.reach}`, "most living cells a colony is paid for, per cell it planted"],
+    [`× ${r.siege_x}`, `the price of planting within ${r.buffer} cells of a rival`],
     [ready ? petri(cellPrice, 2) : "—", "PETRI to plant one cell right now"],
     [ready ? nearPer(petriPrice) : "—", "NEAR for one PETRI from the agar right now"],
   ];
@@ -36,9 +36,10 @@ export function RulesHeader() {
             <h1 className={s.title}>How Petri works</h1>
             <p className={s.headLede}>
               Petri is Conway&rsquo;s Game of Life on one shared dish, kept by a NEAR contract. Every live cell belongs to a
-              colony. Colonies buy PETRI from the dish with NEAR, spend it to plant, and are fed PETRI for every cell that stays
-              alive. The NEAR they pay in goes back out, every hour, to whoever holds ground. This page is the whole rulebook,
-              with the numbers read live from the contract.
+              colony. Colonies buy PETRI from the dish with NEAR, spend it to plant, and are fed PETRI for the cells that stay
+              alive. Every hour a tenth of the tide vault, which holds the NEAR players paid in, goes back out, split by what each
+              colony earned that hour. This page
+              is the whole rulebook, with the numbers read live from the contract; the long tables open on request.
             </p>
           </div>
           <nav className={s.toc} aria-label="On this page">

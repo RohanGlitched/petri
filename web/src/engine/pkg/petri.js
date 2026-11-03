@@ -51,23 +51,21 @@ export class Engine {
      * What one cell costs to plant now, in PETRI units, by the contract's formula.
      * @param {number} payback
      * @param {string} min_price
-     * @param {number} live_floor
      * @returns {string}
      */
-    cell_price(payback, min_price, live_floor) {
-        let deferred4_0;
-        let deferred4_1;
+    cell_price(payback, min_price) {
+        let deferred3_0;
+        let deferred3_1;
         try {
             const val2 = +payback;
-            const val3 = +live_floor;
             const ptr0 = passStringToWasm0(min_price, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
-            const ret = wasm.engine_cell_price(this.__wbg_ptr, val2, ptr0, len0, val3);
-            deferred4_0 = ret[0];
-            deferred4_1 = ret[1];
+            const ret = wasm.engine_cell_price(this.__wbg_ptr, val2, ptr0, len0);
+            deferred3_0 = ret[0];
+            deferred3_1 = ret[1];
             return getStringFromWasm0(ret[0], ret[1]);
         } finally {
-            wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
         }
     }
     /**
@@ -136,6 +134,14 @@ export class Engine {
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
+    }
+    /**
+     * Cells the last feed counted (prices are set against this).
+     * @returns {number}
+     */
+    counted() {
+        const ret = wasm.engine_counted(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * PETRI units earned per colony since this engine started, approximate (f64), for display.
@@ -256,9 +262,10 @@ export class Engine {
      * @param {number} feed_ppm
      * @param {number} keeper_bps
      * @param {number} reach
+     * @param {number} live_floor
      */
-    constructor(width, height, feed_ppm, keeper_bps, reach) {
-        const ret = wasm.engine_new(width, height, feed_ppm, keeper_bps, reach);
+    constructor(width, height, feed_ppm, keeper_bps, reach, live_floor) {
+        const ret = wasm.engine_new(width, height, feed_ppm, keeper_bps, reach, live_floor);
         this.__wbg_ptr = ret;
         EngineFinalization.register(this, this.__wbg_ptr, this);
         return this;
@@ -288,6 +295,13 @@ export class Engine {
      */
     set_colonies(n) {
         wasm.engine_set_colonies(this.__wbg_ptr, n);
+    }
+    /**
+     * Start from the contract's count when the engine starts mid-history.
+     * @param {number} counted
+     */
+    set_counted(counted) {
+        wasm.engine_set_counted(this.__wbg_ptr, counted);
     }
     /**
      * The dish's house colonies (the contract's `state().house`): they are never fed and win no tides.
@@ -451,7 +465,8 @@ export function pattern_cells(name, x, y, width, height, rotate, flip) {
 }
 
 /**
- * What planting `cells` costs in PETRI units (decimal string), given the agar and the living population; a siege
+ * What planting `cells` costs in PETRI units (decimal string), given the agar and the cells the last feed counted
+ * (`counted`, the contract's `state().counted`; pass it as `total_live`); a siege
  * (a planting inside a rival's buffer) costs `siege_x` times as much.
  * @param {string} agar
  * @param {number} feed_ppm
