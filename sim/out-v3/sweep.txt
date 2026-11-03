@@ -1,0 +1,50 @@
+Parameter sweep: reach x siege_x, 7 days, 10 seeds each (the same seeds for every pair), mixed society with the carpet locker.
+Cells: median over seeds of the net NEAR of each kind's mean player (tides + sold + held@sell - paid). 'newc d7' = cheapest block
+for a newcomer on day 7, 'siege7' = a siege block on day 7 (mNEAR, deposit included); 'lockTd%'/'methTd%' = the locker's and the
+methuselahs' share of all tide NEAR; 'vault/h' = vault / players' PETRI at the sell-back price at the end; 'live7' = live cells, day 7.
+
+15 players:
+                                     |  Builder   Raider Defender Methusel     Late    Whale SybilWha   Sniper   Locker    Racer | newc d7  siege7 lockTd% methTd% vault/h  live7
+  reach  4, siege_x 3                |   -0.072   -0.140   +0.315   +9.513   +0.360   -0.810   +2.838   -0.054   +1.778   +0.330 |    7.40   14.93   29.7%    3.6%   0.000    620
+  reach  4, siege_x 4                |   +0.005   -0.150   -0.055   +8.496   +0.100   -1.511   +2.878   +0.007   +1.750   +0.349 |    7.40   18.69   38.1%    4.8%   0.000    628
+  reach  4, siege_x 6                |   -0.067   -0.152   -0.102   +9.441   +0.831   +0.672   +1.893   -0.053   +1.234   +0.344 |    7.40   26.22   37.0%    4.2%   0.000    612
+  reach  8, siege_x 3                |   +0.093   -0.132   -0.036   +8.858   +0.302   -1.739   +3.497   -0.053   +1.807   +0.335 |    7.40   14.93   32.9%    4.8%   0.000    538
+  reach  8, siege_x 4                |   -0.020   -0.194   -0.044  +11.793   +0.287   -1.286   +2.369   -0.039   +1.995   +0.336 |    7.40   18.69   37.3%    5.0%   0.000    620
+  reach  8, siege_x 6                |   +0.003   -0.146   -0.090  +11.300   +0.574   -0.109   +2.374   -0.055   +2.019   +0.333 |    7.40   26.22   37.8%    4.4%   0.000    650
+  reach 16, siege_x 3                |   -0.077   -0.142   -0.036  +10.909   +0.397   -0.270   +3.190   -0.045   +1.880   +0.329 |    7.40   14.93   31.3%    3.8%   0.000    542
+  reach 16, siege_x 4                |   +0.077   -0.174   +0.234   +9.255   +0.355   -0.982   +1.141   +0.034   +1.991   +0.346 |    7.40   18.69   35.8%    4.6%   0.000    630
+  reach 16, siege_x 6                |   +0.136   -0.150   -0.079   +7.874   +0.068   -1.399   -0.018   -0.053   +1.492   +0.357 |    7.40   26.22   39.8%    5.3%   0.000    624
+  capped% (cell-generations unpaid because of reach), median, methuselah / builder / raider:
+    reach  4, siege_x 3: 0.15% / 0.00% / 0.00%
+    reach  4, siege_x 4: 0.10% / 0.00% / 0.00%
+    reach  4, siege_x 6: 0.06% / 0.00% / 0.02%
+    reach  8, siege_x 3: 0.00% / 0.00% / 0.00%
+    reach  8, siege_x 4: 0.02% / 0.00% / 0.00%
+    reach  8, siege_x 6: 0.02% / 0.00% / 0.00%
+    reach 16, siege_x 3: 0.00% / 0.00% / 0.00%
+    reach 16, siege_x 4: 0.00% / 0.00% / 0.00%
+    reach 16, siege_x 6: 0.00% / 0.00% / 0.00%
+
+150 players:
+                                     |  Builder   Raider Defender Methusel     Late    Whale SybilWha   Sniper   Locker    Racer | newc d7  siege7 lockTd% methTd% vault/h  live7
+  reach  4, siege_x 3                |   -0.128   -0.105   -0.098   +1.818   -0.166   -1.148   -0.890   -0.022   +3.563   +0.459 |    7.29   14.60   11.8%   15.1%   0.001   1030
+  reach  4, siege_x 4                |   -0.130   -0.116   -0.082   +1.864   -0.170   -1.313   -0.985   -0.026   +3.849   +0.464 |    7.34   18.46   13.2%   17.0%   0.001   1016
+  reach  4, siege_x 6                |   -0.126   -0.113   -0.082   +1.715   -0.178   -1.443   -1.166   -0.021   +4.469   +0.468 |    7.23   25.16   14.4%   15.9%   0.001   1049
+  reach  8, siege_x 3                |   -0.125   -0.118   -0.098   +1.863   -0.169   -1.353   -0.827   -0.019   +3.571   +0.463 |    7.23   14.42   11.4%   17.5%   0.001   1047
+  reach  8, siege_x 4                |   -0.126   -0.114   -0.094   +1.859   -0.181   -1.286   -0.862   -0.026   +3.856   +0.460 |    7.25   18.09   12.8%   16.3%   0.001   1042
+  reach  8, siege_x 6                |   -0.120   -0.120   -0.106   +1.835   -0.172   -1.428   -0.943   +0.006   +4.420   +0.465 |    7.39   26.13   14.3%   17.0%   0.001    996
+  reach 16, siege_x 3                |   -0.126   -0.120   -0.099   +1.888   -0.167   -1.247   -0.957   -0.006   +3.715   +0.460 |    7.09   14.00   11.7%   17.2%   0.001   1090
+  reach 16, siege_x 4                |   -0.116   -0.114   -0.103   +1.835   -0.172   -1.131   -0.997   -0.029   +3.794   +0.459 |    7.40   18.69   12.8%   16.0%   0.001    969
+  reach 16, siege_x 6                |   -0.122   -0.115   -0.064   +1.880   -0.174   -1.377   -1.054   -0.010   +4.701   +0.461 |    7.27   25.39   14.4%   17.2%   0.001   1038
+  capped% (cell-generations unpaid because of reach), median, methuselah / builder / raider:
+    reach  4, siege_x 3: 0.76% / 0.10% / 0.69%
+    reach  4, siege_x 4: 0.25% / 0.04% / 0.44%
+    reach  4, siege_x 6: 0.34% / 0.03% / 0.48%
+    reach  8, siege_x 3: 0.07% / 0.00% / 0.04%
+    reach  8, siege_x 4: 0.08% / 0.00% / 0.02%
+    reach  8, siege_x 6: 0.03% / 0.00% / 0.05%
+    reach 16, siege_x 3: 0.00% / 0.00% / 0.00%
+    reach 16, siege_x 4: 0.00% / 0.00% / 0.00%
+    reach 16, siege_x 6: 0.00% / 0.00% / 0.00%
+
+Sweep wall time 40 s.

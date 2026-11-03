@@ -497,13 +497,14 @@ pub struct Feed {
 
 /// The agar pays `feed_ppm` parts per million of itself; `keeper_bps` of that goes to the keeper pot and the rest is
 /// split across living colonies by `feed_weight`. `live` and `planted` are indexed by colony id (index 0 unused).
-/// Only living colonies are visited for the arithmetic. An unpaid dish is fed nothing. The contract, the browser and
-/// the simulator all call this, so their books cannot drift apart.
-pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live: &[u32], planted: &[u64]) -> Feed {
+/// Colonies in `house` (the dish's own players) are never fed: on a quiet dish the house cannot eat the agar. Only
+/// living colonies are visited for the arithmetic. An unpaid dish is fed nothing. The contract, the browser and the
+/// simulator all call this, so their books cannot drift apart.
+pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, reach: u32, live: &[u32], planted: &[u64], house: &[ColonyId]) -> Feed {
     let mut weights: Vec<(ColonyId, u128)> = Vec::new();
     let mut total_w = 0u128;
     for (c, &n) in live.iter().enumerate().skip(1) {
-        if n == 0 {
+        if n == 0 || house.contains(&(c as ColonyId)) {
             continue;
         }
         let w = feed_weight(n, planted.get(c).copied().unwrap_or(0), reach);
@@ -595,6 +596,17 @@ pub fn petri_for_near(deposit: u128, agar: u128, k: u128) -> u128 {
     let whole = agar / denom * deposit;
     let rest = (agar % denom) * deposit / denom;
     (whole + rest).min(agar)
+}
+
+/// NEAR the agar pays for `units` PETRI handed back: `sell_bps` of the curve's price, but never more than those units'
+/// pro-rata share of the vault (`vault × units / outstanding`, where `outstanding` is all PETRI outside the agar), so
+/// the vault can never be promised more than it holds.
+pub fn sell_back(units: u128, agar: u128, k: u128, sell_bps: u16, vault: u128, outstanding: u128) -> u128 {
+    let curve = near_for_petri(units, agar, k, sell_bps);
+    if outstanding == 0 {
+        return 0;
+    }
+    curve.min(mul_div(vault, units.min(outstanding), outstanding))
 }
 
 /// NEAR the agar pays for `units` PETRI handed back to it: `sell_bps` of the curve's price at the midpoint of the move

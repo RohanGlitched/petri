@@ -52,6 +52,10 @@ export class Engine {
     set_agar(units: string): void;
     set_colonies(n: number): void;
     /**
+     * The dish's house colonies (the contract's `state().house`): they are never fed and win no tides.
+     */
+    set_house(house: Uint16Array | number[]): void;
+    /**
      * Cells each colony has planted, as the contract counts them (when the engine starts mid-history).
      */
     set_planted(planted: Uint32Array | number[]): void;
@@ -60,10 +64,10 @@ export class Engine {
      */
     step(n: number): void;
     /**
-     * Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping `house`, add it to each colony's winnings
+     * Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping the house, add it to each colony's winnings
      * and reset the window. Returns the total paid to colonies, as a decimal string.
      */
-    tide(pay: string, house: Uint16Array | number[]): string;
+    tide(pay: string): string;
     total_live(): number;
     width(): number;
     /**
@@ -94,9 +98,10 @@ export function pattern_cells(name: string, x: number, y: number, width: number,
 export function quote(agar: string, feed_ppm: number, keeper_bps: number, total_live: number, live_floor: number, payback: number, min_price: string, cells: number, siege: boolean, siege_x: number): string;
 
 /**
- * yoctoNEAR the agar pays for `petri` units handed back (before the sale's record), at `sell_bps` of the curve.
+ * yoctoNEAR the agar pays for `petri` units handed back (before the sale's record): `sell_bps` of the curve, but never
+ * more than their share of `vault` among `outstanding` PETRI (all PETRI outside the agar).
  */
-export function sell_quote(petri: string, agar: string, petri_price: string, max_supply: string, sell_bps: number): string;
+export function sell_quote(petri: string, agar: string, petri_price: string, max_supply: string, sell_bps: number, vault: string, outstanding: string): string;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -126,16 +131,17 @@ export interface InitOutput {
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
     readonly engine_set_agar: (a: number, b: number, c: number) => void;
     readonly engine_set_colonies: (a: number, b: number) => void;
+    readonly engine_set_house: (a: number, b: number, c: number) => void;
     readonly engine_set_planted: (a: number, b: number, c: number) => void;
     readonly engine_step: (a: number, b: number) => void;
-    readonly engine_tide: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly engine_tide: (a: number, b: number, c: number) => [number, number];
     readonly engine_total_live: (a: number) => number;
     readonly engine_width: (a: number) => number;
     readonly engine_window_of: (a: number, b: number) => [number, number];
     readonly engine_won_of: (a: number, b: number) => [number, number];
     readonly pattern_cells: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number];
-    readonly sell_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
+    readonly sell_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

@@ -290,6 +290,15 @@ export class Engine {
         wasm.engine_set_colonies(this.__wbg_ptr, n);
     }
     /**
+     * The dish's house colonies (the contract's `state().house`): they are never fed and win no tides.
+     * @param {Uint16Array | number[]} house
+     */
+    set_house(house) {
+        const ptr0 = passArray16ToWasm0(house, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.engine_set_house(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
      * Cells each colony has planted, as the contract counts them (when the engine starts mid-history).
      * @param {Uint32Array | number[]} planted
      */
@@ -306,33 +315,23 @@ export class Engine {
         wasm.engine_step(this.__wbg_ptr, n);
     }
     /**
-     * Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping `house`, add it to each colony's winnings
+     * Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping the house, add it to each colony's winnings
      * and reset the window. Returns the total paid to colonies, as a decimal string.
      * @param {string} pay
-     * @param {Uint16Array | number[]} house
      * @returns {string}
      */
-    tide(pay, house) {
-        let deferred3_0;
-        let deferred3_1;
+    tide(pay) {
+        let deferred2_0;
+        let deferred2_1;
         try {
-            let ptr0, len0, ptr1, len1;
-            try {
-                ptr0 = passStringToWasm0(pay, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passArray16ToWasm0(house, wasm.__wbindgen_malloc);
-                len1 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 2, 2); }
-                if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            const ret = wasm.engine_tide(this.__wbg_ptr, ptr0, len0, ptr1, len1);
-            deferred3_0 = ret[0];
-            deferred3_1 = ret[1];
+            const ptr0 = passStringToWasm0(pay, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.engine_tide(this.__wbg_ptr, ptr0, len0);
+            deferred2_0 = ret[0];
+            deferred2_1 = ret[1];
             return getStringFromWasm0(ret[0], ret[1]);
         } finally {
-            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
         }
     }
     /**
@@ -499,20 +498,23 @@ export function quote(agar, feed_ppm, keeper_bps, total_live, live_floor, paybac
 }
 
 /**
- * yoctoNEAR the agar pays for `petri` units handed back (before the sale's record), at `sell_bps` of the curve.
+ * yoctoNEAR the agar pays for `petri` units handed back (before the sale's record): `sell_bps` of the curve, but never
+ * more than their share of `vault` among `outstanding` PETRI (all PETRI outside the agar).
  * @param {string} petri
  * @param {string} agar
  * @param {string} petri_price
  * @param {string} max_supply
  * @param {number} sell_bps
+ * @param {string} vault
+ * @param {string} outstanding
  * @returns {string}
  */
-export function sell_quote(petri, agar, petri_price, max_supply, sell_bps) {
-    let deferred6_0;
-    let deferred6_1;
+export function sell_quote(petri, agar, petri_price, max_supply, sell_bps, vault, outstanding) {
+    let deferred8_0;
+    let deferred8_1;
     try {
-        const val5 = +sell_bps;
-        let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3;
+        const val7 = +sell_bps;
+        let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5;
         try {
             ptr0 = passStringToWasm0(petri, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             len0 = WASM_VECTOR_LEN;
@@ -522,19 +524,25 @@ export function sell_quote(petri, agar, petri_price, max_supply, sell_bps) {
             len2 = WASM_VECTOR_LEN;
             ptr3 = passStringToWasm0(max_supply, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             len3 = WASM_VECTOR_LEN;
+            ptr4 = passStringToWasm0(vault, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len4 = WASM_VECTOR_LEN;
+            ptr5 = passStringToWasm0(outstanding, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len5 = WASM_VECTOR_LEN;
         } catch (e) {
+            if (ptr5) { wasm.__wbindgen_free(ptr5, len5 * 1, 1); }
+            if (ptr4) { wasm.__wbindgen_free(ptr4, len4 * 1, 1); }
             if (ptr3) { wasm.__wbindgen_free(ptr3, len3 * 1, 1); }
             if (ptr2) { wasm.__wbindgen_free(ptr2, len2 * 1, 1); }
             if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
             if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
             throw e;
         }
-        const ret = wasm.sell_quote(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, val5);
-        deferred6_0 = ret[0];
-        deferred6_1 = ret[1];
+        const ret = wasm.sell_quote(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, val7, ptr4, len4, ptr5, len5);
+        deferred8_0 = ret[0];
+        deferred8_1 = ret[1];
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
-        wasm.__wbindgen_free(deferred6_0, deferred6_1, 1);
+        wasm.__wbindgen_free(deferred8_0, deferred8_1, 1);
     }
 }
 function __wbg_get_imports() {

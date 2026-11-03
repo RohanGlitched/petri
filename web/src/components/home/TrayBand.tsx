@@ -55,7 +55,7 @@ export function TrayBand() {
           ))}
         </div>
         <p className={s.after}>
-          <Link className="btn btn-amber" href="/dish">Choose one and plant it</Link>
+          <Link className="btn btn-amber" href="/dish">Start a colony</Link>
         </p>
       </div>
     </section>

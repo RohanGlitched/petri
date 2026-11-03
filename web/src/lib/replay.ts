@@ -85,7 +85,10 @@ export class Replayer {
       if ("Join" in entry) {
         const id = entry.Join.colony;
         this.e.set_colonies(id);
-        if (colonies[id - 1]?.house) this.house.push(id);
+        if (colonies[id - 1]?.house) {
+          this.house.push(id);
+          this.e.set_house(new Uint16Array(this.house));
+        }
       } else if ("Buy" in entry) {
         const b = entry.Buy;
         this.buys++;
@@ -98,7 +101,8 @@ export class Replayer {
       } else if ("Sell" in entry) {
         const x = entry.Sell;
         this.sells++;
-        const want = BigInt(sell_quote(x.petri, this.e.agar(), rules.petri_price, rules.max_supply, rules.sell_bps));
+        const outstanding = BigInt(rules.max_supply) - this.burned - BigInt(this.e.agar());
+        const want = BigInt(sell_quote(x.petri, this.e.agar(), rules.petri_price, rules.max_supply, rules.sell_bps, this.vault.toString(), outstanding.toString()));
         if (want !== BigInt(x.near)) this.flag("sell", `sold ${x.petri} units for ${x.near} yocto; the curve gives ${want}`);
         this.e.set_agar((BigInt(this.e.agar()) + BigInt(x.petri)).toString());
         this.boughtBack += BigInt(x.petri);
@@ -128,9 +132,11 @@ export class Replayer {
         const pay = (this.vault * BigInt(rules.tide_bps)) / 10000n;
         const bounty = BigInt(t.bounty);
         const storage = BigInt(t.storage);
-        const pool = pay - (pay * BigInt(rules.tide_bounty_bps)) / 10000n;
-        const paid = BigInt(this.e.tide((pool > storage ? pool - storage : 0n).toString(), new Uint16Array(this.house)));
-        const ok = chainOk && pay === BigInt(t.pay) && paid === BigInt(t.paid) && (paid === 0n || bounty === (pay * BigInt(rules.tide_bounty_bps)) / 10000n);
+        const fullBounty = (pay * BigInt(rules.tide_bounty_bps)) / 10000n;
+        const capped = fullBounty < BigInt(rules.max_bounty) ? fullBounty : BigInt(rules.max_bounty);
+        const pool = pay - capped;
+        const paid = BigInt(this.e.tide((pool > storage ? pool - storage : 0n).toString()));
+        const ok = chainOk && pay === BigInt(t.pay) && paid === BigInt(t.paid) && (paid === 0n || bounty === capped);
         if (ok) this.tidesMatched++;
         else this.flag("tide", !chainOk ? "the history chain differs" : `paid ${t.paid} of ${t.pay}; the replay gives ${paid} of ${pay}`);
         this.vault -= paid + bounty + storage;

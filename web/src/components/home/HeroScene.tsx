@@ -164,7 +164,7 @@ export function HeroScene() {
               the other half.
             </p>
             <div className={s.actions}>
-              <Link className="btn btn-amber" href="/dish">Plant your first colony</Link>
+              <Link className="btn btn-amber" href="/dish">Start a colony</Link>
               <Link className="btn btn-ghost" href="/rules">How the coin works</Link>
             </div>
           </div>

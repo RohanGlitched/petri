@@ -2,7 +2,7 @@
 //! run the dish ahead of the stored generation, replay its whole history from the plant log and check the result
 //! against the contract's history chain.
 
-use petri_core::{chain_due, chain_next, feed, feed_per_cell, near_for_petri, petri_for_near, planting_cost, tide_split, Dish, PlantError};
+use petri_core::{chain_due, chain_next, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, tide_split, Dish, PlantError};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -21,6 +21,8 @@ pub struct Engine {
     /// Cells each colony has planted (the base of its pay cap), and its earnings since the last tide.
     planted: Vec<u64>,
     window: Vec<u64>,
+    /// The dish's own colonies: never fed, no tide share.
+    house: Vec<u16>,
     /// NEAR each colony won at the tides during this engine's run.
     won: Vec<u128>,
     /// PETRI set aside for keepers during this engine's run.
@@ -47,6 +49,7 @@ impl Engine {
             earned: vec![0],
             planted: vec![0],
             window: vec![0],
+            house: Vec::new(),
             won: vec![0],
             keeper: 0,
             last_births: vec![0],
@@ -87,6 +90,11 @@ impl Engine {
         self.planted.resize(n as usize + 1, 0);
         self.window.resize(n as usize + 1, 0);
         self.won.resize(n as usize + 1, 0);
+    }
+
+    /// The dish's house colonies (the contract's `state().house`): they are never fed and win no tides.
+    pub fn set_house(&mut self, house: &[u16]) {
+        self.house = house.to_vec();
     }
 
     /// Cells each colony has planted, as the contract counts them (when the engine starts mid-history).
@@ -154,7 +162,7 @@ impl Engine {
             if chain_due(self.generation) {
                 self.chain = chain_next(&self.chain, self.generation, &self.dish.hash());
             }
-            let f = feed(self.agar, self.feed_ppm, self.keeper_bps, self.reach, &s.live, &self.planted);
+            let f = feed(self.agar, self.feed_ppm, self.keeper_bps, self.reach, &s.live, &self.planted, &self.house);
             for &(c, v) in &f.shares {
                 let c = c as usize;
                 if c < self.earned.len() {
@@ -189,10 +197,10 @@ impl Engine {
         self.earned.get(colony as usize).copied().unwrap_or(0).to_string()
     }
 
-    /// Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping `house`, add it to each colony's winnings
+    /// Run a tide: split `pay` yoctoNEAR by the window's earnings, skipping the house, add it to each colony's winnings
     /// and reset the window. Returns the total paid to colonies, as a decimal string.
-    pub fn tide(&mut self, pay: &str, house: &[u16]) -> String {
-        let (split, paid) = tide_split(pay.parse().unwrap_or(0), &self.window, house);
+    pub fn tide(&mut self, pay: &str) -> String {
+        let (split, paid) = tide_split(pay.parse().unwrap_or(0), &self.window, &self.house);
         for (c, v) in split {
             self.won[c as usize] += v;
         }
@@ -254,6 +262,7 @@ impl Engine {
             earned: self.earned.clone(),
             planted: self.planted.clone(),
             window: self.window.clone(),
+            house: self.house.clone(),
             won: self.won.clone(),
             keeper: self.keeper,
             last_births: self.last_births.clone(),
@@ -272,11 +281,12 @@ pub fn quote(agar: &str, feed_ppm: u32, keeper_bps: u16, total_live: u32, live_f
     planting_cost(per, payback, min_price.parse().unwrap_or(0), cells, siege, siege_x).to_string()
 }
 
-/// yoctoNEAR the agar pays for `petri` units handed back (before the sale's record), at `sell_bps` of the curve.
+/// yoctoNEAR the agar pays for `petri` units handed back (before the sale's record): `sell_bps` of the curve, but never
+/// more than their share of `vault` among `outstanding` PETRI (all PETRI outside the agar).
 #[wasm_bindgen]
-pub fn sell_quote(petri: &str, agar: &str, petri_price: &str, max_supply: &str, sell_bps: u16) -> String {
+pub fn sell_quote(petri: &str, agar: &str, petri_price: &str, max_supply: &str, sell_bps: u16, vault: &str, outstanding: &str) -> String {
     let k = petri_price.parse::<u128>().unwrap_or(0) / 1_000_000 * max_supply.parse::<u128>().unwrap_or(0);
-    near_for_petri(petri.parse().unwrap_or(0), agar.parse().unwrap_or(0), k, sell_bps).to_string()
+    sell_back(petri.parse().unwrap_or(0), agar.parse().unwrap_or(0), k, sell_bps, vault.parse().unwrap_or(0), outstanding.parse().unwrap_or(0)).to_string()
 }
 
 /// PETRI units that `near` yoctoNEAR buys from an agar of `agar` units, with `petri_price` yoctoNEAR per PETRI at

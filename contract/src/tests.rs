@@ -29,6 +29,7 @@ fn rules() -> Rules {
         tide_every: 8,
         tide_bps: 5_000,
         tide_bounty_bps: 100,
+        max_bounty: U128(NEAR / 1_000),
         sell_bps: 5_000,
         sell_cap_bps: 1_000,
         siege_x: 4,
@@ -347,8 +348,9 @@ fn the_house_plays_but_takes_no_tide() {
     assert_eq!(c.state().house, vec![1]);
     at("keeper.testnet", T0 + 8 * GEN_MS);
     c.advance(None);
-    assert!(c.claimable(acct("house.testnet")).petri.0 > 0, "the house earns PETRI like anyone");
-    assert_eq!(c.claimable(acct("house.testnet")).near.0, 0, "but no NEAR");
+    assert_eq!(c.claimable(acct("house.testnet")).petri.0, 0, "the house is never fed");
+    assert_eq!(c.claimable(acct("house.testnet")).near.0, 0, "and wins no NEAR");
+    assert!(c.claimable(acct("alice.testnet")).petri.0 > 0);
     assert!(c.claimable(acct("alice.testnet")).near.0 > 0);
     conserved(&c, &["house.testnet", "alice.testnet", "keeper.testnet"]);
 }
@@ -395,10 +397,12 @@ fn the_agar_buys_back_at_half_price_up_to_a_tenth_of_the_vault() {
     assert_eq!(s.sell_left.0, s.vault.0 / 10);
     let units = 100 * P;
     let quote = c.sell_quote(U128(units)).0;
-    // Half of what 10 PETRI would cost on the curve.
+    // Half of what 100 PETRI would cost on the curve, unless their share of the vault is less.
     let k = NEAR / 5_000 / 1_000_000 * MAX;
     let full = k / (s.agar.0 + units / 2) * units;
-    assert!(quote.abs_diff(full / 2) < NEAR / 1_000_000, "{} vs {}", quote, full / 2);
+    let share = s.vault.0 / (s.total_supply.0 - s.agar.0) * units;
+    let want = (full / 2).min(share);
+    assert!(quote.abs_diff(want) < NEAR / 1_000_000, "{} vs {}", quote, want);
     let held = bal(&c, "alice.testnet");
     at("alice.testnet", T0 + 8 * GEN_MS);
     let paid = c.sell(U128(units)).0;
@@ -529,6 +533,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     let mut chain = [0u8; 32];
     let mut agar = MAX;
     let mut vault = 0u128;
+    let mut burned = 0u128;
     let mut earned = vec![0u128; 4];
     let mut window = vec![0u64; 4];
     let mut won = vec![0u128; 4];
@@ -561,17 +566,21 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                     vault += near.0;
                 }
                 Entry::Plant { colony, cells, cost, near, siege, .. } => {
+                    let cells: Vec<u32> = cells.iter().map(|&c| c as u32).collect();
+                    let cells = &cells;
                     let check = dish.check_plant(*colony, cells, r.buffer, r.max_plant_cells).expect("a legal planting");
                     assert_eq!(check.siege, *siege);
                     let per = feed_per_cell(agar, r.feed_ppm, r.keeper_bps, dish.total_live(), r.live_floor);
                     assert_eq!(planting_cost(per, r.payback, r.min_cell_price.0, cells.len() as u32, *siege, r.siege_x), cost.0, "price at generation {}", g);
                     agar += cost.0 - cost.0 * r.burn_bps as u128 / 10_000;
+                    burned += cost.0 * r.burn_bps as u128 / 10_000;
                     planted[*colony as usize] += cells.len() as u64;
                     vault += near.0;
                     dish.plant_unchecked(*colony, cells);
                 }
                 Entry::Sell { petri, near, .. } => {
-                    assert_eq!(near_for_petri(petri.0, agar, r.petri_price.0 / 1_000_000 * MAX, r.sell_bps), near.0, "sale on the curve");
+                    let outstanding = MAX - burned - agar;
+                    assert_eq!(petri_core::sell_back(petri.0, agar, r.petri_price.0 / 1_000_000 * MAX, r.sell_bps, vault, outstanding), near.0, "sale on the curve");
                     agar += petri.0;
                     vault -= near.0;
                 }
@@ -587,7 +596,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
         if chain_due(g) {
             chain = chain_next(&chain, g, &dish.hash());
         }
-        let f = feed(agar, r.feed_ppm, r.keeper_bps, r.reach, &stats.live, &planted);
+        let f = feed(agar, r.feed_ppm, r.keeper_bps, r.reach, &stats.live, &planted, &house);
         agar -= f.paid;
         for &(i, v) in &f.shares {
             earned[i as usize] += v;
@@ -598,7 +607,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
             assert_eq!(generation.0, g);
             assert_eq!(*ch, hex::encode(chain));
             assert_eq!(pay.0, vault * r.tide_bps as u128 / 10_000);
-            let (split, total) = tide_split((pay.0 - pay.0 * r.tide_bounty_bps as u128 / 10_000).saturating_sub(storage.0), &window, &house);
+            let (split, total) = tide_split((pay.0 - (pay.0 * r.tide_bounty_bps as u128 / 10_000).min(r.max_bounty.0)).saturating_sub(storage.0), &window, &house);
             assert_eq!(total, paid.0);
             for (i, v) in split {
                 won[i as usize] += v;
@@ -623,4 +632,27 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     }
     assert_eq!(won[3], 0, "the house won nothing");
     conserved(&c, &["alice.testnet", "bob.testnet", "house.testnet", "keeper.testnet"]);
+}
+
+#[test]
+fn the_planting_deposit_covers_its_storage_without_overcharging() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 10);
+    for (n, shape) in [(4usize, patterns::BLOCK), (36, patterns::GOSPER_GUN)] {
+        let cs = cells(if n == 4 { 2 } else { 4 }, if n == 4 { 2 } else { 14 }, shape);
+        let d = c.plant_deposit(cs.len() as u32, None).0;
+        let fee = c.rules().cell_fee.0 * cs.len() as u128;
+        let t = T0 + if n == 4 { 0 } else { GEN_MS };
+        at("keeper.testnet", t);
+        c.advance(None);
+        let before = env::storage_usage();
+        ctx("alice.testnet", t, d);
+        let vault = c.state().vault.0;
+        c.plant(cs, None, None);
+        let used = (env::storage_usage() - before) as u128 * env::storage_byte_cost().as_yoctonear();
+        eprintln!("{} cells: {} bytes", n, env::storage_usage() - before);
+        assert!(d >= used + fee, "{} cells: deposit {} < storage {} + fee", n, d, used);
+        assert!(d - fee <= used * 3 / 2, "{} cells: deposit {} asks much more than the storage {}", n, d - fee, used);
+        assert_eq!(c.state().vault.0 - vault, d - used.min(d), "the rest goes to the vault");
+    }
 }

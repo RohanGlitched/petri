@@ -120,7 +120,10 @@ for (;;) {
   for (const x of at.get(g) ?? []) {
     if (x.Join) {
       e.set_colonies(x.Join.colony);
-      if (colonies[x.Join.colony - 1]?.house) house.push(x.Join.colony);
+      if (colonies[x.Join.colony - 1]?.house) {
+        house.push(x.Join.colony);
+        e.set_house(new Uint16Array(house));
+      }
     } else if (x.Buy) {
       count.buys++;
       const want = buy_quote(x.Buy.near, e.agar(), rules.petri_price, rules.max_supply);
@@ -131,7 +134,8 @@ for (;;) {
       nearIn += BigInt(x.Buy.near);
     } else if (x.Sell) {
       count.sells++;
-      const want = sell_quote(x.Sell.petri, e.agar(), rules.petri_price, rules.max_supply, rules.sell_bps);
+      const outstanding = BigInt(rules.max_supply) - burned - BigInt(e.agar());
+      const want = sell_quote(x.Sell.petri, e.agar(), rules.petri_price, rules.max_supply, rules.sell_bps, vault.toString(), outstanding.toString());
       if (want !== x.Sell.near) flag("sell", g, `${x.Sell.near} yocto for ${x.Sell.petri} units, curve gives ${want}`);
       e.set_agar((BigInt(e.agar()) + BigInt(x.Sell.petri)).toString());
       boughtBack += BigInt(x.Sell.petri);
@@ -158,9 +162,10 @@ for (;;) {
       const t = x.Tide;
       count.tides++;
       const pay = (vault * BigInt(rules.tide_bps)) / 10000n;
-      const pool = pay - (pay * BigInt(rules.tide_bounty_bps)) / 10000n;
+      const full = (pay * BigInt(rules.tide_bounty_bps)) / 10000n;
+      const pool = pay - (full < BigInt(rules.max_bounty) ? full : BigInt(rules.max_bounty));
       const storage = BigInt(t.storage);
-      const paid = BigInt(e.tide((pool > storage ? pool - storage : 0n).toString(), new Uint16Array(house)));
+      const paid = BigInt(e.tide((pool > storage ? pool - storage : 0n).toString()));
       if (e.chain_hex() !== t.chain) flag("tide", g, "history chain differs");
       else if (pay !== BigInt(t.pay) || paid !== BigInt(t.paid)) flag("tide", g, `paid ${t.paid} of ${t.pay}, replay ${paid} of ${pay}`);
       vault -= paid + BigInt(t.bounty) + storage;

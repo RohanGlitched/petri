@@ -13,6 +13,7 @@ import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPl
 import { accountUrl, shortAccount, txUrl } from "@/lib/config";
 import { STAINS, firstFreeStain } from "@/lib/stains";
 import { strainOf } from "@/lib/strains";
+import { actionIndex, useStrainLog } from "@/lib/strain-log";
 import s from "./dish.module.css";
 
 type Cell = { x: number; y: number };
@@ -78,6 +79,9 @@ export function DishStage() {
   const [snapped, setSnapped] = useState(false);
 
   const names = useMemo(() => new Map(d.colonies.map((c) => [c.id, c.name])), [d.colonies]);
+  // The strains' log says, move by move, whether the model or the written rules chose it.
+  const strainLog = useStrainLog();
+  const moves = useMemo(() => actionIndex(strainLog?.actions ?? []), [strainLog]);
 
   const loadMe = useCallback(async () => {
     if (!player) {
@@ -186,7 +190,7 @@ export function DishStage() {
   const canBuy = isWallet ? nearLeft === null || nearLeft >= BUY_NEAR + 3n * 10n ** 21n : sponsoredLeft >= BUY_NEAR;
   // Selling back: the agar pays half the curve's price, up to what is left of this tide's allowance.
   const SELL_UNITS = 20_000_000;
-  const sellNear = rules && ready && d.state ? Number(sell_quote(String(SELL_UNITS), String(d.agar), rules.petri_price, rules.max_supply, rules.sell_bps)) : 0;
+  const sellNear = rules && ready && d.state ? Number(sell_quote(String(SELL_UNITS), String(d.agar), rules.petri_price, rules.max_supply, rules.sell_bps, d.state.vault, String(BigInt(d.state.total_supply) - BigInt(d.state.agar)))) : 0;
   const canSell = !!d.state && (balance ?? 0) >= SELL_UNITS && sellNear > 0 && sellNear <= Number(d.state.sell_left);
   // Planting claims a colony's waiting earnings first, so they count towards the price.
   const spendable = (balance ?? 0) + claimable.petri + Math.max(0, myPending);
@@ -475,7 +479,7 @@ export function DishStage() {
 
       <aside className={s.left}>
         {!me && (
-          <JoinForm onStart={start} onConnect={connect} busy={!!busy} player={player} grant={petri(joinPetri)} colonies={d.colonies} />
+          <JoinForm onStart={start} onConnect={connect} busy={!!busy} player={player} grant={ready ? petri(joinPetri) : "…"} colonies={d.colonies} />
         )}
 
         {info && !me && (
@@ -634,14 +638,21 @@ export function DishStage() {
             <ol>
               {d.recentPlants.slice(0, 12).map((p, i) => {
                 const c = d.colonies.find((x) => x.id === p.colony);
-                const ai = c ? strainOf(c.account) : null;
+                const strain = c ? strainOf(c.account) : null;
+                const move = strain && c ? moves.find(c.account, Number(p.generation)) : undefined;
+                const byModel = move?.decided_by === "model";
                 return (
                   <li key={`${p.generation}-${i}`}>
                     <i className="swatch" style={{ background: c ? hex(c.color) : "#888" }} />
                     <div>
                       <p>
                         <b>{c?.name ?? `Colony ${p.colony}`}</b>
-                        {ai && <span className={s.aiTag}>AI</span>} planted {p.cells.length} cells
+                        {strain && (
+                          <span className={s.aiTag} title={byModel ? "A house strain; the model chose this move" : "A house strain; its written rules chose this move"}>
+                            {byModel ? "AI" : "Rules"}
+                          </span>
+                        )}{" "}
+                        planted {p.cells.length} cells{p.siege ? ", a siege" : ""}
                         <span className={`num ${s.gen}`}>gen {int(Number(p.generation))}</span>
                       </p>
                       {p.note && <q>{p.note}</q>}
@@ -649,7 +660,7 @@ export function DishStage() {
                   </li>
                 );
               })}
-              {d.recentPlants.length === 0 && <li className={s.hint}>Nothing planted yet.</li>}
+              {d.recentPlants.length === 0 && <li className={s.hint}>{d.status === "ready" ? "Nothing planted yet." : "Reading the dish from NEAR…"}</li>}
             </ol>
           )}
         </section>
@@ -770,8 +781,9 @@ function JoinForm({ onStart, onConnect, busy, player, grant, colonies }: { onSta
             );
           })}
         </fieldset>
+        <p className={s.hint} style={{ margin: "6px 0 10px" }}>A slashed stain is already taken; hover it to see by whom.</p>
         <button className="btn btn-amber" type="submit" disabled={!valid || busy} style={{ width: "100%" }}>
-          Start my colony
+          {valid ? "Start my colony" : "Name your colony to start"}
         </button>
       </form>
       {player?.kind !== "wallet" && (

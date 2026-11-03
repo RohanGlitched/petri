@@ -22,6 +22,8 @@ export type Rules = {
   tide_every: number;
   tide_bps: number;
   tide_bounty_bps: number;
+  /** yoctoNEAR: the tide bounty never exceeds this */
+  max_bounty: string;
   sell_bps: number;
   sell_cap_bps: number;
   siege_x: number;

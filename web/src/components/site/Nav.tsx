@@ -51,7 +51,7 @@ export function Nav() {
             {d.status === "ready" ? `Generation ${d.generation.toLocaleString("en-US")}` : `NEAR ${NETWORK}`}
           </span>
           <Link className="btn btn-amber btn-small" href="/dish">
-            Plant a colony
+            Start a colony
           </Link>
           <button className="menu-btn" aria-expanded={open} aria-controls="site-menu" onClick={() => setOpen((o) => !o)}>
             <span className="sr">{open ? "Close menu" : "Open menu"}</span>
@@ -74,7 +74,7 @@ export function Nav() {
             </Link>
           ))}
           <Link className="btn btn-amber" href="/dish" onClick={() => setOpen(false)}>
-            Plant a colony
+            Start a colony
           </Link>
         </nav>
       )}

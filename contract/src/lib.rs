@@ -22,7 +22,7 @@ use near_sdk::json_types::{U128, U64};
 use near_sdk::serde_json::json;
 use near_sdk::store::{LookupMap, LookupSet, Vector};
 use near_sdk::{env, log, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue};
-use petri_core::{chain_due, chain_next, feed, feed_per_cell, near_for_petri, petri_for_near, planting_cost, tide_split, Dish, PlantError};
+use petri_core::{chain_due, chain_next, feed, feed_per_cell, petri_for_near, planting_cost, sell_back, tide_split, Dish, PlantError};
 
 mod token;
 
@@ -42,7 +42,7 @@ const MAX_NOTE_CHARS: usize = 140;
 const NOTE_PREFIX: &[u8] = b"n";
 const MAX_HOUSE: usize = 16;
 /// Storage a planting is charged for beyond its cells and note: the ledger entry's fixed part and the colony update.
-const PLANT_STORAGE_BASE: u64 = 300;
+const PLANT_STORAGE_BASE: u64 = 200;
 /// A catch-up stops stepping once the call has used this much gas, so no call can be pushed past NEAR's limit.
 const CATCHUP_GAS_LIMIT: Gas = Gas::from_tgas(180);
 const GAS_FOR_PAYOUT_CHECK: Gas = Gas::from_tgas(5);
@@ -78,8 +78,9 @@ pub struct Rules {
     pub tide_every: u32,
     /// Share of the vault paid out at each tide.
     pub tide_bps: u16,
-    /// Share of each tide paid in NEAR to the caller whose transaction runs it.
+    /// Share of each tide paid in NEAR to the caller whose transaction runs it, up to `max_bounty`.
     pub tide_bounty_bps: u16,
+    pub max_bounty: U128,
     /// The agar buys PETRI back at this share of the curve's price.
     pub sell_bps: u16,
     /// The agar buys back at most this share of the vault between two tides.
@@ -89,7 +90,8 @@ pub struct Rules {
     pub buffer: u16,
     pub max_plant_cells: u32,
     pub max_catchup: u32,
-    /// The dish's own players (the keeper's strains). They play like anyone but take no share of the tides.
+    /// The dish's own players (the keeper's strains). They play like anyone, but they are never fed and take no share
+    /// of the tides: every PETRI they plant with, they buy with NEAR, and that NEAR goes to the other players.
     pub house: Vec<AccountId>,
 }
 
@@ -130,7 +132,8 @@ pub enum Entry {
     /// `near` is what reached the vault (after this entry's storage).
     Buy { generation: U64, colony: u16, petri: U128, near: U128 },
     /// `near` is what reached the vault (after the planting's storage). `siege` marks a planting inside a rival's buffer.
-    Plant { generation: U64, colony: u16, cells: Vec<u32>, cost: U128, near: U128, siege: bool },
+    /// Cells are flat indices; a dish has at most 65,536 cells, so each fits in 16 bits.
+    Plant { generation: U64, colony: u16, cells: Vec<u16>, cost: U128, near: U128, siege: bool },
     /// `near` left the vault: `paid` to the seller and the rest for this entry's storage.
     Sell { generation: U64, colony: u16, petri: U128, near: U128, paid: U128 },
     /// Every `tide_every` generations: the history chain at that generation, and the tide. `pay` is the vault's share
@@ -145,7 +148,7 @@ pub struct PlantView {
     pub index: U64,
     pub generation: U64,
     pub colony: u16,
-    pub cells: Vec<u32>,
+    pub cells: Vec<u16>,
     pub cost: U128,
     pub siege: bool,
     pub note: Option<String>,
@@ -415,7 +418,7 @@ impl Petri {
         require!(units > 0, "sell at least some PETRI");
         let held = self.balance(&account);
         require!(held >= units, format!("you hold {} PETRI", fmt_petri(held)));
-        let near = near_for_petri(units, self.agar, self.price_k(), self.rules.sell_bps);
+        let near = self.sell_quote(petri).0;
         require!(near > 0, "that is too little PETRI to buy back");
         require!(near <= self.sell_left, format!("the agar buys back at most {} NEAR more before the next tide", fmt_near(self.sell_left)));
         let before = env::storage_usage();
@@ -497,8 +500,9 @@ impl Petri {
         if let Some(n) = &note {
             env::storage_write(&note_key(index), n.as_bytes());
         }
+        let short: Vec<u16> = cells.iter().map(|&c| c as u16).collect();
         // The vault's share is fixed once the storage is known; the entry has the same size either way.
-        self.ledger.push(Entry::Plant { generation: U64(self.generation), colony: id, cells: cells.clone(), cost: U128(cost), near: U128(0), siege: check.siege });
+        self.ledger.push(Entry::Plant { generation: U64(self.generation), colony: id, cells: short.clone(), cost: U128(cost), near: U128(0), siege: check.siege });
         self.plant_index.push(index);
         self.plant_count += 1;
         self.colonies.set(id as u32 - 1, colony);
@@ -506,7 +510,7 @@ impl Petri {
         let storage = self.storage_cost_since(before);
         require!(deposit >= storage + fee, format!("this planting needs {} NEAR for its storage and fee", fmt_near(storage + fee)));
         let to_vault = deposit - storage;
-        self.ledger.set(index as u32, Entry::Plant { generation: U64(self.generation), colony: id, cells: cells.clone(), cost: U128(cost), near: U128(to_vault), siege: check.siege });
+        self.ledger.set(index as u32, Entry::Plant { generation: U64(self.generation), colony: id, cells: short, cost: U128(cost), near: U128(to_vault), siege: check.siege });
         self.ledger.flush();
         self.vault += to_vault;
         self.near_in += to_vault;
@@ -577,7 +581,7 @@ impl Petri {
 
     /// The NEAR to bring to a planting of `cells` cells with a note of `note_bytes` bytes: its storage plus the fee.
     pub fn plant_deposit(&self, cells: u32, note_bytes: Option<u32>) -> U128 {
-        let bytes = PLANT_STORAGE_BASE + 6 * cells as u64 + note_bytes.map(|b| b as u64 + 64).unwrap_or(0);
+        let bytes = PLANT_STORAGE_BASE + 4 * cells as u64 + note_bytes.map(|b| b as u64 + 64).unwrap_or(0);
         U128(bytes as u128 * env::storage_byte_cost().as_yoctonear() + self.rules.cell_fee.0 * cells as u128)
     }
 
@@ -586,9 +590,11 @@ impl Petri {
         U128(petri_for_near(near.0, self.agar, self.price_k()))
     }
 
-    /// NEAR the agar would pay for `petri` units right now (before the sale's record is paid for).
+    /// NEAR the agar would pay for `petri` units right now (before the sale's record is paid for): half the curve's
+    /// price, but never more than those units' share of the vault.
     pub fn sell_quote(&self, petri: U128) -> U128 {
-        U128(near_for_petri(petri.0, self.agar, self.price_k(), self.rules.sell_bps))
+        let outstanding = self.total_supply() - self.agar;
+        U128(sell_back(petri.0, self.agar, self.price_k(), self.rules.sell_bps, self.vault, outstanding))
     }
 
     pub fn credit_of(&self, account_id: AccountId) -> U128 {
@@ -895,7 +901,7 @@ impl Petri {
                 self.chain = chain_next(&self.chain, self.generation, &dish.hash());
             }
             self.total_live = stats.total_live;
-            let f = feed(self.agar, self.rules.feed_ppm, self.rules.keeper_bps, self.rules.reach, &stats.live, &planted);
+            let f = feed(self.agar, self.rules.feed_ppm, self.rules.keeper_bps, self.rules.reach, &stats.live, &planted, &self.house);
             if f.paid > 0 {
                 for &(c, s) in &f.shares {
                     earned[c as usize] += s as u64;
@@ -940,7 +946,7 @@ impl Petri {
         self.tide_index.flush();
         let storage_cost = self.storage_cost_since(before);
         let pay = self.vault * self.rules.tide_bps as u128 / 10_000;
-        let bounty = pay * self.rules.tide_bounty_bps as u128 / 10_000;
+        let bounty = (pay * self.rules.tide_bounty_bps as u128 / 10_000).min(self.rules.max_bounty.0);
         let storage = storage_cost.min(pay - bounty);
         let (split, paid) = tide_split(pay - bounty - storage, window, &self.house);
         if paid > 0 {

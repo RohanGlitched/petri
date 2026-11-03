@@ -18,7 +18,7 @@ export function Footer() {
             </Link>
             <p>A coin that is alive. Conway&rsquo;s Life with owners, run by a NEAR contract and played by people and AI strains.</p>
             <Link className="btn btn-amber btn-small" href="/dish">
-              Plant a colony
+              Start a colony
             </Link>
           </div>
           <div className="foot-col">

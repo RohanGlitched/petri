@@ -90,6 +90,7 @@ async function loadStored(rules: Rules, state: DishState, colonies: Colony[]) {
   e.set_colonies(colonies.length);
   // Each colony's pay cap grows with the cells it has planted, so the browser's feed needs those counts.
   e.set_planted(new Uint32Array(colonies.map((c) => Number(c.cells_planted))));
+  e.set_house(new Uint16Array(state.house));
   e.set_agar(state.agar);
   if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("The stored board could not be read");
   engine?.free();
