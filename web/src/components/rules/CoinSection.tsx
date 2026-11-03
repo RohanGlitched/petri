@@ -50,7 +50,7 @@ function ReachDemo({ reach }: { reach: number }) {
         <p>
           Red plants an R-pentomino, 5 cells, which grows. Green planted three blocks (12 cells) and Blue a beehive (6). Each is
           paid for at most {reach} living cells per cell it planted, so Red can cover as much ground as it likes and is still
-          paid for {5 * reach} at most.
+          paid for {5 * reach} at most. (No tide runs in this small demo, so no stake decays.)
         </p>
         <p className={s.live} aria-live="off">
           <span className="num">Generation {g}</span>
@@ -153,7 +153,7 @@ export function CoinSection() {
     ["Still in the agar", v("agar"), "Minted, less sold and fed, plus returned and bought back."],
     ["Waiting in the keeper pot", v("keeper_pot"), "Set aside from the feed until someone advances the dish."],
     ["Paid to keepers", v("keeper_paid"), "Pots already collected."],
-    ["Burned", v("burned"), `The other ${burnPct}% of every planting. Gone for good.`],
+    ["Burned", v("burned"), `The other ${burnPct}% of every planting, and the whole price of every specimen slide. Gone for good.`],
     ["Total supply", v("total_supply"), "What ft_total_supply reports: minted less burned."],
     ["Held by accounts or waiting to be claimed", st ? fmtPetri(held.toString(), 2) : "—", "Total supply less the agar and the keeper pot."],
   ];
@@ -169,7 +169,8 @@ export function CoinSection() {
             All {fmtPetri(r.max_supply, 0)} PETRI were minted once, at launch, into the contract&rsquo;s own balance. That
             balance is the agar, and there is no other mint and no free grant. PETRI leaves the agar two ways: colonies buy it
             with NEAR, and the agar feeds a sliver of itself to living cells every generation. It comes back two ways: half of
-            every planting returns to it, and the agar buys PETRI back for NEAR at half its price.
+            every planting returns to it, and the agar buys PETRI back for NEAR at half its price. The rest of every planting,
+            and every PETRI spent on a specimen slide, is burned.
           </p>
         </div>
 
@@ -180,7 +181,9 @@ export function CoinSection() {
               A colony gets its first PETRI by joining with at least <b className="num">{near(Number(r.min_join), 2)} NEAR</b>,
               attached by a wallet or spent from sponsored credit. That NEAR first pays for the colony&rsquo;s storage and the
               rest buys PETRI from the agar. After that, <code className={s.codePaper}>buy</code> spends NEAR the same way. Every
-              purchase is in the ledger with the NEAR paid and the PETRI received, and the NEAR goes to the tide vault.
+              purchase is in the ledger with the NEAR and credit paid and the PETRI received; attached NEAR goes to the tide
+              vault and credit to the credit pool.{" "}
+              {net.freePlay ? "" : "On mainnet a purchase can also arrive as wNEAR through NEAR Intents, which the contract unwraps and treats as attached NEAR."}
             </p>
             <pre className={s.formulaPaper}>
               {`price of one PETRI = ${nearPer(launchPrice)} NEAR × ${int(maxPetri)} ÷ PETRI in the agar
@@ -276,7 +279,8 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
               <code className={s.codePaper}>sell(petri)</code> hands PETRI back to the agar for NEAR from the tide vault, at{" "}
               {r.sell_bps / 100}% of the curve&rsquo;s price, and never more than those units&rsquo; pro-rata share of the vault.
               Between two tides the agar buys back at most {r.sell_cap_bps / 100}% of the vault, first come first served, and
-              nothing before the first tide. A round trip through the agar always loses.
+              nothing before the first tide. A round trip through the agar always loses. A colony that has never attached NEAR
+              (a free-play guest) is paid for its PETRI in credit it can spend in the dish, never in NEAR.
             </p>
             <pre className={s.formulaPaper}>
               {`NEAR = min(curve price × ${r.sell_bps / 100}%, vault × PETRI sold ÷ PETRI outside the agar)`}
@@ -298,24 +302,28 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
               Earnings do not land in a balance on their own. Each colony&rsquo;s feed adds up in one shared record, so a
               catch-up reads and writes one record and logs one summary line however many colonies are alive. A colony moves its
               earnings into its balance with <code className={s.codePaper}>claim</code>, which also sends the NEAR it has won at
-              the tides. If a NEAR payout fails, a callback owes it to the colony again, to claim later. Planting claims waiting
-              PETRI first. The <code className={s.codePaper}>claimable</code> view shows what is waiting.
+              the tides. If a claim&rsquo;s transfer fails, a callback owes the NEAR to the colony again; a failed sale or bounty
+              payout goes back to the vault with a <code className={s.codePaper}>Refund</code> entry. Planting and minting a
+              slide claim waiting PETRI first. Credit won at the tides needs no claim. The{" "}
+              <code className={s.codePaper}>claimable</code> view shows what is waiting.
             </p>
           </article>
         </div>
 
         <div className={s.capGrid}>
           <div>
-            <h3 className="h3">The reach: paid for {r.reach} living cells per cell planted</h3>
+            <h3 className="h3">The reach: paid for {r.reach} living cells per cell of stake</h3>
             <p className={s.paperMuted}>
               A colony&rsquo;s claim on the feed, and so on the tides, is its living cells, but never more than {r.reach} cells
-              for every cell it has ever planted. The cap grows only with what the colony paid for, so splitting into many
-              colonies never earns more: the capped weights of the parts add up to at most the capped weight of the whole, and a
-              property test in petri-core checks it. A growing pattern can still cover ground; past its reach that ground earns
-              nothing.
+              for every cell of stake. Planting adds one cell of stake per cell planted, and every tide that runs keeps{" "}
+              {r.stake_keep_bps / 100}% of each colony&rsquo;s stake, so holding ground means planting again now and then. The
+              cap grows only with what the colony paid for, so splitting into many colonies never earns more: the capped weights
+              of the parts add up to at most the capped weight of the whole, and a property test in petri-core checks it. A
+              growing pattern can still cover ground; past its reach that ground earns nothing.
             </p>
             <pre className={s.formulaPaper}>
-              {`paid cells = min(a colony's living cells, ${r.reach} × cells it ever planted)   (0 for the house)
+              {`paid cells = min(a colony's living cells, ${r.reach} × its stake)   (0 for the house)
+stake      = cells planted, × ${r.stake_keep_bps / 100}% at every tide that runs
 released = ration × min(all paid cells, ${int(r.live_floor)}) ÷ ${int(r.live_floor)}
 share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
             </pre>
@@ -379,7 +387,9 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                 </div>
                 <p className={s.paperNote}>
                   Highlighted rows are past their reach. Figures are this generation&rsquo;s feed at your browser&rsquo;s
-                  generation, rounded for display; the contract rounds each share down to a millionth of a PETRI.
+                  generation, rounded for display; the contract rounds each share down to a millionth of a PETRI. &ldquo;Paid
+                  for&rdquo; here counts every cell a colony planted; once tides have run, the contract&rsquo;s cap is lower by
+                  the stake that decayed.
                 </p>
               </div>
             </details>
@@ -387,7 +397,7 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
             <h3 className={`h3 ${s.spaced}`}>Nothing is created or lost</h3>
             <p className={s.paperMuted}>
               Every PETRI is in the agar, in an account, waiting to be claimed, in the keeper pot, or burned. The contract tests
-              assert these identities after every scenario; the first two are checked again here on the live counters.
+              assert these identities after their scenarios; the first two are checked again here on the live counters.
             </p>
             <ul className={s.checks}>
               <li className={s.checkItem}>
@@ -430,7 +440,7 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
           </details>
           <details className={`${s.fold} ${s.foldPaper}`}>
             <summary>
-              A standard token <small>NEP-141, 145, 148</small>
+              Standard tokens <small>NEP-141, 145, 148; slides NEP-171, 177, 178, 181</small>
             </summary>
             <div className={s.foldBody}>
               <ul className={s.standards}>
@@ -455,13 +465,23 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                   the keeper pot.
                 </li>
                 <li>
+                  <b>Specimen slides.</b> Each slide is an NFT in the same contract: NEP-171 transfers (with{" "}
+                  <code className={s.codePaper}>nft_transfer_call</code>), NEP-177 metadata whose image is an SVG the contract
+                  draws from the captured cells, NEP-178 approvals and NEP-181 enumeration.
+                </li>
+                <li>
                   <b>Events.</b> NEP-141 <code className={s.codePaper}>ft_mint</code> once at launch,{" "}
                   <code className={s.codePaper}>ft_transfer</code> for purchases, sales, claims, keeper pots, planting returns and
-                  transfers, <code className={s.codePaper}>ft_burn</code> for planting, and the dish&rsquo;s own{" "}
-                  <code className={s.codePaper}>sponsor</code>, <code className={s.codePaper}>join</code>,{" "}
+                  transfers, <code className={s.codePaper}>ft_burn</code> for planting and for slides; NEP-171{" "}
+                  <code className={s.codePaper}>nft_mint</code> and <code className={s.codePaper}>nft_transfer</code>; and the
+                  dish&rsquo;s own <code className={s.codePaper}>sponsor</code>, <code className={s.codePaper}>unsponsor</code>,{" "}
+                  <code className={s.codePaper}>join</code>, <code className={s.codePaper}>rename</code>,{" "}
                   <code className={s.codePaper}>plant</code>, <code className={s.codePaper}>sell</code>,{" "}
-                  <code className={s.codePaper}>claim</code>, <code className={s.codePaper}>payout_failed</code> and one{" "}
-                  <code className={s.codePaper}>generation</code> summary per catch-up.
+                  <code className={s.codePaper}>claim</code>, <code className={s.codePaper}>payout</code>,{" "}
+                  <code className={s.codePaper}>payout_failed</code>, <code className={s.codePaper}>slide</code>,{" "}
+                  <code className={s.codePaper}>intents</code>, <code className={s.codePaper}>claim_pending</code>,{" "}
+                  <code className={s.codePaper}>skip</code> and one <code className={s.codePaper}>generation</code> summary per
+                  catch-up.
                 </li>
               </ul>
             </div>

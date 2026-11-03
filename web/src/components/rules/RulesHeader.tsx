@@ -23,7 +23,7 @@ export function RulesHeader() {
   const glance: [string, string][] = [
     [`${r.width} × ${r.height}`, "cells, with edges that wrap"],
     [`${Number(r.generation_ms) / 1000} s`, "between generations"],
-    [`× ${r.reach}`, "most living cells a colony is paid for, per cell it planted"],
+    [`× ${r.reach}`, "most living cells a colony is paid for, per cell of stake"],
     [`× ${r.siege_x}`, `the price of planting within ${r.buffer} cells of a rival`],
     [ready ? petri(cellPrice, 2) : "—", "PETRI to plant one cell right now"],
     [ready ? nearPer(petriPrice) : "—", "NEAR for one PETRI from the agar right now"],
@@ -37,8 +37,9 @@ export function RulesHeader() {
             <p className={s.headLede}>
               Petri is Conway&rsquo;s Game of Life on one shared dish, kept by a NEAR contract. Every live cell belongs to a
               colony. Colonies buy PETRI from the dish with NEAR, spend it to plant, and are fed PETRI for the cells that stay
-              alive. Every hour a tenth of the tide vault, which holds the NEAR players paid in, goes back out, split by what each
-              colony earned that hour. This page
+              alive. Every hour {r.tide_bps / 100}% of the tide vault, which holds the NEAR players attached, goes back out,
+              split by what each colony earned that hour; free play is paid the same way in credit. A colony can also fix a patch
+              of its living cells as a specimen slide, an NFT the contract draws itself. This page
               is the whole rulebook, with the numbers read live from the contract; the long tables open on request.
             </p>
           </div>

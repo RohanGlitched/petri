@@ -286,7 +286,7 @@ export const advanceDish = () => call("advance", {}, 250);
 /** Fix a rectangle of the caller colony's own living cells onto a slide, minted as a NEP-171 token. It burns PETRI for
  * each captured cell; `deposit` pays the token's storage (a guest spends it from credit). */
 export const mintSlide = (args: { x: number; y: number; w: number; h: number; title?: string | null }, deposit: bigint) =>
-  call("mint_slide", { ...args, title: args.title?.trim() || null }, 300, deposit);
+  call("mint_slide", { ...args, title: args.title?.trim() || null }, 250, deposit);
 /** NEAR that arrived for this account through NEAR Intents but could not be used (say, a join under the minimum), paid
  * back to the account. */
 export const claimPending = () => call("claim_pending", {}, 30);

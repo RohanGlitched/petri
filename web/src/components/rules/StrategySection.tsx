@@ -37,7 +37,7 @@ const FAMILIES: { title: string; color: string; patterns: PatternName[]; body: s
     title: "Wild seeds gamble",
     color: "#c99a2e",
     patterns: ["r-pentomino"],
-    body: "Five cells that grow chaotically for a long time. On an empty dish the R-pentomino is all yours; near others, its births join whoever owns most of their parents, and contested ground stays empty. A colony is paid for at most four cells per cell it planted, so growth past twenty cells covers ground but earns nothing more.",
+    body: "Five cells that grow chaotically for a long time. On an empty dish the R-pentomino is all yours; near others, its births join whoever owns most of their parents, and contested ground stays empty. A colony is paid for at most eight living cells per cell of stake, so an R-pentomino planted on its own is paid for at most forty cells; growth past that covers ground but earns nothing more.",
   },
 ];
 
@@ -135,10 +135,12 @@ export function StrategySection() {
               Both sides shrink slowly with the agar.
             </p>
             <p className="muted">
-              Three things bend the sum. A colony is paid for at most {r.reach} living cells per cell it planted, so growth
-              past that is ground it is not paid for. A siege costs {r.siege_x} times the price, so its cells take{" "}
-              {r.siege_x} times as long to pay back. And every {r.tide_every} generations the tide pays NEAR by the PETRI each
-              colony earned that hour, so every generation a cell stays alive also earns a slice of NEAR.
+              Three things bend the sum. A colony is paid for at most {r.reach} living cells per cell of stake (the cells it
+              planted, of which {r.stake_keep_bps / 100}% remains after each tide), so growth past that is ground it is not paid
+              for. A siege costs {r.siege_x} times the price, so its cells take {r.siege_x} times as long to pay back. And every{" "}
+              {r.tide_every} generations the tide pays {r.tide_bps / 100}% of the vault by the PETRI each colony earned that
+              hour, so every generation a cell stays alive also earns a slice of NEAR (or of credit, for a colony that has never
+              attached NEAR).
             </p>
           </div>
         </div>

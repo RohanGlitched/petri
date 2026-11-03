@@ -13,7 +13,7 @@ export function NetLimitBody() {
   return net.freePlay ? (
     <>
       This dish lives on NEAR testnet. PETRI there is a real token on a real chain, but testnet NEAR and PETRI have no market, and
-      guests play with NEAR the site gives them. The same contract runs with real NEAR on mainnet.
+      guests play with credit the site sponsors. The same contract runs with real NEAR on mainnet.
     </>
   ) : (
     <>

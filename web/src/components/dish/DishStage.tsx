@@ -1210,7 +1210,7 @@ function MainnetStart({ onConnect, onPay, busy }: { onConnect: () => void; onPay
       <button className="btn btn-ghost" onClick={onPay} style={{ width: "100%", marginTop: 10 }}>
         Pay with any token
       </button>
-      <p className={s.hint}>No NEAR? Pay with USDC, ETH, SOL or BTC from their own chains. NEAR Intents swaps it, and the dish joins for the NEAR account you name.</p>
+      <p className={s.hint}>No NEAR? Pay with USDC (on Base, Solana or Arbitrum), ETH on Base, SOL or BTC. NEAR Intents swaps it, and the dish joins for the NEAR account you name.</p>
       <p className={s.hint} style={{ marginTop: 12 }}>
         Just looking? <button className={s.linkish} onClick={() => switchNetwork("testnet")}>Try free play on testnet</button>, with a guest account and no wallet.
       </p>

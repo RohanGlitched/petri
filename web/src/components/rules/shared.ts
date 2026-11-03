@@ -1,6 +1,6 @@
 import type { Rules } from "@/lib/chain";
 
-/** The launch values the live dish (petri-v4.testnet) returns from `rules`, used only until the real view has loaded. */
+/** The launch values the testnet dish (petri-v5.testnet) returns from `rules`, used only until the real view has loaded. */
 export const LAUNCH: Rules = {
   width: 128,
   height: 128,
@@ -53,7 +53,8 @@ export function genTime(gens: number, generationMs: number): string {
 
 /**
  * A colony's claim on the feed, as the contract computes it (`feed_weight` in petri-core): its living cells, but never
- * more than `reach` cells per cell of stake (cells planted, decayed at every tide). House colonies are never fed.
+ * more than `reach` cells per cell of stake (cells planted, decayed at every tide). This counts cells planted, so after
+ * tides it overstates the contract's cap. House colonies are never fed.
  */
 export function weightOf(live: number, planted: number, reach: number, house = false): number {
   return house ? 0 : Math.min(live, planted * reach);

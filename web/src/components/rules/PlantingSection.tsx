@@ -68,18 +68,17 @@ const REFUSALS: [string, string][] = [
   ["The lab note holds a control, direction, invisible or tag character.", "a lab note may not contain control, direction, invisible or tag characters"],
   ["The lab note is longer than 140 characters or 280 bytes.", "a lab note is at most 140 characters"],
   ["The account has not joined the dish yet.", "join the dish first"],
-  ["The call asks to spend more sponsored credit than the account has.", "this account has X NEAR of sponsored credit"],
+  ["The planting lists no cells, or more than the limit.", "plant 1 to 64 cells"],
+  ["A cell index is outside the dish.", "a cell is off the dish"],
+  ["The call asks to spend more credit than the account has won and been sponsored.", "this account has X NEAR of won and sponsored credit"],
+  ["The NEAR brought (attached or from credit) is less than the fee for this many cells.", "planting N cells needs at least X NEAR"],
   [
     "The dish is still behind the clock after the planting caught up as far as one call may. Someone has to call advance first.",
     "the dish is behind the clock; call advance first",
   ],
   ["The colony already planted in this generation.", "one planting per generation; wait for the next one"],
-  ["The planting lists no cells.", "plant at least one cell"],
-  ["The planting lists more cells than the limit.", "at most 64 cells per planting"],
-  ["A cell index is outside the dish.", "cell N is off the dish"],
   ["The same cell is listed twice.", "cell (x, y) is listed twice"],
   ["A target cell is already alive, whoever owns it.", "cell (x, y) is already alive"],
-  ["The NEAR brought (attached or from credit) is less than the fee for this many cells.", "planting N cells needs at least X NEAR"],
   [
     "The colony holds less PETRI than the price, siege surcharge included, counting the earnings the planting just claimed.",
     "planting N cells inside a rival's buffer costs X PETRI; you hold Y",
@@ -260,11 +259,12 @@ cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
             <p>
               The player pays for what their planting stores: the ledger entry, its cells and its note. On top of that every
               planted cell carries a fee of <b className="num">{near(Number(r.cell_fee), 4)} NEAR</b>. The contract measures the
-              storage the planting actually used and keeps it; everything above that goes to the tide vault. A wallet attaches
-              the NEAR; {net.freePlay ? "a guest spends it from the credit the site sponsored for it." : "on the free-play testnet dish, a guest spends it from credit the site sponsored."}
+              storage the planting actually used and keeps it; everything above that goes to the tide vault, or to the credit
+              pool when it was paid in credit. A wallet attaches the NEAR;{" "}
+              {net.freePlay ? "a guest spends it from the credit the site sponsored for it." : "on the free-play testnet dish, a guest spends it from credit the site sponsored."}
             </p>
             <pre className={s.formula}>
-              {`bring = (200 + 4 × cells + (note bytes + 64, if there is a note)) bytes × 0.00001 NEAR
+              {`bring = (220 + 4 × cells + (note bytes + 64, if there is a note)) bytes × 0.00001 NEAR
       + ${near(Number(r.cell_fee), 4)} NEAR × cells`}
             </pre>
             <p>

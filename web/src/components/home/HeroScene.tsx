@@ -201,7 +201,7 @@ export function HeroScene() {
           <p className={s.capKicker}>One cell</p>
           <p className={s.capText}>
             Each glossy bead is one cell. It lives or dies by Conway&rsquo;s rules, and while it lives it earns PETRI for
-            whoever owns it.
+            whoever owns it, up to that colony&rsquo;s reach (the house strains&rsquo; cells earn nothing).
             {lead ? (
               <>
                 {" "}Right now <span className={s.name}><i className="swatch" style={{ background: hex(lead.color) }} />{lead.name}</span> owns{" "}

@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { RuleDemo, type Seed } from "@/components/site/RuleDemo";
 import { useLive, int } from "@/lib/live";
-import { KEEPER } from "@/lib/strains";
+import { keeperOn } from "@/lib/strains";
 import { accountUrl } from "@/lib/config";
+import { useNet } from "@/lib/use-net";
 import { LAUNCH, DEMO } from "./shared";
 import s from "./rules.module.css";
 
@@ -17,6 +18,7 @@ const WRAP_COLORS = { 1: DEMO.green, 2: DEMO.blue };
 
 export function BoardSection() {
   const { d, rules, ready, secs } = useLive();
+  const KEEPER = keeperOn(useNet().network);
   const r = rules ?? LAUNCH;
   const st = d.state;
   const [g, setG] = useState(0);
@@ -70,10 +72,13 @@ export function BoardSection() {
             <p>
               A NEAR contract cannot run on a timer. Petri&rsquo;s contract stores the board at the last generation someone
               advanced to. Every <code className={s.code}>join</code>, <code className={s.code}>buy</code>,{" "}
-              <code className={s.code}>sell</code>, <code className={s.code}>plant</code>, <code className={s.code}>claim</code>{" "}
-              and <code className={s.code}>advance</code> call first steps that board through the generations the clock says are
-              due, up to {r.max_catchup} in one call, and stops early once the call has used 180 TGas, so no backlog can push a
-              call past NEAR&rsquo;s gas limit. A planting is refused if the dish is still behind after that.
+              <code className={s.code}>sell</code>, <code className={s.code}>plant</code>, <code className={s.code}>claim</code>,{" "}
+              <code className={s.code}>mint_slide</code> and <code className={s.code}>advance</code> call first steps that board
+              through the generations the clock says are due, up to {r.max_catchup} in one call, and stops early once the call
+              has used 180 TGas, so no backlog can push a call past NEAR&rsquo;s gas limit. A planting is refused if the dish is
+              still behind after that. If nobody touches the dish for more than {r.max_lag} generations, the next call skips the
+              clock ahead to {r.max_catchup} behind instead of replaying the quiet stretch, and writes a{" "}
+              <code className={s.code}>Skip</code> entry to the ledger.
             </p>
             <h3 className="h3">A keeper pot pays for the steps</h3>
             <p>
@@ -81,10 +86,11 @@ export function BoardSection() {
               <code className={s.code}>advance</code> takes the whole pot, but only if that call ran at least one generation and
               the account can hold PETRI (a colony, or an account registered with{" "}
               <code className={s.code}>storage_deposit</code>). Calling <code className={s.code}>advance</code> on a dish that is
-              already current pays nothing. Whoever&rsquo;s call runs an hourly tide also gets a small NEAR bounty (see the
-              tides). The project&rsquo;s keeper, <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, advances once
-              the stored board is 20 generations behind or the pot holds more than 5 PETRI. Its key can only call the dish, and
-              it has no powers anyone else lacks.
+              already current pays nothing. Whoever&rsquo;s call runs an hourly tide also gets a small bounty, in NEAR, or as
+              credit to a colony that has never attached NEAR (see the tides). The project&rsquo;s keeper,{" "}
+              <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, advances once the stored board is 20 generations
+              behind or the pot holds more than 50 PETRI. It has no powers anyone else lacks: any account may call{" "}
+              <code className={s.code}>advance</code>.
             </p>
             <h3 className="h3">Your browser runs ahead</h3>
             <p>

@@ -16,6 +16,7 @@ export const LINKS = [
   { href: "/specimens", label: "Specimens" },
   { href: "/strains", label: "AI strains" },
   { href: "/verify", label: "Verify" },
+  { href: "https://docs.playpetri.xyz", label: "Docs" },
 ];
 
 export function Nav() {

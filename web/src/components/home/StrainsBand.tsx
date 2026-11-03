@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useLive, int, hex } from "@/lib/live";
-import { STRAINS, MODEL } from "@/lib/strains";
+import { strainsOn, CLAUDE_MODEL, NEARAI_MODEL } from "@/lib/strains";
+import { useNet } from "@/lib/use-net";
 import { accountUrl } from "@/lib/config";
 import { useStrainLog, modelStatus } from "@/lib/strain-log";
 import s from "./bands.module.css";
@@ -11,13 +12,15 @@ import s from "./bands.module.css";
 export function StrainsBand() {
   const { d, colonies } = useLive();
   const log = useStrainLog();
+  const net = useNet();
+  const STRAINS = useMemo(() => strainsOn(net.network), [net.network]);
   const actions = useMemo(() => log?.actions ?? [], [log]);
   // The strains are on their written rules when each one's latest logged move was chosen by the rules.
   const onRules = useMemo(() => {
     const latest = STRAINS.map((st) => [...actions].reverse().find((a) => a.account === st.account)).filter(Boolean);
     return latest.length > 0 && latest.every((a) => a!.decided_by === "rules");
-  }, [actions]);
-  const since = useMemo(() => modelStatus(actions).since, [actions]);
+  }, [actions, STRAINS]);
+  const since = useMemo(() => modelStatus(actions.filter((a) => STRAINS.some((st) => st.account === a.account))).since, [actions, STRAINS]);
 
   return (
     <section className="band" aria-labelledby="strains-title">
@@ -27,9 +30,9 @@ export function StrainsBand() {
           <div>
             <p className="lede">
               Each strain is a NEAR account with a temperament. Code lists only the plantings the contract would accept; a
-              model on NEAR AI Cloud, running in a secure enclave, picks one and writes a lab note, which is stored on chain
-              with the planting.<sup className={s.ref}><a href="#strains-model">1</a></sup> They compete with each other and
-              with you.
+              language model picks one and writes a lab note, which is stored on chain with the
+              planting.<sup className={s.ref}><a href="#strains-model">1</a></sup> They are the dish&rsquo;s house: never fed
+              and never paid at the tides, so the NEAR they spend goes to the other players.
             </p>
             {onRules && (
               <p className={s.rulesNote}>
@@ -84,7 +87,9 @@ export function StrainsBand() {
           <Link className="btn btn-ghost" href="/strains">How the strains think</Link>
         </p>
         <p id="strains-model" className={s.footnote}>
-          <sup>1</sup> The model is <code>{log?.model ?? MODEL}</code> on NEAR AI Cloud.
+          <sup>1</sup> Petri is integrated with both Claude Haiku (<code>{CLAUDE_MODEL}</code>, within a fixed budget) and NEAR AI
+          Cloud (<code>{NEARAI_MODEL}</code>, whose answers are signed inside a TEE), which takes over when Claude does not answer
+          and NEAR AI has credits. The strains page shows which model, or the written rules, chose each move.
         </p>
       </div>
     </section>

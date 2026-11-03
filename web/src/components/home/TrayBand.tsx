@@ -9,7 +9,7 @@ import s from "./bands.module.css";
 const GROUPS: { kind: PatternInfo["kind"][]; title: string; line: string; color: string }[] = [
   { kind: ["still"], title: "Earn", line: "Still lifes never change, so they earn every generation until something hits them.", color: "#1e8c6e" },
   { kind: ["oscillator"], title: "Shimmer", line: "Oscillators pulse in place: bigger at their peak, easier to knock apart.", color: "#6b2fa0" },
-  { kind: ["ship", "gun"], title: "Reach", line: "Ships travel and guns fire them. The only way past a rival’s buffer.", color: "#c8431f" },
+  { kind: ["ship", "gun"], title: "Reach", line: "Ships travel and guns fire them. The cheap way past a rival’s buffer, where planting costs three times as much.", color: "#c8431f" },
   { kind: ["wild"], title: "Gamble", line: "Small seeds that grow wild for hundreds of generations, into everyone’s agar.", color: "#c99a2e" },
 ];
 

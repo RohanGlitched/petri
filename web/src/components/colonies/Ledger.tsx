@@ -182,7 +182,12 @@ export function Ledger() {
                 <div>
                   <dt>Net</dt>
                   <dd className={`num ${preFeed ? s.flat : r.net >= 0 ? s.pos : s.neg}`}><span className={s.sign} aria-hidden="true">{r.net >= 0 ? "+" : "−"}</span><span className="sr">{r.net >= 0 ? "plus " : "minus "}</span>{petri(Math.abs(r.net), 2)}</dd>
-                  {preFeed && <em title="Nothing has been fed to this colony yet; its cells start earning with the next feed">pre-feed</em>}
+                  {preFeed &&
+                    (r.house ? (
+                      <em title="A house strain: the contract never feeds it and never pays it at a tide">house</em>
+                    ) : (
+                      <em title="Nothing has been fed to this colony yet; its cells start earning with the next feed">pre-feed</em>
+                    ))}
                 </div>
                 <div><dt>Holding</dt><dd className="num">{balances[r.account] !== undefined ? petri(balances[r.account], 2) : "—"}</dd></div>
               </dl>

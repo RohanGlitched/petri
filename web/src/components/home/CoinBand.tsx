@@ -120,10 +120,10 @@ export function CoinBand() {
     ["Created, once, at launch", petri(max), "No mint function exists after this."],
     ["Still in the agar", petri(v("agar")), "Sold for NEAR and fed to the living, a sliver at a time."],
     ["Sold from the agar for NEAR", petri(v("sold")), "Every colony buys in. The price rises as the agar empties."],
-    ["Fed to the living so far", petri(v("fed")), `${rules ? rules.feed_ppm : 10} parts per million of the agar, every generation.`],
+    ["Fed to the living so far", petri(v("fed")), `${rules ? rules.feed_ppm : 3} parts per million of the agar, every generation.`],
     ["Paid back by planting", petri(v("returned")), "Half of every planting returns to the agar."],
     ["Bought back by the agar", petri(v("bought_back")), "Sold back for NEAR at half the curve's price."],
-    ["Burned for good", petri(v("burned")), `The other half. PETRI in existence: ${petri(supply)}.`],
+    ["Burned for good", petri(v("burned")), `The other half of every planting, and the whole price of every specimen slide. PETRI in existence: ${petri(supply)}.`],
   ];
   const tideMinutes = rules ? Math.ceil((tideIn * Number(rules.generation_ms)) / 60_000) : 0;
   // Before the first tide there is nothing paid to report, so the card counts down to it instead.
@@ -136,8 +136,9 @@ export function CoinBand() {
           <p className="lede">
             All {rules ? petri(max) : "1,000,000"} PETRI were made once and put in the agar. Nobody can mint more. You buy PETRI
             from the agar with NEAR, at a price that rises as it empties. Living cells are fed from the agar every generation;
-            planting feeds it back and burns as much again. And the NEAR you pay does not go to anyone running the dish: it
-            collects in the tide vault and is paid out every hour to whoever holds ground.
+            planting feeds it back and burns as much again. And the NEAR you pay does not go to anyone running the dish: past
+            the storage it pays for, it collects in the tide vault, and every hour a share of the vault is paid out to the
+            colonies that earned.
           </p>
         </div>
         <div className={s.coinGrid}>
@@ -166,13 +167,15 @@ export function CoinBand() {
           <div>
             <h3 className="h3">The tide pays NEAR to whoever holds ground</h3>
             <p className="muted">
-              Every NEAR that comes in, from buying PETRI and from the small fee on each planting, waits in the tide vault
-              (minus the storage it pays for). Every {rules ? rules.tide_every : 240} generations, about an hour, a tenth of the
-              vault is paid out to colonies in proportion to the PETRI each earned since the last tide, so arriving just before
-              a tide wins almost nothing. The dish&rsquo;s own AI strains are never fed and take no share: they buy every PETRI
-              they plant with, and that NEAR goes to you. Between tides the agar also buys PETRI back at half the curve&rsquo;s
-              price, never more than that PETRI&rsquo;s share of the vault, so what you earn can always be turned into NEAR.
-              You claim it whenever you like.
+              Every NEAR a wallet attaches, to buy PETRI and as the small fee on each planting, waits in the tide vault (minus
+              the storage it pays for). Every {rules ? rules.tide_every : 240} generations, about an hour,{" "}
+              {rules ? rules.tide_bps / 100 : 5}% of the vault is paid out to colonies in proportion to the PETRI each earned
+              since the last tide, so arriving just before a tide wins almost nothing; a tide with nobody to pay is skipped. The
+              dish&rsquo;s own AI strains are never fed and take no share: they buy every PETRI they plant with, and that NEAR
+              goes to the other players. Between tides the agar also buys PETRI back at half the curve&rsquo;s price, never
+              more than that PETRI&rsquo;s share of the vault and at most {rules ? rules.sell_cap_bps / 100 : 10}% of the vault
+              per tide. NEAR won waits for you to claim it. A colony that has never attached NEAR, like a free-play guest, is
+              paid its shares and sales as credit it can spend in the dish at once, never as NEAR.
             </p>
           </div>
           <dl className={s.tideNums} aria-live="polite">

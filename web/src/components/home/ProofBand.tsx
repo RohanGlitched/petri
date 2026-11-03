@@ -10,7 +10,7 @@ const PARTS = [
   {
     name: "The contract",
     where: "contract",
-    text: "Rust on NEAR. Holds the board as bit rows, runs Life 64 cells at a time, pays the agar out, takes plantings, burns. A planting that also catches the dish up three generations burns about 4.4 TGas.",
+    text: "Rust on NEAR. Stores the board compactly, runs Life 64 cells at a time, sells and buys back PETRI, feeds the living, takes plantings, burns, pays the tides and mints specimen slides, and writes all of it to one ledger. Every call first catches the dish up to the clock and stops at 180 TGas, so no backlog can break it.",
   },
   {
     name: "The engine in your browser",
@@ -25,12 +25,12 @@ const PARTS = [
   {
     name: "Pay with any token",
     where: "NEAR Intents, mainnet",
-    text: "On the mainnet dish you can join or buy with USDC, ETH, SOL or BTC from their own chains. NEAR Intents swaps the deposit into wNEAR and sends it to the contract with a message naming your account; the contract unwraps it and joins for you.",
+    text: "On the mainnet dish you can join or buy with USDC (on Base, Solana or Arbitrum), ETH on Base, SOL or BTC. NEAR Intents swaps the deposit into wNEAR and sends it to the contract with a message naming your account; the contract unwraps it and joins or buys for you. Whatever it cannot use that way waits as NEAR your account can claim back.",
   },
   {
     name: "The keeper and the strains",
-    where: "NEAR AI Cloud, in a TEE",
-    text: "A keeper advances the clock when nobody else does. Five strains ask a model for each move, and its answers come back signed by the enclave; while the model is unavailable they play by written rules, and every move says which.",
+    where: "Claude Haiku and NEAR AI Cloud",
+    text: "A keeper advances the clock when nobody else does. Five strains ask a language model for each move. Petri is integrated with both Claude Haiku, within a fixed budget, and NEAR AI Cloud, whose answers come back signed by its enclave; when no model answers they play by written rules, and every move says which.",
   },
 ];
 
@@ -44,9 +44,9 @@ export function ProofBand() {
           <div>
             <h2 id="proof-title" className="h2">Don&rsquo;t trust this page. Replay it.</h2>
             <p className="lede">
-              Every sixteenth generation the contract folds the board into a history chain. Your browser can download every
-              planting since generation zero, replay all of it with the same rules, and arrive at the same chain the contract
-              holds. If one cell were out of place, the hashes would differ.
+              Every sixteenth generation the contract folds the board into a history chain. Your browser can download the whole
+              ledger since generation zero, replay all of it with the same rules, and arrive at the same chain, the same PETRI
+              and the same NEAR the contract holds. If one cell were out of place, the hashes would differ.
             </p>
             <div className={s.chainCard}>
               <span className="muted small">At generation {ready ? int(d.generation) : "—"} the chain reads</span>
@@ -67,7 +67,7 @@ export function ProofBand() {
             <li>
               <h3 className="h3">All of it is open</h3>
               <span className={s.where}><a href={REPO}>{REPO.replace("https://", "")}</a></span>
-              <p className="muted">Contract, engine, simulator, agents and this site. 40 tests, including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI.</p>
+              <p className="muted">Contract, engine, simulator, agents and this site. 104 tests (74 for the contract, 30 for the engine), including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI and every yoctoNEAR.</p>
             </li>
           </ul>
         </div>
@@ -85,7 +85,7 @@ export function CtaBand() {
           <h2 id="cta-title" className="h2">Stake a few cents of NEAR, plant a colony, hold your ground.</h2>
           <p className="lede">
             {net.freePlay
-              ? "On the free-play dish the site gives you a guest account with testnet NEAR to start: name it, pick a stain, plant something. No wallet, no gas, about thirty seconds."
+              ? "On the free-play dish the site gives you a guest account and testnet credit to start: name it, pick a stain, plant something. No wallet, no gas, about thirty seconds."
               : "On the mainnet dish the NEAR is real: connect a NEAR wallet and stake 0.02 NEAR, or pay with USDC, ETH, SOL or BTC through NEAR Intents."}
           </p>
           <Link className="btn btn-amber" href="/dish">Start a colony</Link>

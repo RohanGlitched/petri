@@ -44,8 +44,8 @@ const SCENES: Scene[] = [
     loop: 58,
   },
   {
-    title: "Rivals keep their distance",
-    body: "No one may plant within three cells of a rival (the hatched zone). The red ghost is a planting the contract refuses. To reach a neighbour you send something that travels: this glider was launched from open agar and gets there anyway.",
+    title: "Ground near a rival costs three times as much",
+    body: "Planting within three cells of a rival (the hatched zone) is a siege: allowed, but at three times the price, so no one can close the dish. The red ghost is such a planting. The cheap way in is something that travels: this glider was planted on open agar for the normal price and gets there anyway.",
     w: 40,
     h: 22,
     seeds: [

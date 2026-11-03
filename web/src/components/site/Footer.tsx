@@ -38,6 +38,7 @@ export function Footer() {
               <li><Link href="/rules">How it works</Link></li>
               <li><Link href="/rules#coin">The coin</Link></li>
               <li><Link href="/verify">Verify the dish</Link></li>
+              <li><a href="https://docs.playpetri.xyz">Documentation</a></li>
             </ul>
           </div>
           <div className="foot-col">
@@ -53,7 +54,8 @@ export function Footer() {
             <ul>
               <li><a href={net.contractUrl}>{net.contract}</a></li>
               <li><a href="https://near.org">NEAR Protocol</a></li>
-              <li><a href="https://cloud.near.ai">NEAR AI Cloud</a></li>
+              <li><a href="https://near-intents.org">NEAR Intents</a></li>
+              <li><a href="https://www.anthropic.com/claude/haiku">Claude Haiku</a> and <a href="https://cloud.near.ai">NEAR AI Cloud</a></li>
             </ul>
           </div>
         </div>

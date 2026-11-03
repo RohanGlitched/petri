@@ -10,21 +10,31 @@ import s from "./rules.module.css";
 
 const CHAIN_EVERY = 16;
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit (as in scripts/verify.mjs). */
-const BUILD_HASH = "7GNyLTrzbFSmSxVp92Ne7bVXaKpUtxPsMYGqtx9ULuaS";
-const LOCK_COMMAND = `near account delete-keys ${CONTRACTS.testnet} public-keys ed25519:CDu2wUQhzNN3JKwHcduXqjS5TLSM78WVhowgPByum4LE network-config testnet sign-with-legacy-keychain send`;
+const BUILD_HASH = "Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j";
+/** The one full-access key each dish's account still holds, as `view_access_key_list` returns it. */
+const FULL_KEYS: Record<"testnet" | "mainnet", string> = {
+  testnet: "ed25519:Gx338TCzmupYDbRw7DPPXZVsF45yCPRnazrM173h2yCZ",
+  mainnet: "ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH",
+};
+const lockCommand = (net: "testnet" | "mainnet") =>
+  `near account delete-keys ${CONTRACTS[net]} public-keys ${FULL_KEYS[net]} network-config ${net} sign-with-legacy-keychain send`;
 
+/** The rows `node scripts/verify.mjs` prints, in order. */
 const CHECKS = [
   "History chain",
   "Board hash",
   "Living cells",
   "Every planting legal, sieges marked",
   "Every planting at the formula's price",
+  "Every planting paid its cell fee",
   "Every purchase on the curve",
-  "Every sale back on the curve",
-  "Every tide: chain, pay and split",
+  "Every sale back on the curve and within the allowance",
+  "Every tide: ran exactly when due, chain, shares of the vault and the credit pool, bounty, storage",
+  "Every specimen slide is its colony's own cells as the dish stood, at the rule's price",
   "PETRI in the agar",
   "PETRI sold",
   "PETRI burned",
+  "PETRI burned by specimen slides",
   "PETRI returned by planting",
   "PETRI bought back",
   "Keeper share",
@@ -32,7 +42,13 @@ const CHECKS = [
   "NEAR in the vault",
   "NEAR paid in",
   "NEAR paid at tides",
+  "Vault shares and bounties paid as credit",
+  "Sales paid as credit",
   "Every colony's NEAR winnings",
+  "Credit in the credit pool",
+  "Credit paid at tides",
+  "Every colony's credit winnings",
+  "The contract's NEAR covers everything it owes",
   "Deployed code hash (terminal only)",
   "No full-access key",
 ];
@@ -66,8 +82,9 @@ export function VerifySection() {
           <h2 id="verify-title" className={s.h2}>Check every generation, and every yoctoNEAR, yourself</h2>
           <p className="lede">
             The contract keeps a running hash of the board&rsquo;s history and one ordered ledger of every join, purchase, sale,
-            planting and tide, with the PETRI and the NEAR each moved. Anyone can replay that ledger from generation zero and
-            arrive at the same board, agar, vault and earnings for every colony, or find the first place where they differ.
+            planting, specimen slide, tide, clock skip and refund, with the PETRI, NEAR and credit each moved. Anyone can replay
+            that ledger from generation zero and arrive at the same board, agar, vault, credit pool and earnings for every
+            colony, or find the first place where they differ.
           </p>
         </div>
 
@@ -86,18 +103,22 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
             </p>
             <h3 className="h3">The replay</h3>
             <ol className={s.steps}>
-              <li>Start from an empty board at generation 0, a chain of zeros, an agar holding the whole supply and an empty vault.</li>
+              <li>Start from an empty board at generation 0, a chain of zeros, an agar holding the whole supply, an empty vault and an empty credit pool.</li>
               <li>
                 For each generation, apply its ledger entries in order. A join adds a colony. A purchase and a sale are checked
-                against the curve. A planting is checked for legality and its siege flag, must cost the formula&rsquo;s price,
-                and adds its NEAR to the vault. A tide must carry the same chain and pay the same share, split the same way.
+                against the curve, and a sale against the allowance. A planting is checked for legality and its siege flag, must
+                cost the formula&rsquo;s price and bring its cell fee, and adds its NEAR to the vault and its credit to the pool.
+                A slide must hold exactly its colony&rsquo;s living cells in its rectangle and burn the rule&rsquo;s price. A
+                tide must run exactly when some colony outside the house had earned, carry the same chain, and pay the same
+                shares of the vault and the pool, as NEAR or as credit to the right colonies.
               </li>
-              <li>Step once with petri-core and feed the living, with the reach cap, the house and the keeper&rsquo;s share.</li>
-              <li>At the end, compare every counter and every colony&rsquo;s PETRI earnings and NEAR winnings with the contract.</li>
+              <li>Step with petri-core and feed the living, with the reach cap on each colony&rsquo;s decaying stake, the house and the keeper&rsquo;s share.</li>
+              <li>At the end, compare every counter and every colony&rsquo;s PETRI earnings, NEAR winnings and credit winnings with the contract, and check that its NEAR covers what it owes.</li>
             </ol>
             <p>
-              The terminal script <code className={s.code}>node scripts/verify.mjs</code> pins every read to one final block and
-              runs {CHECKS.length} checks. The <Link className={s.link} href="/verify">verify page</Link> runs the same replay in
+              The terminal script <code className={s.code}>node scripts/verify.mjs</code> (add{" "}
+              <code className={s.code}>--network mainnet</code> for the mainnet dish) pins every read to one final block and
+              prints {CHECKS.length} checks. The <Link className={s.link} href="/verify">verify page</Link> runs the same replay in
               your browser, also pinned to one block, and shows the same checks except the code hash. The contract test{" "}
               <code className={s.code}>replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault</code> does it in Rust.
             </p>
@@ -170,9 +191,9 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
               <p>
                 {lock && lock.fullAccessKeys === 0
                   ? "The account has no full-access key, so its code can never change."
-                  : "The account still has one full-access key. The team will delete it before judging, so the code can never change; until then the full-access check is the one that fails on /verify and in the terminal." + (net.freePlay ? " The command:" : "")}
+                  : "The account still has one full-access key. The team will delete it before judging, so the code can never change; until then the full-access check is the one that fails on /verify and in the terminal. The command:"}
               </p>
-              {!(lock && lock.fullAccessKeys === 0) && net.freePlay && <pre className={s.formula}>{LOCK_COMMAND}</pre>}
+              {!(lock && lock.fullAccessKeys === 0) && <pre className={s.formula}>{lockCommand(net.network)}</pre>}
             </div>
           </div>
         </div>
