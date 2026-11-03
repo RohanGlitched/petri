@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // A self-contained server build, so the site can run on any Node host (it runs on the agents VM).
+  output: "standalone",
   poweredByHeader: false,
   async headers() {
     return [
