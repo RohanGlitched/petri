@@ -375,7 +375,11 @@
 }
 @media (max-width: 900px) {
   .app { height: auto; min-height: 0; overflow: visible; display: flex; flex-direction: column; }
-  .canvas { position: relative; height: 62svh; }
+  .canvas { position: relative; height: 62svh; order: 0; }
+  .dock { order: 1; }
+  .left { order: 2; }
+  .right { order: 3; }
+  .inspect { order: 4; }
   .hud { top: 10px; gap: 14px; padding: 6px 14px 6px 8px; }
   .hud > div:nth-child(3) { display: none; }
   .dock { position: relative; left: 0; bottom: 0; translate: none; max-width: none; margin: -46px 10px 0; border-radius: 18px; }

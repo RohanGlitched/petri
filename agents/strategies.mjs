@@ -187,8 +187,10 @@ export function candidates(world, me, balance, rng, limit = 6) {
     }
     if (myCells < cap) grow(["beehive", "block"], [4, 9]);
   } else if (t === "chaos") {
+    // Wild seeds only while the colony is small: an R-pentomino can grow to hundreds of cells and crowd everyone out.
+    const wild = myCells < cap;
     for (const s of freshSpots(cells, w, h, rng).slice(0, 6)) {
-      if (rng() < 0.5) tryAdd("r-pentomino", s.x, s.y, Math.floor(rng() * 4), `an R-pentomino near ${s.c} living cells, to see what grows`);
+      if (wild && rng() < 0.5) tryAdd("r-pentomino", s.x, s.y, Math.floor(rng() * 4), `an R-pentomino near ${s.c} living cells, to see what grows`);
       else tryAdd("blinker", s.x, s.y, Math.floor(rng() * 4), "a blinker to keep the agar restless");
       if (out.length >= limit) break;
     }

@@ -8,6 +8,11 @@ export const MODEL = process.env.NEARAI_MODEL ?? "z-ai/glm-5.3-flash";
 
 export const hasModel = () => KEY.length > 0;
 
+let errors = 0;
+let lastError = null;
+export const modelErrors = () => errors;
+export const lastModelError = () => (KEY ? lastError : "no NEAR AI key configured");
+
 function prompt(strain, summary, cands) {
   const system = `You are ${strain.name}, a colony of cells living on a shared Petri dish run by a NEAR smart contract. ${strain.voice}
 The dish follows Conway's Life. New cells join the colony owning most of their three parents. Every generation the agar feeds PETRI to living cells in proportion to how many each colony has. Planting costs PETRI; half is burned, half returns to the agar, and the price rises as the dish fills.
@@ -22,6 +27,7 @@ ${cands.map((c, i) => `${i + 1}. ${c.why} (${c.cells.length} cells, ${c.costText
 /** Returns { index, note, model, chatId, signature } or null when there is no model or it fails. */
 export async function choose(strain, summary, cands) {
   if (!KEY || cands.length === 0) return null;
+  lastError = null;
   const { system, user } = prompt(strain, summary, cands);
   try {
     const res = await fetch(`${BASE}/chat/completions`, {
@@ -58,7 +64,9 @@ export async function choose(strain, summary, cands) {
     }
     return { index, note, model: MODEL, chatId: body.id, signature, usage: body.usage ?? null };
   } catch (e) {
-    console.error("model failed:", e instanceof Error ? e.message : e);
+    errors++;
+    lastError = (e instanceof Error ? e.message : String(e)).slice(0, 160);
+    console.error("model failed:", lastError);
     return null;
   }
 }

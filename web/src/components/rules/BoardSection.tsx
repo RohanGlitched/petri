@@ -1,0 +1,108 @@
+"use client";
+
+import { useState } from "react";
+import { RuleDemo, type Seed } from "@/components/site/RuleDemo";
+import { useLive, int } from "@/lib/live";
+import { KEEPER } from "@/lib/strains";
+import { accountUrl } from "@/lib/config";
+import { LAUNCH, DEMO } from "./shared";
+import s from "./rules.module.css";
+
+// A glider and a light spaceship that cross the wrapped edges without meeting for the whole loop (checked with petri-core).
+const WRAP: Seed[] = [
+  { colony: 1, pattern: "glider", x: 6, y: 2, rotate: 1 },
+  { colony: 2, pattern: "lwss", x: 20, y: 8 },
+];
+const WRAP_COLORS = { 1: DEMO.green, 2: DEMO.blue };
+
+export function BoardSection() {
+  const { d, rules, ready, secs } = useLive();
+  const r = rules ?? LAUNCH;
+  const st = d.state;
+  const [g, setG] = useState(0);
+  const genS = Number(r.generation_ms) / 1000;
+  const perDay = Math.round(86_400_000 / Number(r.generation_ms));
+  const stats: [string, string][] = [
+    ["Due by the clock", ready ? int(d.dueGeneration) : "—"],
+    ["Stored on chain", st ? int(Number(st.generation)) : "—"],
+    ["Your browser is ahead by", ready ? `${int(d.ahead)} gen` : "—"],
+    ["Next generation in", ready ? `${secs} s` : "—"],
+  ];
+  return (
+    <section id="board" className={`band ${s.section}`} aria-labelledby="board-title">
+      <div className="wrap">
+        <div className="section-head">
+          <h2 id="board-title" className={s.h2}>A small world on a clock</h2>
+          <p className="lede">
+            The dish is {r.width} by {r.height} cells, {int(r.width * r.height)} in all, and it has no walls. A new generation is
+            due every {genS} seconds, {int(perDay)} times a day, counted from the block in which the contract was created.
+          </p>
+        </div>
+
+        <div className={s.split}>
+          <figure className={s.figure}>
+            <div className={s.dish} style={{ aspectRatio: "36 / 20" }}>
+              <RuleDemo
+                width={36}
+                height={20}
+                seeds={WRAP}
+                loop={120}
+                colors={WRAP_COLORS}
+                stepMs={240}
+                stillAt={30}
+                label="A glider and a spaceship crossing the edges of a small wrapped dish"
+                onGeneration={(gen) => setG(gen)}
+              />
+            </div>
+            <figcaption className={s.caption}>
+              <p>
+                Nothing stops at the edge. The right side touches the left and the top touches the bottom, so this glider and
+                light spaceship leave one side of a 36 by 20 dish and come back on the other. The big dish works the same way.
+              </p>
+              <p className={s.live}>
+                <span className="num">Generation {g}</span>
+              </p>
+            </figcaption>
+          </figure>
+
+          <div className={s.prose}>
+            <h3 className="h3">The contract only moves when asked</h3>
+            <p>
+              A NEAR contract cannot run on a timer. Petri&rsquo;s contract stores the board at the last generation someone
+              advanced to. Any <code className={s.code}>join</code>, <code className={s.code}>plant</code> or{" "}
+              <code className={s.code}>advance</code> call first steps that board through every generation the clock says is
+              due, up to {r.max_catchup} in one call, and the account that sent it earns the keeper share of those
+              generations&rsquo; feed. A planting is refused if the dish is still behind after that.
+            </p>
+            <h3 className="h3">A keeper fills the gaps</h3>
+            <p>
+              When nobody else is calling, the keeper account{" "}
+              <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a> calls <code className={s.code}>advance</code> once the
+              stored board is 20 generations behind, so the chain is normally within about five minutes of the clock. The keeper
+              has no special powers. Anyone can advance the dish and earn the same share.
+            </p>
+            <h3 className="h3">Your browser runs ahead</h3>
+            <p>
+              The site downloads the stored board, loads it into <code className={s.code}>petri-core</code>, the same Rust crate the
+              contract runs, compiled to WebAssembly, and steps it to the generation that is due. That is the dish you see. It
+              also works out the feed every colony is owed since the stored board. The contract pays it the next time anyone
+              advances the dish.
+            </p>
+            <dl className={s.stats}>
+              {stats.map(([k, v]) => (
+                <div key={k} className={s.stat}>
+                  <dt>{k}</dt>
+                  <dd className="num">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+        <p className={s.footnote}>
+          The dish page runs the contract&rsquo;s own placement check, <code className={s.code}>check_plant</code>, on the board
+          your browser holds before you sign, so it can show why a planting would be refused before you send it.
+        </p>
+      </div>
+    </section>
+  );
+}

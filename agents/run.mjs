@@ -4,11 +4,12 @@
 //   node run.mjs --once      one round for every strain, then exit
 
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { callDish, liveDish, log, nearBalance, view, CONTRACT } from "./lib.mjs";
 import { candidates, makeRng } from "./strategies.mjs";
-import { choose, hasModel, MODEL } from "./model.mjs";
+import { choose, hasModel, MODEL, modelErrors, lastModelError } from "./model.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
@@ -28,12 +29,35 @@ export const STRAINS = [
 ];
 
 const KEEPER = process.env.PETRI_KEEPER ?? "petri-keeper.testnet";
+const PORT = Number(process.env.PETRI_LOG_PORT ?? 0);
+const recent = [];
+let lastHealth = null;
 const once = process.argv.includes("--once");
 const nextAt = new Map();
 const rng = makeRng(Date.now() & 0xffffffff);
 
 function record(entry) {
   fs.appendFileSync(path.join(LOG_DIR, "actions.jsonl"), JSON.stringify(entry) + "\n");
+  recent.push(entry);
+  if (recent.length > 500) recent.shift();
+}
+
+// A read-only window on what the strains did and why, for the site's strains page. No keys or secrets pass through it.
+function serve() {
+  if (!PORT) return;
+  try {
+    const lines = fs.readFileSync(path.join(LOG_DIR, "actions.jsonl"), "utf8").trim().split("\n").slice(-500);
+    for (const l of lines) if (l) recent.push(JSON.parse(l));
+  } catch {
+    /* no log yet */
+  }
+  http
+    .createServer((req, res) => {
+      const body = req.url?.startsWith("/health") ? lastHealth : { contract: CONTRACT, model: hasModel() ? MODEL : null, health: lastHealth, actions: recent.slice(-200) };
+      res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "public, max-age=15" });
+      res.end(JSON.stringify(body));
+    })
+    .listen(PORT, () => log(`log window on :${PORT}`));
 }
 
 async function ensureJoined(s, colonies) {
@@ -89,6 +113,7 @@ async function act(s) {
       note,
       tx: r.hash,
       decided_by: pick ? "model" : "rules",
+      model_error: pick ? null : lastModelError(),
       model: pick ? pick.model : null,
       chat_id: pick?.chatId ?? null,
       signature: pick?.signature ?? null,
@@ -122,13 +147,15 @@ async function health() {
       out[a] = null;
     }
   }
-  fs.writeFileSync(path.join(LOG_DIR, "health.json"), JSON.stringify({ at: new Date().toISOString(), near: out, model: hasModel() ? MODEL : null }, null, 1));
+  lastHealth = { at: new Date().toISOString(), near: out, model: hasModel() ? MODEL : null, modelErrors: modelErrors() };
+  fs.writeFileSync(path.join(LOG_DIR, "health.json"), JSON.stringify(lastHealth, null, 1));
   const low = Object.entries(out).filter(([, v]) => v !== null && v < 0.5);
   if (low.length) log("LOW GAS:", low.map(([a, v]) => `${a} ${v}`).join(", "));
 }
 
 async function main() {
   log(`petri agents on ${CONTRACT}; model ${hasModel() ? MODEL : "none (rules choose)"}`);
+  serve();
   await health();
   if (once) {
     for (const s of STRAINS) await act(s).catch((e) => log(s.name, "error", e.message));
