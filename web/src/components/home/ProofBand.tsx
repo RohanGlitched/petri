@@ -19,7 +19,7 @@ const PARTS = [
   {
     name: "Gasless guests",
     where: "NEP-366 meta transactions",
-    text: "No wallet needed to play. Your browser makes a key and signs a delegate action; a relayer that only forwards calls to the dish pays the gas.",
+    text: "No wallet needed to play. Your browser's key is a function-call key for the dish alone; it signs delegate actions, the relayer pays the gas, and the NEAR you play with is credit the relayer sponsored inside the contract. Or connect any NEAR wallet with NEAR Connect.",
   },
   {
     name: "The keeper and the strains",

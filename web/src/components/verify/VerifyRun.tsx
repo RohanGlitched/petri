@@ -65,18 +65,18 @@ export function VerifyRun() {
           if (id !== runId.current) return resolve();
           const prev = r.e.cells();
           const a = performance.now();
-          // A background tab gets no animation frames, so there the replay simply runs to the end.
+          // A hidden tab runs the replay to the end at once; a visible one spreads it out so you can watch.
           const finished = r.run(document.hidden ? r.target + 1 : per);
           work += performance.now() - a;
           setGen(r.generation);
           setFrame({ cells: r.e.cells(), prev, at: performance.now() });
           setLog(r.log.slice(-60));
+          // Timers rather than animation frames: some browsers and embedded panes never deliver frames to a page they
+          // consider hidden, and the replay must finish anyway.
           if (finished) resolve();
-          else if (document.hidden) setTimeout(tick, 0);
-          else requestAnimationFrame(tick);
+          else setTimeout(tick, document.hidden ? 0 : 16);
         };
-        if (document.hidden) setTimeout(tick, 0);
-        else requestAnimationFrame(tick);
+        setTimeout(tick, 0);
       });
       if (id !== runId.current) return;
       setMs(Math.round(work));
@@ -99,7 +99,10 @@ export function VerifyRun() {
     };
   }, [run]);
 
-  const allOk = checks.length > 0 && checks.every((c) => c.ok);
+  // The replay proves the history; the lock is a separate fact about the account, reported on its own.
+  const lock = checks.find((c) => c.id === "lock");
+  const replayOk = checks.length > 0 && checks.every((c) => c.ok || c.id === "lock");
+  const allOk = replayOk && (!lock || lock.ok === true);
   const pct = target > 0 ? Math.min(100, (100 * gen) / target) : 0;
   const checkpointLog = useMemo(() => log.filter((l) => l.text.startsWith("Tide")).reverse(), [log]);
 
@@ -126,7 +129,7 @@ export function VerifyRun() {
               cy="50"
               r="49"
               fill="none"
-              stroke={phase === "done" ? (allOk ? "#9fd8a8" : "#ff8f7f") : "#f2b45a"}
+              stroke={phase === "done" ? (replayOk ? "#9fd8a8" : "#ff8f7f") : "#f2b45a"}
               strokeWidth="1.2"
               strokeDasharray={`${(pct / 100) * 307.9} 400`}
               transform="rotate(-90 50 50)"
@@ -149,11 +152,11 @@ export function VerifyRun() {
             </p>
           )}
           {phase === "done" && (
-            <div className={`${s.verdict} ${allOk ? s.good : s.badV}`}>
-              <b>{allOk ? "Everything matches." : "Something differs."}</b>
+            <div className={`${s.verdict} ${replayOk ? s.good : s.badV}`}>
+              <b>{allOk ? "Everything matches." : replayOk ? "The whole history matches." : "Something differs."}</b>
               <span>
-                {allOk
-                  ? `Your browser rebuilt every cell, every owner and every PETRI from the plant log alone, and arrived where the contract is. The engine itself needed ${ms} ms.`
+                {replayOk
+                  ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${allOk ? "" : " One thing is not done yet: the contract account still has a full-access key, so its code could still be replaced. It is deleted before judging; after that this page shows the contract as locked."}`
                   : "A value below came out differently. That is either a bug or tampering, and either way it is worth reporting."}
               </span>
             </div>

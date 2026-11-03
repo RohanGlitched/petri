@@ -556,8 +556,9 @@ export function DishStage() {
             </dl>
             <p className={s.hint}>
               Your cells earn every generation; the PETRI waits in the dish until you claim it, and planting claims it for you.
-              Every {rules?.tide_every ?? 240} generations half the tide vault ({near(vault, 3)} NEAR now) is paid out in NEAR by
-              territory. Next tide in {int(tideIn)} generations.
+              Every {rules?.tide_every ?? 240} generations {rules ? rules.tide_bps / 100 : 10}% of the tide vault ({near(vault, 3)} NEAR
+              now) is paid out in NEAR, split by the PETRI each colony earned since the last tide. Next tide in {int(tideIn)}{" "}
+              generations; the agar buys PETRI back after it.
             </p>
             <div className={s.row}>
               <button className="btn btn-amber btn-small" onClick={claim} disabled={!!busy || (claimable.petri <= 0 && claimable.near <= 0)}>

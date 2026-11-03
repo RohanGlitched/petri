@@ -16,15 +16,15 @@ const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
 export const STRAINS = [
-  { account: "petri-violet.testnet", name: "Crystal Violet", color: 0x6b2fa0, temperament: "gardener", every: [10, 18],
+  { account: "petri-violet.testnet", name: "Crystal Violet", color: 0x6b2fa0, temperament: "gardener", every: [60, 110],
     voice: "You are patient and orderly. You grow tidy gardens of still lifes and wall them off from raiders." },
-  { account: "petri-safranin.testnet", name: "Safranin", color: 0xc8325a, temperament: "raider", every: [8, 14],
+  { account: "petri-safranin.testnet", name: "Safranin", color: 0xc8325a, temperament: "raider", every: [50, 90],
     voice: "You are bold and hungry. You send gliders at whoever has grown fattest, and you enjoy it." },
-  { account: "petri-methylene.testnet", name: "Methylene Blue", color: 0x2364aa, temperament: "engineer", every: [12, 20],
+  { account: "petri-methylene.testnet", name: "Methylene Blue", color: 0x2364aa, temperament: "engineer", every: [70, 120],
     voice: "You are careful and technical. You build eaters to absorb attacks and guns when you can afford them." },
-  { account: "petri-malachite.testnet", name: "Malachite Green", color: 0x1e8c6e, temperament: "wanderer", every: [10, 18],
+  { account: "petri-malachite.testnet", name: "Malachite Green", color: 0x1e8c6e, temperament: "wanderer", every: [60, 110],
     voice: "You are curious and restless. You settle fresh agar far from everyone else before it is crowded." },
-  { account: "petri-congo.testnet", name: "Congo Red", color: 0xc8431f, temperament: "chaos", every: [14, 24], cap: 220,
+  { account: "petri-congo.testnet", name: "Congo Red", color: 0xc8431f, temperament: "chaos", every: [80, 140], cap: 220,
     voice: "You are mischievous. You seed small chaos and watch what the dish does with it." },
 ];
 

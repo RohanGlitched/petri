@@ -14,9 +14,11 @@ export default function VerifyPage() {
         <header className={s.head}>
           <h1 className={s.title}>Rebuild the dish from nothing</h1>
           <p className="lede">
-            The contract keeps a log of every planting and every colony that joined. That is all anyone needs: Life is
-            deterministic, so replaying the log from an empty dish must land on exactly the board, the history chain and the
-            balances the contract holds. This page does it now, in your browser, with the same Rust code the contract runs.
+            The contract keeps one ordered ledger: every colony that joined, every purchase and sale, every planting and every
+            tide, with the PETRI and NEAR each moved. That is all anyone needs: Life is deterministic, so replaying the ledger
+            from an empty dish must land on exactly the board, the history chain, the PETRI balances and the NEAR vault the
+            contract holds. This page does it now, in your browser, with the same Rust code the contract runs, reading
+            everything from one final block.
           </p>
         </header>
         <VerifyRun />
@@ -28,7 +30,7 @@ export default function VerifyPage() {
             <h2 id="chain-title" className="h2">How the history chain is built</h2>
             <p className="lede">
               Every sixteenth generation the contract hashes the board (each living cell and its owner) and folds that hash into
-              a running chain. Every 240th generation it stores the chain as a checkpoint. Change one cell anywhere in the past
+              a running chain. At every tide, each 240th generation, the ledger records the chain. Change one cell anywhere in the past
               and every later link changes.
             </p>
           </div>
@@ -54,13 +56,13 @@ export default function VerifyPage() {
           </svg>
           <ol className={s.steps}>
             <li>
-              <p>Your browser reads the rules, the colonies with the generation each joined at, the full plant log and the checkpoints from {CONTRACT}. Nothing else.</p>
+              <p>Your browser reads the rules, the colonies, the whole ledger, each colony's earnings and tide winnings, and the contract account's keys from {CONTRACT}, all at one final block. Nothing else.</p>
             </li>
             <li>
-              <p>It starts petri-core on an empty dish with all 1,000,000 PETRI in the agar, then applies each join and planting at its generation and steps Life in between, feeding the living exactly as the contract does.</p>
+              <p>It starts petri-core on an empty dish with all 1,000,000 PETRI in the agar and an empty vault, then applies each entry at its generation: it checks every planting is legal and paid the formula's price, every purchase and sale followed the curve, and every tide paid the right share of the vault, split the right way. Between entries it steps Life and feeds the living exactly as the contract does.</p>
             </li>
             <li>
-              <p>At every checkpoint and at the end it compares hashes and balances with the contract. A match means the dish you see is the dish the rules produced.</p>
+              <p>At every tide and at the end it compares hashes, PETRI and NEAR with the contract. A match means the dish you see, and every coin and NEAR in it, is what the rules produced.</p>
             </li>
           </ol>
         </div>

@@ -164,10 +164,11 @@ export function CoinBand() {
             <h3 className="h3">The tide pays NEAR to whoever holds ground</h3>
             <p className="muted">
               Every NEAR that comes in, from buying PETRI and from the small fee on each planting, waits in the tide vault
-              (minus the storage it pays for). Every {rules ? rules.tide_every : 240} generations, about an hour, half of the
+              (minus the storage it pays for). Every {rules ? rules.tide_every : 240} generations, about an hour, a tenth of the
               vault is paid out to colonies in proportion to the PETRI each earned since the last tide, so arriving just before
-              a tide wins almost nothing. The dish&rsquo;s own AI strains take no share. Between tides the agar also buys
-              PETRI back at half the curve&rsquo;s price, up to a tenth of the vault, so what you earn always has a NEAR floor.
+              a tide wins almost nothing. The dish&rsquo;s own AI strains are never fed and take no share: they buy every PETRI
+              they plant with, and that NEAR goes to you. Between tides the agar also buys PETRI back at half the curve&rsquo;s
+              price, never more than that PETRI&rsquo;s share of the vault, so what you earn can always be turned into NEAR.
               You claim it whenever you like.
             </p>
           </div>
