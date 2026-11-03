@@ -3,6 +3,7 @@ name = "petri-contract"
 version = "0.3.0"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/RohanGlitched/petri"
 description = "The Petri dish on NEAR: Life with colony ownership, and the PETRI token it mints."
 
 [lib]
