@@ -79,12 +79,12 @@ const RULES: { title: string; body: string; cells: number[]; result: number; lab
 // Three L-shaped trios, owned by one, two and three colonies. Simulated with petri-core: the first two become blocks
 // after one generation; the third is contested every generation and never changes.
 const TRIO: Seed[] = [
-  { colony: 1, x: 3, y: 3, cells: [[0, 0], [1, 0], [0, 1]] },
-  { colony: 1, x: 11, y: 3, cells: [[0, 0], [1, 0]] },
-  { colony: 2, x: 11, y: 4, cells: [[0, 0]] },
-  { colony: 1, x: 19, y: 3, cells: [[0, 0]] },
-  { colony: 2, x: 20, y: 3, cells: [[0, 0]] },
-  { colony: 3, x: 19, y: 4, cells: [[0, 0]] },
+  { colony: 1, x: 5, y: 3, cells: [[0, 0], [1, 0], [0, 1]] },
+  { colony: 1, x: 17, y: 3, cells: [[0, 0], [1, 0]] },
+  { colony: 2, x: 17, y: 4, cells: [[0, 0]] },
+  { colony: 1, x: 29, y: 3, cells: [[0, 0]] },
+  { colony: 2, x: 30, y: 3, cells: [[0, 0]] },
+  { colony: 3, x: 29, y: 4, cells: [[0, 0]] },
 ];
 
 // Three gliders that meet on a 40 × 22 dish. Simulated with petri-core: with three owners, one birth at generation 13
@@ -182,9 +182,9 @@ export function LifeSection() {
         </ul>
 
         <figure className={`${s.figure} ${s.trio}`}>
-          <div className={s.dish} style={{ aspectRatio: "24 / 8" }}>
+          <div className={s.dish} style={{ aspectRatio: "36 / 8" }}>
             <RuleDemo
-              width={24}
+              width={36}
               height={8}
               seeds={TRIO}
               loop={3}

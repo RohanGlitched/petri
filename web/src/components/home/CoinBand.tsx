@@ -114,7 +114,7 @@ export function CoinBand() {
           <p className="lede">
             All {rules ? petri(max) : "1,000,000"} PETRI were made at launch and placed in the agar. Nobody can mint more. Living
             cells are fed from the agar; planting new life feeds it back, and burns as much again. Fill the dish and planting
-            gets dearer; let it empty and the agar grows richer for whoever survives.
+            gets dearer; thin it out and every surviving cell takes a bigger share of the feed.
           </p>
         </div>
         <div className={s.coinGrid}>

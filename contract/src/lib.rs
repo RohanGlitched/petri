@@ -382,6 +382,7 @@ impl Petri {
         }
         self.store_dish(&dish);
         let mut total = 0u128;
+        let mut paid_to: Vec<(AccountId, u128)> = Vec::new();
         for (c, amount) in earned.into_iter().enumerate().skip(1) {
             if amount == 0 {
                 continue;
@@ -391,17 +392,19 @@ impl Petri {
             let account = colony.account.clone();
             self.colonies.set(c as u32 - 1, colony);
             self.credit(&account, amount);
+            paid_to.push((account, amount));
             total += amount;
         }
         if keeper_total > 0 {
             self.credit(keeper, keeper_total);
             self.keeper_paid += keeper_total;
+            paid_to.push((keeper.clone(), keeper_total));
             total += keeper_total;
         }
         self.agar -= total;
         self.fed += total;
         if total > 0 {
-            token::emit_transfer_pub(&env::current_account_id(), keeper, total, "the agar feeds the living");
+            token::emit_transfers_from(&env::current_account_id(), &paid_to, "the agar feeds the living");
         }
         emit("generation", json!({ "from": U64(self.generation - ran), "to": U64(self.generation), "live": self.total_live, "minted": U128(total), "keeper": keeper }));
         ran

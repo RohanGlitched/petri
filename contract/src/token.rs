@@ -44,6 +44,17 @@ pub(crate) fn emit_transfer_pub(from: &AccountId, to: &AccountId, amount: u128, 
     emit_transfer(from, to, amount, Some(memo));
 }
 
+/// One NEP-141 transfer entry per recipient, in events of at most 80 entries so each log stays well under 16 KB.
+pub(crate) fn emit_transfers_from(from: &AccountId, to: &[(AccountId, u128)], memo: &str) {
+    for chunk in to.chunks(80) {
+        let data: Vec<_> = chunk
+            .iter()
+            .map(|(who, amount)| json!({ "old_owner_id": from, "new_owner_id": who, "amount": U128(*amount), "memo": memo }))
+            .collect();
+        log!("EVENT_JSON:{}", json!({ "standard": "nep141", "version": "1.0.0", "event": "ft_transfer", "data": data }));
+    }
+}
+
 pub(crate) fn emit_burn(owner: &AccountId, amount: u128, memo: &str) {
     log!("EVENT_JSON:{}", json!({ "standard": "nep141", "version": "1.0.0", "event": "ft_burn", "data": [{ "owner_id": owner, "amount": U128(amount), "memo": memo }] }));
 }

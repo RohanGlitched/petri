@@ -356,3 +356,28 @@ fn an_empty_dish_feeds_nobody() {
     assert_eq!(bal(&c, "keeper.testnet"), 0);
     conserved(&c, &["alice.testnet"]);
 }
+
+#[test]
+fn feeding_logs_a_transfer_to_each_recipient() {
+    let mut c = new_dish();
+    at("alice.testnet", 1_000_000);
+    c.join("Alice".into(), 1);
+    c.plant(cells(2, 2, patterns::BLOCK), None);
+    at("bob.testnet", 1_000_000);
+    c.join("Bob".into(), 2);
+    c.plant(cells(20, 20, patterns::BEEHIVE), None);
+    at("keeper.testnet", 1_000_000 + GEN_MS);
+    c.advance(None);
+    let logs = near_sdk::test_utils::get_logs();
+    let feed: Vec<near_sdk::serde_json::Value> = logs
+        .iter()
+        .filter_map(|l| l.strip_prefix("EVENT_JSON:"))
+        .map(|j| near_sdk::serde_json::from_str::<near_sdk::serde_json::Value>(j).unwrap())
+        .filter(|e| e["event"] == "ft_transfer" && e["data"][0]["memo"] == "the agar feeds the living")
+        .collect();
+    assert_eq!(feed.len(), 1);
+    let to: Vec<&str> = feed[0]["data"].as_array().unwrap().iter().map(|d| d["new_owner_id"].as_str().unwrap()).collect();
+    assert_eq!(to, vec!["alice.testnet", "bob.testnet", "keeper.testnet"]);
+    let sum: u128 = feed[0]["data"].as_array().unwrap().iter().map(|d| d["amount"].as_str().unwrap().parse::<u128>().unwrap()).sum();
+    assert_eq!(sum, c.state().fed.0);
+}
