@@ -90,7 +90,7 @@ export function candidates(world, me, balance, rng, limit = 6) {
   const mine = centres.get(me.id);
   const rivals = [...centres.entries()].filter(([c]) => c !== me.id).map(([c, v]) => ({ id: c, ...v, name: colonies.find((x) => x.id === c)?.name ?? `colony ${c}` }));
   const totalLive = world.totalLive;
-  const price = (n) => Number(quote(rules.plant_cost, n, totalLive, rules.capacity));
+  const price = (n) => Number(quote(engine.agar(), rules.feed_ppm, rules.keeper_bps, totalLive, rules.live_floor, rules.payback, rules.min_cell_price, n));
   const out = [];
   const seen = new Set();
 
@@ -102,7 +102,9 @@ export function candidates(world, me, balance, rng, limit = 6) {
     const cost = price(idx.length);
     if (cost > balance * 0.6) return false;
     seen.add(key);
-    out.push({ pattern, x: ((x % w) + w) % w, y: ((y % h) + h) % h, rot, cells: idx, cost, why });
+    const px = ((x % w) + w) % w;
+    const py = ((y % h) + h) % h;
+    out.push({ pattern, x: px, y: py, rot, cells: idx, cost, why: `${why} at ${px}, ${py}` });
     return true;
   };
 

@@ -60,11 +60,16 @@ function serve() {
     .listen(PORT, () => log(`log window on :${PORT}`));
 }
 
+const YOCTO = 10n ** 24n;
+const JOIN_NEAR = (YOCTO * 5n) / 100n; // a strain brings 0.05 NEAR, which buys its first PETRI
+const TOP_UP_NEAR = (YOCTO * 2n) / 100n;
+const lastClaim = new Map();
+
 async function ensureJoined(s, colonies) {
   const c = colonies.find((x) => x.account === s.account);
   if (c) return c;
   log(s.name, "joining");
-  await callDish(s.account, "join", { name: s.name, color: s.color }, 100);
+  await callDish(s.account, "join", { name: s.name, color: s.color }, 200, JOIN_NEAR);
   return (await view("colony_of", { account_id: s.account })) ?? null;
 }
 
@@ -73,7 +78,29 @@ async function act(s) {
   const me = await ensureJoined(s, world.colonies);
   if (!me) return;
   if (me.last_plant_generation !== null && Number(me.last_plant_generation) >= world.due) return;
-  const balance = Number(await view("ft_balance_of", { account_id: s.account }));
+  // Earnings waiting to be claimed count: planting claims them first.
+  const [held, waiting] = await Promise.all([view("ft_balance_of", { account_id: s.account }), view("claimable", { account_id: s.account })]);
+  let balance = Number(held) + Number(waiting.petri);
+  // A strain that cannot afford three blocks buys a little PETRI from the agar, like anyone would.
+  if (balance < Number(world.state.cell_price) * 12) {
+    try {
+      const r = await callDish(s.account, "buy", {}, 150, TOP_UP_NEAR);
+      log(s.name, "bought PETRI from the agar", r.hash);
+      balance = Number(await view("ft_balance_of", { account_id: s.account }));
+    } catch (e) {
+      log(s.name, "buy refused:", e instanceof Error ? e.message : e);
+    }
+  }
+  // Every few hours a strain collects the NEAR it won at the tides.
+  if (Number(waiting.near) > 0 && Date.now() - (lastClaim.get(s.account) ?? 0) > 3 * 3600_000) {
+    try {
+      await callDish(s.account, "claim", {}, 150);
+      lastClaim.set(s.account, Date.now());
+      log(s.name, "claimed", (Number(waiting.near) / 1e24).toFixed(5), "NEAR from the tides");
+    } catch (e) {
+      log(s.name, "claim refused:", e instanceof Error ? e.message : e);
+    }
+  }
   const totalLive = world.engine.total_live();
   const myCells = world.engine.live_counts()[me.id] ?? 0;
   const cands = candidates({ ...world, totalLive }, { id: me.id, temperament: s.temperament, cap: s.cap }, balance, rng);
@@ -99,7 +126,8 @@ async function act(s) {
   const chosen = pick ? cands[pick.index] : cands[0];
   const note = pick?.note || chosen.why.charAt(0).toUpperCase() + chosen.why.slice(1) + ".";
   try {
-    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 150);
+    const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
+    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 200, BigInt(deposit));
     log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", note, r.hash);
     record({
       at: new Date().toISOString(),
@@ -125,10 +153,17 @@ async function act(s) {
   }
 }
 
+let keeperRegistered = false;
 async function keep() {
+  if (!keeperRegistered) {
+    const reg = await view("storage_balance_of", { account_id: KEEPER });
+    if (!reg) await callDish(KEEPER, "storage_deposit", {}, 30, (YOCTO * 2n) / 1000n);
+    keeperRegistered = true;
+  }
   const st = await view("state");
   const behind = Number(st.due_generation) - Number(st.generation);
-  if (behind >= 20) {
+  // Advance when the stored board falls behind, or when the keeper pot is worth collecting.
+  if (behind >= 20 || Number(st.keeper_pot) > 5_000_000) {
     try {
       const r = await callDish(KEEPER, "advance", {}, 250);
       log("keeper advanced", behind, "due generation(s)", r.hash);

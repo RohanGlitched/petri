@@ -265,3 +265,50 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn the_feed_cap_bounds_one_colony_and_splitting_gains_nothing() {
+    // One colony with 900 of 1,000 living cells counts as the cap (15% = 150 cells).
+    let w = feed_weights(&[0, 900, 100], 1_500, 64);
+    assert_eq!(w, vec![0, 150, 100]);
+    let f = feed(1_000_000_000_000, 10, 200, 1_500, 64, &[0, 900, 100]);
+    assert_eq!(f.keeper, 10_000_000 * 200 / 10_000);
+    assert!(f.shares[1] * 100 / (f.shares[1] + f.shares[2]) == 60, "{:?}", f.shares);
+    assert!(f.paid <= 10_000_000);
+    // Ten small colonies of 10 earn exactly what one colony of 100 earns: weights are linear below the cap.
+    let one = feed(1_000_000_000_000, 10, 200, 1_500, 64, &[0, 100, 900]);
+    let mut many = vec![0u32];
+    many.extend(std::iter::repeat(10).take(10));
+    many.push(900);
+    let ten = feed(1_000_000_000_000, 10, 200, 1_500, 64, &many);
+    let ten_total: u128 = ten.shares[1..11].iter().sum();
+    assert!(ten_total.abs_diff(one.shares[1]) <= 10, "{} vs {}", ten_total, one.shares[1]);
+}
+
+#[test]
+fn an_empty_dish_is_fed_nothing() {
+    let f = feed(1_000_000_000_000, 10, 200, 1_500, 64, &[0, 0, 0]);
+    assert_eq!(f.paid, 0);
+    assert_eq!(f.keeper, 0);
+}
+
+#[test]
+fn the_agar_gets_dearer_as_it_empties() {
+    let k = 200_000_000_000_000u128 * 1_000_000_000_000; // 0.0002 NEAR per PETRI × a million PETRI
+    let near = 10u128.pow(22); // 0.01 NEAR
+    let full = petri_for_near(near, 1_000_000_000_000, k);
+    let half = petri_for_near(near, 500_000_000_000, k);
+    assert!(full > 49_000_000 && full <= 50_000_000, "{}", full); // about 50 PETRI at launch
+    assert!(half * 2 <= full + 1 && half * 2 >= full - 2, "half the agar, half the PETRI: {} vs {}", half, full);
+    assert_eq!(petri_for_near(near, 0, k), 0);
+    // A purchase can never take more than the agar holds.
+    assert!(petri_for_near(10u128.pow(30), 1_000, k) <= 1_000);
+}
+
+#[test]
+fn the_plant_price_follows_the_feed_with_a_floor() {
+    let per = feed_per_cell(1_000_000_000_000, 10, 200, 100, 1_000);
+    assert_eq!(per, 10_000_000 * 98 / 100 / 1_000);
+    assert_eq!(plant_price(per, 480, 500_000, 4), 4 * per * 480);
+    assert_eq!(plant_price(0, 480, 500_000, 4), 2_000_000);
+}

@@ -1,0 +1,126 @@
+launch-like / 6Builder+3Raider+2Defender+4Late: day 7: live 1130 (peak 1807), supply 944568, agar 484869, fed 569603, burned 55432, keeper pot 11392, largest colony 18% of cells, gini of earnings 0.30
+    Builder x6: earned 46150 each (50% of all), spent 8869 each, earned/spent 5.20, first day 9949.9 each, NEAR paid 0.4484 each, NEAR won 0.4528 each
+    Raider x3: earned 47848 each (26% of all), spent 7034 each, earned/spent 6.80, first day 11199.3 each, NEAR paid 0.3567 each, NEAR won 0.4568 each
+    Defender x2: earned 42772 each (15% of all), spent 10647 each, earned/spent 4.02, first day 7158.3 each, NEAR paid 0.5373 each, NEAR won 0.4135 each
+    Late x4: earned 13055 each (9% of all), spent 3814 each, earned/spent 3.42, first day 2502.4 each, NEAR paid 0.1957 each, NEAR won 0.1673 each
+launch-like / 6Builder+3Raider+2Defender+1Methuselah+4Late: day 7: live 1180 (peak 1852), supply 941435, agar 486739, fed 570802, burned 58565, keeper pot 11416, largest colony 35% of cells, gini of earnings 0.56
+    Builder x6: earned 22047 each (24% of all), spent 6927 each, earned/spent 3.18, first day 3896.5 each, NEAR paid 0.3513 each, NEAR won 0.2314 each
+    Raider x3: earned 26062 each (14% of all), spent 6329 each, earned/spent 4.12, first day 4688.5 each, NEAR paid 0.3214 each, NEAR won 0.2577 each
+    Defender x2: earned 20539 each (7% of all), spent 6105 each, earned/spent 3.36, first day 3487.5 each, NEAR paid 0.3102 each, NEAR won 0.2184 each
+    Methuselah x1: earned 274707 each (49% of all), spent 33520 each, earned/spent 8.20, first day 63439.4 each, NEAR paid 1.6810 each, NEAR won 2.8804 each
+    Late x4: earned 8284 each (6% of all), spent 2713 each, earned/spent 3.05, first day 2134.3 each, NEAR paid 0.1406 each, NEAR won 0.1054 each
+launch-like / 6Builder+3Raider+2Defender+1Whale+30Sybil+4Late: day 7: live 994 (peak 1803), supply 930929, agar 493447, fed 572680, burned 69071, keeper pot 11454, largest colony 19% of cells, gini of earnings 0.74
+    Builder x6: earned 41661 each (45% of all), spent 10633 each, earned/spent 3.92, first day 8777.6 each, NEAR paid 0.5367 each, NEAR won 0.5084 each
+    Raider x3: earned 30326 each (16% of all), spent 5289 each, earned/spent 5.73, first day 8052.3 each, NEAR paid 0.2695 each, NEAR won 0.3696 each
+    Defender x2: earned 26088 each (9% of all), spent 5844 each, earned/spent 4.46, first day 4182.7 each, NEAR paid 0.2972 each, NEAR won 0.3285 each
+    Whale x1: earned 86161 each (15% of all), spent 25968 each, earned/spent 3.32, first day 16784.7 each, NEAR paid 1.3034 each, NEAR won 1.1056 each
+    Sybil x30: earned 201 each (1% of all), spent 8 each, earned/spent 25.08, first day 200.7 each, NEAR paid 0.0054 each, NEAR won 0.0022 each
+    Late x4: earned 18982 each (14% of all), spent 5144 each, earned/spent 3.69, first day 4891.3 each, NEAR paid 0.2622 each, NEAR won 0.2777 each
+v2 / 6Builder+3Raider+2Defender+4Late: day 7: live 962 (peak 1639), supply 905825, agar 742662, fed 347870, burned 94175, keeper pot 6957, largest colony 22% of cells, gini of earnings 0.34
+    Builder x6: earned 29494 each (52% of all), spent 16785 each, earned/spent 1.76, first day 5173.7 each, NEAR paid 0.4952 each, NEAR won 0.4911 each
+    Raider x3: earned 29568 each (26% of all), spent 13436 each, earned/spent 2.20, first day 4783.0 each, NEAR paid 0.4072 each, NEAR won 0.5048 each
+    Defender x2: earned 32820 each (19% of all), spent 20258 each, earned/spent 1.62, first day 5045.9 each, NEAR paid 0.5859 each, NEAR won 0.5602 each
+    Late x4: earned 2401 each (3% of all), spent 1704 each, earned/spent 1.41, first day 719.1 each, NEAR paid 0.1017 each, NEAR won 0.0398 each
+v2 / 6Builder+3Raider+2Defender+1Methuselah+4Late: day 7: live 1253 (peak 1846), supply 901664, agar 745951, fed 348249, burned 98336, keeper pot 6965, largest colony 66% of cells, gini of earnings 0.36
+    Builder x6: earned 21946 each (39% of all), spent 11666 each, earned/spent 1.88, first day 3606.4 each, NEAR paid 0.4011 each, NEAR won 0.4363 each
+    Raider x3: earned 22096 each (19% of all), spent 10705 each, earned/spent 2.06, first day 4111.7 each, NEAR paid 0.3731 each, NEAR won 0.4281 each
+    Defender x2: earned 17382 each (10% of all), spent 10386 each, earned/spent 1.67, first day 3049.5 each, NEAR paid 0.3634 each, NEAR won 0.3439 each
+    Methuselah x1: earned 78602 each (23% of all), spent 56313 each, earned/spent 1.40, first day 15409.6 each, NEAR paid 1.7810 each, NEAR won 1.5998 each
+    Late x4: earned 7488 each (9% of all), spent 4368 each, earned/spent 1.71, first day 1971.0 each, NEAR paid 0.1930 each, NEAR won 0.1448 each
+v2 / 6Builder+3Raider+2Defender+1Whale+30Sybil+4Late: day 7: live 1142 (peak 1616), supply 894216, agar 743930, fed 345344, burned 105784, keeper pot 6907, largest colony 14% of cells, gini of earnings 0.75
+    Builder x6: earned 20422 each (36% of all), spent 13581 each, earned/spent 1.50, first day 3428.3 each, NEAR paid 0.4185 each, NEAR won 0.5824 each
+    Raider x3: earned 23208 each (21% of all), spent 9879 each, earned/spent 2.35, first day 3992.6 each, NEAR paid 0.3198 each, NEAR won 0.5105 each
+    Defender x2: earned 22699 each (13% of all), spent 10888 each, earned/spent 2.08, first day 3893.1 each, NEAR paid 0.3462 each, NEAR won 0.5925 each
+    Whale x1: earned 51097 each (15% of all), spent 50780 each, earned/spent 1.01, first day 8544.2 each, NEAR paid 3.3574 each, NEAR won 1.4486 each
+    Sybil x30: earned 215 each (2% of all), spent 19 each, earned/spent 11.50, first day 209.5 each, NEAR paid 0.0254 each, NEAR won 0.0246 each
+    Late x4: earned 10832 each (13% of all), spent 6832 each, earned/spent 1.59, first day 2510.5 each, NEAR paid 0.2476 each, NEAR won 0.2092 each
+v2-uncapped / 6Builder+3Raider+2Defender+4Late: day 7: live 1430 (peak 1511), supply 917295, agar 733153, fed 345913, burned 82705, keeper pot 6918, largest colony 37% of cells, gini of earnings 0.45
+    Builder x6: earned 27997 each (50% of all), spent 14226 each, earned/spent 1.97, first day 4804.4 each, NEAR paid 0.4223 each, NEAR won 0.4171 each
+    Raider x3: earned 23189 each (21% of all), spent 10764 each, earned/spent 2.15, first day 5064.9 each, NEAR paid 0.3325 each, NEAR won 0.3510 each
+    Defender x2: earned 45204 each (27% of all), spent 20628 each, earned/spent 2.19, first day 5759.9 each, NEAR paid 0.5882 each, NEAR won 0.6815 each
+    Late x4: earned 2760 each (3% of all), spent 1627 each, earned/spent 1.70, first day 1053.0 each, NEAR paid 0.0991 each, NEAR won 0.0399 each
+v2-uncapped / 6Builder+3Raider+2Defender+1Methuselah+4Late: day 7: live 1037 (peak 1752), supply 935493, agar 717620, fed 342760, burned 64507, keeper pot 6855, largest colony 83% of cells, gini of earnings 0.79
+    Builder x6: earned 7683 each (14% of all), spent 4266 each, earned/spent 1.80, first day 1782.2 each, NEAR paid 0.1740 each, NEAR won 0.1136 each
+    Raider x3: earned 14897 each (13% of all), spent 8580 each, earned/spent 1.74, first day 2243.2 each, NEAR paid 0.2971 each, NEAR won 0.1882 each
+    Defender x2: earned 10905 each (6% of all), spent 6586 each, earned/spent 1.66, first day 2674.3 each, NEAR paid 0.2407 each, NEAR won 0.1471 each
+    Methuselah x1: earned 210539 each (63% of all), spent 59032 each, earned/spent 3.57, first day 32901.3 each, NEAR paid 1.7810 each, NEAR won 2.8515 each
+    Late x4: earned 3191 each (4% of all), spent 1369 each, earned/spent 2.33, first day 896.1 each, NEAR paid 0.0956 each, NEAR won 0.0418 each
+v2-uncapped / 6Builder+3Raider+2Defender+1Whale+30Sybil+4Late: day 7: live 1083 (peak 1617), supply 898914, agar 739852, fed 344725, burned 101086, keeper pot 6894, largest colony 41% of cells, gini of earnings 0.81
+    Builder x6: earned 16738 each (30% of all), spent 11020 each, earned/spent 1.52, first day 3526.9 each, NEAR paid 0.3490 each, NEAR won 0.4856 each
+    Raider x3: earned 22326 each (20% of all), spent 9866 each, earned/spent 2.26, first day 4057.2 each, NEAR paid 0.3197 each, NEAR won 0.4730 each
+    Defender x2: earned 20766 each (12% of all), spent 10654 each, earned/spent 1.95, first day 1783.5 each, NEAR paid 0.3412 each, NEAR won 0.4772 each
+    Whale x1: earned 96846 each (29% of all), spent 65607 each, earned/spent 1.48, first day 15291.2 each, NEAR paid 3.7576 each, NEAR won 2.5043 each
+    Sybil x30: earned 96 each (1% of all), spent 19 each, earned/spent 5.10, first day 95.6 each, NEAR paid 0.0254 each, NEAR won 0.0208 each
+    Late x4: earned 7295 each (9% of all), spent 4744 each, earned/spent 1.54, first day 1713.4 each, NEAR paid 0.1893 each, NEAR won 0.1396 each
+v2-cap-10 / 6Builder+3Raider+2Defender+4Late: day 7: live 908 (peak 1620), supply 910316, agar 738943, fed 347099, burned 89684, keeper pot 6942, largest colony 19% of cells, gini of earnings 0.34
+    Builder x6: earned 25202 each (44% of all), spent 14265 each, earned/spent 1.77, first day 4777.3 each, NEAR paid 0.4260 each, NEAR won 0.4086 each
+    Raider x3: earned 27969 each (25% of all), spent 13440 each, earned/spent 2.08, first day 4635.0 each, NEAR paid 0.4053 each, NEAR won 0.4535 each
+    Defender x2: earned 38092 each (22% of all), spent 20385 each, earned/spent 1.87, first day 6448.0 each, NEAR paid 0.5857 each, NEAR won 0.6142 each
+    Late x4: earned 7215 each (8% of all), spent 3172 each, earned/spent 2.27, first day 1723.5 each, NEAR paid 0.1432 each, NEAR won 0.1117 each
+v2-cap-10 / 6Builder+3Raider+2Defender+1Methuselah+4Late: day 7: live 1130 (peak 1827), supply 903035, agar 744736, fed 348093, burned 96965, keeper pot 6962, largest colony 53% of cells, gini of earnings 0.34
+    Builder x6: earned 21271 each (37% of all), spent 11573 each, earned/spent 1.84, first day 3942.6 each, NEAR paid 0.4013 each, NEAR won 0.4153 each
+    Raider x3: earned 27239 each (24% of all), spent 10533 each, earned/spent 2.59, first day 4442.5 each, NEAR paid 0.3712 each, NEAR won 0.5336 each
+    Defender x2: earned 19445 each (11% of all), spent 10207 each, earned/spent 1.91, first day 3373.7 each, NEAR paid 0.3608 each, NEAR won 0.3961 each
+    Methuselah x1: earned 60555 each (18% of all), spent 55739 each, earned/spent 1.09, first day 11724.9 each, NEAR paid 1.7810 each, NEAR won 1.2306 each
+    Late x4: earned 8085 each (9% of all), spent 4185 each, earned/spent 1.93, first day 2970.2 each, NEAR paid 0.1895 each, NEAR won 0.1576 each
+v2-cap-10 / 6Builder+3Raider+2Defender+1Whale+30Sybil+4Late: day 7: live 1245 (peak 1648), supply 885690, agar 750133, fed 347662, burned 114310, keeper pot 6953, largest colony 21% of cells, gini of earnings 0.73
+    Builder x6: earned 24410 each (43% of all), spent 16952 each, earned/spent 1.44, first day 4617.6 each, NEAR paid 0.5254 each, NEAR won 0.6990 each
+    Raider x3: earned 23300 each (21% of all), spent 9483 each, earned/spent 2.46, first day 3896.2 each, NEAR paid 0.3207 each, NEAR won 0.5881 each
+    Defender x2: earned 19027 each (11% of all), spent 10320 each, earned/spent 1.84, first day 2775.0 each, NEAR paid 0.3437 each, NEAR won 0.5663 each
+    Whale x1: earned 42309 each (12% of all), spent 51707 each, earned/spent 0.82, first day 6864.5 each, NEAR paid 3.4300 each, NEAR won 1.2657 each
+    Sybil x30: earned 110 each (1% of all), spent 19 each, earned/spent 5.89, first day 110.3 each, NEAR paid 0.0254 each, NEAR won 0.0247 each
+    Late x4: earned 10168 each (12% of all), spent 6387 each, earned/spent 1.59, first day 2559.1 each, NEAR paid 0.2412 each, NEAR won 0.2075 each
+v2-payback-240 / 6Builder+3Raider+2Defender+4Late: day 7: live 1477 (peak 1681), supply 949940, agar 706798, fed 339635, burned 50060, keeper pot 6793, largest colony 33% of cells, gini of earnings 0.21
+    Builder x6: earned 25980 each (47% of all), spent 8122 each, earned/spent 3.20, first day 5048.8 each, NEAR paid 0.5011 each, NEAR won 0.4947 each
+    Raider x3: earned 24698 each (22% of all), spent 6428 each, earned/spent 3.84, first day 5649.9 each, NEAR paid 0.4074 each, NEAR won 0.4524 each
+    Defender x2: earned 27715 each (17% of all), spent 9628 each, earned/spent 2.88, first day 4025.0 each, NEAR paid 0.5830 each, NEAR won 0.5501 each
+    Late x4: earned 11859 each (14% of all), spent 3212 each, earned/spent 3.69, first day 2314.4 each, NEAR paid 0.2448 each, NEAR won 0.2280 each
+v2-payback-240 / 6Builder+3Raider+2Defender+1Methuselah+4Late: day 7: live 966 (peak 1827), supply 951410, agar 705210, fed 339261, burned 48590, keeper pot 6785, largest colony 32% of cells, gini of earnings 0.33
+    Builder x6: earned 18395 each (33% of all), spent 5589 each, earned/spent 3.29, first day 3592.7 each, NEAR paid 0.4007 each, NEAR won 0.3818 each
+    Raider x3: earned 23905 each (22% of all), spent 5123 each, earned/spent 4.67, first day 4094.3 each, NEAR paid 0.3726 each, NEAR won 0.4910 each
+    Defender x2: earned 17777 each (11% of all), spent 4956 each, earned/spent 3.59, first day 3039.7 each, NEAR paid 0.3610 each, NEAR won 0.3721 each
+    Methuselah x1: earned 76668 each (23% of all), spent 26947 each, earned/spent 2.85, first day 15352.5 each, NEAR paid 1.7810 each, NEAR won 1.6509 each
+    Late x4: earned 9542 each (11% of all), spent 2854 each, earned/spent 3.34, first day 1659.8 each, NEAR paid 0.2473 each, NEAR won 0.2040 each
+v2-payback-240 / 6Builder+3Raider+2Defender+1Whale+30Sybil+4Late: day 7: live 1277 (peak 1686), supply 940700, agar 705593, fed 337214, burned 59300, keeper pot 6744, largest colony 21% of cells, gini of earnings 0.73
+    Builder x6: earned 24365 each (44% of all), spent 9342 each, earned/spent 2.61, first day 3964.9 each, NEAR paid 0.5893 each, NEAR won 0.7304 each
+    Raider x3: earned 18598 each (17% of all), spent 4648 each, earned/spent 4.00, first day 4318.8 each, NEAR paid 0.3207 each, NEAR won 0.5102 each
+    Defender x2: earned 17923 each (11% of all), spent 5083 each, earned/spent 3.53, first day 3068.3 each, NEAR paid 0.3458 each, NEAR won 0.5509 each
+    Whale x1: earned 41851 each (13% of all), spent 21348 each, earned/spent 1.96, first day 7944.3 each, NEAR paid 3.1954 each, NEAR won 1.4462 each
+    Sybil x30: earned 138 each (1% of all), spent 9 each, earned/spent 14.72, first day 137.9 each, NEAR paid 0.0254 each, NEAR won 0.0262 each
+    Late x4: earned 11664 each (14% of all), spent 4203 each, earned/spent 2.78, first day 2467.5 each, NEAR paid 0.3142 each, NEAR won 0.2782 each
+v2-payback-960 / 6Builder+3Raider+2Defender+4Late: day 7: live 1114 (peak 1504), supply 873379, agar 768479, fed 354487, burned 126621, keeper pot 7090, largest colony 45% of cells, gini of earnings 0.56
+    Builder x6: earned 23973 each (41% of all), spent 19765 each, earned/spent 1.21, first day 4756.8 each, NEAR paid 0.2977 each, NEAR won 0.2795 each
+    Raider x3: earned 35265 each (30% of all), spent 20228 each, earned/spent 1.74, first day 5300.8 each, NEAR paid 0.3062 each, NEAR won 0.3891 each
+    Defender x2: earned 48176 each (28% of all), spent 35902 each, earned/spent 1.34, first day 5680.7 each, NEAR paid 0.5071 each, NEAR won 0.5407 each
+    Late x4: earned 353 each (0% of all), spent 541 each, earned/spent 0.65, first day 350.4 each, NEAR paid 0.0618 each, NEAR won 0.0061 each
+v2-payback-960 / 6Builder+3Raider+2Defender+1Methuselah+4Late: day 7: live 1378 (peak 1757), supply 867760, agar 773241, fed 354848, burned 132240, keeper pot 7097, largest colony 58% of cells, gini of earnings 0.66
+    Builder x6: earned 13224 each (23% of all), spent 10801 each, earned/spent 1.22, first day 3196.1 each, NEAR paid 0.1994 each, NEAR won 0.1847 each
+    Raider x3: earned 42744 each (37% of all), spent 23324 each, earned/spent 1.83, first day 4704.7 each, NEAR paid 0.3683 each, NEAR won 0.5175 each
+    Defender x2: earned 19043 each (11% of all), spent 13188 each, earned/spent 1.44, first day 3699.9 each, NEAR paid 0.2313 each, NEAR won 0.2314 each
+    Methuselah x1: earned 97571 each (28% of all), spent 98028 each, earned/spent 1.00, first day 15021.1 each, NEAR paid 1.4400 each, NEAR won 1.2843 each
+    Late x4: earned 1130 each (1% of all), spent 1325 each, earned/spent 0.85, first day 1093.6 each, NEAR paid 0.0726 each, NEAR won 0.0166 each
+v2-payback-960 / 6Builder+3Raider+2Defender+1Whale+30Sybil+4Late: day 7: live 1000 (peak 1547), supply 869161, agar 763428, fed 350884, burned 130839, keeper pot 7018, largest colony 34% of cells, gini of earnings 0.87
+    Builder x6: earned 12925 each (23% of all), spent 13128 each, earned/spent 0.98, first day 2398.6 each, NEAR paid 0.2195 each, NEAR won 0.2908 each
+    Raider x3: earned 18636 each (16% of all), spent 7256 each, earned/spent 2.57, first day 4267.7 each, NEAR paid 0.1453 each, NEAR won 0.3673 each
+    Defender x2: earned 28248 each (16% of all), spent 12223 each, earned/spent 2.31, first day 6026.5 each, NEAR paid 0.2089 each, NEAR won 0.5655 each
+    Whale x1: earned 70133 each (20% of all), spent 79791 each, earned/spent 0.88, first day 12688.4 each, NEAR paid 2.9884 each, NEAR won 1.2833 each
+    Sybil x30: earned 115 each (1% of all), spent 37 each, earned/spent 3.07, first day 115.2 each, NEAR paid 0.0254 each, NEAR won 0.0250 each
+    Late x4: earned 20081 each (23% of all), spent 13945 each, earned/spent 1.44, first day 4187.6 each, NEAR paid 0.2398 each, NEAR won 0.2128 each
+v2-20ppm / 6Builder+3Raider+2Defender+4Late: day 7: live 778 (peak 1561), supply 841390, agar 550276, fed 604783, burned 158610, keeper pot 12096, largest colony 19% of cells, gini of earnings 0.39
+    Builder x6: earned 52523 each (53% of all), spent 29256 each, earned/spent 1.80, first day 10086.8 each, NEAR paid 0.4967 each, NEAR won 0.4888 each
+    Raider x3: earned 44917 each (23% of all), spent 18680 each, earned/spent 2.40, first day 8871.5 each, NEAR paid 0.3343 each, NEAR won 0.4296 each
+    Defender x2: earned 62740 each (21% of all), spent 35383 each, earned/spent 1.77, first day 10795.4 each, NEAR paid 0.5883 each, NEAR won 0.6024 each
+    Late x4: earned 4329 each (3% of all), spent 3720 each, earned/spent 1.16, first day 1769.4 each, NEAR paid 0.1169 each, NEAR won 0.0429 each
+v2-20ppm / 6Builder+3Raider+2Defender+1Methuselah+4Late: day 7: live 1247 (peak 1790), supply 857207, agar 538806, fed 599951, burned 142793, keeper pot 11999, largest colony 56% of cells, gini of earnings 0.56
+    Builder x6: earned 41313 each (42% of all), spent 17342 each, earned/spent 2.38, first day 7150.2 each, NEAR paid 0.3442 each, NEAR won 0.3913 each
+    Raider x3: earned 45477 each (23% of all), spent 19019 each, earned/spent 2.39, first day 7981.5 each, NEAR paid 0.3730 each, NEAR won 0.4391 each
+    Defender x2: earned 26954 each (9% of all), spent 10964 each, earned/spent 2.46, first day 5570.8 each, NEAR paid 0.2359 each, NEAR won 0.2686 each
+    Methuselah x1: earned 147991 each (25% of all), spent 100129 each, earned/spent 1.48, first day 30996.2 each, NEAR paid 1.7810 each, NEAR won 1.4509 each
+    Late x4: earned 436 each (0% of all), spent 606 each, earned/spent 0.72, first day 434.3 each, NEAR paid 0.0648 each, NEAR won 0.0039 each
+v2-20ppm / 6Builder+3Raider+2Defender+1Whale+30Sybil+4Late: day 7: live 937 (peak 1672), supply 809090, agar 565377, fed 609108, burned 190910, keeper pot 12182, largest colony 20% of cells, gini of earnings 0.80
+    Builder x6: earned 44148 each (44% of all), spent 29518 each, earned/spent 1.50, first day 7056.4 each, NEAR paid 0.5135 each, NEAR won 0.6594 each
+    Raider x3: earned 37535 each (19% of all), spent 17045 each, earned/spent 2.20, first day 7828.5 each, NEAR paid 0.3193 each, NEAR won 0.5237 each
+    Defender x2: earned 41845 each (14% of all), spent 18117 each, earned/spent 2.31, first day 6242.6 each, NEAR paid 0.3377 each, NEAR won 0.6271 each
+    Whale x1: earned 105220 each (18% of all), spent 105959 each, earned/spent 0.99, first day 18580.8 each, NEAR paid 3.6304 each, NEAR won 1.6290 each
+    Sybil x30: earned 370 each (2% of all), spent 37 each, earned/spent 9.87, first day 368.9 each, NEAR paid 0.0254 each, NEAR won 0.0273 each
+    Late x4: earned 4857 each (3% of all), spent 2566 each, earned/spent 1.89, first day 1417.0 each, NEAR paid 0.0987 each, NEAR won 0.0586 each

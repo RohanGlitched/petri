@@ -473,6 +473,87 @@ pub fn plant_cost(base: u128, cells: u32, total_live: u32, capacity: u32) -> u12
 
 /// Split `emission` between colonies in proportion to their live cells. Remainders from integer division are not
 /// minted. Index 0 of the result is always 0.
+/// Each colony's claim on the feed: its living cells, but never more than `cap_bps` of all living cells (and the cap
+/// is never below `cap_min` cells). One runaway grower cannot take the whole feed, and splitting into many small
+/// accounts gains nothing, because small colonies are counted cell for cell like everyone else.
+pub fn feed_weights(live: &[u32], cap_bps: u16, cap_min: u32) -> Vec<u128> {
+    let total: u128 = live.iter().skip(1).map(|&n| n as u128).sum();
+    let cap = (total * cap_bps as u128 / 10_000).max(cap_min as u128);
+    let mut w: Vec<u128> = live.iter().map(|&n| (n as u128).min(cap)).collect();
+    if let Some(first) = w.first_mut() {
+        *first = 0;
+    }
+    w
+}
+
+/// Split `amount` in proportion to `weights` (index 0 gets nothing). Rounding dust is not paid out.
+pub fn split_by_weight(amount: u128, weights: &[u128]) -> Vec<u128> {
+    let mut out = vec![0u128; weights.len()];
+    let total: u128 = weights.iter().skip(1).sum();
+    if total == 0 {
+        return out;
+    }
+    for c in 1..weights.len() {
+        out[c] = amount * weights[c] / total;
+    }
+    out
+}
+
+/// One generation's feed from the agar.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Feed {
+    /// What each colony earns (index = colony id).
+    pub shares: Vec<u128>,
+    /// The keeper's cut, which goes to the keeper pot.
+    pub keeper: u128,
+    /// Everything that leaves the agar this generation: the shares plus the keeper's cut.
+    pub paid: u128,
+}
+
+/// The agar pays `feed_ppm` parts per million of itself; `keeper_bps` of that goes to the keeper pot and the rest is
+/// split across living colonies by capped weight (see `feed_weights`). An empty dish is fed nothing. The contract,
+/// the browser and the simulator all call this, so their books cannot drift apart.
+pub fn feed(agar: u128, feed_ppm: u32, keeper_bps: u16, cap_bps: u16, cap_min: u32, live: &[u32]) -> Feed {
+    let weights = feed_weights(live, cap_bps, cap_min);
+    if weights.iter().all(|&w| w == 0) {
+        return Feed { shares: vec![0; live.len()], keeper: 0, paid: 0 };
+    }
+    let total = agar * feed_ppm as u128 / 1_000_000;
+    let keeper = total * keeper_bps as u128 / 10_000;
+    let shares = split_by_weight(total - keeper, &weights);
+    let paid = keeper + shares.iter().sum::<u128>();
+    Feed { shares, keeper, paid }
+}
+
+/// What a single living cell earns per generation on average at today's feed, counting at least `live_floor` cells
+/// so the price stays sane on a nearly empty dish.
+pub fn feed_per_cell(agar: u128, feed_ppm: u32, keeper_bps: u16, total_live: u32, live_floor: u32) -> u128 {
+    let total = agar * feed_ppm as u128 / 1_000_000;
+    let to_cells = total - total * keeper_bps as u128 / 10_000;
+    to_cells / total_live.max(live_floor).max(1) as u128
+}
+
+/// The price of planting `cells` cells: what that many average cells would earn in `payback` generations at today's
+/// feed, and never less than `floor` per cell. The price follows the feed: it falls as the agar shrinks or the dish
+/// fills, and a planting only pays for itself if its cells survive about `payback` generations.
+pub fn plant_price(per_cell_feed: u128, payback: u32, floor: u128, cells: u32) -> u128 {
+    (per_cell_feed * payback as u128).max(floor) * cells as u128
+}
+
+/// PETRI bought from the agar for `deposit` yoctoNEAR. The price per PETRI is `k / agar` (where `k` is the launch
+/// price times the full supply), so it rises as the agar empties; the purchase is priced at the midpoint of the
+/// curve it moves along. Returns PETRI units.
+pub fn petri_for_near(deposit: u128, agar: u128, k: u128) -> u128 {
+    if agar == 0 || k == 0 {
+        return 0;
+    }
+    // units = agar * deposit / (k + deposit / 2), computed without overflow for deposits up to a few hundred NEAR.
+    let denom = k + deposit / 2;
+    let whole = agar / denom * deposit;
+    let rest = (agar % denom) * deposit / denom;
+    (whole + rest).min(agar)
+}
+
 pub fn split_emission(emission: u128, live: &[u32], total_live: u32) -> Vec<u128> {
     let mut out = vec![0u128; live.len()];
     if total_live == 0 {

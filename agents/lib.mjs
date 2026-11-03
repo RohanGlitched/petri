@@ -4,14 +4,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Account, JsonRpcProvider, actions } from "near-api-js";
-import { initSync, Engine, pattern_cells, quote } from "../web/src/engine/pkg/petri.js";
+import { pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-initSync({ module: fs.readFileSync(path.join(here, "../web/src/engine/pkg/petri_bg.wasm")) });
+// The engine package: the site's copy by default, or another build (PETRI_PKG_DIR) while a new one is staged.
+const PKG = process.env.PETRI_PKG_DIR ?? path.join(here, "../web/src/engine/pkg");
+const { initSync, Engine, pattern_cells, quote } = await import(pathToFileURL(path.join(PKG, "petri.js")).href);
+initSync({ module: fs.readFileSync(path.join(PKG, "petri_bg.wasm")) });
 
 export { Engine, pattern_cells, quote };
 
-export const CONTRACT = process.env.PETRI_CONTRACT ?? "petri-dish.testnet";
+export const CONTRACT = process.env.PETRI_CONTRACT ?? "petri-v2.testnet";
 export const NETWORK = process.env.PETRI_NETWORK ?? "testnet";
 export const RPCS =
   NETWORK === "mainnet"
@@ -62,7 +65,7 @@ export async function nearBalance(accountId) {
 export async function liveDish() {
   const [rules, state, colonies] = await Promise.all([view("rules"), view("state"), view("colonies", { from: 0, limit: 500 })]);
   const board = Buffer.from(await view("board"), "base64");
-  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps);
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.cap_bps, rules.cap_min);
   e.set_colonies(colonies.length);
   e.set_agar(state.agar);
   if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("board did not load");
@@ -88,12 +91,12 @@ export function failureText(f) {
   return m ? m[1] : s.slice(0, 200);
 }
 
-/** Call the dish as `accountId`. Returns { hash } or throws with the contract's own words. */
-export async function callDish(accountId, methodName, args, tgas = 150) {
+/** Call the dish as `accountId`, attaching `deposit` yoctoNEAR. Returns { hash } or throws with the contract's own words. */
+export async function callDish(accountId, methodName, args, tgas = 150, deposit = 0n) {
   const a = account(accountId);
   const res = await a.signAndSendTransaction({
     receiverId: CONTRACT,
-    actions: [actions.functionCall(methodName, args, BigInt(tgas) * 10n ** 12n, 0n)],
+    actions: [actions.functionCall(methodName, args, BigInt(tgas) * 10n ** 12n, BigInt(deposit))],
     waitUntil: "EXECUTED_OPTIMISTIC",
     throwOnFailure: false,
   });
