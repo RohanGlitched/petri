@@ -51,7 +51,10 @@ const KEEPER = process.env.PETRI_KEEPER ?? acct("keeper");
 const PLAYERS = MAINNET ? STRAINS : [...STRAINS, ...BENCH];
 // Who attaches NEAR instead of spending credit.
 const attaches = (s) => !!s.bench || MAINNET;
-const PACE = Number(process.env.PETRI_PACE ?? (MAINNET ? "2" : "1"));
+// On mainnet the house plays at an eighth of the pace (about eight plantings a day each), so its NEAR lasts past
+// judging: each planting costs it about 0.004 NEAR of gas and storage.
+const KEEPER_LAG = process.env.PETRI_KEEPER_LAG ?? "400";
+const PACE = Number(process.env.PETRI_PACE ?? (MAINNET ? "8" : "1"));
 const PORT = Number(process.env.PETRI_LOG_PORT ?? 0);
 const recent = [];
 let lastHealth = null;
@@ -265,7 +268,11 @@ async function keep() {
       log("unwrap refused:", e instanceof Error ? e.message : e);
     }
   }
-  if (behind >= 20 || (keeperRegistered && Number(st.keeper_pot) > 50_000_000)) {
+  // On mainnet every advance is real gas, and the house's own plantings step the dish; the keeper only steps in
+  // before the clock would skip (max_lag), and only once someone outside the house is playing.
+  const outsiders = Number(st.colonies) > (st.house?.length ?? 0);
+  const due = MAINNET ? outsiders && behind >= Number(KEEPER_LAG) : behind >= 20 || (keeperRegistered && Number(st.keeper_pot) > 50_000_000);
+  if (due) {
     try {
       const r = await callDish(KEEPER, "advance", {}, 250);
       log("keeper advanced", behind, "due generation(s)", r.hash);

@@ -39,7 +39,7 @@ export const lastModelError = () => (hasModel() ? lastError : "no model configur
 function prompt(strain, summary, cands) {
   const system = `You are ${strain.name}, a colony of cells living on a shared Petri dish run by a NEAR smart contract. ${strain.voice}
 The dish follows Conway's Life. New cells join the colony owning most of their three parents. Every generation the agar feeds PETRI to living cells, but a colony is paid for at most a few living cells per cell it has planted. Planting costs PETRI; half is burned, half returns to the agar. Planting inside a rival's buffer is a siege and costs several times as much, so you never do it. Rivals are known only by number.
-Choose exactly one of the numbered plantings, all of which the contract will accept. Then write a lab note of at most 120 characters, in your own voice, saying why. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
+Choose exactly one of the numbered plantings, all of which the contract will accept. Then write a lab note of one or two short sentences, at most 100 characters in all, in your own voice, saying why. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
   const user = `Generation ${summary.generation}. You hold ${summary.balance} PETRI and ${summary.myCells} living cells. The dish has ${summary.totalLive} living cells; ${summary.agar} PETRI remain in the agar.
 Rivals: ${summary.rivals || "none yet"}.
 Plantings you can make:
@@ -69,8 +69,12 @@ function parsePick(text, cands) {
   const index = Number(json.choice) - 1;
   if (!Number.isInteger(index) || index < 0 || index >= cands.length) throw new Error(`choice out of range: ${json.choice}`);
   let note = String(json.note ?? "").replace(/\s+/g, " ").trim();
-  // Keep whole words: a note cut mid-word reads like a glitch.
-  if (note.length > 120) note = `${note.slice(0, 119).replace(/\s+\S*$/, "")}…`;
+  // Too long: keep whole sentences, or failing that whole words, and never leave a trailing ellipsis.
+  if (note.length > 120) {
+    const sentences = note.slice(0, 120).match(/^.*[.!?](?=\s|$)/);
+    note = sentences ? sentences[0] : `${note.slice(0, 118).replace(/[\s,;:–—-]+\S*$/, "")}.`;
+  }
+  note = note.replace(/(\.\.+|…)$/, ".");
   return { index, note };
 }
 
