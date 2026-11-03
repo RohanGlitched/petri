@@ -32,6 +32,8 @@ type Props = {
   drift?: [number, number];
   start?: { x: number; y: number };
   overlay?: Uint8Array;
+  /** Colour (0xRRGGBB) of the "fits here" ghost drawn for overlay code 1; amber by default. */
+  ghost?: number;
   interactive?: boolean;
   onHover?: (cell: { x: number; y: number } | null) => void;
   onCellClick?: (cell: { x: number; y: number }) => void;
@@ -108,8 +110,9 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
     const t = reduceMotion.current ? 1 : Math.min(1, Math.max(0, (now - changedRef.current) / (cbRef.current.transitionMs ?? TRANSITION_MS)));
     const glow = reduceMotion.current ? 1 : Math.min(1, (now - bornAt.current) / 1600);
     const radius = round ? (Math.min(s.cssW, s.cssH) / 2) * s.dpr - 1 : 0;
-    g.draw(camRef.current, { w: s.w, h: s.h }, { radius, t, time: now / 1000, look: cbRef.current.look, glow });
-    const pending = cbRef.current.overlay?.includes(4);
+    g.draw(camRef.current, { w: s.w, h: s.h }, { radius, t, time: now / 1000, look: cbRef.current.look, glow, ghost: cbRef.current.ghost });
+    const ov = cbRef.current.overlay;
+    const pending = !!ov && !reduceMotion.current && (ov.includes(4) || ov.includes(1));
     if (t < 1 || pending || drifting || glow < 1) requestDraw();
     else lastFrame.current = 0;
   }
@@ -219,7 +222,7 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
     glRef.current?.setOverlay(props.overlay ?? new Uint8Array(width * height));
     requestDraw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.overlay]);
+  }, [props.overlay, props.ghost]);
 
   useEffect(() => {
     requestDraw();

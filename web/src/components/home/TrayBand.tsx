@@ -14,9 +14,9 @@ const GROUPS: { kind: PatternInfo["kind"][]; title: string; line: string; color:
 ];
 
 export function TrayBand() {
-  const { rules, d, ready } = useLive();
+  const { rules, ready, cellPrice } = useLive();
   const offsets = usePatternOffsets();
-  const cost = (n: number) => (rules ? (Number(rules.plant_cost) * n * (rules.capacity + d.totalLive)) / rules.capacity : 0);
+  const cost = (n: number) => cellPrice * n;
   return (
     <section className="band band-2" aria-labelledby="tray-title">
       <div className="wrap">
@@ -27,26 +27,31 @@ export function TrayBand() {
             Life, priced live from the contract&rsquo;s own formula. What you build with them is up to you.
           </p>
         </div>
-        <div className={s.groups}>
+        <div className={s.tray}>
           {GROUPS.map((g) => (
-            <div key={g.title} className={s.group}>
-              <h3 className="h3" style={{ color: g.color === "#c99a2e" ? "#e8b957" : undefined }}>{g.title}</h3>
-              <p className="muted">{g.line}</p>
+            <section key={g.title} className={s.trayCol} aria-labelledby={`tray-${g.title}`}>
+              <header className={s.trayHead}>
+                <h3 id={`tray-${g.title}`} className={s.trayTitle} style={{ color: g.color === "#c99a2e" ? "#e8b957" : undefined }}>
+                  {g.title}
+                </h3>
+                <p>{g.line}</p>
+              </header>
               <ul className={s.stamps}>
                 {PATTERNS.filter((p) => g.kind.includes(p.kind)).map((p) => (
                   <li key={p.name} className={s.stamp}>
-                    <Specimen offsets={offsets[p.name]} color={g.color} size={60} />
+                    <Specimen offsets={offsets[p.name]} color={g.color} size={56} />
                     <div>
                       <b>{p.label}</b>
-                      <span className="num">
-                        {p.cells} cells{ready ? `, ${petri(cost(p.cells), 1)} PETRI now` : ""}
+                      <span className={`num ${s.stampMeta}`}>
+                        <span>{p.cells} cells</span>
+                        {ready && <span>{petri(cost(p.cells), 1)} PETRI now</span>}
                       </span>
                       <p>{p.note}</p>
                     </div>
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
           ))}
         </div>
         <p className={s.after}>

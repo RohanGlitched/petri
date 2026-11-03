@@ -19,8 +19,9 @@ export function VerifySection() {
         <div className="section-head">
           <h2 id="verify-title" className={s.h2}>Check every generation yourself</h2>
           <p className="lede">
-            The contract keeps a running hash of the board&rsquo;s whole history. Anyone holding the plant log can replay the dish
-            from generation zero and arrive at the same hash, or find the first place where it differs.
+            The contract keeps a running hash of the board&rsquo;s whole history and one ordered ledger of every join, purchase
+            and planting, with the price each paid. Anyone can replay that ledger from generation zero and arrive at the same
+            board, the same agar and the same earnings for every colony, or find the first place where they differ.
           </p>
         </div>
 
@@ -39,15 +40,29 @@ export function VerifySection() {
             </p>
             <h3 className="h3">The replay</h3>
             <ol className={s.steps}>
-              <li>Start from an empty board at generation 0 and a chain of zeros.</li>
-              <li>For each generation, apply the plantings the log records for it, in log order.</li>
-              <li>Step once with the petri-core rules.</li>
+              <li>Start from an empty board at generation 0, a chain of zeros and an agar holding the whole supply.</li>
+              <li>
+                For each generation, apply the ledger entries recorded for it, in order. A join adds a colony. A purchase takes
+                its PETRI out of the agar. A planting is checked against the price formula at that moment, puts its unburned half
+                back into the agar and brings its cells to life.
+              </li>
+              <li>Step once with the petri-core rules, and feed the living from the agar, capped, with the keeper&rsquo;s share set aside.</li>
               <li>If the new generation is a multiple of {CHAIN_EVERY}, fold the board hash into the chain.</li>
-              <li>Compare the chain with each stored checkpoint, and at the end with the contract&rsquo;s chain and board hash.</li>
+              <li>
+                Compare the chain with each stored checkpoint. At the end, compare the chain, the board hash, the agar, what was
+                sold, burned and returned, the keeper total, every colony&rsquo;s lifetime earnings and the living cells with what
+                the contract holds.
+              </li>
             </ol>
             <p>
-              A contract test does exactly this in Rust. The verify page does it in your browser, with the plant log fetched from
-              the contract and the same engine compiled to WebAssembly.
+              The contract test <code className={s.code}>replaying_the_ledger_reproduces_the_dish_the_agar_and_the_earnings</code>{" "}
+              does this in Rust. The verify page does it in your browser, with the ledger fetched from the contract and the same
+              engine compiled to WebAssembly, and shows eleven checks.
+            </p>
+            <p className="muted">
+              The replay covers PETRI. The NEAR side is checked by the contract&rsquo;s counters: everything that came into the
+              vault is either still there or was paid out at a tide. The replay takes each purchase&rsquo;s PETRI from the
+              ledger as recorded; the NEAR beside it lets anyone check that figure against the curve.
             </p>
             <p>
               <Link className="btn btn-amber" href="/verify">Replay from genesis</Link>
@@ -73,8 +88,16 @@ export function VerifySection() {
                 <dd className="num">{st ? int(checkpoints) : "—"}</dd>
               </div>
               <div className={s.stat}>
-                <dt>Plantings in the log</dt>
+                <dt>Entries in the ledger</dt>
+                <dd className="num">{st ? int(Number(st.ledger)) : "—"}</dd>
+              </div>
+              <div className={s.stat}>
+                <dt>Of which plantings</dt>
                 <dd className="num">{st ? int(Number(st.plants)) : "—"}</dd>
+              </div>
+              <div className={s.stat}>
+                <dt>Colonies</dt>
+                <dd className="num">{st ? int(st.colonies) : "—"}</dd>
               </div>
             </dl>
           </div>

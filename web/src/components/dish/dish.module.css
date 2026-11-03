@@ -1,4 +1,6 @@
 .app {
+  /* Height of the stamp dock plus its gap from the bottom edge; the chip and both side columns sit above it. */
+  --dock: 132px;
   position: relative;
   height: calc(100vh - 68px);
   height: calc(100svh - 68px);
@@ -84,7 +86,7 @@
   position: absolute;
   top: 16px;
   left: 16px;
-  bottom: 118px;
+  bottom: calc(var(--dock) + 52px);
   width: 340px;
   display: flex;
   flex-direction: column;
@@ -147,6 +149,20 @@
   box-shadow: inset 0 -3px 5px rgba(0, 0, 0, 0.4), inset 0 2px 3px rgba(255, 255, 255, 0.45);
 }
 .stainOn { box-shadow: 0 0 0 2px var(--amber) !important; }
+.stains .stainTaken { cursor: not-allowed; box-shadow: none; }
+.stains .stainTaken i { opacity: 0.32; filter: saturate(0.5); }
+.stains .stainTaken::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 50%;
+  height: 1.5px;
+  background: rgba(243, 233, 218, 0.55);
+  transform: rotate(-45deg);
+  pointer-events: none;
+}
+.stains .stainTaken input { cursor: not-allowed; }
 .stains label:has(input:focus-visible) { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 .meHead { display: flex; align-items: center; gap: 10px; }
@@ -159,8 +175,24 @@
 }
 .meStats dt { font-size: 12px; color: var(--dim); }
 .meStats dd { margin: 0; font-family: var(--display); font-size: 22px; }
+.sign { font-family: var(--body); font-weight: 600; font-size: 0.86em; margin-right: 1px; }
 
 .plantCard { border: 0; }
+.stampLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 14px;
+}
+.stampLine svg {
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #3a2210, #1a0e06 70%);
+}
+.stampLine p { margin: 0; font-size: 14px; color: var(--text-2); line-height: 1.35; }
+.stampLine p b { color: var(--bone); font-weight: 600; }
+.stampLine > :global(.swatch) { margin: 0 2px; }
+.stampLine .close { flex: none; width: 30px; height: 30px; font-size: 18px; }
 .plantHead { display: flex; align-items: center; gap: 12px; }
 .plantHead svg {
   flex: none;
@@ -209,7 +241,7 @@
   position: absolute;
   top: 16px;
   right: 16px;
-  bottom: 118px;
+  bottom: calc(var(--dock) + 52px);
   width: 300px;
   display: flex;
   flex-direction: column;
@@ -304,17 +336,22 @@
 /* Inspector and dock */
 .inspect {
   position: absolute;
-  left: 16px;
-  bottom: 112px;
+  left: 50%;
+  bottom: calc(var(--dock) + 10px);
+  translate: -50% 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 14px;
+  padding: 7px 14px;
   border-radius: 999px;
-  background: rgba(24, 14, 7, 0.78);
+  background: rgba(24, 14, 7, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   box-shadow: inset 0 0 0 1px var(--line);
   font-size: 13.5px;
+  white-space: nowrap;
   max-width: calc(100% - 32px);
+  overflow: hidden;
   pointer-events: none;
   opacity: 0;
 }
@@ -326,36 +363,57 @@
   bottom: 14px;
   translate: -50% 0;
   max-width: calc(100% - 24px);
-  padding: 8px;
+  padding: 6px 8px 8px;
   border-radius: 22px;
   background: rgba(24, 14, 7, 0.86);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: inset 0 0 0 1px var(--line), 0 24px 50px -20px rgba(0, 0, 0, 0.8);
+}
+.dockScroll {
+  display: flex;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.dock ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
+.dockScroll::-webkit-scrollbar { display: none; }
+.dockGroup {
+  flex: none;
+  display: grid;
+  grid-template-rows: auto auto;
+  padding: 0 6px;
+}
+.dockGroup + .dockGroup { border-left: 1px solid var(--line); }
+.dockLabel {
+  padding: 2px 8px 2px;
+  font-size: 11.5px;
+  color: var(--dim);
+  line-height: 1.3;
+}
+.dockGroup ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 2px; }
 .stamp {
-  width: 78px;
-  height: 86px;
+  min-width: 78px;
+  height: 84px;
+  padding: 0 8px;
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 2px;
+  gap: 1px;
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   background: transparent;
   color: var(--bone);
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 .stamp:hover { background: rgba(243, 233, 218, 0.06); }
 .stamp.on { background: rgba(242, 180, 90, 0.16); box-shadow: inset 0 0 0 1.5px var(--amber); }
 .stamp.on svg { transform: scale(1.08); }
-.stamp svg { transition: transform 0.2s ease; }
+.stamp svg { transition: transform 0.2s ease; margin-bottom: 2px; }
 .stampName { font-size: 12px; font-weight: 600; white-space: nowrap; }
-.stampCost { font-size: 11px; color: var(--dim); }
+.stampCost { font-size: 11px; color: var(--dim); white-space: nowrap; }
+.short svg, .short .stampName { opacity: 0.45; }
+.short .stampCost { opacity: 0.7; }
+.needs { font-size: 10.5px; color: var(--amber); white-space: nowrap; line-height: 1.2; }
 .err {
   position: absolute;
   left: 50%;
@@ -371,6 +429,11 @@
 @media (min-width: 901px) {
   .inspect { opacity: 1; }
 }
+@media (min-width: 901px) and (max-height: 760px) {
+  .app { --dock: 124px; }
+  .stamp { height: 74px; }
+  .stamp svg { width: 28px; height: 28px; }
+}
 @media (max-width: 1180px) {
   .hud > div:nth-child(4), .hud > div:nth-child(5) { display: none; }
 }
@@ -383,7 +446,14 @@
   .inspect { order: 4; }
   .hud { top: 10px; gap: 14px; padding: 6px 14px 6px 8px; }
   .hud > div:nth-child(3) { display: none; }
-  .dock { position: relative; left: 0; bottom: 0; translate: none; max-width: none; margin: -46px 10px 0; border-radius: 18px; }
+  .dock { position: relative; left: 0; bottom: 0; translate: none; max-width: none; margin: -46px 10px 0; border-radius: 18px; padding: 6px 0 8px; }
+  /* Fade the edges so the sideways scroll is obvious. */
+  .dockScroll {
+    padding: 0 8px;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 36px), transparent);
+  }
+  .stamp { min-width: 68px; padding: 0 6px; height: 80px; }
   .left, .right { position: relative; inset: auto; width: auto; padding: 0 12px; overflow: visible; }
   .left { margin-top: 12px; }
   .right { margin: 12px 0 24px; }

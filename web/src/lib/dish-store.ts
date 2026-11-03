@@ -7,7 +7,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Engine, loadEngine } from "@/engine";
-import { getBoard, getColonies, getPlants, getRules, getState, type Colony, type DishState, type PlantRecord, type Rules } from "./chain";
+import { getAllColonies, getBoard, getEarnings, getPlants, getRules, getState, type Colony, type DishState, type PlantRecord, type Rules } from "./chain";
 
 export type Snapshot = {
   status: "loading" | "ready" | "error";
@@ -37,6 +37,8 @@ export type Snapshot = {
   recentPlants: PlantRecord[];
   /** PETRI units in the agar at the browser's generation. */
   agar: number;
+  /** Each colony's lifetime earnings at the stored board, claimed or not (index = colony id). */
+  earnings: number[];
 };
 
 const empty: Snapshot = {
@@ -56,6 +58,7 @@ const empty: Snapshot = {
   pending: [],
   recentPlants: [],
   agar: 0,
+  earnings: [],
 };
 
 let snap: Snapshot = empty;
@@ -83,7 +86,7 @@ function dueFor(rules: Rules, state: DishState): number {
 
 async function loadStored(rules: Rules, state: DishState, colonies: Colony[]) {
   const board = await getBoard();
-  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps);
+  const e = new Engine(rules.width, rules.height, rules.feed_ppm, rules.keeper_bps, rules.cap_bps, rules.cap_min);
   e.set_colonies(colonies.length);
   e.set_agar(state.agar);
   if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("The stored board could not be read");
@@ -122,13 +125,16 @@ async function sync(first = false) {
   const [rules, state] = await Promise.all([snap.rules ? Promise.resolve(snap.rules) : getRules(), getState()]);
   if (first) clockOffset = Number(state.now_ms) - Date.now();
   const coloniesChanged = state.colonies !== knownColonies;
-  const colonies = coloniesChanged ? await getColonies(0, 500) : snap.colonies;
-  const plantKey = `${state.plants}:${state.colonies}`;
+  const colonies = coloniesChanged ? await getAllColonies(state.colonies) : snap.colonies;
+  const plantKey = `${state.ledger}:${state.colonies}`;
   if (first || plantKey !== knownPlants || !engine) {
     await loadStored(rules, state, colonies);
     const total = Number(state.plants);
-    const recentPlants = total > 0 ? (await getPlants(Math.max(0, total - 24), 24)).reverse() : [];
-    emit({ recentPlants });
+    const [recent, earned] = await Promise.all([
+      total > 0 ? getPlants(Math.max(0, total - 24), 24) : Promise.resolve([] as PlantRecord[]),
+      getEarnings(0, 2000),
+    ]);
+    emit({ recentPlants: recent.reverse(), earnings: [0, ...earned.map(Number)] });
     knownPlants = plantKey;
     knownColonies = state.colonies;
     const due = dueFor(rules, state);

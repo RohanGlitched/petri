@@ -2,7 +2,7 @@
 //! run the dish ahead of the stored generation, replay its whole history from the plant log and check the result
 //! against the contract's history chain.
 
-use petri_core::{chain_due, chain_next, plant_cost, split_emission, Dish, PlantError};
+use petri_core::{chain_due, chain_next, feed, feed_per_cell, petri_for_near, plant_price, Dish, PlantError};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -15,8 +15,12 @@ pub struct Engine {
     agar: u128,
     feed_ppm: u32,
     keeper_bps: u16,
+    cap_bps: u16,
+    cap_min: u32,
     /// PETRI earned per colony during this engine's run (index = colony id).
     earned: Vec<u128>,
+    /// PETRI set aside for keepers during this engine's run.
+    keeper: u128,
     last_births: Vec<u32>,
     last_deaths: Vec<u32>,
     last_live: Vec<u32>,
@@ -26,7 +30,7 @@ pub struct Engine {
 #[wasm_bindgen]
 impl Engine {
     #[wasm_bindgen(constructor)]
-    pub fn new(width: u16, height: u16, feed_ppm: u32, keeper_bps: u16) -> Engine {
+    pub fn new(width: u16, height: u16, feed_ppm: u32, keeper_bps: u16, cap_bps: u16, cap_min: u32) -> Engine {
         Engine {
             dish: Dish::new(width, height),
             generation: 0,
@@ -35,7 +39,10 @@ impl Engine {
             agar: 0,
             feed_ppm,
             keeper_bps,
+            cap_bps,
+            cap_min,
             earned: vec![0],
+            keeper: 0,
             last_births: vec![0],
             last_deaths: vec![0],
             last_live: vec![0],
@@ -125,16 +132,14 @@ impl Engine {
             if chain_due(self.generation) {
                 self.chain = chain_next(&self.chain, self.generation, &self.dish.hash());
             }
-            if s.total_live > 0 {
-                let feed = self.agar * self.feed_ppm as u128 / 1_000_000;
-                let keeper_cut = feed * self.keeper_bps as u128 / 10_000;
-                let mut paid = keeper_cut;
-                for (c, v) in split_emission(feed - keeper_cut, &s.live, s.total_live).into_iter().enumerate() {
+            let f = feed(self.agar, self.feed_ppm, self.keeper_bps, self.cap_bps, self.cap_min, &s.live);
+            for (c, v) in f.shares.iter().enumerate() {
+                if c < self.earned.len() {
                     self.earned[c] += v;
-                    paid += v;
                 }
-                self.agar -= paid;
             }
+            self.agar -= f.paid;
+            self.keeper += f.keeper;
             self.last_births = s.births;
             self.last_deaths = s.deaths;
             self.last_live = s.live;
@@ -150,9 +155,25 @@ impl Engine {
         hex::encode(self.dish.hash())
     }
 
-    /// PETRI units earned per colony since this engine started (f64 is exact below 2^53 units, ~9 billion PETRI).
+    /// PETRI units earned per colony since this engine started, approximate (f64), for display.
     pub fn earned(&self) -> Vec<f64> {
         self.earned.iter().map(|&v| v as f64).collect()
+    }
+
+    /// Exact PETRI units one colony earned since this engine started, as a decimal string.
+    pub fn earned_of(&self, colony: u16) -> String {
+        self.earned.get(colony as usize).copied().unwrap_or(0).to_string()
+    }
+
+    /// Exact PETRI units set aside for keepers since this engine started.
+    pub fn keeper_total(&self) -> String {
+        self.keeper.to_string()
+    }
+
+    /// What one cell costs to plant now, in PETRI units, by the contract's formula.
+    pub fn cell_price(&self, payback: u32, min_price: &str, live_floor: u32) -> String {
+        let per = feed_per_cell(self.agar, self.feed_ppm, self.keeper_bps, self.dish.total_live(), live_floor);
+        plant_price(per, payback, min_price.parse().unwrap_or(0), 1).to_string()
     }
 
     pub fn live_counts(&self) -> Vec<u32> {
@@ -184,7 +205,10 @@ impl Engine {
             agar: self.agar,
             feed_ppm: self.feed_ppm,
             keeper_bps: self.keeper_bps,
+            cap_bps: self.cap_bps,
+            cap_min: self.cap_min,
             earned: self.earned.clone(),
+            keeper: self.keeper,
             last_births: self.last_births.clone(),
             last_deaths: self.last_deaths.clone(),
             last_live: self.last_live.clone(),
@@ -193,10 +217,19 @@ impl Engine {
     }
 }
 
-/// What planting `cells` costs (in PETRI units, as a decimal string) with `total_live` cells alive.
+/// What planting `cells` costs in PETRI units (decimal string), given the agar and the living population.
 #[wasm_bindgen]
-pub fn quote(base_units: &str, cells: u32, total_live: u32, capacity: u32) -> String {
-    plant_cost(base_units.parse().unwrap_or(0), cells, total_live, capacity).to_string()
+pub fn quote(agar: &str, feed_ppm: u32, keeper_bps: u16, total_live: u32, live_floor: u32, payback: u32, min_price: &str, cells: u32) -> String {
+    let per = feed_per_cell(agar.parse().unwrap_or(0), feed_ppm, keeper_bps, total_live, live_floor);
+    plant_price(per, payback, min_price.parse().unwrap_or(0), cells).to_string()
+}
+
+/// PETRI units that `near` yoctoNEAR buys from an agar of `agar` units, with `petri_price` yoctoNEAR per PETRI at
+/// launch and `max_supply` units in all.
+#[wasm_bindgen]
+pub fn buy_quote(near: &str, agar: &str, petri_price: &str, max_supply: &str) -> String {
+    let k = petri_price.parse::<u128>().unwrap_or(0) / 1_000_000 * max_supply.parse::<u128>().unwrap_or(0);
+    petri_for_near(near.parse().unwrap_or(0), agar.parse().unwrap_or(0), k).to_string()
 }
 
 /// Flat indices for a named pattern placed at (x, y), wrapped onto the dish. Empty if the name is unknown.

@@ -7,6 +7,10 @@ export class Engine {
     agar(): string;
     board_hash_hex(): string;
     /**
+     * What one cell costs to plant now, in PETRI units, by the contract's formula.
+     */
+    cell_price(payback: number, min_price: string, live_floor: number): string;
+    /**
      * The owner array (u16 per cell), copied out for rendering.
      */
     cells(): Uint16Array;
@@ -18,17 +22,25 @@ export class Engine {
     clone_engine(): Engine;
     compact(): Uint8Array;
     /**
-     * PETRI units earned per colony since this engine started (f64 is exact below 2^53 units, ~9 billion PETRI).
+     * PETRI units earned per colony since this engine started, approximate (f64), for display.
      */
     earned(): Float64Array;
+    /**
+     * Exact PETRI units one colony earned since this engine started, as a decimal string.
+     */
+    earned_of(colony: number): string;
     generation(): number;
     height(): number;
+    /**
+     * Exact PETRI units set aside for keepers since this engine started.
+     */
+    keeper_total(): string;
     last_births(): Uint32Array;
     last_contested(): number;
     last_deaths(): Uint32Array;
     live_counts(): Uint32Array;
     load_compact(bytes: Uint8Array | number[], generation: number, chain_hex: string): boolean;
-    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number);
+    constructor(width: number, height: number, feed_ppm: number, keeper_bps: number, cap_bps: number, cap_min: number);
     /**
      * Plant without checks (replaying the contract's log).
      */
@@ -47,36 +59,46 @@ export class Engine {
 }
 
 /**
+ * PETRI units that `near` yoctoNEAR buys from an agar of `agar` units, with `petri_price` yoctoNEAR per PETRI at
+ * launch and `max_supply` units in all.
+ */
+export function buy_quote(near: string, agar: string, petri_price: string, max_supply: string): string;
+
+/**
  * Flat indices for a named pattern placed at (x, y), wrapped onto the dish. Empty if the name is unknown.
  */
 export function pattern_cells(name: string, x: number, y: number, width: number, height: number, rotate: number, flip: boolean): Uint32Array;
 
 /**
- * What planting `cells` costs (in PETRI units, as a decimal string) with `total_live` cells alive.
+ * What planting `cells` costs in PETRI units (decimal string), given the agar and the living population.
  */
-export function quote(base_units: string, cells: number, total_live: number, capacity: number): string;
+export function quote(agar: string, feed_ppm: number, keeper_bps: number, total_live: number, live_floor: number, payback: number, min_price: string, cells: number): string;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_engine_free: (a: number, b: number) => void;
+    readonly buy_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly engine_agar: (a: number) => [number, number];
     readonly engine_board_hash_hex: (a: number) => [number, number];
+    readonly engine_cell_price: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly engine_cells: (a: number) => [number, number];
     readonly engine_chain_hex: (a: number) => [number, number];
     readonly engine_check_plant: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly engine_clone_engine: (a: number) => number;
     readonly engine_compact: (a: number) => [number, number];
     readonly engine_earned: (a: number) => [number, number];
+    readonly engine_earned_of: (a: number, b: number) => [number, number];
     readonly engine_generation: (a: number) => number;
     readonly engine_height: (a: number) => number;
+    readonly engine_keeper_total: (a: number) => [number, number];
     readonly engine_last_births: (a: number) => [number, number];
     readonly engine_last_contested: (a: number) => number;
     readonly engine_last_deaths: (a: number) => [number, number];
     readonly engine_live_counts: (a: number) => [number, number];
     readonly engine_load_compact: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
-    readonly engine_new: (a: number, b: number, c: number, d: number) => number;
+    readonly engine_new: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
     readonly engine_set_agar: (a: number, b: number, c: number) => void;
     readonly engine_set_colonies: (a: number, b: number) => void;
@@ -84,11 +106,11 @@ export interface InitOutput {
     readonly engine_total_live: (a: number) => number;
     readonly engine_width: (a: number) => number;
     readonly pattern_cells: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
-    readonly quote: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

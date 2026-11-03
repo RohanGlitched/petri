@@ -93,6 +93,8 @@
 .nums dd { margin: 0; font-family: var(--display); font-size: 21px; }
 .nums em { font-style: normal; font-size: 12.5px; color: var(--dim); }
 .pos { color: var(--ok); }
+/* Gloock's plus reads as a dash at this size, so the sign is set in the body face. */
+.sign { font-family: var(--body); font-weight: 600; font-size: 0.86em; margin-right: 1px; vertical-align: 0.04em; }
 .neg { color: var(--bad); }
 .empty { padding: 32px 0; color: var(--dim); }
 .empty a { color: var(--amber); }

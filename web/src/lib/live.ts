@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useDish } from "./dish-store";
-import { loadEngine, pattern_cells, PATTERNS, type PatternName } from "@/engine";
+import { loadEngine, pattern_cells, quote, PATTERNS, type PatternName } from "@/engine";
 
 export function useLive() {
   const d = useDish();
@@ -24,8 +24,10 @@ export function useLive() {
   const st = d.state;
   const supply = st ? Number(st.total_supply) : 0;
   const burned = st ? Number(st.burned) : 0;
-  /** PETRI units to plant one cell right now. */
-  const cellPrice = rules ? (Number(rules.plant_cost) * (rules.capacity + d.totalLive)) / rules.capacity : 0;
+  /** PETRI units to plant one cell right now, by the contract's formula at the browser's generation. */
+  const cellPrice = rules && ready ? Number(quote(String(d.agar), rules.feed_ppm, rules.keeper_bps, d.totalLive, rules.live_floor, rules.payback, rules.min_cell_price, 1)) : st ? Number(st.cell_price) : 0;
+  /** yoctoNEAR the agar asks for one PETRI right now. */
+  const petriPrice = rules && d.agar > 0 ? (Number(rules.petri_price) * Number(rules.max_supply)) / d.agar : 0;
   return {
     d,
     rules,
@@ -37,6 +39,9 @@ export function useLive() {
     supply,
     burned,
     cellPrice,
+    petriPrice,
+    vault: st ? Number(st.vault) : 0,
+    tideIn: rules && ready ? rules.tide_every - (d.generation % rules.tide_every) : 0,
     w: rules?.width ?? 128,
     h: rules?.height ?? 128,
     secs: Math.max(0, Math.ceil(d.nextInMs / 1000)),
@@ -70,3 +75,5 @@ export const hex = (n: number) => "#" + n.toString(16).padStart(6, "0");
 export const petri = (units: number, dp = 0) =>
   (units / 1e6).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 export const int = (n: number) => Math.round(n).toLocaleString("en-US");
+/** yoctoNEAR as NEAR with `dp` decimals. */
+export const near = (yocto: number, dp = 3) => (yocto / 1e24).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });

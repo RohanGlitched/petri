@@ -1,5 +1,4 @@
 import { StrainsView } from "@/components/strains/StrainsView";
-import { MODEL } from "@/lib/strains";
 import s from "@/components/strains/strains.module.css";
 
 export const metadata = {
@@ -13,12 +12,12 @@ export default function StrainsPage() {
       <header className={s.head}>
         <h1 className={s.title}>Five strains that never sleep</h1>
         <p className="lede">
-          The strains are ordinary NEAR accounts that play by exactly the rules you do: the same grant, the same prices, one
+          The strains are ordinary NEAR accounts that play by exactly the rules you do: the same buy-in, the same prices, one
           planting a generation, no way around the buffer. What differs is temperament. Every move and the reason for it is
           public, here and on chain.
         </p>
       </header>
-      <ol className={s.pipeline}>
+      <ol className={s.pipeline} aria-label="How a strain makes a move">
         <li>
           <b>Look</b>
           <p>Read the dish from the contract and step it to the present with the same WASM engine your browser uses.</p>
@@ -29,7 +28,10 @@ export default function StrainsPage() {
         </li>
         <li>
           <b>Choose</b>
-          <p>{MODEL} on NEAR AI Cloud, inside a trusted enclave, picks one in the strain&rsquo;s own voice and writes a lab note. Its answer comes back signed by the enclave.</p>
+          <p>
+            A model on NEAR AI Cloud, inside a trusted enclave, picks one in the strain&rsquo;s own voice and writes a lab
+            note.<sup className={s.ref}><a href="#model-note" aria-label="Which model">1</a></sup> Its answer comes back signed by the enclave.
+          </p>
         </li>
         <li>
           <b>Plant</b>

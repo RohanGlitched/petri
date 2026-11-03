@@ -1,16 +1,34 @@
 // Relays a guest's signed delegate action (NEP-366 meta transaction): the guest signs a call to the dish, this
-// server wraps it in a transaction and pays the gas. NEAR checks the guest's signature on chain, so the relayer can
-// forward a guest's intent but never forge one. Only the dish's own methods, with no deposit, are relayed.
+// server wraps it in a transaction and pays the gas. Before paying anything it checks, off chain, everything NEAR
+// would check on chain: the sender is one of our guests, the call is one of the dish's own methods with a bounded
+// deposit and gas, the signature is valid for the delegate action, and the key exists on the guest's account with a
+// fresh nonce. A request that would fail costs the relayer nothing.
+//
+// Under NEP-366 the relayer, which signs the outer transaction, also pays any NEAR the inner call attaches. So each
+// guest has a sponsored budget: the colony's own `near_paid` on chain (shared by every server instance) may not go
+// above GUEST_BUDGET. Wallet players pay their own deposits.
 
 import { NextResponse } from "next/server";
-import { Account, JsonRpcProvider, SCHEMA, actions } from "near-api-js";
+import { Account, JsonRpcProvider, SCHEMA, actions, baseEncode, encodeDelegateAction } from "near-api-js";
 import { deserialize } from "borsh";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { CONTRACT, RPC_URLS } from "@/lib/config";
 
 export const runtime = "nodejs";
 
-const ALLOWED = new Set(["join", "plant", "advance"]);
-const MAX_GAS = 200n * 10n ** 12n;
+const YOCTO = 10n ** 24n;
+/** The dish's methods a guest may call through the relayer, and the most NEAR each may carry. */
+const ALLOWED: Record<string, bigint> = {
+  join: (YOCTO * 3n) / 100n,
+  buy: (YOCTO * 2n) / 100n,
+  plant: YOCTO / 100n,
+  claim: 0n,
+  advance: 0n,
+};
+const MAX_GAS = 250n * 10n ** 12n;
+/** The most NEAR the relayer will attach for one guest across all its calls. */
+const GUEST_BUDGET = (YOCTO * 6n) / 100n;
 const PER_ACCOUNT_PER_MIN = 6;
 const PER_MIN = 120;
 const hits = new Map<string, number[]>();
@@ -24,11 +42,12 @@ type Decoded = {
     actions: { functionCall?: FunctionCallFields }[];
     nonce: bigint;
     maxBlockHeight: bigint;
-    publicKey: unknown;
+    publicKey: { ed25519Key?: { data: number[] | Uint8Array } };
   };
-  signature: unknown;
+  signature: { ed25519Signature?: { data: number[] | Uint8Array } };
 };
 
+// Best effort: each server instance keeps its own counters. The checks below are what actually protect the relayer.
 function limited(account: string): string | null {
   const now = Date.now();
   const minute = now - 60_000;
@@ -48,14 +67,36 @@ function failureText(f: unknown): string {
   if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1) + ".";
   if (/DelegateActionExpired/.test(s)) return "The signed action expired before it was relayed. Try again.";
   if (/DelegateActionInvalidNonce/.test(s)) return "That action was already used. Try again.";
+  if (/NotEnoughBalance|LackBalanceForState/.test(s)) return "Your guest account is out of NEAR for deposits.";
   if (/Exceeded the prepaid gas/.test(s)) return "The transaction ran out of gas.";
   return "NEAR rejected the transaction.";
+}
+
+const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
+
+/** NEAR the colony of `account` has paid in so far (0 before it joins), read from the contract. */
+async function colonyNearPaid(account: string): Promise<bigint> {
+  const res = await fetch(RPC_URLS[0], {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "relay",
+      method: "query",
+      params: { request_type: "call_function", finality: "optimistic", account_id: CONTRACT, method_name: "colony_of", args_base64: Buffer.from(JSON.stringify({ account_id: account })).toString("base64") },
+    }),
+    signal: AbortSignal.timeout(6000),
+  });
+  const body = await res.json();
+  if (body.error) throw new Error("rpc");
+  const colony = JSON.parse(Buffer.from(body.result.result).toString("utf8")) as { near_paid: string } | null;
+  return colony ? BigInt(colony.near_paid) : 0n;
 }
 
 export async function POST(req: Request) {
   const relayer = process.env.PETRI_RELAYER_ACCOUNT;
   const key = process.env.PETRI_RELAYER_KEY;
-  if (!relayer || !key) return NextResponse.json({ error: "The relayer is not configured on this server." }, { status: 503 });
+  if (!relayer || !key) return bad("The relayer is not configured on this server.", 503);
 
   let bytes: Uint8Array;
   try {
@@ -63,28 +104,61 @@ export async function POST(req: Request) {
     bytes = Uint8Array.from(Buffer.from(String(body?.signedDelegate ?? ""), "base64"));
     if (bytes.length < 64 || bytes.length > 8192) throw new Error("size");
   } catch {
-    return NextResponse.json({ error: "Send JSON: { signedDelegate: base64 }" }, { status: 400 });
+    return bad("Send JSON: { signedDelegate: base64 }");
   }
 
   let decoded: Decoded;
   try {
     decoded = deserialize(SCHEMA.SignedDelegate, bytes) as unknown as Decoded;
   } catch {
-    return NextResponse.json({ error: "That is not a signed delegate action." }, { status: 400 });
+    return bad("That is not a signed delegate action.");
   }
   const da = decoded.delegateAction;
-  if (da.receiverId !== CONTRACT) return NextResponse.json({ error: `Only calls to ${CONTRACT} are relayed.` }, { status: 400 });
-  if (!da.senderId.endsWith(`.${relayer}`)) return NextResponse.json({ error: "Only Petri guest accounts are relayed; wallet accounts pay their own gas." }, { status: 403 });
-  if (da.actions.length !== 1) return NextResponse.json({ error: "Relay one call at a time." }, { status: 400 });
+  const guest = new RegExp(`^g-[0-9a-f]{10}\\.${relayer.replace(/\./g, "\\.")}$`);
+  if (da.receiverId !== CONTRACT) return bad(`Only calls to ${CONTRACT} are relayed.`);
+  if (!guest.test(da.senderId)) return bad("Only Petri guest accounts are relayed; wallet accounts pay their own gas.", 403);
+  if (da.actions.length !== 1) return bad("Relay one call at a time.");
   const fc = da.actions[0].functionCall;
-  if (!fc || !ALLOWED.has(fc.methodName)) return NextResponse.json({ error: "Only join, plant and advance are relayed." }, { status: 400 });
-  if (BigInt(fc.deposit) !== 0n) return NextResponse.json({ error: "Relayed calls carry no deposit." }, { status: 400 });
-  if (BigInt(fc.gas) > MAX_GAS) return NextResponse.json({ error: "Too much gas requested." }, { status: 400 });
+  if (!fc || !(fc.methodName in ALLOWED)) return bad("Only join, buy, plant, claim and advance are relayed.");
+  if (BigInt(fc.deposit) > ALLOWED[fc.methodName]) return bad(`That ${fc.methodName} carries more NEAR than the relayer allows.`);
+  if (BigInt(fc.gas) > MAX_GAS) return bad("Too much gas requested.");
+
+  // The signature must be valid for exactly this delegate action.
+  const pk = da.publicKey.ed25519Key?.data;
+  const sig = decoded.signature.ed25519Signature?.data;
+  if (!pk || !sig) return bad("Only ed25519 keys are relayed.");
+  let valid = false;
+  try {
+    valid = ed25519.verify(Uint8Array.from(sig), sha256(encodeDelegateAction(da as never)), Uint8Array.from(pk));
+  } catch {
+    valid = false;
+  }
+  if (!valid) return bad("The signature does not match this action.", 403);
+
   const why = limited(da.senderId);
-  if (why) return NextResponse.json({ error: why }, { status: 429 });
+  if (why) return bad(why, 429);
+
+  const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
+  const deposit = BigInt(fc.deposit);
+  if (deposit > 0n) {
+    try {
+      const paid = await colonyNearPaid(da.senderId);
+      if (paid + deposit > GUEST_BUDGET) {
+        return bad("This guest has used its sponsored NEAR. Connect a wallet to keep buying, or play with what you hold.", 402);
+      }
+    } catch {
+      return bad("Could not read this guest's colony. Try again.", 503);
+    }
+  }
+  // The key must exist on the guest's account, and the nonce must be fresh, or NEAR would reject it and we would pay.
+  try {
+    const ak = await provider.viewAccessKey({ accountId: da.senderId, publicKey: `ed25519:${baseEncode(Uint8Array.from(pk))}` });
+    if (BigInt(da.nonce) <= BigInt(ak.nonce)) return bad("That action was already used. Try again.", 409);
+  } catch {
+    return bad("This guest account or its key does not exist.", 403);
+  }
 
   try {
-    const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
     const acct = new Account(relayer, provider, key as `ed25519:${string}`);
     const res = await acct.signAndSendTransaction({
       receiverId: da.senderId,
@@ -107,6 +181,6 @@ export async function POST(req: Request) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("relay failed", msg);
     const funds = /NotEnoughBalance|LackBalance|balance/i.test(msg);
-    return NextResponse.json({ error: funds ? "The relayer is out of gas money. It is topped up regularly; try again soon." : "The relay did not go through. Try again." }, { status: 502 });
+    return bad(funds ? "The relayer is out of gas money. It is topped up regularly; try again soon." : "The relay did not go through. Try again.", 502);
   }
 }

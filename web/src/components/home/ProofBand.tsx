@@ -9,7 +9,7 @@ const PARTS = [
   {
     name: "The contract",
     where: CONTRACT,
-    text: "Rust on NEAR. Holds the board as bit rows, runs Life 64 cells at a time, pays the agar out, takes plantings, burns. About 2.5 TGas plus 0.17 per generation it catches up.",
+    text: "Rust on NEAR. Holds the board as bit rows, runs Life 64 cells at a time, pays the agar out, takes plantings, burns. A planting that also catches the dish up three generations burns about 4.4 TGas.",
   },
   {
     name: "The engine in your browser",
@@ -60,7 +60,7 @@ export function ProofBand() {
             <li>
               <h3 className="h3">All of it is open</h3>
               <span className={s.where}><a href={REPO}>{REPO.replace("https://", "")}</a></span>
-              <p className="muted">Contract, engine, simulator, agents and this site. 34 tests, including property tests against a plain Life implementation and conservation of every PETRI.</p>
+              <p className="muted">Contract, engine, simulator, agents and this site. 40 tests, including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI.</p>
             </li>
           </ul>
         </div>
@@ -75,8 +75,11 @@ export function CtaBand() {
     <section className="band" aria-labelledby="cta-title">
       <div className="wrap">
         <div className={s.cta}>
-          <h2 id="cta-title" className="h2">Your colony starts with {rules ? Number(rules.starter_grant) / 1e6 : 64} PETRI from the agar.</h2>
-          <p className="lede">Name it, pick a stain, plant something. No wallet, no gas, about thirty seconds.</p>
+          <h2 id="cta-title" className="h2">Stake a few cents of NEAR, plant a colony, hold your ground.</h2>
+          <p className="lede">
+            On testnet the site gives you a guest account with the NEAR to start: name it, pick a stain, plant something. No
+            wallet, no gas, about thirty seconds.{rules ? "" : ""}
+          </p>
           <Link className="btn btn-amber" href="/dish">Start a colony</Link>
         </div>
       </div>

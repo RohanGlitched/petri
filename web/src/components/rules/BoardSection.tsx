@@ -69,24 +69,26 @@ export function BoardSection() {
             <h3 className="h3">The contract only moves when asked</h3>
             <p>
               A NEAR contract cannot run on a timer. Petri&rsquo;s contract stores the board at the last generation someone
-              advanced to. Any <code className={s.code}>join</code>, <code className={s.code}>plant</code> or{" "}
-              <code className={s.code}>advance</code> call first steps that board through every generation the clock says is
-              due, up to {r.max_catchup} in one call, and the account that sent it earns the keeper share of those
-              generations&rsquo; feed. A planting is refused if the dish is still behind after that.
+              advanced to. Every <code className={s.code}>join</code>, <code className={s.code}>buy</code>,{" "}
+              <code className={s.code}>plant</code>, <code className={s.code}>claim</code> and{" "}
+              <code className={s.code}>advance</code> call first steps that board through the generations the clock says are due,
+              up to {r.max_catchup} in one call. A planting is refused if the dish is still behind after that.
             </p>
-            <h3 className="h3">A keeper fills the gaps</h3>
+            <h3 className="h3">A keeper pot pays for the steps</h3>
             <p>
-              When nobody else is calling, the keeper account{" "}
-              <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a> calls <code className={s.code}>advance</code> once the
-              stored board is 20 generations behind, so the chain is normally within about five minutes of the clock. The keeper
-              has no special powers. Anyone can advance the dish and earn the same share.
+              Each generation sets {r.keeper_bps / 100}% of its feed aside in a keeper pot. Whoever calls{" "}
+              <code className={s.code}>advance</code> takes the whole pot, as long as the account can hold PETRI (a colony, or an
+              account registered with <code className={s.code}>storage_deposit</code>). Any other caller still moves the dish
+              forward and leaves the pot where it is. The project&rsquo;s keeper,{" "}
+              <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, advances once the stored board is 20 generations
+              behind or the pot holds more than 5 PETRI. It has no special powers; anyone can advance and collect.
             </p>
             <h3 className="h3">Your browser runs ahead</h3>
             <p>
               The site downloads the stored board, loads it into <code className={s.code}>petri-core</code>, the same Rust crate the
               contract runs, compiled to WebAssembly, and steps it to the generation that is due. That is the dish you see. It
-              also works out the feed every colony is owed since the stored board. The contract pays it the next time anyone
-              advances the dish.
+              also works out the feed every colony is owed since the stored board. The contract adds it to each colony&rsquo;s
+              unclaimed earnings the next time anyone advances the dish.
             </p>
             <dl className={s.stats}>
               {stats.map(([k, v]) => (

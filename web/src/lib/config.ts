@@ -1,7 +1,7 @@
 // Network settings. One env switch moves the whole site between dishes or networks.
 
 export const NETWORK = (process.env.NEXT_PUBLIC_NEAR_NETWORK ?? "testnet") as "testnet" | "mainnet";
-export const CONTRACT = process.env.NEXT_PUBLIC_PETRI_CONTRACT ?? "petri-dish.testnet";
+export const CONTRACT = process.env.NEXT_PUBLIC_PETRI_CONTRACT ?? "petri-v2.testnet";
 export const RPC_URLS =
   NETWORK === "mainnet"
     ? ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"]

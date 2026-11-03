@@ -71,13 +71,38 @@ export function HeroScene() {
       L.setZoomFit(k);
       const W = window.innerWidth;
       const H = el.querySelector<HTMLElement>(`.${s.stage}`)!.clientHeight;
+      const NAV = 68;
       const full = Math.hypot(W, H) / 2 + 4;
-      const end = Math.min(W, H) / 2 - (W < 700 ? 18 : 40);
+      // Where the pulled-back dish comes to rest: clear of the nav, and clear of the "One dish" caption.
+      let cx = W / 2;
+      let cy = H / 2;
+      let end: number;
+      if (W < 900) {
+        // Phones and tablets: the dish sits high, the caption below it, with neither touching.
+        const top = NAV + 22;
+        const bottom = (layers.current[2]?.offsetTop ?? H) - 24;
+        end = Math.max(80, Math.min(W / 2 - 18, H * 0.34, (bottom - top) / 2));
+        cy = Math.max(top + end, Math.min(H * 0.36, bottom - end));
+      } else {
+        const capLeft = layers.current[2]?.offsetLeft ?? W;
+        cy = H / 2 + NAV / 2;
+        end = Math.max(120, Math.min((H - NAV) / 2 - 36, (capLeft - 56) / 2));
+        cx = Math.max(end + 24, Math.min(W * 0.38, capLeft - 32 - end));
+      }
       const r = full + (end - full) * ease(band(p, 0.45, 0.9));
-      if (mask.current) mask.current.style.clipPath = `circle(${r}px at 50% 50%)`;
+      // Shift the dish towards its resting centre only as far as the shrinking circle allows, so no straight edge shows.
+      const toward = (want: number, room: number) => Math.sign(want) * Math.min(Math.abs(want), Math.max(0, room));
+      const ox = toward(cx - W / 2, W / 2 - r);
+      const oy = toward(cy - H / 2, H / 2 - r);
+      if (mask.current) {
+        mask.current.style.clipPath = `circle(${r}px at 50% 50%)`;
+        mask.current.style.translate = `${ox}px ${oy}px`;
+      }
       if (scrim.current) scrim.current.style.opacity = String(1 - band(p, 0.4, 0.75));
       if (rim.current) {
         rim.current.style.width = rim.current.style.height = `${2 * r + 18}px`;
+        rim.current.style.left = `${W / 2 + ox}px`;
+        rim.current.style.top = `${H / 2 + oy}px`;
         rim.current.style.opacity = String(band(p, 0.72, 0.9));
       }
       const first = 1 - band(p, 0.06, 0.2);

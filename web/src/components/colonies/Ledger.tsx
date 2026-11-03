@@ -74,8 +74,9 @@ export function Ledger() {
 
   const rows = useMemo(() => {
     const r = colonies.map((c) => {
-      const earned = Number(c.petri_earned) + (d.pending[c.id] ?? 0);
-      const spent = Number(c.petri_burned);
+      // Lifetime earnings at the stored board (claimed or not), plus what accrued since in the browser.
+      const earned = (d.earnings[c.id] ?? 0) + (d.pending[c.id] ?? 0);
+      const spent = Number(c.petri_spent);
       return { ...c, earned, spent, net: earned - spent, joined: Number(c.joined_generation) };
     });
     const key: Record<Sort, (x: (typeof r)[number]) => number> = {
@@ -147,7 +148,7 @@ export function Ledger() {
                 <div><dt>Living</dt><dd className="num">{int(r.live)}</dd><em>{((100 * r.live) / total).toFixed(1)}%</em></div>
                 <div><dt>Earned</dt><dd className="num">{petri(r.earned, 2)}</dd></div>
                 <div><dt>Spent planting</dt><dd className="num">{petri(r.spent, 2)}</dd></div>
-                <div><dt>Net</dt><dd className={`num ${r.net >= 0 ? s.pos : s.neg}`}>{r.net >= 0 ? "+" : "−"}{petri(Math.abs(r.net), 2)}</dd></div>
+                <div><dt>Net</dt><dd className={`num ${r.net >= 0 ? s.pos : s.neg}`}><span className={s.sign} aria-hidden="true">{r.net >= 0 ? "+" : "−"}</span><span className="sr">{r.net >= 0 ? "plus " : "minus "}</span>{petri(Math.abs(r.net), 2)}</dd></div>
                 <div><dt>Holding</dt><dd className="num">{balances[r.account] !== undefined ? petri(balances[r.account], 2) : "—"}</dd></div>
               </dl>
             </li>
@@ -161,7 +162,7 @@ export function Ledger() {
       </ol>
       <p className={s.foot}>
         Earned includes PETRI accrued since the dish last advanced on chain. Spent planting is the full price paid; half of it
-        was burned and half went back to the agar. Holding is the live token balance, which also counts starter grants,
+        was burned and half went back to the agar. Holding is the live token balance, which also counts PETRI bought from the agar,
         keeper shares and transfers.
       </p>
     </>

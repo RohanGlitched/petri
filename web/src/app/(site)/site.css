@@ -47,6 +47,7 @@ body {
   overflow-x: clip;
 }
 a { color: inherit; }
+h1, h2, h3, .h2, .h3 { text-wrap: balance; }
 ::selection { background: rgba(242, 180, 90, 0.35); color: var(--bone); }
 :focus-visible {
   outline: 2px solid var(--amber);

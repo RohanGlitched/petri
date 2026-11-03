@@ -33,6 +33,7 @@ uniform vec3 uAgarDeep;
 uniform vec3 uAgarLit;
 uniform vec3 uLight;
 uniform float uGlow;       // fluor glow strength, animated on load
+uniform vec3 uGhost;       // the player's stain, for the "fits here" ghost
 out vec4 outColor;
 
 vec3 colonyColor(uint id) { return texelFetch(uPalette, ivec2(int(id % 256u), int(id / 256u)), 0).rgb; }
@@ -143,11 +144,22 @@ void main() {
     vec3 okInk = dark ? vec3(0.92, 0.96, 1.0) : vec3(0.08, 0.13, 0.2);
     vec3 badInk = vec3(0.95, 0.28, 0.36);
     if (ov == 3u) {
-      float hatch = step(0.5, fract((cellPos.x + cellPos.y) * 1.2));
-      c = mix(c, badInk * (dark ? 0.55 : 0.8), 0.2 + 0.16 * hatch);
+      // Screen-space diagonal hatching, so the buffer reads as a hatched zone at any zoom.
+      float d = (gl_FragCoord.x + gl_FragCoord.y) / 9.0;
+      float hatch = smoothstep(0.30, 0.42, fract(d)) * (1.0 - smoothstep(0.58, 0.70, fract(d)));
+      c = mix(c, badInk * (dark ? 0.55 : 0.8), 0.16);
+      c = mix(c, badInk * (dark ? 0.85 : 0.7), 0.30 * hatch);
     } else if (ov == 4u) {
       float pulse = 0.5 + 0.5 * sin(uTime * 5.0);
       c = mix(c, okInk, (0.25 + 0.3 * pulse) * (1.0 - smoothstep(0.38, 0.5, m)));
+    } else if (ov == 1u) {
+      // The stamp where it would grow, in the player's own stain, breathing softly.
+      float pulse = 0.5 + 0.5 * sin(uTime * 3.2);
+      vec2 q = f - 0.5;
+      float bead = 1.0 - smoothstep(0.30, 0.40, length(q));
+      float ring = smoothstep(0.38, 0.43, m) * (1.0 - smoothstep(0.46, 0.5, m));
+      vec3 ink = mix(uGhost, vec3(1.0), 0.18 + 0.12 * pulse);
+      c = mix(c, ink, bead * (0.55 + 0.25 * pulse) + ring * 0.6);
     } else {
       vec3 ink = ov == 2u ? badInk : okInk;
       float inner = 1.0 - smoothstep(0.30, 0.38, m);
@@ -207,7 +219,7 @@ export class CultureGL {
     const a = gl.getAttribLocation(prog, "aPos");
     gl.enableVertexAttribArray(a);
     gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
-    for (const n of ["uCells", "uPrev", "uOverlay", "uPalette", "uRes", "uCenter", "uZoom", "uT", "uRadius", "uDish", "uTime", "uLook", "uAgarDeep", "uAgarLit", "uLight", "uGlow"]) {
+    for (const n of ["uCells", "uPrev", "uOverlay", "uPalette", "uRes", "uCenter", "uZoom", "uT", "uRadius", "uDish", "uTime", "uLook", "uAgarDeep", "uAgarLit", "uLight", "uGlow", "uGhost"]) {
       this.loc[n] = gl.getUniformLocation(prog, n);
     }
     this.tex = {
@@ -267,7 +279,7 @@ export class CultureGL {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, data);
   }
 
-  draw(cam: Camera, size: { w: number; h: number }, opts: { radius: number; t: number; time: number; look: Look; glow: number }) {
+  draw(cam: Camera, size: { w: number; h: number }, opts: { radius: number; t: number; time: number; look: Look; glow: number; ghost?: number }) {
     const gl = this.gl;
     const p = LOOKS[opts.look];
     gl.viewport(0, 0, size.w, size.h);
@@ -295,6 +307,8 @@ export class CultureGL {
     gl.uniform3fv(this.loc.uAgarLit, p.agarLit);
     gl.uniform3fv(this.loc.uLight, p.light);
     gl.uniform1f(this.loc.uGlow, opts.glow);
+    const g = opts.ghost ?? 0xf2b45a;
+    gl.uniform3f(this.loc.uGhost, ((g >> 16) & 255) / 255, ((g >> 8) & 255) / 255, (g & 255) / 255);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 

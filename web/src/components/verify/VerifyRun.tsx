@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Culture } from "@/components/Culture";
 import { loadEngine } from "@/engine";
-import { getAllPlants, getCheckpoints, getColonies, getRules, getState } from "@/lib/chain";
+import { getAllColonies, getAllLedger, getCheckpoints, getEarnings, getRules, getState } from "@/lib/chain";
 import { Replayer, type Check } from "@/lib/replay";
 import { CONTRACT, NETWORK, REPO, accountUrl } from "@/lib/config";
 import s from "./verify.module.css";
@@ -33,14 +33,18 @@ export function VerifyRun() {
       await loadEngine();
       const [rules, state] = await Promise.all([getRules(), getState()]);
       // Read everything up to the counts in this one state, so a planting that lands mid-read cannot skew the replay.
-      const [allColonies, allPlants, allCheckpoints] = await Promise.all([getColonies(0, 500), getAllPlants(Number(state.plants)), getCheckpoints(0, 2000)]);
-      const colonies = allColonies.slice(0, state.colonies);
-      const plants = allPlants.slice(0, Number(state.plants));
+      const [colonies, ledger, allCheckpoints, earnings] = await Promise.all([
+        getAllColonies(state.colonies),
+        getAllLedger(Number(state.ledger)),
+        getCheckpoints(0, 2000),
+        getEarnings(0, 2000),
+      ]);
+      const plants = ledger.filter((e) => "Plant" in e);
       const checkpoints = allCheckpoints.filter((c) => Number(c.generation) <= Number(state.generation));
       if (id !== runId.current) return;
       setPalette(new Map(colonies.map((c) => [c.id, c.color])));
       setCounts({ plants: plants.length, colonies: colonies.length, checkpoints: checkpoints.length });
-      const r = new Replayer({ rules, state, colonies, plants, checkpoints });
+      const r = new Replayer({ rules, state, colonies, ledger, checkpoints, earnings: earnings.slice(0, colonies.length) });
       setTarget(r.target);
       setPhase("replaying");
       setMsg("Replaying from generation zero with petri-core…");
@@ -54,15 +58,18 @@ export function VerifyRun() {
           if (id !== runId.current) return resolve();
           const prev = r.e.cells();
           const a = performance.now();
-          const finished = r.run(per);
+          // A background tab gets no animation frames, so there the replay simply runs to the end.
+          const finished = r.run(document.hidden ? r.target + 1 : per);
           work += performance.now() - a;
           setGen(r.generation);
           setFrame({ cells: r.e.cells(), prev, at: performance.now() });
           setLog(r.log.slice(-60));
           if (finished) resolve();
+          else if (document.hidden) setTimeout(tick, 0);
           else requestAnimationFrame(tick);
         };
-        requestAnimationFrame(tick);
+        if (document.hidden) setTimeout(tick, 0);
+        else requestAnimationFrame(tick);
       });
       if (id !== runId.current) return;
       setMs(Math.round(work));
@@ -158,7 +165,7 @@ export function VerifyRun() {
           <h3 className="h3">What was checked</h3>
           <ul className={s.checks}>
             {(checks.length ? checks : PLACEHOLDER).map((c) => (
-              <li key={c.id} className={c.ok === null ? "" : c.ok ? s.pass : s.fail}>
+              <li key={c.id} className={c.ok === null ? s.wait : c.ok ? s.pass : s.fail}>
                 <i aria-hidden="true">{c.ok === null ? "" : c.ok ? "✓" : "✕"}</i>
                 <div>
                   <b>{c.label}</b>
@@ -192,9 +199,11 @@ const PLACEHOLDER: Check[] = [
   { id: "chain", label: "History chain", expected: "", got: null, ok: null },
   { id: "board", label: "Board hash: every cell and its owner", expected: "", got: null, ok: null },
   { id: "checkpoints", label: "Checkpoints every 240 generations", expected: "", got: null, ok: null },
+  { id: "prices", label: "Every planting paid the formula's price", expected: "", got: null, ok: null },
   { id: "agar", label: "PETRI left in the agar", expected: "", got: null, ok: null },
+  { id: "sold", label: "PETRI sold from the agar for NEAR", expected: "", got: null, ok: null },
   { id: "burned", label: "PETRI burned by planting", expected: "", got: null, ok: null },
   { id: "returned", label: "PETRI returned to the agar", expected: "", got: null, ok: null },
-  { id: "granted", label: "Starter grants", expected: "", got: null, ok: null },
+  { id: "keeper", label: "PETRI set aside for keepers", expected: "", got: null, ok: null },
   { id: "earned", label: "Every colony's lifetime earnings", expected: "", got: null, ok: null },
 ];

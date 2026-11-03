@@ -88,7 +88,37 @@
   box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--dim);
 }
-.checks .pass i { background: rgba(159, 216, 168, 0.16); color: var(--ok); box-shadow: none; }
+.checks .pass i { background: rgba(159, 216, 168, 0.16); color: var(--ok); box-shadow: none; animation: flip 0.5s cubic-bezier(0.2, 0.7, 0.1, 1) both; }
+.checks .fail i { animation: flip 0.5s cubic-bezier(0.2, 0.7, 0.1, 1) both; }
+@keyframes flip {
+  from { transform: rotateY(90deg) scale(0.8); }
+  to { transform: rotateY(0) scale(1); }
+}
+/* Waiting rows are skeleton chips: the values shimmer until the replay fills them in. */
+.checks .wait i {
+  box-shadow: none;
+  background: linear-gradient(90deg, rgba(243, 233, 218, 0.06), rgba(243, 233, 218, 0.14), rgba(243, 233, 218, 0.06));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.checks .wait dd {
+  justify-self: start;
+  width: min(100%, 22ch);
+  border-radius: 6px;
+  color: transparent;
+  user-select: none;
+  background: linear-gradient(90deg, rgba(243, 233, 218, 0.05), rgba(243, 233, 218, 0.12), rgba(243, 233, 218, 0.05));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.checks .wait dl div + div dd { width: min(100%, 16ch); }
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .checks .wait i, .checks .wait dd, .checks .pass i, .checks .fail i { animation: none; }
+}
 .checks .fail i { background: rgba(255, 143, 127, 0.16); color: var(--bad); box-shadow: none; }
 .checks b { font-weight: 600; }
 .checks dl { margin: 6px 0 0; display: grid; gap: 2px; }

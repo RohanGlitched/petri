@@ -48,6 +48,29 @@ export class Engine {
         }
     }
     /**
+     * What one cell costs to plant now, in PETRI units, by the contract's formula.
+     * @param {number} payback
+     * @param {string} min_price
+     * @param {number} live_floor
+     * @returns {string}
+     */
+    cell_price(payback, min_price, live_floor) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const val2 = +payback;
+            const val3 = +live_floor;
+            const ptr0 = passStringToWasm0(min_price, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.engine_cell_price(this.__wbg_ptr, val2, ptr0, len0, val3);
+            deferred4_0 = ret[0];
+            deferred4_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+        }
+    }
+    /**
      * The owner array (u16 per cell), copied out for rendering.
      * @returns {Uint16Array}
      */
@@ -114,7 +137,7 @@ export class Engine {
         return v1;
     }
     /**
-     * PETRI units earned per colony since this engine started (f64 is exact below 2^53 units, ~9 billion PETRI).
+     * PETRI units earned per colony since this engine started, approximate (f64), for display.
      * @returns {Float64Array}
      */
     earned() {
@@ -122,6 +145,23 @@ export class Engine {
         var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
         return v1;
+    }
+    /**
+     * Exact PETRI units one colony earned since this engine started, as a decimal string.
+     * @param {number} colony
+     * @returns {string}
+     */
+    earned_of(colony) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.engine_earned_of(this.__wbg_ptr, colony);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * @returns {number}
@@ -136,6 +176,22 @@ export class Engine {
     height() {
         const ret = wasm.engine_height(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * Exact PETRI units set aside for keepers since this engine started.
+     * @returns {string}
+     */
+    keeper_total() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.engine_keeper_total(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * @returns {Uint32Array}
@@ -198,9 +254,11 @@ export class Engine {
      * @param {number} height
      * @param {number} feed_ppm
      * @param {number} keeper_bps
+     * @param {number} cap_bps
+     * @param {number} cap_min
      */
-    constructor(width, height, feed_ppm, keeper_bps) {
-        const ret = wasm.engine_new(width, height, feed_ppm, keeper_bps);
+    constructor(width, height, feed_ppm, keeper_bps, cap_bps, cap_min) {
+        const ret = wasm.engine_new(width, height, feed_ppm, keeper_bps, cap_bps, cap_min);
         this.__wbg_ptr = ret;
         EngineFinalization.register(this, this.__wbg_ptr, this);
         return this;
@@ -256,6 +314,45 @@ export class Engine {
 if (Symbol.dispose) Engine.prototype[Symbol.dispose] = Engine.prototype.free;
 
 /**
+ * PETRI units that `near` yoctoNEAR buys from an agar of `agar` units, with `petri_price` yoctoNEAR per PETRI at
+ * launch and `max_supply` units in all.
+ * @param {string} near
+ * @param {string} agar
+ * @param {string} petri_price
+ * @param {string} max_supply
+ * @returns {string}
+ */
+export function buy_quote(near, agar, petri_price, max_supply) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3;
+        try {
+            ptr0 = passStringToWasm0(near, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(agar, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+            ptr2 = passStringToWasm0(petri_price, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len2 = WASM_VECTOR_LEN;
+            ptr3 = passStringToWasm0(max_supply, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len3 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr3) { wasm.__wbindgen_free(ptr3, len3 * 1, 1); }
+            if (ptr2) { wasm.__wbindgen_free(ptr2, len2 * 1, 1); }
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.buy_quote(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+        deferred5_0 = ret[0];
+        deferred5_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
  * Flat indices for a named pattern placed at (x, y), wrapped onto the dish. Empty if the name is unknown.
  * @param {string} name
  * @param {number} x
@@ -282,28 +379,44 @@ export function pattern_cells(name, x, y, width, height, rotate, flip) {
 }
 
 /**
- * What planting `cells` costs (in PETRI units, as a decimal string) with `total_live` cells alive.
- * @param {string} base_units
- * @param {number} cells
+ * What planting `cells` costs in PETRI units (decimal string), given the agar and the living population.
+ * @param {string} agar
+ * @param {number} feed_ppm
+ * @param {number} keeper_bps
  * @param {number} total_live
- * @param {number} capacity
+ * @param {number} live_floor
+ * @param {number} payback
+ * @param {string} min_price
+ * @param {number} cells
  * @returns {string}
  */
-export function quote(base_units, cells, total_live, capacity) {
-    let deferred5_0;
-    let deferred5_1;
+export function quote(agar, feed_ppm, keeper_bps, total_live, live_floor, payback, min_price, cells) {
+    let deferred9_0;
+    let deferred9_1;
     try {
-        const val2 = +cells;
-        const val3 = +total_live;
-        const val4 = +capacity;
-        const ptr0 = passStringToWasm0(base_units, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.quote(ptr0, len0, val2, val3, val4);
-        deferred5_0 = ret[0];
-        deferred5_1 = ret[1];
+        const val3 = +feed_ppm;
+        const val4 = +keeper_bps;
+        const val5 = +total_live;
+        const val6 = +live_floor;
+        const val7 = +payback;
+        const val8 = +cells;
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(agar, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(min_price, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.quote(ptr0, len0, val3, val4, val5, val6, val7, ptr1, len1, val8);
+        deferred9_0 = ret[0];
+        deferred9_1 = ret[1];
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
-        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+        wasm.__wbindgen_free(deferred9_0, deferred9_1, 1);
     }
 }
 function __wbg_get_imports() {

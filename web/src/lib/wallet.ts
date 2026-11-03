@@ -3,6 +3,7 @@
 // it. The key never leaves the browser; the server only sees the public half.
 
 import { Account, JsonRpcProvider, KeyPair, type KeyPairString } from "near-api-js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { useSyncExternalStore } from "react";
 import { CONTRACT, RPC_URLS } from "./config";
 
@@ -47,12 +48,34 @@ function saved(): Saved | null {
   return memoryKey;
 }
 
+/** The small proof of work the guest faucet asks for, bound to this key (see /api/guest). About a second. */
+async function proofOfWork(publicKey: string, bits = 18): Promise<string> {
+  const enc = new TextEncoder();
+  for (let n = 0; ; n++) {
+    const h = sha256(enc.encode(`petri-guest:${publicKey}:${n}`));
+    let z = 0;
+    for (const b of h) {
+      if (b === 0) {
+        z += 8;
+        continue;
+      }
+      z += Math.clz32(b) - 24;
+      break;
+    }
+    if (z >= bits) return String(n);
+    // Let the page breathe every few thousand tries.
+    if (n % 20_000 === 0) await new Promise((r) => setTimeout(r, 0));
+  }
+}
+
 export async function createGuest(): Promise<string> {
   const kp = KeyPair.fromRandom("ed25519");
+  const publicKey = kp.getPublicKey().toString();
+  const nonce = await proofOfWork(publicKey);
   const res = await fetch("/api/guest", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ publicKey: kp.getPublicKey().toString() }),
+    body: JSON.stringify({ publicKey, nonce }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.accountId) throw new Error(body.error ?? "The guest account could not be made.");
@@ -97,12 +120,12 @@ function account(): Account {
 export type TxResult = { hash: string };
 
 // Guests sign a delegate action (NEP-366) and the site's relayer submits it and pays the gas.
-async function call(methodName: string, args: Record<string, unknown>, tgas: number): Promise<TxResult> {
+async function call(methodName: string, args: Record<string, unknown>, tgas: number, deposit: bigint = 0n): Promise<TxResult> {
   const a = account();
   const { actions, encodeSignedDelegate } = await import("near-api-js");
   const { signedDelegate } = await a.createSignedMetaTransaction({
     receiverId: CONTRACT,
-    actions: [actions.functionCall(methodName, args, BigInt(tgas) * 10n ** 12n, 0n)],
+    actions: [actions.functionCall(methodName, args, BigInt(tgas) * 10n ** 12n, deposit)],
     blockHeightTtl: 120,
   });
   const bytes = encodeSignedDelegate(signedDelegate);
@@ -127,9 +150,16 @@ export function readableFailure(f: unknown): string {
   return "NEAR rejected the transaction.";
 }
 
-export const joinDish = (name: string, color: number) => call("join", { name, color }, 60);
-export const plantCells = (cells: number[], note?: string) => call("plant", { cells, note: note?.trim() || null }, 150);
-export const advanceDish = () => call("advance", {}, 200);
+/** A guest stakes 0.02 NEAR when it joins: storage for its colony, and the rest buys its first PETRI. */
+export const JOIN_NEAR = 2n * 10n ** 22n;
+export const BUY_NEAR = 10n ** 22n;
+/** NEAR of deposits the site's relayer sponsors per guest (kept in step with /api/relay). */
+export const GUEST_BUDGET = 6n * 10n ** 22n;
+export const joinDish = (name: string, color: number, deposit: bigint = JOIN_NEAR) => call("join", { name, color }, 200, deposit);
+export const plantCells = (cells: number[], note: string | undefined, deposit: bigint) => call("plant", { cells, note: note?.trim() || null }, 200, deposit);
+export const buyPetri = (deposit: bigint = BUY_NEAR) => call("buy", {}, 150, deposit);
+export const claimAll = () => call("claim", {}, 150);
+export const advanceDish = () => call("advance", {}, 250);
 
 export function usePlayer(): Player {
   return useSyncExternalStore(

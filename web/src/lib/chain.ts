@@ -9,10 +9,18 @@ export type Rules = {
   max_supply: string;
   feed_ppm: number;
   keeper_bps: number;
+  cap_bps: number;
+  cap_min: number;
   burn_bps: number;
-  plant_cost: string;
-  capacity: number;
-  starter_grant: string;
+  payback: number;
+  min_cell_price: string;
+  live_floor: number;
+  /** yoctoNEAR per PETRI at launch */
+  petri_price: string;
+  min_join: string;
+  cell_fee: string;
+  tide_every: number;
+  tide_bps: number;
   buffer: number;
   max_plant_cells: number;
   max_catchup: number;
@@ -27,14 +35,25 @@ export type DishState = {
   board_hash: string;
   total_live: number;
   colonies: number;
+  ledger: string;
   plants: string;
   total_supply: string;
   agar: string;
-  granted: string;
+  sold: string;
   fed: string;
   returned: string;
   burned: string;
+  keeper_pot: string;
   keeper_paid: string;
+  /** yoctoNEAR waiting in the tide vault */
+  vault: string;
+  near_in: string;
+  near_tides: string;
+  tides: string;
+  /** PETRI units per cell right now */
+  cell_price: string;
+  /** yoctoNEAR per PETRI right now */
+  petri_price: string;
 };
 
 export type Colony = {
@@ -45,12 +64,20 @@ export type Colony = {
   joined_generation: string;
   last_plant_generation: string | null;
   cells_planted: string;
+  petri_spent: string;
   petri_burned: string;
-  petri_earned: string;
+  petri_claimed: string;
+  near_paid: string;
+  near_claimed: string;
 };
 
-export type PlantRecord = { generation: string; colony: number; cells: number[]; note: string | null };
+export type PlantRecord = { index: string; generation: string; colony: number; cells: number[]; cost: string; note: string | null };
+export type Entry =
+  | { Join: { generation: string; colony: number } }
+  | { Buy: { generation: string; colony: number; petri: string; near: string } }
+  | { Plant: { generation: string; colony: number; cells: number[]; cost: string } };
 export type Checkpoint = { generation: string; chain: string };
+export type Claimable = { petri: string; near: string };
 
 let preferred = 0;
 
@@ -110,17 +137,33 @@ export const getBoard = async () => {
 };
 export const getColonies = (from = 0, limit = 500) => view<Colony[]>("colonies", { from, limit });
 export const getPlants = (from = 0, limit = 1000) => view<PlantRecord[]>("plants", { from, limit });
+export const getLedger = (from = 0, limit = 1000) => view<Entry[]>("ledger", { from, limit });
+export const getEarnings = (from = 0, limit = 2000) => view<string[]>("earnings", { from, limit });
 export const getCheckpoints = (from = 0, limit = 2000) => view<Checkpoint[]>("checkpoints", { from, limit });
 export const getBalance = (account_id: string) => view<string>("ft_balance_of", { account_id });
+export const getClaimable = (account_id: string) => view<Claimable>("claimable", { account_id });
 export const getQuote = (cells: number) => view<string>("quote", { cells });
+export const getBuyQuote = (near: string) => view<string>("buy_quote", { near });
+export const getPlantDeposit = (cells: number, note_bytes: number | null) => view<string>("plant_deposit", { cells, note_bytes });
 export const getColonyOf = (account_id: string) => view<Colony | null>("colony_of", { account_id });
 
-export async function getAllPlants(total: number): Promise<PlantRecord[]> {
-  const out: PlantRecord[] = [];
-  for (let from = 0; from < total; from += 1000) {
-    out.push(...(await getPlants(from, 1000)));
-  }
-  return out;
+/** An account's NEAR balance in yoctoNEAR (what a guest has left for deposits). */
+export async function getNearBalance(account_id: string): Promise<bigint> {
+  const r = await rpc<{ amount: string }>("query", { request_type: "view_account", finality: "optimistic", account_id });
+  return BigInt(r.amount);
+}
+
+async function paged<T>(total: number, page: (from: number, limit: number) => Promise<T[]>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; from < total; from += 1000) out.push(...(await page(from, 1000)));
+  return out.slice(0, total);
+}
+export const getAllPlants = (total: number) => paged(total, getPlants);
+export const getAllLedger = (total: number) => paged(total, getLedger);
+export async function getAllColonies(total: number): Promise<Colony[]> {
+  const out: Colony[] = [];
+  for (let from = 0; from < total; from += 500) out.push(...(await getColonies(from, 500)));
+  return out.slice(0, total);
 }
 
 export function colorHex(c: number): string {

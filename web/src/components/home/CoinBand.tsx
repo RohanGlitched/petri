@@ -2,23 +2,35 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useLive, petri, int } from "@/lib/live";
+import { useLive, petri, int, near } from "@/lib/live";
 import s from "./bands.module.css";
 
-function Cycle({ agar, fed, back, burned, perGen }: { agar: string; fed: string; back: string; burned: string; perGen: string }) {
+function useMotion() {
   const [motion, setMotion] = useState(false);
   useEffect(() => setMotion(!window.matchMedia("(prefers-reduced-motion: reduce)").matches), []);
-  const dots = (path: string, n: number, dur: number, color: string, r = 4) =>
-    motion &&
-    Array.from({ length: n }, (_, i) => (
-      <circle key={`${path}${i}`} r={r} fill={color}>
-        <animateMotion dur={`${dur}s`} repeatCount="indefinite" begin={`${(i * dur) / n}s`}>
-          <mpath href={`#${path}`} />
-        </animateMotion>
-      </circle>
-    ));
+  return motion;
+}
+
+function Dots({ path, n, dur, color, r = 4, on }: { path: string; n: number; dur: number; color: string; r?: number; on: boolean }) {
+  if (!on) return null;
   return (
-    <svg className={s.cycle} viewBox="0 0 640 400" role="img" aria-label="The PETRI cycle: the agar feeds living cells, planting pays half back to the agar and burns half.">
+    <>
+      {Array.from({ length: n }, (_, i) => (
+        <circle key={i} r={r} fill={color}>
+          <animateMotion dur={`${dur}s`} repeatCount="indefinite" begin={`${(i * dur) / n}s`}>
+            <mpath href={`#${path}`} />
+          </animateMotion>
+        </circle>
+      ))}
+    </>
+  );
+}
+
+/** The PETRI loop: bought from the agar, fed to the living, spent on planting, half back and half burned. */
+function Cycle({ agar, fed, back, burned, sold, perGen }: { agar: string; fed: string; back: string; burned: string; sold: string; perGen: string }) {
+  const on = useMotion();
+  return (
+    <svg className={s.cycle} viewBox="0 0 640 420" role="img" aria-label="The PETRI cycle: the agar sells PETRI for NEAR and feeds living cells; planting pays half back to the agar and burns half.">
       <defs>
         <radialGradient id="cy-agar" cx="40%" cy="35%" r="75%">
           <stop offset="0" stopColor="#ffd796" />
@@ -34,54 +46,60 @@ function Cycle({ agar, fed, back, burned, perGen }: { agar: string; fed: string;
           <path d="M0 0L10 5L0 10z" fill="#6f5c47" />
         </marker>
       </defs>
-      <path id="cy-feed" d="M210 130 C 300 60, 380 60, 452 104" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
-      <path id="cy-spend" d="M500 190 L 500 262" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
-      <path id="cy-back" d="M446 318 C 360 360, 260 330, 200 262" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
-      <path id="cy-burn" d="M556 318 C 590 340, 600 360, 600 372" fill="none" stroke="#b8a58e" strokeWidth="2" strokeDasharray="4 5" />
-      {dots("cy-feed", 4, 3.2, "#e29a3a")}
-      {dots("cy-spend", 2, 1.6, "#c8431f", 3.5)}
-      {dots("cy-back", 3, 3.4, "#e29a3a", 3.5)}
-      {dots("cy-burn", 2, 2.2, "#4e3d2c", 3)}
+      <path id="cy-buy" d="M40 52 C 70 70, 90 92, 104 112" fill="none" stroke="#7fb5a6" strokeWidth="2" markerEnd="url(#cy-arrow)" />
+      <path id="cy-feed" d="M222 150 C 300 80, 380 80, 452 122" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
+      <path id="cy-spend" d="M500 206 L 500 278" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
+      <path id="cy-back" d="M446 334 C 360 376, 260 346, 208 282" fill="none" stroke="#b8a58e" strokeWidth="2" markerEnd="url(#cy-arrow)" />
+      <path id="cy-burn" d="M556 334 C 590 356, 600 376, 600 392" fill="none" stroke="#b8a58e" strokeWidth="2" strokeDasharray="4 5" />
+      <Dots path="cy-buy" n={2} dur={2.4} color="#1e8c6e" r={3.5} on={on} />
+      <Dots path="cy-feed" n={4} dur={3.2} color="#e29a3a" on={on} />
+      <Dots path="cy-spend" n={2} dur={1.6} color="#c8431f" r={3.5} on={on} />
+      <Dots path="cy-back" n={3} dur={3.4} color="#e29a3a" r={3.5} on={on} />
+      <Dots path="cy-burn" n={2} dur={2.2} color="#4e3d2c" r={3} on={on} />
 
-      <circle cx="140" cy="190" r="104" fill="url(#cy-agar)" />
-      <circle cx="140" cy="190" r="104" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
-      <text x="140" y="172" textAnchor="middle" className={s.cyBig}>The agar</text>
-      <text x="140" y="204" textAnchor="middle" className={s.cyNum}>{agar}</text>
-      <text x="140" y="226" textAnchor="middle" className={s.cySmall}>PETRI left to feed</text>
+      <text x="20" y="34" className={s.cyLabel}>NEAR in</text>
+      <text x="20" y="50" className={s.cySmall}>sold so far: {sold}</text>
 
-      <g>
-        {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-          <circle key={i} cx={470 + (i % 4) * 20 + (i > 3 ? 10 : 0)} cy={126 + Math.floor(i / 4) * 20} r="9" fill="url(#cy-cell)" />
-        ))}
-        <text x="500" y="92" textAnchor="middle" className={s.cyLabel}>Living cells</text>
-        <text x="500" y="186" textAnchor="middle" className={s.cySmall}>{perGen} PETRI to every cell, every generation</text>
-      </g>
+      <circle cx="150" cy="210" r="104" fill="url(#cy-agar)" />
+      <circle cx="150" cy="210" r="104" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
+      <text x="150" y="192" textAnchor="middle" className={s.cyBig}>The agar</text>
+      <text x="150" y="224" textAnchor="middle" className={s.cyNum}>{agar}</text>
+      <text x="150" y="246" textAnchor="middle" className={s.cySmall}>PETRI left</text>
 
-      <rect x="430" y="266" width="140" height="56" rx="28" fill="#1d1208" />
-      <text x="500" y="300" textAnchor="middle" className={s.cyBtn}>Planting</text>
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+        <circle key={i} cx={470 + (i % 4) * 20 + (i > 3 ? 10 : 0)} cy={146 + Math.floor(i / 4) * 20} r="9" fill="url(#cy-cell)" />
+      ))}
+      <text x="500" y="112" textAnchor="middle" className={s.cyLabel}>Living cells</text>
+      <text x="500" y="204" textAnchor="middle" className={s.cySmall}>{perGen} PETRI a cell, a generation</text>
 
-      <text x="300" y="54" textAnchor="middle" className={s.cySmall}>fed so far: {fed}</text>
-      <text x="300" y="370" textAnchor="middle" className={s.cySmall}>half back to the agar: {back}</text>
-      <text x="600" y="392" textAnchor="end" className={s.cySmall}>half burned: {burned}</text>
+      <rect x="430" y="282" width="140" height="56" rx="28" fill="#1d1208" />
+      <text x="500" y="316" textAnchor="middle" className={s.cyBtn}>Planting</text>
+
+      <text x="320" y="72" textAnchor="middle" className={s.cySmall}>fed so far: {fed}</text>
+      <text x="320" y="392" textAnchor="middle" className={s.cySmall}>half back to the agar: {back}</text>
+      <text x="610" y="412" textAnchor="end" className={s.cySmall}>half burned: {burned}</text>
     </svg>
   );
 }
 
-function PriceCurve({ live, base, capacity }: { live: number; base: number; capacity: number }) {
+/** Price of one cell against living cells, at today's agar: flat until the floor count, then it falls. */
+function PriceCurve({ live, agar, feedPpm, keeperBps, liveFloor, payback, minPrice }: { live: number; agar: number; feedPpm: number; keeperBps: number; liveFloor: number; payback: number; minPrice: number }) {
   const W = 520;
   const H = 180;
-  const maxLive = Math.max(3000, Math.ceil((live * 1.6) / 500) * 500);
-  const price = (l: number) => (base * (capacity + l)) / capacity / 1e6;
-  const maxP = price(maxLive);
+  const maxLive = Math.max(4000, Math.ceil((live * 1.6) / 500) * 500);
+  const price = (l: number) => Math.max(minPrice, ((agar * feedPpm) / 1e6) * (1 - keeperBps / 1e4) / Math.max(l, liveFloor) * payback) / 1e6;
+  const maxP = price(0);
   const x = (l: number) => 40 + (l / maxLive) * (W - 60);
   const y = (p: number) => H - 30 - (p / maxP) * (H - 50);
-  const px = x(live);
+  const pts = Array.from({ length: 81 }, (_, i) => (i / 80) * maxLive);
+  const d = pts.map((l, i) => `${i ? "L" : "M"}${x(l).toFixed(1)} ${y(price(l)).toFixed(1)}`).join(" ");
+  const px = x(Math.min(live, maxLive));
   const py = y(price(live));
   return (
-    <svg className={s.curve} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Price per planted cell against living cells. Now ${price(live).toFixed(2)} PETRI at ${live} living cells.`}>
+    <svg className={s.curve} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Price of a cell against living cells. Now ${price(live).toFixed(2)} PETRI at ${live} living cells.`}>
       <line x1="40" y1={H - 30} x2={W - 20} y2={H - 30} stroke="#cdbba3" />
       <line x1="40" y1="16" x2="40" y2={H - 30} stroke="#cdbba3" />
-      <path d={`M${x(0)} ${y(price(0))} L${x(maxLive)} ${y(price(maxLive))}`} stroke="#9c5a14" strokeWidth="2.5" fill="none" />
+      <path d={d} stroke="#9c5a14" strokeWidth="2.5" fill="none" />
       <line x1={px} y1={py} x2={px} y2={H - 30} stroke="#9c5a14" strokeDasharray="3 4" />
       <circle cx={px} cy={py} r="6" fill="#c8431f" stroke="#fff" strokeWidth="2" />
       <text x={px + 10} y={py - 10} className={s.cySmall}>now {price(live).toFixed(2)}</text>
@@ -93,28 +111,29 @@ function PriceCurve({ live, base, capacity }: { live: number; base: number; capa
 }
 
 export function CoinBand() {
-  const { d, rules, ready, perCell, supply, cellPrice } = useLive();
+  const { d, rules, ready, perCell, supply, cellPrice, petriPrice, vault, tideIn } = useLive();
   const st = d.state;
-  const v = (k: keyof NonNullable<typeof st>) => (st ? Number(st[k]) : 0);
-  const held = st ? supply - v("agar") : 0;
+  const v = (k: "agar" | "sold" | "fed" | "returned" | "burned" | "near_tides" | "near_in" | "tides" | "keeper_pot" | "keeper_paid") => (st ? Number(st[k]) : 0);
   const max = rules ? Number(rules.max_supply) : 1e12;
   const rows: [string, string, string][] = [
     ["Created, once, at launch", petri(max), "No mint function exists after this."],
-    ["Still in the agar", petri(v("agar")), "Paid out a sliver at a time to whoever is alive."],
-    ["Held by colonies", petri(held), "Earned by living cells, or granted when a colony joined."],
-    ["Fed to the living so far", petri(v("fed")), `${rules ? rules.feed_ppm : 20} parts per million of the agar, every generation.`],
+    ["Still in the agar", petri(v("agar")), "Sold for NEAR and fed to the living, a sliver at a time."],
+    ["Sold from the agar for NEAR", petri(v("sold")), "Every colony buys in. The price rises as the agar empties."],
+    ["Fed to the living so far", petri(v("fed")), `${rules ? rules.feed_ppm : 10} parts per million of the agar, every generation.`],
     ["Paid back by planting", petri(v("returned")), "Half of every planting returns to the agar."],
-    ["Burned for good", petri(v("burned")), "The other half. Total supply only ever falls."],
+    ["Burned for good", petri(v("burned")), `The other half. PETRI in existence: ${petri(supply)}.`],
   ];
+  const tideMinutes = rules ? Math.ceil((tideIn * Number(rules.generation_ms)) / 60_000) : 0;
   return (
     <section id="coin" className="band band-paper" aria-labelledby="coin-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="coin-title" className="h2">The coin is the nutrient</h2>
           <p className="lede">
-            All {rules ? petri(max) : "1,000,000"} PETRI were made at launch and placed in the agar. Nobody can mint more. Living
-            cells are fed from the agar; planting new life feeds it back, and burns as much again. Fill the dish and planting
-            gets dearer; thin it out and every surviving cell takes a bigger share of the feed.
+            All {rules ? petri(max) : "1,000,000"} PETRI were made once and put in the agar. Nobody can mint more. You buy PETRI
+            from the agar with NEAR, at a price that rises as it empties. Living cells are fed from the agar every generation;
+            planting feeds it back and burns as much again. And the NEAR you pay does not go to anyone running the dish: it
+            collects in the tide vault and is paid out every hour to whoever holds ground.
           </p>
         </div>
         <div className={s.coinGrid}>
@@ -124,6 +143,7 @@ export function CoinBand() {
               fed={st ? petri(v("fed")) : "—"}
               back={st ? petri(v("returned")) : "—"}
               burned={st ? petri(v("burned")) : "—"}
+              sold={st ? petri(v("sold")) : "—"}
               perGen={ready ? petri(perCell, 4) : "—"}
             />
           </div>
@@ -137,19 +157,49 @@ export function CoinBand() {
             ))}
           </dl>
         </div>
+
+        <div className={s.tides}>
+          <div>
+            <h3 className="h3">The tide pays NEAR to whoever holds ground</h3>
+            <p className="muted">
+              Every NEAR that comes in, from buying PETRI and from the small fee on each planting, waits in the tide vault
+              (minus the storage it pays for). Every {rules ? rules.tide_every : 240} generations, about an hour, half of the
+              vault is paid out to colonies in proportion to their living cells, with no colony counted for more than{" "}
+              {rules ? rules.cap_bps / 100 : 15}% of the dish. You claim it whenever you like.
+            </p>
+          </div>
+          <dl className={s.tideNums} aria-live="polite">
+            <div><dt>In the vault now</dt><dd className="num">{st ? near(vault, 4) : "—"} <small>NEAR</small></dd></div>
+            <div><dt>Next tide</dt><dd className="num">{ready ? `${int(tideIn)} gens` : "—"}</dd><p>about {tideMinutes} minutes</p></div>
+            <div><dt>Paid at {st ? int(v("tides")) : "—"} tides so far</dt><dd className="num">{st ? near(v("near_tides"), 4) : "—"} <small>NEAR</small></dd></div>
+            <div><dt>One PETRI from the agar</dt><dd className="num">{ready ? near(petriPrice * 1e6, 6) : "—"} <small>NEAR</small></dd></div>
+          </dl>
+        </div>
+
         <div className={s.priceRow}>
           <div>
-            <h3 className="h3">Planting gets dearer as the dish fills</h3>
+            <h3 className="h3">A cell costs what it earns in two hours</h3>
             <p className="muted">
-              One cell costs {rules ? petri(Number(rules.plant_cost)) : "2"} PETRI on an empty dish, plus the same again for
-              every {rules ? int(rules.capacity) : "1,000"} cells already alive. Right now a cell costs{" "}
-              <b className="num">{ready ? petri(cellPrice, 2) : "—"} PETRI</b> and earns{" "}
-              <b className="num">{ready ? petri(perCell, 4) : "—"}</b> a generation, so a still life pays for itself in about{" "}
-              <b className="num">{ready && perCell > 0 ? int(cellPrice / perCell) : "—"}</b> generations if nothing hits it.
+              The price of planting follows the feed: one cell costs what an average living cell earns in{" "}
+              {rules ? int(rules.payback) : "480"} generations at today&rsquo;s rate (counting at least{" "}
+              {rules ? int(rules.live_floor) : "1,000"} cells, never under {rules ? petri(Number(rules.min_cell_price), 1) : "0.5"}{" "}
+              PETRI). Right now a cell costs <b className="num">{ready ? petri(cellPrice, 2) : "—"} PETRI</b> and earns{" "}
+              <b className="num">{ready ? petri(perCell, 4) : "—"}</b> a generation. So planting only pays if your cells live
+              longer than two hours, and the dish decides that, not the price.
             </p>
             <Link className="btn btn-ink btn-small" href="/rules#coin">Read the full economics</Link>
           </div>
-          {rules && <PriceCurve live={d.totalLive} base={Number(rules.plant_cost)} capacity={rules.capacity} />}
+          {rules && ready && (
+            <PriceCurve
+              live={d.totalLive}
+              agar={d.agar}
+              feedPpm={rules.feed_ppm}
+              keeperBps={rules.keeper_bps}
+              liveFloor={rules.live_floor}
+              payback={rules.payback}
+              minPrice={Number(rules.min_cell_price)}
+            />
+          )}
         </div>
       </div>
     </section>

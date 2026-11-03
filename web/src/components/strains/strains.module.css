@@ -8,32 +8,60 @@
   margin: 0 0 18px;
   max-width: 20ch;
 }
+/* One flow line: Look, List, Choose, Plant, joined by a hairline with a node at each step. */
 .pipeline {
   list-style: none;
   counter-reset: step;
-  margin: 8px 0 48px;
+  margin: 16px 0 56px;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 0 36px;
+  position: relative;
 }
 .pipeline li {
   counter-increment: step;
-  padding: 20px;
-  border-radius: 20px;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line);
+  position: relative;
+  padding-top: 52px;
 }
 .pipeline li::before {
   content: counter(step);
-  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
   font-family: var(--display);
-  font-size: 28px;
+  font-size: 18px;
   color: var(--amber);
-  margin-bottom: 4px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.55);
+  z-index: 1;
 }
+.pipeline li::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 44px;
+  right: -28px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(242, 180, 90, 0.55), var(--line-2));
+}
+.pipeline li:last-child::after { display: none; }
 .pipeline b { display: block; font-family: var(--display); font-weight: 400; font-size: 22px; margin-bottom: 6px; }
-.pipeline p { margin: 0; font-size: 15px; color: var(--text-2); }
+.pipeline p { margin: 0; font-size: 15px; color: var(--text-2); max-width: 34ch; }
+.ref { font-size: 0.72em; line-height: 0; margin-left: 2px; }
+.ref a { color: var(--amber); text-decoration: none; }
+.footnote { margin: 32px 0 0; max-width: 72ch; font-size: 13.5px; color: var(--dim); }
+.footnote sup { color: var(--amber); margin-right: 4px; }
+.footnote code { font-family: var(--body); color: var(--text-2); }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+.meta > * { white-space: nowrap; }
+.notes .byModel { color: var(--amber-2); }
+.notes .byRules { color: var(--text-2); }
 .status {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -119,10 +147,15 @@
 
 @media (max-width: 960px) {
   .grid, .status { grid-template-columns: 1fr; }
-  .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  /* The flow line turns vertical: nodes down the left, a hairline joining them. */
+  .pipeline { grid-template-columns: 1fr; gap: 0; }
+  .pipeline li { padding: 4px 0 28px 56px; }
+  .pipeline li::after { top: 40px; bottom: 4px; left: 18px; right: auto; width: 1px; height: auto; background: linear-gradient(180deg, rgba(242, 180, 90, 0.55), var(--line-2)); }
+  .pipeline li:last-child { padding-bottom: 0; }
 }
 @media (max-width: 520px) {
-  .pipeline { grid-template-columns: 1fr; }
   .nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .card { padding: 20px; }
 }
