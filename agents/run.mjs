@@ -89,6 +89,46 @@ const TOP_UP_NEAR = (YOCTO * 2n) / 100n;
 // NEAR an attaching strain always keeps (nearBalance is in NEAR).
 const MIN_NEAR = Number(process.env.PETRI_MIN_NEAR ?? "0.12");
 const lastClaim = new Map();
+const lastSlide = new Map();
+// A house strain fossilizes its densest patch now and then, so the dish keeps a record of how it grew.
+const SLIDE_EVERY_MS = Number(process.env.PETRI_SLIDE_HOURS ?? (MAINNET ? "12" : "6")) * 3600_000;
+const SLIDE_SIDE = 16;
+const SLIDE_MIN_CELLS = 12;
+
+/** The 16×16 window (on an 8-cell grid, wrapping) holding most of the colony's live cells, or null. */
+function densestWindow(world, colony) {
+  const { width, height } = world.rules;
+  let best = null;
+  for (let y = 0; y < height; y += 8) {
+    for (let x = 0; x < width; x += 8) {
+      const bits = world.engine.region_bitmap(colony, x, y, SLIDE_SIDE, SLIDE_SIDE);
+      let n = 0;
+      for (const byte of bits) for (let v = byte; v; v &= v - 1) n++;
+      if (!best || n > best.n) best = { x, y, n };
+    }
+  }
+  return best && best.n >= SLIDE_MIN_CELLS ? best : null;
+}
+
+async function maybeFossilize(s, world, me, balance) {
+  if (s.bench) return;
+  if (Date.now() - (lastSlide.get(s.account) ?? 0) < SLIDE_EVERY_MS) return;
+  lastSlide.set(s.account, Date.now());
+  const win = densestWindow(world, me.id);
+  if (!win) return;
+  const cost = BigInt(world.rules.slide_cells_price) * BigInt(win.n);
+  // Keep enough PETRI to keep planting; a slide is a keepsake, not a strategy.
+  if (BigInt(balance) < cost + BigInt(world.state.cell_price) * 24n) return;
+  const title = `${s.name}, generation ${world.due}`;
+  const deposit = await view("slide_deposit", { w: SLIDE_SIDE, h: SLIDE_SIDE, title_bytes: Buffer.byteLength(title) });
+  try {
+    const args = { x: win.x, y: win.y, w: SLIDE_SIDE, h: SLIDE_SIDE, title };
+    const r = await callDish(s.account, "mint_slide", args, 200, BigInt(deposit), attaches(s));
+    log(s.name, `fossilized ${win.n} cells at ${win.x}, ${win.y}`, r.hash);
+  } catch (e) {
+    log(s.name, "slide refused:", e instanceof Error ? e.message : e);
+  }
+}
 
 async function ensureJoined(s, colonies) {
   const c = colonies.find((x) => x.account === s.account);
@@ -131,6 +171,7 @@ async function act(s) {
       log(s.name, "claim refused:", e instanceof Error ? e.message : e);
     }
   }
+  await maybeFossilize(s, world, me, balance);
   const totalLive = world.engine.total_live();
   const myCells = world.engine.live_counts()[me.id] ?? 0;
   const cands = candidates({ ...world, totalLive }, { id: me.id, temperament: s.temperament, cap: s.cap }, balance, rng);
