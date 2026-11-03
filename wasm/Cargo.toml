@@ -1,0 +1,14 @@
+[package]
+name = "petri-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "petri-core for the browser: render, replay and verify the dish."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+petri-core = { path = "../core" }
+wasm-bindgen = "0.2"
+hex = "0.4"

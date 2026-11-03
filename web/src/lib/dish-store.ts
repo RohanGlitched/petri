@@ -1,0 +1,191 @@
+"use client";
+// The live dish in the browser.
+//
+// The contract stores the board at the last generation someone advanced to. Time keeps running after that, and the
+// rules are deterministic, so this store loads the stored board into petri-core (WASM) and steps it forward to the
+// generation the clock says is due. When the plant log grows, it reloads the stored board and steps forward again.
+
+import { useSyncExternalStore } from "react";
+import { Engine, loadEngine } from "@/engine";
+import { getBoard, getColonies, getRules, getState, type Colony, type DishState, type Rules } from "./chain";
+
+export type Snapshot = {
+  status: "loading" | "ready" | "error";
+  error?: string;
+  rules?: Rules;
+  state?: DishState;
+  colonies: Colony[];
+  generation: number;
+  dueGeneration: number;
+  cells?: Uint16Array;
+  prevCells?: Uint16Array;
+  changedAt: number;
+  liveCounts: number[];
+  totalLive: number;
+  births: number[];
+  deaths: number[];
+  chain: string;
+  /** Milliseconds until the next generation is due. */
+  nextInMs: number;
+  /** When the chain was last read. */
+  syncedAt: number;
+  /** Generations the browser is ahead of the stored board. */
+  ahead: number;
+};
+
+const empty: Snapshot = {
+  status: "loading",
+  colonies: [],
+  generation: 0,
+  dueGeneration: 0,
+  changedAt: 0,
+  liveCounts: [],
+  totalLive: 0,
+  births: [],
+  deaths: [],
+  chain: "",
+  nextInMs: 0,
+  syncedAt: 0,
+  ahead: 0,
+};
+
+let snap: Snapshot = empty;
+const listeners = new Set<() => void>();
+let engine: Engine | null = null;
+let started = false;
+let clockOffset = 0;
+let knownPlants = "";
+let knownColonies = -1;
+let storedGeneration = 0;
+
+function emit(patch: Partial<Snapshot>) {
+  snap = { ...snap, ...patch };
+  if (typeof window !== "undefined") (window as unknown as { __petri: Snapshot }).__petri = snap;
+  listeners.forEach((l) => l());
+}
+
+function nowChain(): number {
+  return Date.now() + clockOffset;
+}
+
+function dueFor(rules: Rules, state: DishState): number {
+  return Math.floor((nowChain() - Number(state.epoch_ms)) / Number(rules.generation_ms));
+}
+
+async function loadStored(rules: Rules, state: DishState, colonies: Colony[]) {
+  const board = await getBoard();
+  const e = new Engine(rules.width, rules.height, Number(rules.emission_per_generation), rules.keeper_bps);
+  e.set_colonies(colonies.length);
+  if (!e.load_compact(board, Number(state.generation), state.chain)) throw new Error("The stored board could not be read");
+  engine?.free();
+  engine = e;
+  storedGeneration = Number(state.generation);
+}
+
+function advanceTo(due: number, force = false) {
+  if (!engine) return;
+  const g = engine.generation();
+  if (g >= due && !force) return;
+  const prev = snap.cells ?? engine.cells();
+  // Large gaps are stepped in one go; the renderer only animates the last generation.
+  const n = Math.max(0, due - g);
+  if (n > 1) engine.step(n - 1);
+  const before = engine.cells();
+  if (n >= 1) engine.step(1);
+  emit({
+    generation: engine.generation(),
+    cells: engine.cells(),
+    prevCells: n >= 1 ? before : prev,
+    changedAt: performance.now(),
+    liveCounts: Array.from(engine.live_counts()),
+    totalLive: engine.total_live(),
+    births: Array.from(engine.last_births()),
+    deaths: Array.from(engine.last_deaths()),
+    chain: engine.chain_hex(),
+    ahead: engine.generation() - storedGeneration,
+  });
+}
+
+async function sync(first = false) {
+  const [rules, state] = await Promise.all([snap.rules ? Promise.resolve(snap.rules) : getRules(), getState()]);
+  if (first) clockOffset = Number(state.now_ms) - Date.now();
+  const coloniesChanged = state.colonies !== knownColonies;
+  const colonies = coloniesChanged ? await getColonies(0, 500) : snap.colonies;
+  const plantKey = `${state.plants}:${state.colonies}`;
+  if (first || plantKey !== knownPlants || !engine) {
+    await loadStored(rules, state, colonies);
+    knownPlants = plantKey;
+    knownColonies = state.colonies;
+    const due = dueFor(rules, state);
+    emit({ rules, state, colonies, status: "ready", syncedAt: Date.now(), dueGeneration: due });
+    advanceTo(due, true);
+  } else {
+    emit({ state, colonies, syncedAt: Date.now() });
+  }
+}
+
+function tick() {
+  const { rules, state } = snap;
+  if (!rules || !state || !engine) return;
+  const due = dueFor(rules, state);
+  const genMs = Number(rules.generation_ms);
+  const nextInMs = genMs - ((nowChain() - Number(state.epoch_ms)) % genMs);
+  if (due > engine.generation()) {
+    emit({ dueGeneration: due, nextInMs });
+    advanceTo(due);
+  } else if (Math.abs(nextInMs - snap.nextInMs) > 400) {
+    emit({ nextInMs, dueGeneration: due });
+  }
+}
+
+export function startDish() {
+  if (started || typeof window === "undefined") return;
+  started = true;
+  (async () => {
+    try {
+      await loadEngine();
+      await sync(true);
+    } catch (e) {
+      emit({ status: "error", error: e instanceof Error ? e.message : String(e) });
+    }
+    setInterval(tick, 250);
+    const poll = async () => {
+      if (document.visibilityState === "visible") {
+        try {
+          await sync();
+          if (snap.status === "error") emit({ status: "ready", error: undefined });
+        } catch (e) {
+          if (snap.status !== "ready") emit({ status: "error", error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+      setTimeout(poll, 5000);
+    };
+    setTimeout(poll, 5000);
+  })();
+}
+
+/** Re-read the chain now, e.g. right after a planting lands. */
+export async function refreshDish() {
+  try {
+    await sync();
+  } catch {
+    /* the next poll retries */
+  }
+}
+
+/** The engine itself, for checks that must match the contract (planting validity). */
+export function currentEngine(): Engine | null {
+  return engine;
+}
+
+export function useDish(): Snapshot {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      startDish();
+      return () => listeners.delete(l);
+    },
+    () => snap,
+    () => empty,
+  );
+}
