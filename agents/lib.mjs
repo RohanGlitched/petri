@@ -79,14 +79,41 @@ export async function liveDish() {
 }
 
 const accounts = new Map();
-export function account(accountId) {
-  if (!accounts.has(accountId)) {
-    const file = path.join(KEYS_DIR, `${accountId}.json`);
+export function account(accountId, keysDir = KEYS_DIR) {
+  const k = `${keysDir}|${accountId}`;
+  if (!accounts.has(k)) {
+    const file = path.join(keysDir, `${accountId}.json`);
     const { private_key } = JSON.parse(fs.readFileSync(file, "utf8"));
     const provider = new JsonRpcProvider({ url: RPCS[0] });
-    accounts.set(accountId, new Account(accountId, provider, private_key));
+    accounts.set(k, new Account(accountId, provider, private_key));
   }
-  return accounts.get(accountId);
+  return accounts.get(k);
+}
+
+/**
+ * Where a key that can attach NEAR lives for `accountId`, or null. NEP-141 `ft_transfer` needs exactly 1 yoctoNEAR
+ * attached, which a function-call key cannot do. On mainnet the strains sign with full-access keys; on testnet they
+ * sign with dish-only function-call keys, so a transfer needs a full-access key from PETRI_KEYS_DIR_FULL (optional).
+ */
+export function transferKeysDir(accountId) {
+  if (NETWORK === "mainnet") return KEYS_DIR;
+  const dir = process.env.PETRI_KEYS_DIR_FULL;
+  return dir && fs.existsSync(path.join(dir, `${accountId}.json`)) ? dir : null;
+}
+
+/** Sends `amount` PETRI units from `from` to `to` with NEP-141 ft_transfer and a memo. Returns { hash } or throws. */
+export async function ftTransfer(from, to, amount, memo) {
+  const dir = transferKeysDir(from);
+  if (!dir) throw new Error("no key that can attach the 1 yoctoNEAR ft_transfer needs");
+  const res = await account(from, dir).signAndSendTransaction({
+    receiverId: CONTRACT,
+    actions: [actions.functionCall("ft_transfer", { receiver_id: to, amount: String(amount), memo }, 30n * 10n ** 12n, 1n)],
+    waitUntil: "EXECUTED_OPTIMISTIC",
+    throwOnFailure: false,
+  });
+  const fail = res.status?.Failure ?? res.receipts_outcome?.map((r) => r.outcome.status?.Failure).find(Boolean);
+  if (fail) throw new Error(failureText(fail));
+  return { hash: res.transaction.hash };
 }
 
 export function failureText(f) {

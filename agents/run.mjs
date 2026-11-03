@@ -2,6 +2,11 @@
 //
 //   PETRI_KEYS_DIR=~/.near-credentials/testnet NEARAI_API_KEY=... node run.mjs
 //   node run.mjs --once      one round for every strain, then exit
+//   node run.mjs --dry       one council round and one move per house strain against the live dish, printed, with
+//                            nothing signed or sent and nothing written to the log (model calls are real)
+//
+// Each house strain forecasts every candidate on a copy of the dish, remembers what its moves really did, and meets
+// the other house strains at a council once per tide window to trade PETRI for promises (council.mjs).
 
 import fs from "node:fs";
 import http from "node:http";
@@ -9,7 +14,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { callDish, liveDish, log, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
 import { candidates, makeRng } from "./strategies.mjs";
-import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent } from "./model.mjs";
+import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally } from "./model.mjs";
+import { forecast, forecastText, boxOf } from "./forecast.mjs";
+import { loadMemory, saveMemory, rememberMove, measureOutcomes, bootstrapFromChain, memoryText, movesOf, OUTCOME_GENS } from "./memory.mjs";
+import { runCouncil, pactsFor, pactGens } from "./council.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
@@ -56,30 +64,80 @@ const attaches = (s) => !!s.bench || MAINNET;
 const KEEPER_LAG = process.env.PETRI_KEEPER_LAG ?? "400";
 const PACE = Number(process.env.PETRI_PACE ?? (MAINNET ? "8" : "1"));
 const PORT = Number(process.env.PETRI_LOG_PORT ?? 0);
+// Forecasts: generations ahead (one tide window) and the CPU each move may spend on them.
+const FORECAST_GENS = Number(process.env.PETRI_FORECAST_GENS ?? "240");
+const FORECAST_MS = Number(process.env.PETRI_FORECAST_MS ?? "2000");
+// On mainnet each strain spends at most this much PETRI a day on plantings (big plays included), so the NEAR it pays
+// to buy PETRI stays where it was before the strains could choose guns and pulsars; a small planting is always allowed.
+const DAILY_PETRI = Number(process.env.PETRI_DAILY_PETRI ?? (MAINNET ? "100" : "0")) * 1e6;
+const SMALL_MOVE = 10e6;
+const spentToday = (account) => (mem.spend?.[account] ?? []).filter((x) => Date.now() - Date.parse(x.at) < 86_400_000).reduce((a, x) => a + x.petri, 0);
 const recent = [];
+const recentCouncil = [];
 let lastHealth = null;
 const once = process.argv.includes("--once");
+const dry = process.argv.includes("--dry");
 const nextAt = new Map();
 const rng = makeRng(Date.now() & 0xffffffff);
+const mem = loadMemory(LOG_DIR, NETWORK);
+// A promise lasts a tide window, or on a slow dish until the promisor's next planting is due.
+let holdGens = 240;
 
 function record(entry) {
+  if (dry) return;
   fs.appendFileSync(path.join(LOG_DIR, "actions.jsonl"), JSON.stringify(entry) + "\n");
   recent.push(entry);
   if (recent.length > 500) recent.shift();
 }
 
+function recordCouncil(events) {
+  for (const e of events) {
+    if (!dry) fs.appendFileSync(path.join(LOG_DIR, `council-${NETWORK}.jsonl`), JSON.stringify(e) + "\n");
+    recentCouncil.push(e);
+  }
+  if (recentCouncil.length > 300) recentCouncil.splice(0, recentCouncil.length - 300);
+}
+
+/** Puts a move's measured outcome on its entry in the public log, and keeps it across restarts. */
+function recordOutcome(tx, outcome) {
+  if (!tx || dry) return;
+  const entry = recent.find((a) => a.tx === tx);
+  if (entry) entry.outcome = outcome;
+  fs.appendFileSync(path.join(LOG_DIR, "outcomes.jsonl"), JSON.stringify({ tx, contract: CONTRACT, outcome }) + "\n");
+}
+
+/** What the site shows of each strain's memory: its moves, forecasts and outcomes, and the promises on record. */
+function memoryView() {
+  const strains = {};
+  for (const s of STRAINS) {
+    strains[s.name] = movesOf(mem, s.account).map(({ box, ...m }) => m);
+  }
+  const reputation = Object.entries(mem.reputation).map(([k, v]) => {
+    const [promisor, payer] = k.split("|");
+    return { promisor, payer, ...v };
+  });
+  return { network: NETWORK, strains, reputation, pacts: mem.pacts.slice(-30) };
+}
+
 // A read-only window on what the strains did and why, for the site's strains page. No keys or secrets pass through it.
 function serve() {
   if (!PORT) return;
-  try {
-    const lines = fs.readFileSync(path.join(LOG_DIR, "actions.jsonl"), "utf8").trim().split("\n").slice(-500);
-    for (const l of lines) if (l) recent.push(JSON.parse(l));
-  } catch {
-    /* no log yet */
-  }
+  const read = (file) => {
+    try {
+      return fs.readFileSync(path.join(LOG_DIR, file), "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    } catch {
+      return [];
+    }
+  };
+  for (const a of read("actions.jsonl").slice(-500)) recent.push(a);
+  const outcomes = new Map(read("outcomes.jsonl").map((o) => [o.tx, o.outcome]));
+  for (const a of recent) if (outcomes.has(a.tx)) a.outcome = outcomes.get(a.tx);
+  for (const e of read(`council-${NETWORK}.jsonl`).slice(-300)) recentCouncil.push(e);
   http
     .createServer((req, res) => {
-      const body = req.url?.startsWith("/health") ? lastHealth : { contract: CONTRACT, model: modelName(), health: lastHealth, actions: recent.slice(-200) };
+      const body = req.url?.startsWith("/health")
+        ? lastHealth
+        : { contract: CONTRACT, model: modelName(), health: lastHealth, actions: recent.slice(-200), council: recentCouncil.slice(-150), memory: memoryView() };
       res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "public, max-age=15" });
       res.end(JSON.stringify(body));
     })
@@ -114,7 +172,7 @@ function densestWindow(world, colony) {
 }
 
 async function maybeFossilize(s, world, me, balance) {
-  if (s.bench) return;
+  if (s.bench || dry) return;
   if (Date.now() - (lastSlide.get(s.account) ?? 0) < SLIDE_EVERY_MS) return;
   lastSlide.set(s.account, Date.now());
   const win = densestWindow(world, me.id);
@@ -136,13 +194,60 @@ async function maybeFossilize(s, world, me, balance) {
 async function ensureJoined(s, colonies) {
   const c = colonies.find((x) => x.account === s.account);
   if (c) return c;
+  if (dry) {
+    log(s.name, "has not joined this dish (dry run: not joining)");
+    return null;
+  }
   log(s.name, "joining");
   await callDish(s.account, "join", { name: s.name, color: s.color }, 200, JOIN_NEAR, attaches(s));
   return (await view("colony_of", { account_id: s.account })) ?? null;
 }
 
+/** House strains named, everyone else by number only (colony names are player-written). */
+function namer(world) {
+  const names = new Map();
+  for (const s of STRAINS) {
+    const c = world.colonies.find((x) => x.account === s.account);
+    if (c) names.set(c.id, s.name);
+  }
+  return (id) => (names.has(id) ? `${names.get(id)} (colony ${id})` : `colony ${id}`);
+}
+
+/**
+ * Brings memory up to date with the live dish: a strain with no memory reads its last plantings back from the chain,
+ * and every move old enough has its outcome measured and put on its entry in the public log.
+ */
+let readBack = false;
+async function learn(world) {
+  const house = (world.state.house ?? []).map(Number);
+  if (!readBack && STRAINS.some((s) => movesOf(mem, s.account).length === 0)) {
+    readBack = true;
+    const total = Number(world.state.plants ?? 0);
+    const plants = total ? await view("plants", { from: Math.max(0, total - 120), limit: 120 }) : [];
+    const added = bootstrapFromChain(mem, world, plants, house, cleanNote);
+    if (added) log(`memory: read ${added} past house plantings back from the chain`);
+  }
+  const due = Object.values(mem.strains).some((s) => s.moves.some((m) => !m.outcome && world.due - m.generation >= (m.source === "chain" ? 30 : OUTCOME_GENS)));
+  if (!due) return;
+  const earned = await view("earnings", { from: 0, limit: 2000 });
+  const earnings = new Map(earned.map((v, i) => [i + 1, Number(v)]));
+  for (const { account, move } of measureOutcomes(mem, world, earnings)) {
+    recordOutcome(move.tx, move.outcome);
+    if (move.source !== "chain") log(STRAINS.find((s) => s.account === account)?.name ?? account, "outcome:", JSON.stringify(move.outcome));
+  }
+  saveMemory(mem, dry);
+}
+
 async function act(s) {
   const world = await liveDish();
+  try {
+    await actOn(s, world);
+  } finally {
+    world.engine.free();
+  }
+}
+
+async function actOn(s, world) {
   const me = await ensureJoined(s, world.colonies);
   if (!me) return;
   if (me.last_plant_generation !== null && Number(me.last_plant_generation) >= world.due) return;
@@ -151,21 +256,23 @@ async function act(s) {
   let balance = Number(held) + Number(waiting.petri);
   // A strain that cannot afford three blocks buys a little PETRI from the agar, like anyone would.
   if (balance < Number(world.state.cell_price) * 12) {
+    if (dry) log(s.name, "would buy PETRI from the agar (dry run)");
     // A strain that attaches its own NEAR stops buying before its account runs dry: it keeps enough for gas.
-    if (attaches(s) && Number(await nearBalance(s.account)) < MIN_NEAR) {
+    else if (attaches(s) && Number(await nearBalance(s.account)) < MIN_NEAR) {
       log(s.name, "keeps its last NEAR for gas; not buying");
       return;
-    }
-    try {
-      const r = await callDish(s.account, "buy", {}, 150, TOP_UP_NEAR, attaches(s));
-      log(s.name, "bought PETRI from the agar", r.hash);
-      balance = Number(await view("ft_balance_of", { account_id: s.account }));
-    } catch (e) {
-      log(s.name, "buy refused:", e instanceof Error ? e.message : e);
+    } else {
+      try {
+        const r = await callDish(s.account, "buy", {}, 150, TOP_UP_NEAR, attaches(s));
+        log(s.name, "bought PETRI from the agar", r.hash);
+        balance = Number(await view("ft_balance_of", { account_id: s.account }));
+      } catch (e) {
+        log(s.name, "buy refused:", e instanceof Error ? e.message : e);
+      }
     }
   }
   // Every few hours a colony collects the NEAR it won at the tides (the bench every hour, so claims show up early).
-  if (Number(waiting.near) > 0 && Date.now() - (lastClaim.get(s.account) ?? 0) > (s.bench ? 3600_000 : 3 * 3600_000)) {
+  if (!dry && Number(waiting.near) > 0 && Date.now() - (lastClaim.get(s.account) ?? 0) > (s.bench ? 3600_000 : 3 * 3600_000)) {
     try {
       await callDish(s.account, "claim", {}, 150);
       lastClaim.set(s.account, Date.now());
@@ -175,18 +282,33 @@ async function act(s) {
     }
   }
   await maybeFossilize(s, world, me, balance);
+  if (!s.bench) await learn(world);
   const totalLive = world.engine.total_live();
-  const myCells = world.engine.live_counts()[me.id] ?? 0;
-  const cands = candidates({ ...world, totalLive }, { id: me.id, temperament: s.temperament, cap: s.cap }, balance, rng);
+  const counts = world.engine.live_counts();
+  const myCells = counts[me.id] ?? 0;
+  const nameOf = namer(world);
+  // Promises this strain made at the council, held here as candidate filters.
+  const pacts = s.bench ? { avoid: new Set(), banRegions: new Set(), strike: null, lines: [], ids: [] } : pactsFor(mem, s.account, world.due, nameOf);
+  const maxCost = DAILY_PETRI && !s.bench ? Math.max(SMALL_MOVE, DAILY_PETRI - spentToday(s.account)) : null;
+  let cands = candidates({ ...world, totalLive }, { id: me.id, temperament: s.temperament, cap: s.cap, maxCost }, balance, rng, 6, pacts);
+  let fc = null;
+  if (!s.bench && cands.length) {
+    fc = forecast(world, me.id, cands, { gens: FORECAST_GENS, budgetMs: FORECAST_MS, house: (world.state.house ?? []).map(Number) });
+    // A truce also rules out any planting the forecast says would cost the ally cells.
+    if (pacts.avoid.size) {
+      const harmless = cands.filter((c) => !c.forecast?.rivals.some((r) => pacts.avoid.has(r.id) && r.delta <= -3));
+      if (harmless.length < cands.length) log(s.name, `holds its truce: ${cands.length - harmless.length} planting(s) dropped`);
+      cands = harmless;
+    }
+  }
   if (cands.length === 0) {
     log(s.name, "no legal planting it can afford");
     return;
   }
-  const counts = world.engine.live_counts();
-  // Rivals by number and size only: no player-written text reaches the model.
+  // Rivals by number and size only, house strains by name: no player-written text reaches the model.
   const rivals = world.colonies
     .filter((c) => c.id !== me.id && (counts[c.id] ?? 0) > 0)
-    .map((c) => `colony ${c.id} with ${counts[c.id]} cells`)
+    .map((c) => `${nameOf(c.id)} with ${counts[c.id]} cells`)
     .join(", ");
   const summary = {
     generation: world.due,
@@ -195,16 +317,62 @@ async function act(s) {
     totalLive,
     agar: Math.round(Number(world.engine.agar()) / 1e6),
     rivals,
+    forecastGens: FORECAST_GENS,
+    memory: memoryText(mem, s.account, nameOf),
+    pacts: pacts.lines.join("\n"),
   };
-  for (const c of cands) c.costText = (c.cost / 1e6).toFixed(2);
+  for (const c of cands) {
+    c.costText = (c.cost / 1e6).toFixed(2);
+    c.forecastText = forecastText(c.forecast, nameOf);
+  }
   // The bench plays by written rules only; the house strains ask the model.
   const pick = s.bench ? null : await choose(s, summary, cands);
   const chosen = pick ? cands[pick.index] : cands[0];
   const note = cleanNote(pick?.note) || chosen.why.charAt(0).toUpperCase() + chosen.why.slice(1) + ".";
+  if (dry) {
+    console.log(`\n=== ${s.name} (colony ${me.id}, ${myCells} cells, ${summary.balance} PETRI) — forecast ${fc ? `${fc.done} of ${fc.done + fc.skipped} candidates in ${fc.ms} ms` : "off"}`);
+    console.log(summary.memory.split("\n").map((l) => `  ${l}`).join("\n"));
+    if (summary.pacts) console.log(`  Promises in force:\n${summary.pacts.split("\n").map((l) => `    ${l}`).join("\n")}`);
+    cands.forEach((c, i) => console.log(`  ${i === cands.indexOf(chosen) ? "*" : " "}${i + 1}. ${c.pact ? "[PACT] " : ""}${c.ambitious ? "[BIG] " : ""}${c.why} (${c.cells.length} cells, ${c.costText} PETRI)\n       ${c.forecastText}`));
+    console.log(`  -> chose ${cands.indexOf(chosen) + 1} by ${pick ? pick.model : "rules"}: "${note}" (${note.length} chars)${pick ? "" : ` [${lastModelError()}]`}`);
+    console.log("  (dry run: not planted)");
+    return;
+  }
   try {
     const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
     const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 200, BigInt(deposit), attaches(s));
     log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", note, r.hash);
+    if (!s.bench) {
+      let earnedAt = null;
+      try {
+        earnedAt = Number((await view("earnings", { from: me.id - 1, limit: 1 }))[0] ?? 0);
+      } catch {
+        /* the outcome then has no PETRI figure */
+      }
+      rememberMove(mem, s.account, {
+        source: "live",
+        tx: r.hash,
+        generation: world.due,
+        pattern: chosen.pattern,
+        kind: chosen.kind,
+        target: chosen.target,
+        ambitious: chosen.ambitious,
+        cells: chosen.cells.length,
+        cost: chosen.cost,
+        x: chosen.x,
+        y: chosen.y,
+        box: boxOf(chosen.cells, world.rules.width, world.rules.height),
+        note,
+        forecast: chosen.forecast ?? null,
+        before: { mine: myCells, target: chosen.target != null ? counts[chosen.target] ?? 0 : null },
+        earnedAt,
+        pacts: chosen.pact ? pacts.ids : [],
+        outcome: null,
+      });
+      mem.spend ??= {};
+      mem.spend[s.account] = [...(mem.spend[s.account] ?? []), { at: new Date().toISOString(), petri: chosen.cost }].filter((x) => Date.now() - Date.parse(x.at) < 86_400_000);
+      saveMemory(mem);
+    }
     record({
       at: new Date().toISOString(),
       contract: CONTRACT,
@@ -212,6 +380,9 @@ async function act(s) {
       account: s.account,
       generation: world.due,
       pattern: chosen.pattern,
+      kind: chosen.kind,
+      target: chosen.target,
+      ambitious: chosen.ambitious,
       cells: chosen.cells.length,
       cost: chosen.cost,
       note,
@@ -222,7 +393,12 @@ async function act(s) {
       chat_id: pick?.chatId ?? null,
       signature: pick?.signature ?? null,
       usage: pick?.usage ?? null,
+      forecast: chosen.forecast ?? null,
+      forecast_ms: fc?.ms ?? null,
+      pacts: pacts.ids,
       options: cands.map((c) => c.why),
+      option_forecasts: cands.map((c) => c.forecastText ?? null),
+      outcome: null,
     });
   } catch (e) {
     log(s.name, "plant refused:", e instanceof Error ? e.message : e);
@@ -240,6 +416,23 @@ function cleanNote(n) {
     .replace(/\s+/g, " ")
     .trim();
   return t.slice(0, 120);
+}
+
+/** Once per tide window the house strains meet; see council.mjs. */
+async function council() {
+  if (!hasModel()) return;
+  const world = await liveDish();
+  try {
+    await learn(world);
+    const events = await runCouncil({ world, strains: STRAINS, mem, dry, holdGens, log });
+    recordCouncil(events);
+    saveMemory(mem, dry);
+    for (const e of events) {
+      log("council", `${e.id ?? ""} ${e.from ?? ""}${e.to ? ` → ${e.to}` : ""}: ${e.status}${e.petri ? ` ${e.petri} PETRI` : ""}${e.terms ? ` — ${e.terms}` : ""}${e.tx ? ` ${e.tx}` : ""}${e.note ? ` (${e.note})` : ""}`);
+    }
+  } finally {
+    world.engine.free();
+  }
 }
 
 let keeperChecked = false;
@@ -291,13 +484,25 @@ async function health() {
       out[a] = null;
     }
   }
-  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)) };
+  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)), modelCalls: modelTally() };
   fs.writeFileSync(path.join(LOG_DIR, "health.json"), JSON.stringify(lastHealth, null, 1));
   const low = Object.entries(out).filter(([, v]) => v !== null && v < 0.5);
   if (low.length) log("LOW GAS:", low.map(([a, v]) => `${a} ${v}`).join(", "));
 }
 
+async function dryRun() {
+  log(`DRY RUN on ${CONTRACT} (${NETWORK}); model ${modelName() ?? "none (rules choose)"}; nothing is signed or sent`);
+  const spent0 = claudeSpent();
+  await council();
+  for (const s of STRAINS) await act(s).catch((e) => log(s.name, "error", e.stack ?? e.message));
+  const t = modelTally();
+  console.log(`\nmodel calls this run: ${JSON.stringify(t)}; Claude spend this run $${(claudeSpent() - spent0).toFixed(5)}`);
+}
+
 async function main() {
+  const rules = await view("rules");
+  holdGens = pactGens(Number(rules.tide_every), Math.max(...STRAINS.map((s) => s.every[1])) * PACE);
+  if (dry) return dryRun();
   log(`petri agents on ${CONTRACT}; model ${modelName() ?? "none (rules choose)"}`);
   serve();
   await health();
@@ -311,11 +516,13 @@ async function main() {
       const st = await view("state");
       const due = Number(st.due_generation);
       await keep();
+      // The council sits at the start of every tide window, before the window's moves.
+      if (Math.floor(due / Number(rules.tide_every)) !== mem.councilWindow) await council().catch((e) => log("council error", e.message));
       for (const s of PLAYERS) {
         const at = nextAt.get(s.account) ?? due + Math.floor(rng() * 6);
         if (due >= at) {
           await act(s).catch((e) => log(s.name, "error", e.message));
-          // On mainnet the house plays at half the pace, so its NEAR lasts through judging.
+          // On mainnet the house plays at an eighth of the pace, so its NEAR lasts through judging.
           const [lo, hi] = s.every.map((g) => g * PACE);
           nextAt.set(s.account, due + lo + Math.floor(rng() * (hi - lo + 1)));
         } else if (!nextAt.has(s.account)) {
