@@ -2,7 +2,7 @@
 // Replay the Petri dish from generation zero and check it against the contract.
 //
 //   node scripts/verify.mjs
-//   node scripts/verify.mjs --contract petri-v4.testnet --network testnet [--code-hash <base58>]
+//   node scripts/verify.mjs [--network testnet|mainnet] [--contract <account>] [--code-hash <base58>]
 //
 // Every read is pinned to one finalized block, so a transaction landing mid-read cannot skew the result. The script
 // reads the rules, state, colonies, the whole ledger (every join, purchase, sale, planting, tide, skip and refund in
@@ -30,14 +30,14 @@ const { initSync, Engine, quote, buy_quote, sell_quote } = await import(pathToFi
 initSync({ module: fs.readFileSync(path.join(pkg, "petri_bg.wasm")) });
 
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit. */
-const BUILD_HASH = "7GNyLTrzbFSmSxVp92Ne7bVXaKpUtxPsMYGqtx9ULuaS";
+const BUILD_HASH = "Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j";
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > 0 ? process.argv[i + 1] : dflt;
 };
 const NETWORK = arg("network", "testnet");
-const CONTRACT = arg("contract", NETWORK === "mainnet" ? "petri.near" : "petri-v4.testnet");
+const CONTRACT = arg("contract", NETWORK === "mainnet" ? "petri-dish.near" : "petri-v5.testnet");
 const CODE_HASH = arg("code-hash", BUILD_HASH);
 const RPCS = NETWORK === "mainnet" ? ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"] : ["https://rpc.testnet.fastnear.com", "https://rpc.testnet.near.org"];
 

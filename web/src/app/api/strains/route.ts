@@ -2,7 +2,11 @@
 
 import { CONTRACTS } from "@/lib/config";
 
-const SOURCE = process.env.PETRI_STRAINS_LOG_URL ?? "http://136.64.100.170:8790/";
+// Each dish has its own agents process and log window on the agents VM.
+const SOURCES = {
+  testnet: process.env.PETRI_STRAINS_LOG_URL ?? "http://136.64.100.170:8790/",
+  mainnet: process.env.PETRI_STRAINS_LOG_URL_MAINNET ?? "http://136.64.100.170:8791/",
+};
 
 export const revalidate = 15;
 
@@ -10,7 +14,7 @@ export async function GET(req: Request) {
   // The browser says which dish it reads; the log is filtered to that dish's contract.
   const net = new URL(req.url).searchParams.get("net") === "mainnet" ? "mainnet" : "testnet";
   try {
-    const res = await fetch(SOURCE, { next: { revalidate: 15 }, signal: AbortSignal.timeout(6000) });
+    const res = await fetch(SOURCES[net], { next: { revalidate: 15 }, signal: AbortSignal.timeout(6000) });
     if (!res.ok) throw new Error(`log window answered ${res.status}`);
     const body = await res.json();
     // The log spans every dish the strains have played; show only moves on the dish this site reads.
