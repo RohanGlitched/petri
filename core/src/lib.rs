@@ -868,11 +868,35 @@ pub fn petri_for_near(deposit: u128, agar: u128, k: u128) -> u128 {
     if agar == 0 || k == 0 {
         return 0;
     }
-    // units = agar * deposit / (k + deposit / 2), computed without overflow for deposits up to a few hundred NEAR.
+    // units = agar * deposit / (k + deposit / 2), exact for any deposit (the product may need 256 bits).
     let denom = k + deposit / 2;
-    let whole = agar / denom * deposit;
-    let rest = (agar % denom) * deposit / denom;
-    (whole + rest).min(agar)
+    wide_mul_div(agar, deposit, denom).min(agar)
+}
+
+/// `a * b / d` rounded down, for any `a`, `b` and `d > 0` whose quotient fits 128 bits: the product is formed in 256 bits
+/// and divided bit by bit.
+pub fn wide_mul_div(a: u128, b: u128, d: u128) -> u128 {
+    if let Some(p) = a.checked_mul(b) {
+        return p / d;
+    }
+    let m = u64::MAX as u128;
+    let (a1, a0, b1, b0) = (a >> 64, a & m, b >> 64, b & m);
+    let (lo, mid1, mid2, hi) = (a0 * b0, a1 * b0, a0 * b1, a1 * b1);
+    let mid = (lo >> 64) + (mid1 & m) + (mid2 & m);
+    let low = (lo & m) | (mid << 64);
+    let high = hi + (mid1 >> 64) + (mid2 >> 64) + (mid >> 64);
+    let (mut q, mut r) = (0u128, 0u128);
+    for i in (0..256).rev() {
+        let bit = if i >= 128 { (high >> (i - 128)) & 1 } else { (low >> i) & 1 };
+        let carry = r >> 127;
+        r = (r << 1) | bit;
+        q <<= 1;
+        if carry == 1 || r >= d {
+            r = r.wrapping_sub(d);
+            q |= 1;
+        }
+    }
+    q
 }
 
 /// NEAR the agar pays for `units` PETRI handed back: `sell_bps` of the curve's price, but never more than those units'

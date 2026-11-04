@@ -1,0 +1,16 @@
+[package]
+name = "petri-contract-v6-1"
+version = "0.3.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "The v6.1 Petri contract (4858ca0), frozen, for the v6.2 relaunch test only."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+near-sdk = "=5.29.1"
+petri-core = { path = "../../core" }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }

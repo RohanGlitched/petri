@@ -10,6 +10,7 @@ import { useSyncExternalStore } from "react";
 import type { NearConnector } from "@hot-labs/near-connect";
 import type { DataStorage } from "@hot-labs/near-connect";
 import { CONTRACT, FREE_PLAY, NETWORK, RPC_URLS, isAccountId } from "./config";
+import { getRules, getState, type Rules } from "./chain";
 
 const STORE = "petri.guest.v1";
 // Each network remembers its own wallet; testnet keeps the key it always had.
@@ -219,13 +220,59 @@ function failureOf(o: Outcome): unknown {
   return bad(o.status) ?? (o.receipts_outcome ?? []).map((r) => bad(r.outcome.status)).find(Boolean) ?? null;
 }
 
+/** The calls the contract refuses while the dish is behind the clock (plant, sell, mint_slide), and buy, which catches
+ * up like them. Each catches up at most rules.max_catchup generations itself. */
+const NEEDS_CURRENT = new Set(["plant", "sell", "mint_slide", "buy"]);
+/** A transaction may prepay at most 300 TGas across all its actions; the move itself keeps at least this much. */
+const TX_TGAS = 300;
+const MAIN_MIN_TGAS = 150;
+const ADVANCE_MAX_TGAS = 100;
+/** Generations that may pass while the player signs (a minute at 15 s). */
+const SIGN_MARGIN = 4;
+
+type Step = { methodName: string; args: Record<string, unknown>; tgas: number };
+
+let rulesOnce: Promise<Rules> | null = null;
+
+/** The move, preceded in the same transaction by enough `advance` calls to bring the dish within one catch-up of the
+ * clock. The mainnet house plays slowly, so its dish often sits more than max_catchup generations behind, where a
+ * planting (or a sale or a slide) alone would be refused "the dish is behind the clock". The actions of one transaction
+ * to one receiver run in one receipt, so they succeed or fail together. Beyond max_lag the first catch-up skips the
+ * clock ahead to max_catchup behind, so one advance is then enough. Gas is split so the whole stays within 300 TGas. */
+async function withCatchUp(methodName: string, args: Record<string, unknown>, tgas: number): Promise<Step[]> {
+  const main: Step = { methodName, args, tgas };
+  if (!NEEDS_CURRENT.has(methodName)) return [main];
+  try {
+    rulesOnce ??= getRules().catch((e) => {
+      rulesOnce = null;
+      throw e;
+    });
+    const [rules, state] = await Promise.all([rulesOnce, getState()]);
+    const lag = Number(state.due_generation) - Number(state.generation) + SIGN_MARGIN;
+    if (lag <= rules.max_catchup) return [main];
+    const room = TX_TGAS - MAIN_MIN_TGAS;
+    const most = Math.floor(room / 50);
+    const n = Math.min(most, lag > rules.max_lag ? 1 : Math.ceil(lag / rules.max_catchup) - 1);
+    const each = Math.min(ADVANCE_MAX_TGAS, Math.floor(room / n));
+    const advance: Step = { methodName: "advance", args: { max: rules.max_catchup }, tgas: each };
+    return [...Array<Step>(n).fill(advance), { ...main, tgas: Math.min(tgas, TX_TGAS - n * each) }];
+  } catch {
+    // The views did not answer: send the move alone, as before.
+    return [main];
+  }
+}
+
 // A wallet signs the call itself and pays its own gas and deposit.
 async function walletCall(methodName: string, args: Record<string, unknown>, tgas: number, deposit: bigint): Promise<TxResult> {
+  const steps = await withCatchUp(methodName, args, tgas);
   const w = await (await connector()).wallet();
   const out = (await w.signAndSendTransaction({
     signerId: player?.accountId,
     receiverId: CONTRACT,
-    actions: [{ type: "FunctionCall", params: { methodName, args, gas: String(BigInt(tgas) * 10n ** 12n), deposit: String(deposit) } }],
+    actions: steps.map((s, i) => ({
+      type: "FunctionCall" as const,
+      params: { methodName: s.methodName, args: s.args, gas: String(BigInt(s.tgas) * 10n ** 12n), deposit: String(i === steps.length - 1 ? deposit : 0n) },
+    })),
   })) as unknown as Outcome;
   const f = failureOf(out);
   if (f) throw new Error(readableFailure(f));
@@ -244,10 +291,12 @@ async function call(methodName: string, args: Record<string, unknown>, tgas: num
     deposit = 0n;
   }
   const a = account();
+  const steps = await withCatchUp(methodName, args, tgas);
   const { actions, encodeSignedDelegate } = await import("near-api-js");
+  // The relayer takes advance calls ahead of the move in one delegate action (see /api/relay).
   const { signedDelegate } = await a.createSignedMetaTransaction({
     receiverId: CONTRACT,
-    actions: [actions.functionCall(methodName, args, BigInt(tgas) * 10n ** 12n, deposit)],
+    actions: steps.map((s) => actions.functionCall(s.methodName, s.args, BigInt(s.tgas) * 10n ** 12n, 0n)),
     blockHeightTtl: 120,
   });
   const bytes = encodeSignedDelegate(signedDelegate);
@@ -302,10 +351,13 @@ export const claimPending = () => call("claim_pending", {}, 30);
 export const settlePending = (account: string) => call("settle_pending", { account_id: account }, 100);
 /** A colony someone else's payment started (`proxy`, under a neutral "Culture" name) may take its own name and stain,
  * once. */
-export const renameColony = (name: string, color: number) => call("rename", { name, color }, 50);
+/** Both `rename` and `set_payout` charge the storage they add (a longer name, a payout account) from the attached NEAR
+ * and send the rest back; this covers either. */
+export const SMALL_STORAGE_NEAR = 10n ** 21n;
+export const renameColony = (name: string, color: number) => call("rename", { name, color }, 50, SMALL_STORAGE_NEAR);
 /** Where the colony's NEAR payouts (tide winnings and sales) go from now on; `null` sends them to its own account again.
  * Only a colony that has attached NEAR may set one: a guest is paid in credit, and the relayer does not relay this call. */
-export const setPayout = (account: string | null) => call("set_payout", { account_id: account }, 50);
+export const setPayout = (account: string | null) => call("set_payout", { account_id: account }, 50, SMALL_STORAGE_NEAR);
 /** Offer `to`'s colony `petri` PETRI units for its promise not to plant within rules.pact_radius of the caller's living
  * cells before generation `until`. The PETRI is held until it accepts; it must be PETRI the caller could sell (a guest,
  * or a colony holding kept PETRI, offers pacts without PETRI). `deposit` is PACT_DEPOSIT (a guest spends it from

@@ -9,22 +9,30 @@
 //! and either can be accepted alone; a pact that bound both would need both colonies' consent in one call and buys
 //! nothing two pacts cannot.
 //!
-//! Bounds: a colony is party to at most `MAX_PACTS` pacts that have not ended (offers it made or received, and
-//! accepted pacts on either side), and at most one open offer goes from one colony to another, so a planting checks
-//! at most `MAX_PACTS` pacts and scans at most cells × (2 `pact_radius` + 1)² cells once each (`Dish::pact_breach`).
-//! An offer pays for its own storage and for the entries its acceptance and its end will write.
+//! Bounds: a colony is party to at most `MAX_PACTS` accepted pacts and offers it made, and has at most `MAX_OFFERS_IN`
+//! open offers from others waiting (so offers nobody asked for can fill only that list, which its colony empties by
+//! declining them); at most one open offer goes from one colony to another. A planting checks at most `MAX_PACTS`
+//! pacts and scans at most cells × (2 `pact_radius` + 1)² cells once each (`Dish::pact_breach`). An offer pays for its
+//! own storage and for the entries its acceptance and its end will write, and carries at least `MIN_PACT_PETRI`.
+//!
+//! The protected ground is the paying colony's living cells as the board stands at each planting: it moves with the
+//! colony, cells it plants after the pact was accepted included. A pact is a promise to stay away from a colony, not
+//! from a place.
 //!
 //! What a pact pays must be PETRI its maker could sell: a colony holding kept PETRI, or one that never attached NEAR,
-//! offers pacts that carry no PETRI. The house's PETRI stays in the house: a house colony's pact with a player carries
-//! none; a player's pact with the house may (the house plants with it and never sells), and house-to-house pacts are
+//! cannot offer one. The house's PETRI stays in the house: a house colony offers pacts only to the house; a player's
+//! pact with the house may carry PETRI (the house plants with it and never sells), and house-to-house pacts may be
 //! free. Every pact is in the ledger (`PactOffer`, `PactAccept`, `PactEnd`), and both replays rebuild them, check every
 //! planting against the pacts binding its colony and count the PETRI held for offers.
 
 use crate::*;
 
-/// Most pacts one colony is party to at once (offers made or received, and accepted pacts), so a planting checks at
-/// most this many.
+/// Most accepted pacts and offers it made one colony is party to at once, so a planting checks at most this many.
 pub const MAX_PACTS: usize = 8;
+/// Most open offers from other colonies one colony has waiting.
+pub const MAX_OFFERS_IN: usize = 16;
+/// The least PETRI a pact carries (1 PETRI), except between two of the house's colonies.
+pub const MIN_PACT_PETRI: u128 = 1_000_000;
 /// Bytes an offer sets aside for the entries its acceptance and its end write, and for the record growing with them.
 const PACT_RESERVE: u128 = 140;
 /// NEAR that always covers an offer's storage (0.0042 NEAR: its record, 75 bytes; its entry with the credit it spent,
@@ -74,6 +82,7 @@ impl Petri {
         require!(a != b, "a colony makes no pact with itself");
         let units = petri.0;
         let (house_a, house_b) = (self.colonies.get(a as u32 - 1).unwrap().house, self.colonies.get(b as u32 - 1).unwrap().house);
+        require!(units >= MIN_PACT_PETRI || (house_a && house_b), "a pact carries at least 1 PETRI (only pacts between the house's colonies may carry less)");
         if units > 0 {
             require!(!house_a || house_b, "the house's PETRI stays in the house: a house colony's pact with a player carries no PETRI");
             self.require_sendable(&account, "pay for a pact");
@@ -86,11 +95,15 @@ impl Petri {
         self.end_expired(b);
         self.flush();
         let (la, lb) = (self.pact_list(a), self.pact_list(b));
-        require!(la.len() < MAX_PACTS && lb.len() < MAX_PACTS, "each colony is party to at most 8 pacts at once, and one of these already is");
+        let mut bound = 0;
         for &i in &la {
             let p = read_pact(i);
             require!(!(p.to == b && p.accepted.is_none()), "your offer to that colony is still open: one open offer to a colony at a time");
+            bound += pact_counts(a, &p);
         }
+        require!(bound < MAX_PACTS, "your colony is party to 8 pacts (accepted, or offers it made) at once; one must end first");
+        let waiting = lb.iter().filter(|&&i| pact_counts(b, &read_pact(i)) == 0).count();
+        require!(waiting < MAX_OFFERS_IN, "that colony has 16 offers waiting; it must accept or decline one first");
         let held = self.balance(&account);
         require!(held >= units, format!("you hold {} PETRI", fmt_petri(held)));
         let before = env::storage_usage();
@@ -129,6 +142,10 @@ impl Petri {
         let mut p = self.pact_record(id);
         require!(p.to == me, "that pact was not offered to your colony");
         require!(p.accepted.is_none() && p.ended.is_none() && self.generation < p.until.0, "that pact is no longer open: it was accepted, ended or expired");
+        // Pacts past their end make room first; an accepted pact counts towards this colony's eight.
+        self.end_expired(me);
+        let bound: usize = pact_list(me).iter().map(|&i| pact_counts(me, &read_pact(i))).sum();
+        require!(bound < MAX_PACTS, "your colony is party to 8 pacts (accepted, or offers it made) at once; one must end first");
         let units = p.petri.0 as u128;
         if units > 0 {
             self.pact_escrow -= units;
@@ -253,6 +270,12 @@ impl Petri {
             ));
         }
     }
+}
+
+/// Whether pact `p` counts towards colony `c`'s `MAX_PACTS`: accepted, or an offer `c` made (1), or an offer waiting
+/// for `c` (0).
+fn pact_counts(c: u16, p: &Pact) -> usize {
+    (p.accepted.is_some() || p.from == c) as usize
 }
 
 /// The `pact` event: what happened to pact `id` (`offer`, `accept` or `end`), and, for an end, the PETRI sent back.

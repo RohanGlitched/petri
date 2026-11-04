@@ -1,8 +1,8 @@
 // Relays a guest's signed delegate action (NEP-366 meta transaction): the guest signs a call to the dish, this
 // server wraps it in a transaction and pays the gas. Before paying anything it checks, off chain, what NEAR would
-// check before running the call: the sender is one of our guests, the call is one of the dish's own methods with no
-// deposit and bounded gas, the delegate action has not expired, the signature is valid for it, and the key exists on
-// the guest's account with a fresh nonce.
+// check before running the call: the sender is one of our guests, the call is one of the dish's own methods (with at
+// most three `advance` calls before it) with no deposit and bounded gas in all, the delegate action has not expired,
+// the signature is valid for it, and the key exists on the guest's account with a fresh nonce.
 //
 // Under NEP-366 the relayer would also pay any NEAR an inner call attaches, and a failed call refunds that NEAR to the
 // guest, so nothing relayed may attach NEAR at all. Guests pay for joining, buying and planting with the credit the
@@ -24,6 +24,8 @@ const ALLOWED = new Set(["join", "buy", "plant", "sell", "claim", "advance", "mi
 /** The most gas a relayed call may prepay: 300 TGas, a transaction's limit, which a catch-up on a crowded dish can need
  * (unused gas is refunded to the relayer). */
 const MAX_GAS = 300n * 10n ** 12n;
+/** Most `advance` calls a relayed delegate action may carry ahead of its call (in all within MAX_GAS). */
+const MAX_ADVANCES = 3;
 const PER_ACCOUNT_PER_MIN = 6;
 /** Nonces this instance has relayed recently, so two copies of one action sent at once are paid for only once. */
 const seen = new Map<string, number>();
@@ -107,11 +109,18 @@ export async function POST(req: Request) {
   const guest = new RegExp(`^g-[0-9a-f]{10}\\.${relayer.replace(/\./g, "\\.")}$`);
   if (da.receiverId !== CONTRACT) return bad(`Only calls to ${CONTRACT} are relayed.`);
   if (!guest.test(da.senderId)) return bad("Only Petri guest accounts are relayed; wallet accounts pay their own gas.", 403);
-  if (da.actions.length !== 1) return bad("Relay one call at a time.");
-  const fc = da.actions[0].functionCall;
-  if (!fc || !ALLOWED.has(fc.methodName)) return bad("Only join, buy, plant, sell, claim, advance, mint_slide, settle_pending and the pact calls are relayed.");
-  if (BigInt(fc.deposit) !== 0n) return bad("Relayed calls carry no NEAR; guests pay from their sponsored credit.");
-  if (BigInt(fc.gas) > MAX_GAS) return bad("Too much gas requested.");
+  // One call, or one call preceded by up to MAX_ADVANCES `advance` calls that bring a dish far behind the clock within
+  // one catch-up of it (the actions run in one receipt, so they succeed or fail together).
+  if (da.actions.length < 1 || da.actions.length > 1 + MAX_ADVANCES) return bad("Relay one call at a time (with at most 3 advance calls before it).");
+  let gas = 0n;
+  for (const [i, a] of da.actions.entries()) {
+    const fc = a.functionCall;
+    if (!fc || !ALLOWED.has(fc.methodName)) return bad("Only join, buy, plant, sell, claim, advance, mint_slide, settle_pending and the pact calls are relayed.");
+    if (i < da.actions.length - 1 && fc.methodName !== "advance") return bad("Only advance calls may come before the call itself.");
+    if (BigInt(fc.deposit) !== 0n) return bad("Relayed calls carry no NEAR; guests pay from their sponsored credit.");
+    gas += BigInt(fc.gas);
+  }
+  if (gas > MAX_GAS) return bad("Too much gas requested.");
 
   // The signature must be valid for exactly this delegate action.
   const pk = da.publicKey.ed25519Key?.data;

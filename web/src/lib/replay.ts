@@ -66,8 +66,11 @@ const TIDE_BYTES = [130, 175];
 
 type SlideSeen = { bitmap: Uint8Array; w: number; h: number; cells: number; moves: number; holder: string; royalties: bigint };
 type PactSeen = { from: number; to: number; petri: bigint; until: number; accepted: boolean; ended: boolean };
-/** Most pacts one colony is party to at once. */
+/** Most pacts one colony is party to at once (accepted ones and the offers it made), and most open offers it can receive. */
 const MAX_PACTS = 8;
+const MAX_INCOMING = 16;
+/** The least a pact offer carries, unless both colonies are the house's: 1 PETRI. */
+const MIN_PACT_PETRI = 1_000_000n;
 
 export class Replayer {
   e: Engine;
@@ -130,6 +133,8 @@ export class Replayer {
   /** Each colony's kept PETRI as the ledger gives it, and its earnings when last counted (a guest's count as kept). */
   private kept = new Map<number, bigint>();
   private synced = new Map<number, bigint>();
+  /** Vault shares the engine counted as NEAR won that went to an attached colony holding kept PETRI, paid as credit. */
+  private asCreditWon = new Map<number, bigint>();
 
   constructor(input: ReplayInput) {
     const { rules, state, ledger } = input;
@@ -175,8 +180,24 @@ export class Replayer {
     this.kept.set(id, k > units ? k - units : 0n);
   }
 
+  /** NEAR the engine counted as won by colony `id`, less the shares paid to it as credit while it held kept PETRI. */
+  private wonOf(id: number): bigint {
+    return BigInt(this.e.won_of(id)) - (this.asCreditWon.get(id) ?? 0n);
+  }
+
+  /** Paid in NEAR: a colony that brought at least min_join of NEAR in one call and holds no kept PETRI. */
+  private paidInNear(id: number) {
+    return this.e.has_attached(id) && this.keptOf(id) === 0n;
+  }
+
+  /** Pacts colony `id` is bound by or waits on: accepted ones it is party to and open offers it made (at most 8). */
   private livePacts(id: number) {
-    return this.pactsSeen.filter((p) => (p.from === id || p.to === id) && !p.ended).length;
+    return this.pactsSeen.filter((p) => !p.ended && (p.accepted ? p.from === id || p.to === id : p.from === id)).length;
+  }
+
+  /** Open offers made to colony `id` (at most 16). */
+  private incomingPacts(id: number) {
+    return this.pactsSeen.filter((p) => !p.ended && !p.accepted && p.to === id).length;
   }
 
   private applyEvents() {
@@ -216,7 +237,8 @@ export class Replayer {
         // What a guest earned is kept until it first attaches; PETRI bought with credit is kept.
         this.sync(b.colony);
         this.kept.set(b.colony, this.keptOf(b.colony) + BigInt(credit_share(b.petri, b.credit, paid.toString())));
-        if (BigInt(b.near) > 0n) this.e.attach(b.colony);
+        // A colony is paid in NEAR only once one call of its brought at least min_join of NEAR to the vault.
+        if (BigInt(b.near) >= BigInt(rules.min_join)) this.e.attach(b.colony);
       } else if ("Sell" in entry) {
         const x = entry.Sell;
         this.sells++;
@@ -255,6 +277,7 @@ export class Replayer {
         }
         // Kept PETRI is spent first, the royalty too; a royalty to a guest holder is kept.
         this.sync(p.colony);
+        const keptBefore = this.keptOf(p.colony);
         this.spend(p.colony, BigInt(p.cost) + BigInt(p.licence?.royalty ?? 0));
         if (p.licence?.holder && !p.licence.to_agar) {
           const h = colonies.find((c) => c.account === p.licence?.holder);
@@ -269,12 +292,13 @@ export class Replayer {
           const [cost, toll] = licence(base, rules.slide_discount_bps, rules.slide_royalty_bps).split(",");
           const s = this.seen[Number(l.token) - 1];
           const who = l.holder ?? this.accountOf(p.colony);
-          // A planter that has never attached NEAR (before this planting) pays its royalty to the agar.
-          const toAgar = !!l.holder && !this.e.has_attached(p.colony);
+          // A planter that has never attached NEAR (before this planting), or that holds kept PETRI beyond the planting's
+          // cost (which the royalty would come from), pays its royalty to the agar.
+          const toAgar = !!l.holder && (!this.e.has_attached(p.colony) || keptBefore > BigInt(p.cost));
           if (!s) this.flag("licence", `slide ${l.token} did not exist yet`);
           else if (s.cells < (rules.licence_min_cells ?? 0)) this.flag("licence", `slide ${l.token} holds ${s.cells} cells, under the ${rules.licence_min_cells} a licence needs`);
           else if (!this.e.fits_slide(cells, s.bitmap, s.w, s.h)) this.flag("licence", `colony ${p.colony}'s planting is not slide ${l.token}'s pattern`);
-          else if (!!l.to_agar !== toAgar) this.flag("licence", `colony ${p.colony}'s royalty went to ${l.to_agar ? "the agar" : "the holder"}, but it ${toAgar ? "never" : "has"} attached NEAR`);
+          else if (!!l.to_agar !== toAgar) this.flag("licence", `colony ${p.colony}'s royalty went to ${l.to_agar ? "the agar" : "the holder"}, but it ${toAgar ? "never attached NEAR or held kept PETRI" : "had attached NEAR and held no kept PETRI beyond the cost"}`);
           else if (cost !== p.cost) this.flag("price", `a licensed planting paid ${p.cost}; the licence gives ${cost}`);
           else if (l.moves < s.moves || (l.moves === s.moves && who !== s.holder)) this.flag("licence", `slide ${l.token}'s holder was ${s.holder} (after ${s.moves} moves), not ${who}`);
           else if (l.holder === this.accountOf(p.colony)) this.flag("licence", `colony ${p.colony} paid its own slide a royalty`);
@@ -299,7 +323,7 @@ export class Replayer {
         this.returned += cost - burn;
         this.e.set_agar((BigInt(this.e.agar()) + cost - burn).toString());
         this.e.plant(p.colony, cells);
-        if (BigInt(p.near) > 0n) this.e.attach(p.colony);
+        if (BigInt(p.near) >= BigInt(rules.min_join)) this.e.attach(p.colony);
         this.vault += BigInt(p.near);
         this.nearIn += BigInt(p.near);
         this.pool += BigInt(p.credit);
@@ -357,8 +381,11 @@ export class Replayer {
         const c = entry.Claim;
         this.claims++;
         // A claim takes all its colony was owed: what it won at the tides less what it claimed before.
-        const owedNow = BigInt(this.e.won_of(c.colony)) - (this.claimed.get(c.colony) ?? 0n);
-        if (BigInt(c.near) !== owedNow) this.flag("claim", `colony ${c.colony} claimed ${c.near} NEAR; it was owed ${owedNow}`);
+        const owedNow = this.wonOf(c.colony) - (this.claimed.get(c.colony) ?? 0n);
+        // No NEAR claim while the colony holds kept PETRI.
+        this.keptChecks++;
+        if (this.keptOf(c.colony) > 0n) this.flag("kept", `colony ${c.colony} claimed NEAR while it held ${fmt(this.keptOf(c.colony))} kept PETRI`);
+        else if (BigInt(c.near) !== owedNow) this.flag("claim", `colony ${c.colony} claimed ${c.near} NEAR; it was owed ${owedNow}`);
         else if (BigInt(c.paid) > BigInt(c.near) || BigInt(c.near) - BigInt(c.paid) > RECORD_STORAGE_MAX) this.flag("claim", `colony ${c.colony} was sent ${c.paid} of ${c.near}`);
         this.claimed.set(c.colony, (this.claimed.get(c.colony) ?? 0n) + BigInt(c.near));
         this.owed -= BigInt(c.near);
@@ -377,7 +404,9 @@ export class Replayer {
         const until = Number(o.until);
         if (o.pact !== this.pactsSeen.length + 1) this.flag("pact", `pact ${o.pact} is out of order`);
         else if (o.from === o.to || until <= g || until > g + (rules.pact_max_gens ?? 0)) this.flag("pact", `pact ${o.pact} runs to generation ${until}`);
-        else if (this.livePacts(o.from) >= MAX_PACTS || this.livePacts(o.to) >= MAX_PACTS) this.flag("pact", `pact ${o.pact}: a colony already party to ${MAX_PACTS} pacts`);
+        else if (this.livePacts(o.from) >= MAX_PACTS) this.flag("pact", `pact ${o.pact}: colony ${o.from} already had ${MAX_PACTS} pacts and offers`);
+        else if (this.incomingPacts(o.to) >= MAX_INCOMING) this.flag("pact", `pact ${o.pact}: colony ${o.to} already had ${MAX_INCOMING} open offers`);
+        else if (petri < MIN_PACT_PETRI && !(this.house.includes(o.from) && this.house.includes(o.to))) this.flag("pact", `pact ${o.pact} carries ${fmt(petri)} PETRI; an offer carries at least 1`);
         else if (this.pactsSeen.some((q) => q.from === o.from && q.to === o.to && !q.accepted && !q.ended)) this.flag("pact", `pact ${o.pact}: a second open offer from colony ${o.from} to colony ${o.to}`);
         else if (petri > 0n && this.house.includes(o.from) && !this.house.includes(o.to)) this.flag("pact", `pact ${o.pact}: the house offered a player PETRI`);
         if (petri > 0n && !this.house.includes(o.from)) {
@@ -392,7 +421,8 @@ export class Replayer {
       } else if ("PactAccept" in entry) {
         const q = this.pactsSeen[entry.PactAccept.pact - 1];
         if (!q || q.accepted || q.ended || g >= q.until) this.flag("pact", `pact ${entry.PactAccept.pact} accepted while not open`);
-        else {
+        else if (this.livePacts(q.to) >= MAX_PACTS) this.flag("pact", `pact ${entry.PactAccept.pact}: colony ${q.to} accepted it with ${MAX_PACTS} pacts and offers already`);
+        if (q && !q.accepted && !q.ended && g < q.until) {
           q.accepted = true;
           this.escrow -= q.petri;
         }
@@ -416,10 +446,21 @@ export class Replayer {
         const creditPay = (this.pool * BigInt(rules.tide_bps)) / 10000n;
         const left = pay - capped;
         const storage0 = cost < left ? cost : left;
+        // An attached colony holding kept PETRI is paid its vault share as credit: the engine counts it as NEAR won, so
+        // it is moved to credit here.
+        const heldBack = [...this.kept].filter(([id, k]) => k > 0n && this.e.has_attached(id)).map(([id]) => [id, BigInt(this.e.won_of(id))] as const);
         const [paidS, creditPaidS, asCreditS] = this.e.tide((left - storage0).toString(), creditPay.toString()).split(",");
-        const paid = BigInt(paidS);
+        let paid = BigInt(paidS);
         const creditPaid = BigInt(creditPaidS);
-        const asCredit = BigInt(asCreditS);
+        let asCredit = BigInt(asCreditS);
+        for (const [id, before] of heldBack) {
+          const share = BigInt(this.e.won_of(id)) - before;
+          if (share === 0n) continue;
+          this.asCreditWon.set(id, (this.asCreditWon.get(id) ?? 0n) + share);
+          this.e.add_credit_won(id, share.toString());
+          paid -= share;
+          asCredit += share;
+        }
         const winners = paid + asCredit > 0n;
         // Without winners only the storage leaves the vault, as much of it as the vault holds.
         const storage = winners ? storage0 : cost < this.vault ? cost : this.vault;
@@ -427,8 +468,9 @@ export class Replayer {
         const houseRunner = t.by === HOUSE_RUNNER || this.house.includes(t.by);
         const bounty = winners && !houseRunner ? capped : 0n;
         this.tideBounty.set(this.indexOf.get(entry) ?? -1, bounty);
-        // A guest (a colony that never attached NEAR) that ran the tide is paid its bounty as credit.
-        const bountyCredit = t.by > 0 && t.by !== HOUSE_RUNNER && !this.e.has_attached(t.by) ? bounty : 0n;
+        // A guest (a colony that never attached NEAR), or a colony holding kept PETRI, that ran the tide is paid its
+        // bounty as credit.
+        const bountyCredit = t.by > 0 && t.by !== HOUSE_RUNNER && !this.paidInNear(t.by) ? bounty : 0n;
         if (bountyCredit > 0n) this.e.add_credit_won(t.by, bountyCredit.toString());
         const problem = !chainOk ? "the history chain differs" : !TIDE_BYTES.includes(Number(t.bytes)) ? `stored ${t.bytes} bytes; a tide stores ${TIDE_BYTES.join(" or ")}` : null;
         if (problem) this.flag("tide", problem);
@@ -473,7 +515,7 @@ export class Replayer {
   checks(): Check[] {
     const { state, colonies, earnings, winnings, slides, lock } = this.input;
     const earnedOk = colonies.filter((c, i) => this.e.earned_of(c.id) === (earnings[i] ?? "0")).length;
-    const wonOk = colonies.filter((c, i) => this.e.won_of(c.id) === (winnings[i] ?? "0")).length;
+    const wonOk = colonies.filter((c, i) => this.wonOf(c.id).toString() === (winnings[i] ?? "0")).length;
     const creditOk = colonies.filter((c) => this.e.credit_won_of(c.id) === c.credit_won).length;
     for (const c of colonies) this.sync(c.id);
     const keptOk = colonies.filter((c) => this.keptOf(c.id).toString() === String(c.kept ?? "0")).length;
@@ -499,7 +541,7 @@ export class Replayer {
       rule("legal", "Every planting was legal, sieges marked", this.plants, "plantings", this.problems.plant),
       rule("prices", "Every planting paid the formula's price", this.plants, "plantings", this.problems.price),
       rule("fees", "Every planting paid its cell fee", this.plants, "plantings", this.problems.fee),
-      rule("licences", "Every licensed planting was a slide of at least licence_min_cells (12) cells, its pattern, and paid the holder of the day (or the agar, for a planter that never attached NEAR)", this.licensed, "licensed plantings", this.problems.licence),
+      rule("licences", "Every licensed planting was a slide of at least licence_min_cells (12) cells, its pattern, and paid the holder of the day (or the agar, for a planter that never attached NEAR or holds kept PETRI beyond the cost)", this.licensed, "licensed plantings", this.problems.licence),
       rule("buys", "Every purchase followed the agar's curve", this.buys, "purchases", this.problems.buy),
       rule("sells", "Every sale back followed the curve and the allowance, and none was the house's", this.sells, "sales", this.problems.sell),
       {
@@ -523,9 +565,9 @@ export class Replayer {
       },
       rule("claims", "Every claim took exactly what its colony was owed", this.claims, "claims", this.problems.claim),
       rule("refunds", "Every refund is for exactly the payout it names, once", this.refunds, "refunds", this.problems.refund),
-      rule("kept", "No colony holding kept PETRI (earned before its first NEAR, or bought with credit) sold PETRI for NEAR or paid for a pact", this.keptChecks, "sales and pact payments", this.problems.kept),
+      rule("kept", "No colony holding kept PETRI (earned before its first NEAR, or bought with credit) sold PETRI for NEAR, claimed NEAR or paid for a pact", this.keptChecks, "sales, claims and pact payments", this.problems.kept),
       every("kept_each", "Every colony's kept PETRI, from the ledger", keptOk),
-      rule("pacts", "Every pact kept to the rules, and no planting broke a pact binding its colony", this.pactsSeen.length + this.bound, "pacts and bound plantings", this.problems.pact),
+      rule("pacts", "Every pact kept to the rules (at least 1 PETRI; 8 pacts and own offers, 16 offers received), and no planting broke a pact binding its colony", this.pactsSeen.length + this.bound, "pacts and bound plantings", this.problems.pact),
       c("pact_escrow", "PETRI the dish holds for pact offers not yet accepted", fmt(BigInt(state.pact_escrow ?? "0")), fmt(this.escrow)),
       c("agar", "PETRI left in the agar", fmt(BigInt(state.agar)), fmt(BigInt(this.e.agar()))),
       c("sold", "PETRI sold from the agar", fmt(BigInt(state.sold)), fmt(this.sold)),

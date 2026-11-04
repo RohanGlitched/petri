@@ -583,3 +583,27 @@ fn the_credit_share_of_a_purchase_is_exact_for_small_amounts_and_never_overflows
     assert_eq!(credit_share(1_000_000_000_000, 1_000 * near, 3_000 * near), 333_333_333_333);
     assert_eq!(credit_share(u64::MAX, u128::MAX / 2, u128::MAX), u64::MAX / 2);
 }
+
+/// A purchase of any size is priced exactly: from about 340 NEAR `agar * deposit` used to overflow. `wide_mul_div`
+/// agrees with the exact quotient where the product needs more than 128 bits.
+#[test]
+fn petri_for_near_is_exact_for_any_deposit() {
+    assert_eq!(wide_mul_div(1u128 << 100, 1u128 << 100, 1u128 << 90), 1u128 << 110);
+    // (2^128 - 1) * 3 / 7 = (MAX / 7) * 3 + (MAX % 7) * 3 / 7, and MAX % 7 = 3.
+    assert_eq!(wide_mul_div(u128::MAX, 3, 7), u128::MAX / 7 * 3 + 1);
+    assert_eq!(wide_mul_div(1_000, 2_000, 7), 2_000_000 / 7);
+    let k = 200_000_000_000_000u128 * 1_000_000_000_000;
+    let near = 1_000_000_000_000_000_000_000_000u128;
+    let agar = 1_000_000_000_000u128;
+    let mut last = 0;
+    for n in [1u128, 100, 339, 341, 380, 1_000, 10_000_000] {
+        let d = n * near;
+        let got = petri_for_near(d, agar, k);
+        let denom = k + d / 2;
+        assert!((got > last && got < agar) || (n >= 1_000 && got == agar), "{} NEAR buys {}", n, got);
+        if got < agar {
+            assert_eq!(got, wide_mul_div(d, agar, denom), "symmetric");
+        }
+        last = got;
+    }
+}

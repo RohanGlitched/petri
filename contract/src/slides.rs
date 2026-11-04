@@ -162,6 +162,8 @@ impl Petri {
         let title = title.map(|t| clean_text(&t, MAX_TITLE_CHARS, MAX_TITLE_BYTES, "a slide's title")).filter(|t| !t.is_empty());
         let attached = env::attached_deposit().as_yoctonear();
         self.catch_up(self.rules.max_catchup as u64);
+        // A slide captures the board as it stands now, never a stale one.
+        require!(self.generation == self.due_generation(), "the dish is behind the clock; call advance first");
         self.claim_petri(id, &account);
         let (bitmap, cells) = self.load_dish().region_bitmap(id, x, y, w, h);
         require!(cells >= self.rules.slide_min_cells, format!("a slide needs at least {} of your living cells; that rectangle holds {}", self.rules.slide_min_cells, cells));
@@ -175,7 +177,8 @@ impl Petri {
         let token = index as u64 + 1;
         // Kept PETRI is spent first.
         let mut c = self.colony(id);
-        c.kept = U64(c.kept.0.saturating_sub(cost as u64));
+        let kept = c.kept.0.saturating_sub(cost as u64);
+        self.keep(id, &mut c, kept);
         let color = c.color;
         self.colonies.set(id as u32 - 1, c);
         self.slides.push(Slide {

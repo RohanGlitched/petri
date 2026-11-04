@@ -51,8 +51,10 @@ pub(crate) const HOT_WRITE_GAS_PER_BYTE: u64 = 72_000_000;
 pub(crate) const COLD_PAGE_GAS: u64 = 350_000_000_000;
 const FEED_KEY: &[u8] = b"h";
 const PURSE_KEY: &[u8] = b"j";
-pub(crate) const COLD_PREFIX: u8 = b'X';
+/// v6.1 kept its cold pages under `X`; v6.2 uses `x`, so a page a relaunch missed is never read as v6.2 state.
+pub(crate) const COLD_PREFIX: u8 = b'x';
 const ATTACHED: u8 = 1;
+const KEPT: u8 = 2;
 
 /// One colony's numbers (see the module notes).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -65,8 +67,19 @@ pub struct Books {
     pub won: u128,
     /// Credit won at the tides in all.
     pub credit_won: u128,
-    /// Whether the colony has ever put NEAR into the vault itself. One that has not is paid in credit.
+    /// Whether the colony has ever put at least `min_join` of NEAR into the vault itself in one call. One that has
+    /// not is paid in credit.
     pub attached: bool,
+    /// Whether the colony holds kept PETRI (mirrors `Colony::kept` > 0, so a tide reads no colony record). While it
+    /// does, it is paid in credit too.
+    pub kept: bool,
+}
+
+impl Books {
+    /// Whether the colony's tide shares and bounties are paid in NEAR: it attached NEAR and holds no kept PETRI.
+    pub fn in_near(&self) -> bool {
+        self.attached && !self.kept
+    }
 }
 
 impl Books {
@@ -75,7 +88,7 @@ impl Books {
         out.extend_from_slice(&self.owed.to_le_bytes());
         out.extend_from_slice(&self.won.to_le_bytes());
         out.extend_from_slice(&self.credit_won.to_le_bytes());
-        out.push(if self.attached { ATTACHED } else { 0 });
+        out.push((if self.attached { ATTACHED } else { 0 }) | (if self.kept { KEPT } else { 0 }));
     }
 
     fn read(b: &[u8]) -> Books {
@@ -85,6 +98,7 @@ impl Books {
             won: u128::from_le_bytes(b[24..40].try_into().unwrap()),
             credit_won: u128::from_le_bytes(b[40..56].try_into().unwrap()),
             attached: b[56] & ATTACHED != 0,
+            kept: b[56] & KEPT != 0,
         }
     }
 }

@@ -366,6 +366,11 @@ export function slideBits(b64: string): Uint8Array {
 /*
  * Calls for the wallet (wallet.ts), as the contract takes them:
  *
+ * Catching up: plant, sell and mint_slide are refused "the dish is behind the clock; call advance first" while the
+ *   stored generation is more than rules.max_catchup behind due_generation after their own catch-up (each catches up at
+ *   most max_catchup). wallet.ts then puts "advance" { max: max_catchup } calls ahead of them (and of buy) in the same
+ *   transaction, splitting the 300 TGas a transaction may prepay (at most 3 advances, 50 to 100 TGas each; the move
+ *   keeps at least 150). The guest relay accepts the same shape.
  * mintSlide: method "mint_slide", args { x, y, w, h, title: string | null, credit: string | null } (w and h 4 to 32;
  *   x, y the rectangle's top-left cell; the rectangle wraps at the dish's edges). Attach getSlideDeposit(w, h, bytes)
  *   yoctoNEAR (unused NEAR comes back), or pass that much as `credit` for a guest; 300 TGas (it catches the dish up
@@ -380,8 +385,11 @@ export function slideBits(b64: string): Uint8Array {
  *   costs slide_discount_bps less, and a planter that does not hold the slide also pays slide_royalty_bps of that cost
  *   in PETRI, to the holder (or to the agar, for a planter that has never attached NEAR). Attach
  *   getPlantDeposit(n, bytes, slide). A colony with no hot row is refused while 10,000 colonies play at once.
- * rename: method "rename", args { name, color }, no deposit. Only for a colony started by someone else's payment
- *   (`proxy`), once. Names "Culture <hex digits>" are reserved for such colonies.
+ * rename: method "rename", args { name, color }, payable: attach SMALL_STORAGE_NEAR (0.001 NEAR); the storage a longer
+ *   name adds is charged and the rest sent back. Only for a colony started by someone else's payment (`proxy`), once.
+ *   Names "Culture <hex digits>" are reserved for such colonies.
+ * setPayout: method "set_payout", args { account_id: string | null }, payable: attach SMALL_STORAGE_NEAR; the storage the
+ *   payout account adds is charged and the rest sent back. Only a colony that has attached NEAR.
  * NEP-171: "nft_transfer" { receiver_id, token_id, approval_id: null, memo: null } with exactly 1 yoctoNEAR attached.
  * pactOffer: method "pact_offer", args { to: "<account with a colony>", petri: "<PETRI units>", until: "<generation>", credit },
  *   bring PACT_DEPOSIT (0.0042 NEAR) attached or as `credit` (a string, yoctoNEAR; what is not used comes back), 300 TGas (it catches the dish up first). The PETRI

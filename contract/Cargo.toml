@@ -23,5 +23,5 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 near-sdk = { version = "=5.29.1", features = ["unit-testing"] }
-# The v6 contract, frozen, so the relaunch test can build a real v6 state.
-petri-contract-v6 = { path = "v6" }
+# The v6.1 contract, frozen, so the relaunch test can build a real v6.1 state.
+petri-contract-v6-1 = { path = "v6_1" }

@@ -11,10 +11,11 @@
 //! its own wNEAR). Its account may then choose its own name and colour once (`rename`). The house's accounts start
 //! their own colonies, so a payment for one of them waits as pending NEAR instead.
 //!
-//! wNEAR is never refunded, so no 1Click delivery can bounce back to the intents contract and be lost to its payer:
-//! `ft_on_transfer` keeps the whole amount, whatever it is, as pending NEAR for `for` (or for the sender if the order
-//! names nobody), with the order. Its record's storage and its `Pending` entry are paid from it; an amount too small
-//! even for that goes to the vault with a `Dust` entry. The join or purchase then runs in a receipt of its own; if it
+//! wNEAR that pays for its own records is never refunded, so no 1Click delivery can bounce back to the intents contract
+//! and be lost to its payer: `ft_on_transfer` keeps the whole amount as pending NEAR for `for` (or for the sender if the
+//! order names nobody), with the order. Its record's storage and its `Pending` entry are paid from it. An amount no
+//! larger than what those records cost (1Click never delivers so little) is refunded whole and writes nothing, so dust
+//! cannot grow the dish's storage. The join or purchase then runs in a receipt of its own; if it
 //! cannot run (an unreadable order, too little gas, a failed unwrap, a purchase for an account with no colony), the
 //! NEAR waits with its order, and anyone (the keeper, the account) can complete the order later with `settle_pending`.
 //! The account can instead take the NEAR back with `claim_pending`. Every change to pending NEAR is in the ledger.
@@ -84,13 +85,18 @@ fn read_order(msg: &str, sender: &AccountId) -> (AccountId, Option<Order>) {
 #[near]
 impl Petri {
     /// NEP-141 receiver. wNEAR from `rules.wnear` is kept whole and unwrapped, and joins or buys for the account the
-    /// message names (see the module notes); any other token is refunded. Never fails.
+    /// message names (see the module notes); any other token, and wNEAR too little for its records, is refunded. Never
+    /// fails.
     pub fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> PromiseOrValue<U128> {
         let token = env::predecessor_account_id();
         if self.rules.wnear.as_ref() != Some(&token) || amount.0 == 0 {
             return PromiseOrValue::Value(amount);
         }
         let (account, order) = read_order(&msg, &sender_id);
+        // Too little to pay for the records it would need: refunded, so nobody else pays for its storage.
+        if amount.0 <= intent_bytes(&account, &order) * byte_cost() {
+            return PromiseOrValue::Value(amount);
+        }
         self.wrapped += amount.0;
         let left = env::prepaid_gas().saturating_sub(env::used_gas());
         // Each receipt also pays its own fees up front (about 5 TGas for a function call), hence the margin.
@@ -390,6 +396,13 @@ impl Petri {
         }
         env::panic_str("every neutral name for that account is taken")
     }
+}
+
+/// The most storage a wNEAR payment for `account` with `order` can write on arrival: a new pending record (key and
+/// record overhead included) and its `Pending` entry. An existing record only grows by less.
+fn intent_bytes(account: &AccountId, order: &Option<Order>) -> u128 {
+    let rec = PendingRec { near: 0, order_near: 0, order: order.clone() };
+    (40 + 1 + 4 + account.as_str().len() + near_sdk::borsh::to_vec(&rec).unwrap().len()) as u128 + entry_bytes(&Entry::Pending { generation: U64(0), account: account.clone(), near: U128(0) })
 }
 
 /// A colour for a colony whose order named none: from its account's hash, never too dark to see on the agar.
