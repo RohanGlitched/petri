@@ -64,6 +64,46 @@ const FIXES: [string, string, string, string, string, string, string][] = [
   ["1,500", "sell_bps 3000", "−0.0992", "+0.3890", "−1.1119", "37.1%", "1.2%"],
 ];
 
+// sim/out-v6.1/summary.txt, section 5: the largest call of each kind in 30,000 colonies over 2 days (TGas, the 30 TGas payout
+// reservation included, and the hot rows when it happened), then calls over 150 TGas and over their prepaid gas, v6 / v6.1.
+const V61_CALLS: [string, string, string, string, string, string, string][] = [
+  ["Join", "94.0 @ 26,035 rows", "222.0 @ 25,500 rows", "31.1 @ 2,320 rows", "60.2 @ 2,030 rows", "28 / 0", "9 / 0"],
+  ["Plant", "204.6 @ 27,534 rows", "236.5 @ 27,468 rows", "26.8 @ 2,033 rows", "58.5 @ 1,820 rows", "67,841 / 0", "15,727 / 0"],
+  ["Buy", "203.3 @ 27,528 rows", "234.0 @ 27,272 rows", "23.8 @ 1,793 rows", "56.6 @ 1,726 rows", "623 / 0", "366 / 0"],
+  ["Sell", "147.5 @ 27,498 rows", "—", "53.2 @ 1,659 rows", "—", "0 / 0", "0 / 0"],
+  ["Claim", "232.7 @ 27,478 rows", "—", "53.7 @ 1,666 rows", "—", "48,237 / 0", "0 / 0"],
+  ["Advance", "—", "205.5 @ 27,538 rows", "—", "23.1 @ 1,358 rows", "2 / 0", "0 / 0"],
+];
+
+// sim/out-v6.1/summary.txt, section 5: analytic v6.1 at p hot rows on a full board (4,000 live cells, 400 colonies alive), every row a tide winner.
+const V61_ANALYTIC: [string, string, string, string, string, string, string][] = [
+  ["100", "3.6", "5.6", "44.9", "33.8", "3.4", "120 (120)"],
+  ["1,500", "3.6", "15.7", "55.6", "43.9", "5.4", "120 (120)"],
+  ["3,000", "3.6", "26.5", "67.0", "54.7", "7.6", "120 (120)"],
+  ["5,000", "3.6", "41.0", "82.2", "69.2", "10.5", "120 (120)"],
+  ["7,500", "3.6", "59.0", "101.2", "87.2", "14.0", "120 (120)"],
+  ["10,000", "3.6", "77.1", "120.3", "105.2", "17.6", "120 (120)"],
+];
+
+// sim/out-v6.1/fixes.txt, "Measured": the young mainnet dish, 7 days, median cash per player; vault left; house NEAR paid; tide-entry storage as % of tide pay.
+const V61_YOUNG: [string, string, string, string, string, string, string, string, string][] = [
+  ["Penny alone", "v6", "+0.4372", "—", "—", "—", "—", "0.0000", "2.3327"],
+  ["Penny alone", "v6.1", "+0.5709", "—", "—", "—", "—", "0.0002", "2.2784"],
+  ["Penny alone", "v6.1 + tide_cap_bps 2500", "+0.4149", "—", "—", "—", "—", "0.1506", "2.2851"],
+  ["Penny alone", "v6.1 + tide_bps 200", "+0.4552", "—", "—", "—", "—", "0.0934", "2.2650"],
+  ["Penny alone", "v6.1 + tide_every 960", "+0.6073", "—", "—", "—", "—", "0.2230", "2.2933"],
+  ["5 outsiders", "v6", "−0.0479", "−0.2496", "−0.2498", "+0.0667", "—", "0.0000", "2.3080"],
+  ["5 outsiders", "v6.1", "−0.0481", "−0.2492", "−0.2504", "+0.0612", "—", "0.0115", "2.2849"],
+  ["5 outsiders", "v6.1 + tide_cap_bps 2500", "−0.0497", "−0.2502", "−0.2510", "+0.0058", "—", "0.0198", "2.2885"],
+  ["5 outsiders", "v6.1 + tide_bps 200", "−0.0489", "−0.2496", "−0.2531", "+0.0852", "—", "0.0282", "2.2744"],
+  ["5 outsiders", "v6.1 + tide_every 960", "−0.0493", "−0.2482", "−0.2476", "+0.1847", "—", "0.2374", "2.3048"],
+  ["20 outsiders", "v6", "−0.0469", "−0.2484", "−0.2457", "+0.2724", "−2.9984", "0.0315", "2.2740"],
+  ["20 outsiders", "v6.1", "−0.0485", "−0.2483", "−0.2259", "+0.2114", "−3.0001", "0.0364", "2.2602"],
+  ["20 outsiders", "v6.1 + tide_cap_bps 2500", "−0.0483", "−0.2495", "−0.2287", "+0.2360", "−3.0017", "0.0417", "2.2199"],
+  ["20 outsiders", "v6.1 + tide_bps 200", "−0.0485", "−0.2491", "−0.2433", "+0.3452", "−2.9996", "0.0862", "2.2629"],
+  ["20 outsiders", "v6.1 + tide_every 960", "−0.0488", "−0.2484", "−0.2471", "+0.4787", "−2.9651", "0.6431", "2.2770"],
+];
+
 const cls = (v: string) => (v.startsWith("+") ? "n pos" : v.startsWith("−") ? "n neg" : "n");
 
 export default function Page() {
@@ -74,6 +114,8 @@ export default function Page() {
         { label: "sim/src/main.rs", path: "sim/src/main.rs" },
         { label: "sim/out-v5/summary.txt", path: "sim/out-v5/summary.txt" },
         { label: "sim/out-v5/fixes.txt", path: "sim/out-v5/fixes.txt" },
+        { label: "sim/out-v6.1/summary.txt", path: "sim/out-v6.1/summary.txt" },
+        { label: "sim/out-v6.1/fixes.txt", path: "sim/out-v6.1/fixes.txt" },
       ]}
     >
       <H2 id="what">What the simulator is</H2>
@@ -85,7 +127,7 @@ export default function Page() {
       </p>
       <Callout kind="note" title="Which rules these numbers describe">
         <p>
-          <C>summary.txt</C> was produced on the v5 rules just before their last round of changes: tides paid 10% of the vault (<C>tide_bps 1000</C>), a guest&rsquo;s vault shares were paid as NEAR into an account it could not move, and the credit pool&rsquo;s winners were written one record each. <C>fixes.txt</C> then tested one change at a time against those rules, and four changes shipped in v5 (see <a href="#changed">What changed because of it</a>). The deployed rules are therefore not exactly the ones in the big table; where a fix measured the difference, both numbers are shown. v6, the contract both dishes run now, keeps v5&rsquo;s economic parameters and changes who can do what (the house can neither sell nor take bounties or the keeper pot, sponsored credit is kept per sponsor, wNEAR is never refunded, slides license their pattern) and how each colony&rsquo;s numbers are stored; the simulator has not been rerun on v6, and the v6 gas figures below come from the contract&rsquo;s own tests.
+          <C>summary.txt</C> was produced on the v5 rules just before their last round of changes: tides paid 10% of the vault (<C>tide_bps 1000</C>), a guest&rsquo;s vault shares were paid as NEAR into an account it could not move, and the credit pool&rsquo;s winners were written one record each. <C>fixes.txt</C> then tested one change at a time against those rules, and four changes shipped in v5 (see <a href="#changed">What changed because of it</a>). The deployed rules are therefore not exactly the ones in the big table; where a fix measured the difference, both numbers are shown. v6 kept v5&rsquo;s economic parameters and changed who can do what (the house can neither sell nor take bounties or the keeper pot, sponsored credit is kept per sponsor, wNEAR is never refunded, slides license their pattern) and how each colony&rsquo;s numbers are stored. The simulator was then rerun on v6 (<C>sim/out-v6</C>), and on v6.1, the contract both dishes run now, with v6&rsquo;s rules and layout set back on the same seeds for comparison; those runs are described under <a href="#v6-1">v6.1</a>.
         </p>
       </Callout>
 
@@ -94,9 +136,10 @@ export default function Page() {
 cargo run --release -- out-v5 all          # every scenario: summary.txt, players-*.csv, timeline.csv
 cargo run --release -- out-v5 fixes        # one change at a time: fixes.txt
 cargo run --release -- out-v5 probe 150 7  # one scenario, printed
-cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Code>
+cargo run --release -- out-v5 all --set tide_bps=500   # override any rule
+cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on 12 threads`}</Code>
       <p>
-        It reads <C>../contract/launch-rules.json</C> unless given <C>--rules</C>. The outputs are in <a href={tree("sim/out-v5")}>sim/out-v5</a>.
+        It reads <C>../contract/launch-rules.json</C> unless given <C>--rules</C>. The outputs are in <a href={tree("sim/out-v5")}>sim/out-v5</a>, and for v6.1 in <a href={tree("sim/out-v6.1")}>sim/out-v6.1</a>. Both launch files were loaded exactly (<C>contract/launch-rules.json</C> for testnet, <C>contract/launch-rules-mainnet.json</C> for mainnet): their economic parameters are identical, and they differ only in the house, keeper and wNEAR account names.
       </p>
 
       <H2 id="kinds">Player kinds</H2>
@@ -240,7 +283,7 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
       </p>
       <H3 id="gas-v6">v6: cold pages and a hot table</H3>
       <p>
-        The packed arrays had a limit of their own: each covered every colony that ever joined, so a join rewrote seven of them and every catch-up and tide rewrote several, and the gas grew with every colony until it would have run out at about 27,000. In v6 each colony&rsquo;s numbers live in exactly one of two places (<C>contract/src/books.rs</C>): a <strong>cold page</strong> of 64 colonies, where a join appends one slot, or the <strong>hot table</strong> of the colonies that play, which a colony enters when it plants and leaves (16 a call) once its stake has decayed to nothing. The feed, the tides and the decay touch only the hot table, so a call costs what the colonies playing now cost, however many ever joined. The contract&rsquo;s tests build a dish of 30,000 colonies and measure each call&rsquo;s host-call gas (<C>cargo test -p petri-contract thirty_thousand -- --nocapture</C>):
+        The packed arrays had a limit of their own: each covered every colony that ever joined, so a join rewrote seven of them and every catch-up and tide rewrote several, and the gas grew with every colony until it would have run out at about 27,000. In v6 each colony&rsquo;s numbers lived in exactly one of two places (<C>contract/src/books.rs</C>): a <strong>cold page</strong> of 64 colonies, where a join appends one slot, or the <strong>hot table</strong> of the colonies with stake, which a colony entered when it planted and left (16 a call) once its stake had decayed to nothing. The feed, the tides and the decay touched only the hot table. v6&rsquo;s contract tests built a dish of 30,000 colonies and measured each call&rsquo;s host-call gas in the unit runtime:
       </p>
       <Table caption="v6 contract tests: TGas of host calls with 30,000 colonies">
         <thead>
@@ -284,7 +327,147 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
         </tbody>
       </Table>
       <p>
-        Every figure for a call that pays NEAR includes about 30 TGas for the transfer and its callback. The tests assert under 60 TGas a call at 1,501 playing and under 200 TGas with all 30,000 playing (<C>thirty_thousand_colonies_join_plant_tide_and_claim_well_under_the_gas_limit</C>, <C>thirty_thousand_colonies_all_playing_still_fit</C>). A 1,500-winner tide costs 6.65 TGas of host calls plus 29.74 TGas for the bounty payout (<C>a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit</C>); in v5 the same tide was about 11 TGas with the arrays and 104 TGas with a record per winner. These are host calls measured in the unit runtime, not the wasm execution on chain.
+        Every figure for a call that pays NEAR includes about 30 TGas for the transfer and its callback. v6&rsquo;s tests asserted under 60 TGas a call at 1,501 playing and under 200 TGas with all 30,000 playing. These are host calls measured in the unit runtime, which charges neither the wasm execution on chain nor the real price per rewritten byte. The simulator, which does count both, found that v6&rsquo;s hot table was still far too large on a busy dish: stake lingers about a day after a colony&rsquo;s last planting, so with 30,000 colonies it held up to 27,538 rows and a plant cost 237 TGas. That is what v6.1 fixes, next.
+      </p>
+
+      <H2 id="v6-1">v6.1: what the rerun measured</H2>
+      <p>
+        The simulator was rerun on v6.1 (<C>sim/out-v6.1</C>, 8 seeds). Every v6.1 run mirrors the contract: the hot table holds only colonies that earned since the last tide or have living cells and a stake that can still earn (125 or more thousandths of a cell at reach 8; never the house), at most 10,000 rows, 32 leaving a call; stake waits in a 69-byte cold slot (pages of 32) and decays lazily; the catch-up reserves the purse part of the table only when a tide falls in it, and stops at the lesser of 110 TGas and the prepaid gas less 40, less what is still to write; PETRI amounts in entries are <C>u64</C> and a tide stores 130 bytes (was 289); <C>PLANT_STORAGE_BASE</C> is 180 (was 240) and <C>BUY_BYTES</C> 113 (was 140); licences only for slides of at least 12 cells; royalties from planters that never attached NEAR go to the agar; the keeper pot goes to any outside caller whose call ran a generation; the site prepays 300 TGas. Runs marked V6 set all of v6&rsquo;s rules and layout back on the same seeds, and reproduce <C>sim/out-v6</C> exactly. Cash is again NEAR a player actually got back minus NEAR it actually paid, storage and gas included; the table cells are medians over seeds.
+      </p>
+
+      <H3 id="v6-1-gas">Gas at 30,000 colonies</H3>
+      <p>
+        Mixed outsiders joining over 1.5 days plus the house, 30,005 colonies, 2 days, 2 seeds. Each cell is the largest call of that kind, in TGas with the 30 TGas payout reservation included, and the hot rows when it happened.
+      </p>
+      <Table caption="sim/out-v6.1/summary.txt, section 5: largest gas per call (TGas)">
+        <thead>
+          <tr>
+            <th>Call</th>
+            <th className="n">v6, no tide</th>
+            <th className="n">v6, with a tide</th>
+            <th className="n">v6.1, no tide</th>
+            <th className="n">v6.1, with a tide</th>
+            <th className="n">Over 150 TGas, v6 / v6.1</th>
+            <th className="n">Over prepaid gas, v6 / v6.1</th>
+          </tr>
+        </thead>
+        <tbody>
+          {V61_CALLS.map(([c, ...v]) => (
+            <tr key={c}>
+              <th>{c}</th>
+              {v.map((x, i) => (
+                <td key={i} className={i === 2 || i === 3 ? "n pos" : "n"}>
+                  {x}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <p>
+        Hot rows averaged 1,315 (1,303 to 1,327) and peaked at 2,389 (2,381 to 2,397); in v6 they averaged 17,102 and peaked at 27,538. In v6.1, 68,304 rows left the table; catch-ups cut short by the gas limit: 0; plantings refused as behind the clock: 0; plantings refused because the table held 10,000 rows: 0 of 427,131 (v6: 413,134 plantings in all). Calls over 150 TGas fell from 116,731 to 0, and calls over their prepaid gas from 16,102 to 0 (prepaid is now 300 on the site).
+      </p>
+      <p>
+        The worst case cannot be reached in a simulation of this size, so it is computed: at <em>p</em> hot rows on a full board (4,000 live cells, 400 colonies alive), every row a tide winner, NEAR payouts reserving 30 TGas, the tide call also moving 32 rows to their cold pages. The table holds at most 10,000 rows.
+      </p>
+      <Table caption="sim/out-v6.1/summary.txt, section 5: analytic v6.1 (TGas)">
+        <thead>
+          <tr>
+            <th className="n">Rows</th>
+            <th className="n">Join</th>
+            <th className="n">Plant</th>
+            <th className="n">Advance through a tide</th>
+            <th className="n">Claim with NEAR</th>
+            <th className="n">Claim, idle</th>
+            <th className="n">Generations per catch-up at 300 (tide in)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {V61_ANALYTIC.map(([p, ...v]) => (
+            <tr key={p} className={p === "10,000" ? "hl" : undefined}>
+              <td className="n">{p}</td>
+              {v.map((x, i) => (
+                <td key={i} className="n">
+                  {x}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <p>
+        With 10,000 rows (the cap) the tide call is 120 TGas, a claim with NEAR 105 and a plant 77, and a catch-up steps all 120 generations with or without a tide in it. v6 stepped 1 at 25,000 rows. The contract&rsquo;s own tests run 30,000 colonies that all have stake, scale the unit runtime&rsquo;s host calls by the real price per rewritten byte (×1.83, measured in the test) and add an estimate of the wasm, which the unit runtime does not charge: with 1,500 playing the largest call is 67.5 TGas (advance through a paying tide; plant 20.4, claim with NEAR 47.7); with 9,999 playing, a full table, 125.7 (advance through a tide; claim with NEAR 115.6, plant 88.3). They assert that every call stays under 150 TGas (<C>thirty_thousand_colonies_with_stake_every_call_under_150_tgas_on_the_real_network</C>, <C>a_full_hot_table_keeps_every_call_under_150_tgas_on_the_real_network</C>). On the ordinary mainnet dish, 150 players for 7 days, the largest calls (TGas, v6 / v6.1) are Join 21 / 22, Plant 40 / 39, Buy 7 / 6, Sell 67 / 34, Claim 68 / 68, Advance 38 / 37, Slide 5 / 5, Unsponsor 33 / 33; hot rows average 111 (v6) and 25 (v6.1).
+      </p>
+
+      <H3 id="v6-1-tides">Smaller ledger entries</H3>
+      <p>
+        A tide stored 289 bytes in v6 and stores 130 in v6.1 (a 126-byte entry and 4 bytes in the packed tide index), because its amounts are worked out by the replay instead of stored. On the young mainnet dish, the tide entry&rsquo;s storage as a share of tide pay fell from 39% to 21% with one outsider, from 31% to 16% with 5 and from 8% to 4% with 20. Colonies received 0.69 to 0.80 and 1.00 to 1.10 NEAR of those tides (with 20 outsiders 5.81 to 5.47: the tides are smaller, 6.32 to 5.74, because plantings attach 60 fewer bytes of storage deposit, whose surplus fed the vault). Of all NEAR that comes in, storage fell from 70% to 61% with one outsider. The other compacted entries (Buy 105 to 97, Sell 105 to 97, Claim 104 to 96, Plant 111 to 103 + 2 per cell, the plant index 53 to 49, the note key 9 to 5 bytes) are modelled too.
+      </p>
+      <Table caption="sim/out-v6.1/fixes.txt, Measured: the young mainnet dish, 7 days. Median cash per player (NEAR); vault left and NEAR paid in by the house">
+        <thead>
+          <tr>
+            <th>Outsiders</th>
+            <th>Rules</th>
+            <th className="n">Penny</th>
+            <th className="n">Builder</th>
+            <th className="n">Raider</th>
+            <th className="n">Methuselah</th>
+            <th className="n">Whale</th>
+            <th className="n">Vault left</th>
+            <th className="n">House paid</th>
+          </tr>
+        </thead>
+        <tbody>
+          {V61_YOUNG.map(([o, r, ...v]) => (
+            <tr key={o + r} className={r === "v6.1" ? "hl" : undefined}>
+              <td>{o}</td>
+              <td>{r}</td>
+              {v.map((x, i) => (
+                <td key={i} className={i < 5 ? cls(x) : "n"}>
+                  {x}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+
+      <H3 id="v6-1-royalty">Royalties</H3>
+      <p>
+        <strong>Royalty farming</strong> is one player minting slides of the common patterns at launch (in v6: beehive, loaf, eater, glider, LWSS, R-pentomino, toad, pulsar) so every other player who plants one pays it 10%. With <C>licence_min_cells</C> 12 only the pulsar (48 cells) of the farmer&rsquo;s eight patterns is still a licence. At 150 players for 7 days the farmer&rsquo;s cash fell from +0.2910 (+0.0243 to +0.3565) to +0.0834 (−0.0063 to +0.1261) NEAR; with <C>licence_min_cells</C> 0, v6.1 would pay it +0.3240 (+0.0823 to +0.3614). Licensed plantings fell from 7,852 to 402 (all pulsars) and royalties from 6,296.1 to 2,845.7 PETRI. On the young dish with 20 outsiders the farmer went from +0.2095 to +0.0341 (−0.0286 to +0.2112), royalties from 2,202.9 to 1,503.9 PETRI. The whales, who plant the pulsars, lose −1.9446 with the farmer and −1.9477 without it: the licence&rsquo;s 25% discount covers the royalty for them.
+      </p>
+      <p>
+        <strong>Guests&rsquo; royalties.</strong> The royalty operator mints a beehive slide (6 cells: no licence in v6.1). Royalties paid by colonies that never attached NEAR, received by the royalty operator&rsquo;s wallet: 56.2 (42.0 to 74.7) PETRI in v6, 0.0 in v6.1 and 0.0 in v6.1 with <C>licence_min_cells</C> 0 and the beehive licence kept, so the agar rule alone closes it (152.8 PETRI of royalties went to the agar instead). The operator&rsquo;s cash: −0.1580 (v6), −0.1492 (v6.1, licence kept) and −0.0967 (v6.1, no 6-cell licence, so its guests plant beehives without paying it). Its royalties in: 773.5 (525.3 to 880.8) PETRI in v6, 667.0 and 0.0.
+      </p>
+
+      <H3 id="v6-1-pot">The keeper pot</H3>
+      <p>
+        Pot left at the end of 7 days: 1.1 (0.1 to 3.7) PETRI on the 150-player mainnet dish against 12.3 (0.1 to 21.8) in v6; 1.1 (0.0 to 1.9) against 1,479.7 (1,420.7 to 1,692.7) on the young dish with 20 outsiders. It now goes to whoever&rsquo;s call runs the generation; the median received per player at 150 players was Penny 1.0, Builder 9.4, Raider 5.8, Defender 9.6, Methuselah 70.6, Late 22.5, Whale 32.5, Sniper 1.3, Racer 12.0, Guest 1.8 and Locker 23.6 PETRI (in v6 the Racer alone took 1,081.8). The Racer&rsquo;s cash went from −0.0192 (−0.0204 to −0.0170) to −0.0054 (−0.0063 to −0.0046). Keepers and the house never take it.
+      </p>
+      <p>
+        The testnet keeper (<C>agents/run.mjs</C>, unchanged) still advances whenever a registered keeper sees more than 50 PETRI in the pot. Players&rsquo; calls now empty the pot every generation, so it never gets there: 29 (26 to 31) calls a day registered or unregistered (v6: 4,820 against 30), 0.0151 NEAR a day at mainnet gas price, pot left 1.3 (0.4 to 1.6) PETRI.
+      </p>
+      <p>
+        Otherwise the economy is within seed noise at 150 players for 7 days (mainnet, v6 against v6.1): Builder −0.1931 and −0.1899, Methuselah +0.4100 and +0.3680, Whale −1.9995 and −1.9477, Penny −0.0431 and −0.0454. The mainnet house lasts a day longer, out of NEAR on day 7 (6 to 7) where v6 was out on day 6, because its plantings carry less storage deposit.
+      </p>
+
+      <H3 id="v6-1-broken">What still looks broken</H3>
+      <ul>
+        <li>
+          <strong>A pulsar farmer still pays (N1).</strong> +0.08 NEAR a week at 150 players, from 2,846 PETRI of royalties out of 402 whale plantings. <C>licence_min_cells</C> 12 removes the small common patterns but not the big ones: whoever mints the first slide of a pattern others will plant (the pulsar, 48 cells; the glider gun, 36) collects 10% of every licensed planting of it. Measured on v6.1, <C>licence_min_cells</C> 49 makes the farmer lose 0.156 (150 players) and 0.158 (young dish, 20 outsiders), with royalties 0; <C>slide_royalty_bps</C> 0 makes it lose 0.158 and 0.077, with royalties 0 and the whales keeping the discount (−1.96). Either closes it in the model; 49 would keep royalties for large original slides, though no model here has players planting other people&rsquo;s large custom patterns, so how much of the licence idea survives at 49 is not measured. The launch rules keep 12.
+        </li>
+        <li>
+          <strong>The first outsider still takes the house&rsquo;s subsidy (F2).</strong> Whoever is alone on the dish collects every tide (100% of about 165), and more of it reaches that player now that tides store less: a lone 0.01 NEAR Penny nets +0.57 (+0.54 to +0.62) NEAR of the house&rsquo;s 2.28 NEAR in a week (v6 +0.44). With 5 outsiders its share of all tide shares is 15% (4% to 43%), with 20 under 1%. <C>tide_cap_bps</C> 2500 (no colony more than 25% of a tide) gives +0.41 with 0.15 NEAR left in the vault; <C>tide_every</C> 960 gives +0.61 and <C>tide_bps</C> 200 +0.46 (table above). A judgment call.
+        </li>
+        <li>
+          <strong>The house runs dry (F8).</strong> The mainnet house runs out of NEAR on day 7 (6 to 7) at 0.55 NEAR a strain, 1/8 pace and 100 PETRI a day (v6: day 6); about 1.2 NEAR a strain would last to Nov 18 (a linear estimate, not simulated).
+        </li>
+        <li>
+          <strong>The Methuselah is still ahead (N2).</strong> +0.38 at 15 players and +0.37 at 150 (v6 +0.42, +0.41), −0.05 at 1,500 and −0.39 over 30 days.
+        </li>
+      </ul>
+      <p>
+        Not broken, checked again on v6.1: house laundering (all paths refused; 0 PETRI moved in 423 runs), sybil guests (no NEAR in guest accounts; operators lose 0.10 to 0.12 at the median), self-sponsoring (−0.51 to −0.72 at the median), the carpet locker (loses at every size), dormancy and idle-tide skips, the join&rsquo;s cost on a current dish (3.6 TGas analytic, 60 TGas at most when it caught up through a paying tide) and the 10,000-row cap (never reached at 30,000 colonies).
       </p>
 
       <H2 id="zero">A dish with no players</H2>
@@ -357,7 +540,7 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
           </tr>
           <tr>
             <td>A 15,000-player tide needed up to 595 TGas and would halt the dish</td>
-            <td>v5: credit winnings kept in packed per-colony arrays, so a tide touches no colony or credit record. v6 replaced the arrays, whose cost grew with every colony that ever joined, with cold pages and a hot table of the colonies that play (<C>dd18fac</C>)</td>
+            <td>v5: credit winnings kept in packed per-colony arrays, so a tide touches no colony or credit record. v6 replaced the arrays, whose cost grew with every colony that ever joined, with cold pages and a hot table of the colonies with stake (<C>dd18fac</C>)</td>
             <td>
               <C>3ad1c70</C>
             </td>
@@ -383,10 +566,35 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
               <C>3ad1c70</C>
             </td>
           </tr>
+          <tr>
+            <td>In v6 a 30,000-colony dish held up to 27,538 hot rows, a plant cost 237 TGas, and 116,731 calls passed 150 TGas</td>
+            <td>v6.1: the hot table holds only colonies that play now, at most 10,000, 32 leaving a call; cold pages of 32; the catch-up reserves only what the rest of the call writes; the site prepays 300 TGas</td>
+            <td>v6.1</td>
+          </tr>
+          <tr>
+            <td>A tide cost 289 bytes, 39% of a lone outsider&rsquo;s tide pay</td>
+            <td>v6.1: a 130-byte tide entry; the replay works out the amounts, and a <C>tide</C> event logs them; Buy, Plant, Sell and Claim shrank too</td>
+            <td>v6.1</td>
+          </tr>
+          <tr>
+            <td>A farmer licensing small common slides took 10% of every planting of them</td>
+            <td>v6.1: a slide is a licence only from <C>licence_min_cells</C> 12</td>
+            <td>v6.1</td>
+          </tr>
+          <tr>
+            <td>Free-play planters paid royalties to a sybil wallet (56 PETRI)</td>
+            <td>v6.1: a planter that never attached NEAR pays its royalty to the agar</td>
+            <td>v6.1</td>
+          </tr>
+          <tr>
+            <td>The keeper pot stranded at 1,480 PETRI after a week on a young dish</td>
+            <td>v6.1: the pot goes to the account whose call ran the generation</td>
+            <td>v6.1</td>
+          </tr>
         </tbody>
       </Table>
       <p>
-        Earlier simulator rounds (v2 and v3) led to the NEAR buy-in, payback pricing, the reach cap, the house never being fed, the sell-back cap by vault share and the tide bounty cap. v6&rsquo;s changes came from a review of the contract rather than the simulator. See the <Doc to="changelog">Changelog</Doc>.
+        Earlier simulator rounds (v2 and v3) led to the NEAR buy-in, payback pricing, the reach cap, the house never being fed, the sell-back cap by vault share and the tide bounty cap. v6&rsquo;s changes came from a review of the contract rather than the simulator; v6.1&rsquo;s came from rerunning the simulator on v6. See the <Doc to="changelog">Changelog</Doc>.
       </p>
 
       <H2 id="losses">What loses money</H2>

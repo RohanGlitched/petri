@@ -151,8 +151,8 @@ export function CoinSection() {
     ["Returned by planting", v("returned"), `${100 - burnPct}% of every planting goes back into the agar.`],
     ["Bought back", v("bought_back"), "PETRI the agar bought back for NEAR from the vault."],
     ["Still in the agar", v("agar"), "Minted, less sold and fed, plus returned and bought back."],
-    ["Waiting in the keeper pot", v("keeper_pot"), "Set aside from the feed until someone outside the house advances the dish."],
-    ["Paid from the keeper pot", v("keeper_paid"), "Pots already collected by whoever advanced (never a house account or keeper)."],
+    ["Waiting in the keeper pot", v("keeper_pot"), "Set aside from the feed until a call outside the house runs a generation."],
+    ["Paid from the keeper pot", v("keeper_paid"), "Pots already collected by the calls that ran a generation (never a house account or keeper)."],
     ["Burned", v("burned"), `The other ${burnPct}% of every planting, the whole price of every specimen slide, and PETRI burned by a forced unregistration or a refund to a sender that had unregistered. Gone for good.`],
     ["Total supply", v("total_supply"), "What ft_total_supply reports: minted less burned."],
     ["Held by accounts or waiting to be claimed", st ? fmtPetri(held.toString(), 2) : "—", "Total supply less the agar and the keeper pot."],
@@ -246,9 +246,9 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
               The agar&rsquo;s ration is {r.feed_ppm} parts per million of its balance. It releases the whole ration only when
               at least {int(r.live_floor)} cells are counted (living cells of fed colonies, capped by reach); with fewer, it
               releases that fraction and keeps the rest, so a lone block earns 4/{int(r.live_floor)} of the ration, what its
-              price assumes. {keeperPct}% of what is released goes to the keeper pot, paid to whoever next calls <code className={s.codePaper}>advance</code>,
-              runs at least one generation and can hold PETRI, unless it is a house account or a keeper: then the pot keeps
-              waiting for the next caller. The rest is split by each colony&rsquo;s paid cells (see the reach, below). House
+              price assumes. {keeperPct}% of what is released goes to the keeper pot, paid to the account whose call next runs at least one generation
+              (<code className={s.codePaper}>advance</code> or any call that catches the dish up) and can hold PETRI, unless it is
+              a house account or a keeper: then the pot keeps waiting for the next caller. The rest is split by each colony&rsquo;s paid cells (see the reach, below). House
               colonies are never fed. Rounding remainders stay in the agar.
             </p>
             <dl className={s.sums}>
@@ -302,7 +302,7 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
             <h3 className="h3">Claiming</h3>
             <p>
               Earnings do not land in a balance on their own. Each playing colony&rsquo;s feed adds up in one row of a table of
-              the colonies that have stake, so a catch-up reads and writes that table once and logs one summary line however
+              the colonies that play now, so a catch-up reads and writes that table once and logs one summary line however
               many colonies are alive. A colony moves its earnings into its balance with{" "}
               <code className={s.codePaper}>claim</code>, which also sends the NEAR it has won at the tides, less what the
               claim&rsquo;s own <code className={s.codePaper}>Claim</code> entry costs; winnings too small to cover that and a
@@ -478,7 +478,7 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                   <b>Specimen slides.</b> Each slide is an NFT in the same contract: NEP-171 transfers (with{" "}
                   <code className={s.codePaper}>nft_transfer_call</code>), NEP-177 metadata whose image is an SVG the contract
                   draws from the captured cells (at most 10 a call from the enumeration views), NEP-178 approvals and NEP-181
-                  enumeration. A slide is also a pattern licence: see planting.
+                  enumeration. A slide of 12 or more cells is also a pattern licence: see planting.
                 </li>
                 <li>
                   <b>Events.</b> NEP-141 <code className={s.codePaper}>ft_mint</code> once at launch,{" "}

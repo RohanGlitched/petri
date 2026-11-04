@@ -90,32 +90,6 @@ export function account(accountId, keysDir = KEYS_DIR) {
   return accounts.get(k);
 }
 
-/**
- * Where a key that can attach NEAR lives for `accountId`, or null. NEP-141 `ft_transfer` needs exactly 1 yoctoNEAR
- * attached, which a function-call key cannot do. On mainnet the strains sign with full-access keys; on testnet they
- * sign with dish-only function-call keys, so a transfer needs a full-access key from PETRI_KEYS_DIR_FULL (optional).
- */
-export function transferKeysDir(accountId) {
-  if (NETWORK === "mainnet") return KEYS_DIR;
-  const dir = process.env.PETRI_KEYS_DIR_FULL;
-  return dir && fs.existsSync(path.join(dir, `${accountId}.json`)) ? dir : null;
-}
-
-/** Sends `amount` PETRI units from `from` to `to` with NEP-141 ft_transfer and a memo. Returns { hash } or throws. */
-export async function ftTransfer(from, to, amount, memo) {
-  const dir = transferKeysDir(from);
-  if (!dir) throw new Error("no key that can attach the 1 yoctoNEAR ft_transfer needs");
-  const res = await account(from, dir).signAndSendTransaction({
-    receiverId: CONTRACT,
-    actions: [actions.functionCall("ft_transfer", { receiver_id: to, amount: String(amount), memo }, 30n * 10n ** 12n, 1n)],
-    waitUntil: "EXECUTED_OPTIMISTIC",
-    throwOnFailure: false,
-  });
-  const fail = res.status?.Failure ?? res.receipts_outcome?.map((r) => r.outcome.status?.Failure).find(Boolean);
-  if (fail) throw new Error(failureText(fail));
-  return { hash: res.transaction.hash };
-}
-
 export function failureText(f) {
   const s = JSON.stringify(f);
   const m = s.match(/Smart contract panicked: ([^"\\]+)/);
@@ -125,10 +99,11 @@ export function failureText(f) {
 /**
  * Call the dish as `accountId`. The strains and the keeper sign with function-call keys that may only call the dish and
  * cannot attach NEAR, so whatever a call needs (`deposit` yoctoNEAR) is paid from the account's sponsored credit in
- * the dish instead. The bench colonies (`attach`) attach their own NEAR, like a wallet player. Returns { hash } or
- * throws with the contract's own words.
+ * the dish instead. The bench colonies (`attach`) attach their own NEAR, like a wallet player. Every call prepays 300
+ * TGas by default: unused gas is refunded, and a catch-up on a crowded dish can need well over 150. Returns { hash,
+ * value } (what the method returned, parsed) or throws with the contract's own words.
  */
-export async function callDish(accountId, methodName, args, tgas = 150, deposit = 0n, attach = false) {
+export async function callDish(accountId, methodName, args, tgas = 300, deposit = 0n, attach = false) {
   const a = account(accountId);
   if (BigInt(deposit) > 0n && !attach) {
     args = { ...args, credit: BigInt(deposit).toString() };
@@ -142,7 +117,21 @@ export async function callDish(accountId, methodName, args, tgas = 150, deposit 
   });
   const fail = res.status?.Failure ?? res.receipts_outcome?.map((r) => r.outcome.status?.Failure).find(Boolean);
   if (fail) throw new Error(failureText(fail));
-  return { hash: res.transaction.hash };
+  return { hash: res.transaction.hash, value: returned(res) };
+}
+
+/** What a call returned (the first SuccessValue that parses as JSON), or null. */
+function returned(res) {
+  for (const st of [res.status, ...(res.receipts_outcome ?? []).map((r) => r.outcome.status)]) {
+    const v = st?.SuccessValue;
+    if (!v) continue;
+    try {
+      return JSON.parse(Buffer.from(v, "base64").toString("utf8"));
+    } catch {
+      /* not JSON */
+    }
+  }
+  return null;
 }
 
 export function log(...a) {

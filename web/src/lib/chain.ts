@@ -44,8 +44,16 @@ export type Rules = {
   slide_min_cells: number;
   /** A planting of a slide's exact pattern under its licence costs this share less (basis points). */
   slide_discount_bps: number;
-  /** Anyone but the slide's holder pays the holder this share of a licensed planting's cost, in PETRI (basis points). */
+  /** Anyone but the slide's holder pays the holder this share of a licensed planting's cost, in PETRI (basis points); a
+   * planter that has never attached NEAR pays it to the agar instead. */
   slide_royalty_bps: number;
+  /** Only a slide that captured at least this many cells is a licence (v6.1; 12 on both dishes). */
+  licence_min_cells: number;
+  /** A colony bound by a pact may not plant within this many cells (across or down, wrapping) of the living cells of the
+   * colony it protects (8 on both dishes). */
+  pact_radius: number;
+  /** A pact binds for at most this many generations from its offer (2,880, 12 hours, on both dishes). */
+  pact_max_gens: number;
   /** The wNEAR contract whose `ft_transfer_call` joins or buys for the account its message names (NEAR Intents). */
   wnear: string | null;
 };
@@ -117,6 +125,9 @@ export type DishState = {
   wrapped: string;
   unwrapping: string;
   wnear_ready: boolean;
+  /** pacts offered so far, and the PETRI the dish holds for offers not yet accepted */
+  pacts: string;
+  pact_escrow: string;
   /** PETRI units per cell right now */
   cell_price: string;
   /** yoctoNEAR per PETRI right now */
@@ -145,12 +156,35 @@ export type Colony = {
   /** started by someone else's payment (wNEAR through NEAR Intents) under a neutral name ("Culture" and hex digits of
    * its account's hash); the account may `rename` it once */
   proxy: boolean;
+  /** whether the colony has ever put NEAR into the vault itself; one that has not (a guest) is paid in credit and cannot
+   * send PETRI */
+  attached: boolean;
+  /** PETRI that stays in the dish: what it earned, bought with credit or was paid in royalties before its first NEAR
+   * (a guest's unclaimed earnings included), and PETRI it has bought with credit since, less what it has planted or
+   * minted since (kept PETRI is spent first). While it holds any, the colony cannot sell PETRI for NEAR, send PETRI or
+   * pay for a pact. */
+  kept: string;
+};
+
+/** A pact (the `pact` and `pacts_of` views): colony `from` paid colony `to` `petri` for its promise not to plant within
+ * rules.pact_radius of `from`'s living cells before generation `until`. `binding` while accepted, not ended and
+ * `until` still ahead of the stored generation. */
+export type PactView = {
+  id: number;
+  from: number;
+  to: number;
+  petri: string;
+  until: string;
+  accepted: string | null;
+  ended: string | null;
+  binding: boolean;
 };
 
 export type PlantRecord = { index: string; generation: string; colony: number; cells: number[]; cost: string; siege: boolean; note: string | null; slide: string | null };
-/** A planting under a slide's licence: the slide, how many times it had changed hands, the holder paid (none when the
- * planter held it) and the royalty. */
-export type Licence = { token: string; moves: number; holder: string | null; royalty: string };
+/** A planting under a slide's licence: the slide, how many times it had changed hands, the holder (none when the
+ * planter held it), the royalty, and whether it went to the agar (the planter had never attached NEAR) instead of the
+ * holder. */
+export type Licence = { token: string; moves: number; holder: string | null; royalty: string; to_agar: boolean };
 /** A Refund's `kind`: what the failed payout was (0 a claim, 1 a sale, 2 a bounty, 3 a sponsor's reclaim, 4 a pending
  * claim). */
 export type PayoutKind = 0 | 1 | 2 | 3 | 4;
@@ -159,7 +193,9 @@ export type Entry =
   | { Buy: { generation: string; colony: number; petri: string; near: string; credit: string; spent: string | null } }
   | { Plant: { generation: string; colony: number; cells: number[]; cost: string; near: string; credit: string; siege: boolean; spent: string | null; licence: Licence | null } }
   | { Sell: { generation: string; colony: number; petri: string; near: string; paid: string; as_credit: boolean } }
-  | { Tide: { generation: string; chain: string; pay: string; bounty: string; storage: string; paid: string; as_credit: string; credit_pay: string; credit_paid: string; by: number } }
+  /** v6.1 keeps only the chain, the bytes the tide stored and who ran it; what it paid follows from the ledger before
+   * it (the replays work it out, see replay.ts `tidesPaid`) and is in the contract's `tide` event. */
+  | { Tide: { generation: string; chain: string; bytes: number; by: number } }
   | { Skip: { generation: string; skipped: string } }
   | { Refund: { generation: string; colony: number; kind: PayoutKind; of: string; near: string; storage: string } }
   | { Slide: { generation: string; colony: number; token: string; x: number; y: number; w: number; h: number; cells: number; bitmap: string; cost: string; spent: string | null } }
@@ -169,7 +205,10 @@ export type Entry =
   | { Pending: { generation: string; account: string; near: string } }
   | { Unpend: { generation: string; account: string; near: string; paid: string } }
   | { Dust: { generation: string; near: string } }
-  | { Burn: { generation: string; account: string; petri: string } };
+  | { Burn: { generation: string; account: string; petri: string } }
+  | { PactOffer: { generation: string; pact: number; from: number; to: number; petri: string; until: string; spent: string | null } }
+  | { PactAccept: { generation: string; pact: number } }
+  | { PactEnd: { generation: string; pact: number } };
 
 /** One sponsor's credit for an account (the `credit_grants` view, oldest first, which is the order it is spent in). */
 export type Grant = { sponsor: string; amount: string; at: string };
@@ -308,6 +347,11 @@ export const getPending = (account_id: string) => view<string>("pending_of", { a
 export const getPendingRecord = (account_id: string) => view<PendingRecord | null>("pending_record", { account_id });
 /** The least wNEAR a payment for `account_id` must deliver for its order ("join" or "buy") to run. */
 export const getIntentMinimum = (what: "join" | "buy", account_id: string) => view<string>("intent_minimum", { what, account_id });
+/** The pacts a colony is party to that have not ended (at most 8), and one pact by number. */
+export const getPactsOf = (account_id: string) => view<PactView[]>("pacts_of", { account_id });
+export const getPact = (id: number) => view<PactView | null>("pact", { id });
+/** yoctoNEAR that always covers a pact offer's storage (attached, or as credit); what is not used comes back. */
+export const PACT_DEPOSIT = 4_200_000_000_000_000_000_000n;
 /** PETRI a slide's holders have been paid in royalties, in all. */
 export const getSlideRoyalties = (token_id: string) => view<string>("slide_royalties", { token_id });
 
@@ -332,11 +376,24 @@ export function slideBits(b64: string): Uint8Array {
  *   order waiting with that account's pending NEAR (a join, or a purchase for a colony), with only the NEAR that came
  *   with the order. Fails, changing nothing, while the order cannot run.
  * plant with a licence: method "plant", args { cells, note, credit, slide: "<token id>" }: the cells must be exactly the
- *   slide's pattern moved anywhere (not turned); it costs slide_discount_bps less, and a planter that does not hold the
- *   slide also pays its holder slide_royalty_bps of that cost in PETRI. Attach getPlantDeposit(n, bytes, slide).
+ *   slide's pattern moved anywhere (not turned), and the slide must hold at least rules.licence_min_cells cells; it
+ *   costs slide_discount_bps less, and a planter that does not hold the slide also pays slide_royalty_bps of that cost
+ *   in PETRI, to the holder (or to the agar, for a planter that has never attached NEAR). Attach
+ *   getPlantDeposit(n, bytes, slide). A colony with no hot row is refused while 10,000 colonies play at once.
  * rename: method "rename", args { name, color }, no deposit. Only for a colony started by someone else's payment
  *   (`proxy`), once. Names "Culture <hex digits>" are reserved for such colonies.
  * NEP-171: "nft_transfer" { receiver_id, token_id, approval_id: null, memo: null } with exactly 1 yoctoNEAR attached.
+ * pactOffer: method "pact_offer", args { to: "<account with a colony>", petri: "<PETRI units>", until: "<generation>", credit },
+ *   bring PACT_DEPOSIT (0.0042 NEAR) attached or as `credit` (a string, yoctoNEAR; what is not used comes back), 300 TGas (it catches the dish up first). The PETRI
+ *   is held until `to` accepts; it must be PETRI the colony could sell (none if it holds kept PETRI or never attached
+ *   NEAR; a house colony offers players none). `until` is after the stored generation and at most rules.pact_max_gens
+ *   ahead. One open offer to a colony at a time; a colony is party to at most 8 pacts. Returns the pact's number.
+ * pactAccept: method "pact_accept", args { id }, no deposit, 30 TGas. Pays the caller's colony the pact's PETRI; from
+ *   then until `until` the dish refuses its plantings within rules.pact_radius of the offering colony's living cells.
+ * pactCancel: method "pact_cancel", args { id }, no deposit, 30 TGas. Ends an open offer (by either colony, or by anyone
+ *   once it expired; its PETRI goes back), or an accepted pact once its `until` has come (by anyone).
+ * Kept PETRI: a colony with `kept` above zero is refused "sell" for NEAR, "ft_transfer", "ft_transfer_call" and paid
+ *   pacts until it has planted (or minted slides with) that much; a guest (`attached` false) cannot send PETRI at all.
  *
  * Paying with NEAR Intents: 1Click's `customRecipientMsg` (wNEAR delivered to the dish with ft_transfer_call) is the
  * JSON string {"for": "<account>", "do": "join" | "buy", "name": "<colony name>", "color": <0xRRGGBB as a number>}.

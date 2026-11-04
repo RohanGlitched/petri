@@ -26,7 +26,7 @@ export function SpecimenDetail({ id }: { id: string }) {
   const maker = c?.account ?? null;
   const all = useAllSlides();
   const [copied, setCopied] = useState(false);
-  const licence = useSlideLicence(sl ? sl.id : null, player?.accountId ?? null, sl?.owner ?? null);
+  const licence = useSlideLicence(sl ? sl.id : null, player?.accountId ?? null, sl?.owner ?? null, sl?.count ?? sl?.cells?.length ?? null);
 
   if (one.status === "loading")
     return (
@@ -108,6 +108,7 @@ export function SpecimenDetail({ id }: { id: string }) {
                   offsets={offsets}
                   color={c?.color ?? 0xf2b45a}
                   live={licence.live}
+                  small={licence.small ? rules?.licence_min_cells ?? null : null}
                   bps={licence.royaltyBps}
                   holder={licence.holder}
                   perk={licence.perk}
@@ -221,10 +222,12 @@ export function SpecimenDetail({ id }: { id: string }) {
 /** "Plant this pattern": what planting a slide's cells costs its holder and everyone else, and what the slide has earned.
  * The licence comes with the next contract version (licence.ts); until a dish has it, the block says plainly that both
  * sides pay the normal price and the slide earns nothing. */
-function PatternLicence({ offsets, color, live, bps, holder, perk, lifetime, price, owner }: {
+function PatternLicence({ offsets, color, live, small, bps, holder, perk, lifetime, price, owner }: {
   offsets: [number, number][];
   color: number;
   live: boolean;
+  /** `licence_min_cells`, when this slide captured fewer cells than that and is a keepsake. */
+  small: number | null;
   bps: number | null;
   holder: boolean;
   perk: string | null;
@@ -243,7 +246,7 @@ function PatternLicence({ offsets, color, live, bps, holder, perk, lifetime, pri
           <h2 id="licence-title">Plant this pattern</h2>
           <p>
             {int(offsets.length)} cells{price !== null ? `, ${petri(price, 2)} PETRI at today's price` : ""}.{" "}
-            {live ? "The slide is a licence for its pattern." : "Slides are not pattern licences on this dish."}
+            {live ? "The slide is a licence for its pattern." : small !== null ? `Only a slide of ${small} cells or more is a licence; this one is a keepsake.` : "Slides are not pattern licences on this dish."}
           </p>
         </div>
         <span className={`${s.licenceTag} ${live ? s.licenceLive : ""}`}>{live ? "Licence live" : "No licence"}</span>

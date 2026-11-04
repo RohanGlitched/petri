@@ -3,6 +3,7 @@
 export const memory: WebAssembly.Memory;
 export const __wbg_engine_free: (a: number, b: number) => void;
 export const buy_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+export const credit_share: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
 export const engine_add_credit_won: (a: number, b: number, c: number, d: number) => void;
 export const engine_agar: (a: number) => [number, number];
 export const engine_attach: (a: number, b: number) => void;
@@ -28,6 +29,7 @@ export const engine_last_deaths: (a: number) => [number, number];
 export const engine_live_counts: (a: number) => [number, number];
 export const engine_load_compact: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
 export const engine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
+export const engine_pact_breach: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
 export const engine_plant: (a: number, b: number, c: number, d: number) => void;
 export const engine_region_bitmap: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
 export const engine_set_agar: (a: number, b: number, c: number) => void;

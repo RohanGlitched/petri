@@ -210,7 +210,7 @@ near contract call-function as-transaction petri-dish.near claim_pending json-ar
           <tr>
             <td>Least wNEAR for the order to run</td>
             <td>
-              <C>intent_minimum(what, account_id)</C>: <C>min_join</C> (0.01 NEAR) for a join or a purchase&rsquo;s 141-byte record for a buy, plus the <C>Pending</C> and <C>Unpend</C> entries the payment writes on its way. Those entries name the account, so the figure grows with its length: at the time of writing, for <C>alice.near</C>, 0.01184 NEAR to join and 0.00325 NEAR to buy. Less than that is never refunded; it waits as pending NEAR
+              <C>intent_minimum(what, account_id)</C>: <C>min_join</C> (0.01 NEAR) for a join or a purchase&rsquo;s 114 bytes (<C>BUY_BYTES</C> and one more) for a buy, plus the <C>Pending</C> and <C>Unpend</C> entries the payment writes on its way. Those entries name the account, so the figure grows with its length: at the time of writing, for <C>alice.near</C>, 0.01184 NEAR to join and 0.00298 NEAR to buy. Less than that is never refunded; it waits as pending NEAR
             </td>
             <td>
               The contract; <C>/api/intents/quote</C> refuses quotes below it

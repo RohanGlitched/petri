@@ -53,7 +53,7 @@ export default function Page() {
       </Q>
       <Q id="q-slide-free" q="Does a slide do anything in the game?">
         <p>
-          Yes: it is a pattern licence. Plant its exact pattern anywhere on the dish (moved, not turned or flipped) with the slide&rsquo;s token id, and the planting costs 25% less. Anyone but the slide&rsquo;s holder also pays the holder 10% of that cost in PETRI, so a slide whose pattern others plant earns its holder royalties, whoever holds it now. The siege surcharge still applies in full. See <Doc to="how-to-play" hash="replant">Replanting a slide</Doc>.
+          Yes, if it captured at least 12 cells: then it is a pattern licence. Plant its exact pattern anywhere on the dish (moved, not turned or flipped) with the slide&rsquo;s token id, and the planting costs 25% less. Anyone but the slide&rsquo;s holder also pays the holder 10% of that cost in PETRI (a planter that has never attached NEAR pays the agar instead), so a slide whose pattern others plant earns its holder royalties, whoever holds it now. A smaller slide is a keepsake and does nothing in the dish. The siege surcharge still applies in full. See <Doc to="how-to-play" hash="replant">Replanting a slide</Doc>.
         </p>
       </Q>
 
@@ -92,7 +92,7 @@ export default function Page() {
       <H2 id="trust">Trust</H2>
       <Q id="q-change" q="Can the team change the rules?">
         <p>
-          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account that already runs v6, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6. Both contract accounts still hold a full-access key, so until it is deleted the code itself could be replaced. It is to be deleted with the owner&rsquo;s approval before judging. <Doc to="verification" hash="keys">Check the keys</Doc>.
+          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6 dish and one that already runs v6.1, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6 and then to v6.1, and how <C>petri-v6.testnet</C> moved to v6.1. Both contract accounts still hold a full-access key, so until it is deleted the code itself could be replaced. It is to be deleted with the owner&rsquo;s approval before judging. <Doc to="verification" hash="keys">Check the keys</Doc>.
         </p>
       </Q>
       <Q id="q-verify" q="How do I know the board is right?">
@@ -132,7 +132,7 @@ near contract deploy YOUR-DISH.testnet use-file target/near/petri_contract/petri
   prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
 node scripts/verify.mjs --network testnet --contract YOUR-DISH.testnet`}</Code>
         <p>
-          The account needs NEAR for the contract&rsquo;s storage (the 571,418-byte build alone is about 5.7 NEAR of storage). The reproducible build writes the commit it was built at into the contract&rsquo;s NEP-330 metadata, so only a build at <C>{BUILD_COMMIT_SHORT}</C> has the code hash the verifier expects; for any other commit pass your build&rsquo;s hash with <C>--code-hash</C>. The verifier&rsquo;s last row passes only once your account has no full-access key.
+          The account needs NEAR for the contract&rsquo;s storage (the build, about 575 KB, is about 5.75 NEAR of storage on its own). The reproducible build writes the commit it was built at into the contract&rsquo;s NEP-330 metadata, so only a build at <C>{BUILD_COMMIT_SHORT}</C> has the code hash the verifier expects; for any other commit pass your build&rsquo;s hash with <C>--code-hash</C>. The verifier&rsquo;s last row passes only once your account has no full-access key.
         </p>
       </Q>
     </DocPage>

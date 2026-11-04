@@ -13,10 +13,10 @@ const CHECKS: [string, string][] = [
   ["Legal plantings", "Every Plant entry passes check_plant on the replayed board, and its siege flag matches."],
   ["Planting prices", "Every Plant paid exactly quote(agar, counted, …) for its cell count and siege flag, less the licence discount (slide_discount_bps) when it names a slide."],
   ["Planting fees", "Every Plant brought at least cell_fee per cell to the pools (near + credit)."],
-  ["Licensed plantings: shape, holder, royalty", "Every Plant under a licence is exactly its slide's pattern moved on the dish (Engine.fits_slide, not turned); its price and royalty are licence(cost, discount, royalty); its holder is the minter until the slide's first move and one account between moves; no royalty when the planter held it."],
+  ["Licensed plantings: shape, holder, royalty", "Every Plant under a licence is exactly its slide's pattern moved on the dish (Engine.fits_slide, not turned); its price and royalty are licence(cost, discount, royalty); its slide captured at least licence_min_cells (12) cells; its holder is the minter until the slide's first move and one account between moves; no royalty when the planter held it, and to_agar is true exactly when there is a holder and the planter had never attached NEAR (the royalty then goes to the agar)."],
   ["Purchases on the curve", "Every Buy got exactly buy_quote(near + credit) units from the replayed agar."],
   ["Sales on the curve and allowance", "Every Sell got exactly sell_quote, within the allowance left since the last tide, paid in credit exactly when the colony never attached NEAR, and none by a house colony."],
-  ["Tides", "A tide ran at exactly the tide generations where some non-house colony had earned; each has the right chain, vault share, NEAR shares, credit shares, capped bounty (none when a house colony or keeper ran it), and at most 0.003 NEAR of storage."],
+  ["Tides", "A tide ran at exactly the tide generations where some non-house colony had earned; each has the right chain and stored bytes (130, or 175 on the tide that starts a new index page), and the replay works out its vault share, NEAR shares, credit shares, capped bounty (none when a house colony or keeper ran it) and storage from the ledger before it."],
   ["Claims of exactly what was owed", "Every Claim took exactly the NEAR its colony was owed in the replay (all it won at the tides, less what it claimed before), and sent it less at most a record's storage."],
   ["Refunds tied to their payouts", "Every Refund names a payout entry (of) of its kind, refunds exactly the NEAR that entry sent, no payout is refunded twice, and its storage is at most a record's; the rest goes to the vault (a bounty) or to pending NEAR (everything else)."],
   ["Specimens", "Every Slide is the colony's own cells in its rectangle as the replayed board stood, numbered in order, at least slide_min_cells, priced at slide_cells_price per cell."],
@@ -154,7 +154,7 @@ Owed, from the ledger: 0.22886 NEAR (vault, credit pool, unspent credit, unclaim
           <strong>Start empty.</strong> A 128 × 128 dish, the agar at <C>max_supply</C>, no colonies.
         </li>
         <li>
-          <strong>Walk the generations.</strong> At each generation it first checks the tide schedule, then applies that generation&rsquo;s entries in ledger order, checking each against the rules. Then it steps Life and the feed to the next generation that has an entry or is a tide generation.
+          <strong>Walk the generations.</strong> At each generation it first checks the tide schedule and works out that tide&rsquo;s amounts itself (a Tide entry stores only the chain, its bytes and who ran it), then applies that generation&rsquo;s entries in ledger order, checking each against the rules. Then it steps Life and the feed to the next generation that has an entry or is a tide generation.
         </li>
         <li>
           <strong>Track the attachers.</strong> A colony whose <C>Buy</C> or <C>Plant</C> brought <C>near &gt; 0</C> has attached NEAR; from then on its tide shares and sales must be NEAR, before then credit.
@@ -163,7 +163,7 @@ Owed, from the ledger: 0.22886 NEAR (vault, credit pool, unspent credit, unclaim
           <strong>Track the money.</strong> Every NEAR and credit movement is an entry (<C>Sponsor</C>, <C>Unsponsor</C>, <C>Claim</C>, <C>Refund</C>, <C>Pending</C>, <C>Unpend</C>, <C>Dust</C>, <C>Burn</C>, and the <C>spent</C> field of purchases, plantings and slides), so the replay keeps its own vault, credit pool, credit given, won, sold, spent and reclaimed, NEAR owed and pending NEAR, without reading any of the contract&rsquo;s counters.
         </li>
         <li>
-          <strong>Track the slides.</strong> Each slide starts with its minter as holder. A licensed planting records the slide&rsquo;s move count and the holder it paid; the replay checks the holder is the minter while the count is 0 and the same account for as long as the count stays the same, and adds the royalty to the slide.
+          <strong>Track the slides.</strong> Each slide starts with its minter as holder. A licensed planting records the slide&rsquo;s move count, the holder, the royalty and whether it went to the agar; the replay checks the slide had at least 12 cells, that the royalty went to the agar exactly when the planter had never attached NEAR, and the holder is the minter while the count is 0 and the same account for as long as the count stays the same, and adds the royalty to the slide.
         </li>
         <li>
           <strong>Compare.</strong> At the stored generation it compares every total and every colony&rsquo;s numbers with the contract&rsquo;s views, each slide&rsquo;s owner, moves and royalties with the <C>slides</C> view, and solvency with the replay&rsquo;s own terms.
@@ -225,7 +225,7 @@ cargo near build reproducible-wasm`}</Code>
           <Code lang="sh" title="Shell, with Node">{`node -e 'const h=require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest();const A="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";let n=BigInt("0x"+h.toString("hex")),s="";while(n>0n){s=A[Number(n%58n)]+s;n/=58n}for(const b of h){if(b)break;s="1"+s}console.log(s)' target/near/petri_contract/petri_contract.wasm`}</Code>
         </li>
         <li>
-          It prints <C>{CODE_HASH}</C>, and the file is 571,418 bytes. Compare it with what both accounts report:
+          It prints <C>{CODE_HASH}</C>, and the file is about 575 KB. Compare it with what both accounts report:
           <NetTabs
             mainnet={<Code lang="sh" title="mainnet">{`near account view-account-summary petri-dish.near network-config mainnet now
 node scripts/verify.mjs --network mainnet | grep "code hash"`}</Code>}

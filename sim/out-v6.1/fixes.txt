@@ -1,0 +1,133 @@
+PETRI v6.1: EACH FIX FROM sim/out-v6 AND ITS MEASURED EFFECT, AND THE RULES THAT STILL LOOK BROKEN
+(sim/out-v6.1, re-run on v6.1 part 2: the kept rule and pacts; every comparison re-runs the same seeds with v6's rules and layout set back
+('V6' scenarios, which reproduce sim/out-v6), or with one v6.1 change taken out ('NOKEPT' = without the kept rule); the measured tables
+follow below.)
+
+PART 2 (v6.1 part 2, measured here)
+
+P1 (free play reaching NEAR) FIXED. Rule: PETRI earned before a colony's first NEAR stays in the dish. A guest cannot send PETRI and takes
+    no keeper pot; when it first attaches NEAR, what it earned, bought with credit or was paid in royalties is kept PETRI, and so is PETRI
+    anyone buys with credit; plantings and slides spend kept PETRI first; while a colony holds any it cannot sell for NEAR, send PETRI or pay
+    for a pact. Testnet 150 p + 3 SybilAttach + 3 SybilTransfer operators (each 10 relayer guests), 7 d, 6 seeds:
+    - exit (a), guests ft_transfer their PETRI to one wallet that sells it: without the rule 477 PETRI moved per operator and the vault paid
+      +0.047 NEAR (+0.043..+0.053) a week per operator for it; with the rule every transfer is refused (0 moved, 0 NEAR).
+    - exit (b), guests farm a day, attach 0.01 NEAR each and sell what they farmed: with the rule 0 NEAR (82 sales refused per operator,
+      292 PETRI still kept at the end); without it +0.0008 NEAR per operator, because a guest's day of farming (about 30 PETRI, 0.003 NEAR)
+      is worth less than a sale's own record and refund reserve (0.0035 NEAR), so most of its sales never happen; the 0.01 NEAR attach is
+      a loss either way (cash -0.055 with the rule, -0.044 without).
+    - every colony in the run: vault NEAR paid for PETRI earned before its first NEAR (or bought with credit, or moved in by a guest's
+      transfer) 0.0000 with the rule, 0.167 without. The keeper pot no longer reaches guests (left at the end 1.3 vs 1.6 PETRI).
+    - cost to everyone else, mainnet 150 p 7 d: within seed noise (Builder -0.187 vs -0.190, Methuselah +0.350 vs +0.368, Whale -2.007 vs
+      -1.948, SelfSponsor -0.597 vs -0.620; the young dishes are identical, no credit there).
+P2 (pacts, new). A builder that pays the raider nearest it (within 40 cells) 2 PETRI a tide window for a pact (pact_radius 8) changes the
+    raider's game: 150 p 7 d, 12 pacts a builder, raids aimed elsewhere 2.0 and plantings refused by the contract 1.6 per raider; young 20:
+    6 pacts, 1.8 aimed elsewhere, 0.8 refused. At that naive price it does not pay the builder: cash -0.222 vs -0.187 at 150 p (the PETRI
+    and the 0.0038 NEAR of storage a pact are spent, and PETRI paid is PETRI not planted: 128 k vs 163 k cell-generations). Pacts are worth
+    it only where a raider's threat is real, which is what the strains' council prices with its model.
+
+CONFIRMED (v6 -> v6.1)
+
+CONFIRMED (v6 -> v6.1)
+
+F5 (gas at scale) FIXED. 30,000 colonies, 2 days, 2 seeds: the hot table holds only colonies that earned since the last tide or have
+    living cells and a stake >= 125 (feed_weight(1, stake, 8) > 0), never the house. Hot rows avg 17,102 -> 1,336, max 27,538 -> 2,390
+    (32 rows at most leave a call). Largest call per kind (TGas, 30 TGas payout reservations included): plant 237 -> 60, join 222 -> 61,
+    buy 234 -> 55, claim 233 -> 52, sell 147 -> 54, advance 206 -> 23. Calls over 150 TGas 116,731 -> 0; over their prepaid gas 16,102 -> 0
+    (prepaid now 300 on the site); catch-ups cut short 0; plantings refused because the table held 10,000 rows: 0. Analytic (every row a
+    tide winner, full board): at the 10,000-row cap the tide call is 120 TGas, a plant 77, a claim with NEAR 105, and a catch-up steps all
+    120 generations with or without a tide in it (v6 stepped 1 at 25,000 rows). The contract's own test, on 30,000 colonies that all have
+    stake, scales the unit runtime's host calls by the real price per rewritten byte (x1.83) and adds the wasm it does not charge: at 1,500
+    playing the largest call is 67.5 TGas (advance through a paying tide), a plant 20.4; at 9,999 playing 125.7, 115.6 and 88.3.
+F1 (tide entries) FIXED. 289 -> 130 B a tide (126-B entry + 4 B in the packed index). Tide storage as a share of tide pay on the young
+    mainnet dish: 39% -> 21% (Penny alone), 31% -> 16% (5 outsiders), 8% -> 4% (20). Colonies received 0.69 -> 0.80 and 1.00 -> 1.10 NEAR
+    of those tides (with 20 outsiders 5.81 -> 5.47: the tides are smaller, 6.32 -> 5.74, since plantings attach 60 fewer bytes of storage
+    deposit, whose surplus fed the vault); Penny alone +0.44 -> +0.57, Methuselah alone +0.22 -> +0.36. Storage of all NEAR in: 70% -> 61%
+    (one outsider). The other compacted entries (Buy 105 -> 97, Sell 105 -> 97, Claim 104 -> 96, Plant 111 -> 103 + 2c, plant index
+    53 -> 49, note key 9 -> 5 B, PLANT_STORAGE_BASE 240 -> 180, BUY_BYTES 140 -> 113) are modelled too.
+F3 (royalty farming) REDUCED, NOT GONE. licence_min_cells 12: of the farmer's eight patterns only the pulsar (48 cells) still licenses.
+    150 p, 7 d: licensed plantings 7,852 -> 466 (all pulsars), royalties 6,296 -> 3,171 PETRI, farmer cash +0.29 -> +0.11 (+0.08..+0.15);
+    with licence_min_cells 0 v6.1 would pay it +0.33. Young 20: +0.21 -> +0.03 (-0.03..+0.21). Whales (the pulsar planters) -1.97 with the
+    farmer vs -2.01 without, so the licence's 25% discount covers the royalty for them. See N1 (now BY DESIGN).
+F4 (guest royalty leak) FIXED. Royalties paid by colonies that never attached NEAR to the SybilRoyalty wallet: 56 -> 0 PETRI, both in v6.1
+    and in v6.1 with licence_min_cells 0 (the beehive licence kept). Operator cash -0.158 -> -0.149 (licence kept) / -0.097 (v6.1: no 6-cell
+    licence, so its guests plant beehives without paying it).
+F6 (stranded keeper pot) FIXED. Pot left at the end: young 20, 7 d 1,480 -> 1.1 PETRI; 150 p 12.3 -> 1.3. It now goes to whoever's call
+    runs the generation (150 p medians per player: Methuselah 82, Whale 49, Locker 28, Late 21, Racer 13, Defender 9, Builder 9 PETRI);
+    the racer, which v6 paid 1,082 PETRI through `advance`, loses less (-0.019 -> -0.005). Keepers and the house never take it.
+F7 (testnet keeper spin) GONE. Players' calls empty the pot every generation, so the old "pot > 50 PETRI" condition never fired (29
+    advances a day registered or not, v6: 4,820 vs 30; 0.015 NEAR/day at mainnet gas price); agents/run.mjs no longer has it (the sim's
+    testnet keeper still models it, which changes nothing).
+Site gas (300 TGas prepaid for join/plant/buy/sell/claim/advance/mint_slide; relay cap 300): no call in any v6.1 run passed its prepaid gas
+    or 150 TGas.
+
+STILL BROKEN, OR NEW
+
+N1. BY DESIGN, with the numbers. The pulsar's first minter collects 10% of every licensed planting of it: +0.11 NEAR (+0.08..+0.15) a
+    week at 150 players, 3,171 PETRI of royalties from 466 whale plantings. Who pays: only planters that choose the licence (plant's `slide`
+    is optional, and the royalty is PETRI from their own balance, `toll`), and they still come out ahead: whales -1.97 with the farmer vs
+    -2.01 with no farmer and -2.05 with no licence at all (licence_min_cells 49); with royalty 0 they would keep the whole 25% (-1.82).
+    The house never pays (it plants only slides it holds) and a guest's royalty goes to the agar. The vault pays the farmer only through
+    sell-backs, at the capped half price any holder gets, and its totals hardly move with the royalty: sales 10.23 NEAR with the farmer vs
+    10.16 with royalty 0 (9.51 with no licence), tide shares 29.30 vs 29.09 (29.49). What moves the vault is the licence's discount
+    itself (less PETRI burned and returned, so more to sell), which every licence has whoever holds it. Tide winners shift within seed
+    noise (Methuselah +0.28 with the farmer, +0.31 royalty 0, +0.34 no licence, +0.35 no farmer; ranges overlap). So the farmer's gain is
+    the licence working as designed (the first to fossilize a large pattern holds its licence), not a leak of house or vault money;
+    licence_min_cells stays 12. If it should not pay, licence_min_cells 49 or slide_royalty_bps 0 make the farmer lose 0.16.
+F2 (judgment; tide_cap_bps 2500 measured and not adopted). The house's subsidy still goes to whoever is alone on the dish, and more of it
+    reaches it now that tides store less: a 0.01 NEAR Penny alone nets +0.57 (v6 +0.44) of the house's 2.28 NEAR in a week. tide_cap_bps
+    2500 (no colony more than 25% of a tide) was to be added if it cost real players under 0.02 NEAR a week in every scenario and removed
+    most of the lone farmer's gain. It does neither: the lone Penny keeps +0.41 of +0.57 (28% removed, 0.15 NEAR left idle in the vault),
+    and with 5 outsiders it costs the Methuselah 0.055 a week (+0.061 -> +0.006), the one outsider that plays well early, which the
+    "first players should be rewarded" goal protects (with 20 outsiders it gains, +0.21 -> +0.24). The first player taking the subsidy
+    while alone is that goal at work; a cap mostly strands NEAR. tide_every 960: +0.61, 0.22 left; tide_bps 200: +0.46. Left as is.
+F8 (house runway). The mainnet house runs dry on day 7 (6..7) at 0.55 NEAR a strain, 1/8 pace, 100 PETRI a day (v6: day 6): about 1.2 NEAR
+    a strain would last to Nov 18 (linear estimate, not simulated).
+N2 (note). The methuselah stays the one kind ahead at 15 and 150 players (+0.38, +0.37; v6 +0.42, +0.41). It loses at 1,500 players
+    (-0.05) and over 30 days (-0.39).
+Now modelled (P1): guests' PETRI moved by ft_transfer to a wallet that sells it, and guests that attach a little NEAR to sell what they
+    farmed. Both pay 0 vault NEAR under the kept rule.
+
+Not broken (checked again on v6.1 part 2): house laundering (all paths refused; 0 PETRI moved in 467 runs), sybil guests (no NEAR in guest
+accounts; operators lose 0.10-0.12 at the median), self-sponsoring (-0.51..-0.72 at the median), the carpet locker (loses at every size), dormancy and idle-tide skips,
+the join's cost on a current dish (3.6 TGas analytic, 60 TGas at most when it caught up through a paying tide), the 10,000-row cap
+(never reached at 30,000 colonies).
+
+=== Measured: v6.1 against v6 (same seeds; 'V6' runs set every v6 rule and layout back) ===
+  Young mainnet, 7 days: median cash per player; vault left; house NEAR paid; tide-entry storage as % of tide pay.
+                                                       |     Penny   Builder    Raider   Methus.     Whale |     vault |  house pd |    stor%
+  Penny alone | v6                                     |   +0.4372         -         -         -         - |    0.0000 |    2.3327 |      39%
+  Penny alone | v6.1                                   |   +0.5709         -         -         -         - |    0.0002 |    2.2784 |      21%
+  Penny alone | v6.1 + tide_cap_bps 2500               |   +0.4149         -         -         -         - |    0.1506 |    2.2851 |       8%
+  Penny alone | v6.1 + tide_bps 200                    |   +0.4552         -         -         -         - |    0.0934 |    2.2650 |      24%
+  Penny alone | v6.1 + tide_every 960                  |   +0.6073         -         -         -         - |    0.2230 |    2.2933 |       7%
+  5 outsiders | v6                                     |   -0.0479   -0.2496   -0.2498   +0.0667         - |    0.0000 |    2.3080 |      31%
+  5 outsiders | v6.1                                   |   -0.0481   -0.2492   -0.2504   +0.0612         - |    0.0115 |    2.2849 |      16%
+  5 outsiders | v6.1 + tide_cap_bps 2500               |   -0.0497   -0.2502   -0.2510   +0.0058         - |    0.0198 |    2.2885 |      12%
+  5 outsiders | v6.1 + tide_bps 200                    |   -0.0489   -0.2496   -0.2531   +0.0852         - |    0.0282 |    2.2744 |      28%
+  5 outsiders | v6.1 + tide_every 960                  |   -0.0493   -0.2482   -0.2476   +0.1847         - |    0.2374 |    2.3048 |       5%
+  20 outsiders | v6                                    |   -0.0469   -0.2484   -0.2457   +0.2724   -2.9984 |    0.0315 |    2.2740 |       8%
+  20 outsiders | v6.1                                  |   -0.0485   -0.2483   -0.2259   +0.2114   -3.0001 |    0.0364 |    2.2602 |       4%
+  20 outsiders | v6.1 + tide_cap_bps 2500              |   -0.0483   -0.2495   -0.2287   +0.2360   -3.0017 |    0.0417 |    2.2199 |       3%
+  20 outsiders | v6.1 + tide_bps 200                   |   -0.0485   -0.2491   -0.2433   +0.3452   -2.9996 |    0.0862 |    2.2629 |       6%
+  20 outsiders | v6.1 + tide_every 960                 |   -0.0488   -0.2484   -0.2471   +0.4787   -2.9651 |    0.6431 |    2.2770 |       1%
+
+  Keeper pot left at the end: mainnet 150 p 7 d 1.3 (0.2..3.7) PETRI (v6.1) vs 12.3 (0.1..21.8) (v6); young 20 7 d 1.1 (0.0..1.9) vs 1479.7 (1420.7..1692.7); Racer cash (150 p) -0.0055 (-0.0059..-0.0043) vs -0.0192 (-0.0204..-0.0170); Builder -0.1865 (-0.2041..-0.1621) vs -0.1931 (-0.2025..-0.1830)
+    pot received per player (median PETRI), 150 p v6.1: Penny 1.0, Builder 9.2, Raider 5.9, Defender 8.7, Methuselah 81.6, Late 21.4, Whale 48.5, Sniper 1.1, Racer 13.0, Locker 27.6; v6: Racer 1081.8
+  Testnet keeper (agents/run.mjs, unchanged: advances whenever the pot > 50 PETRI if registered; keepers never take the pot): calls/day 31 (25..32) vs 31 (25..32) unregistered; gas/day 0.0157 (0.0127..0.0168) vs 0.0157 (0.0127..0.0168) NEAR at mainnet gas price (testnet's is 10x); pot left 0.5 (0.2..0.7) PETRI
+  Testnet sybil royalty: SybilRoyalty operator cash -0.1580 (-0.1866..-0.1408) (v6) vs -0.1499 (-0.1696..-0.1409) (v6.1, licence_min 0) vs -0.1042 (-0.1292..-0.0878) (v6.1); royalties in 773.5 (525.3..880.8) vs 685.1 (470.8..893.7) vs 0.0 (0.0..0.0) PETRI, of them paid by credit-only planters 56.2 (42.0..74.7) vs 0.0 (0.0..0.0) vs 0.0 (0.0..0.0)
+  Royalty farmer: 150 p 7 d cash +0.2910 (+0.0243..+0.3565) (v6) vs +0.3337 (+0.0305..+0.3528) (v6.1, licence_min 0) vs +0.1089 (+0.0774..+0.1503) (v6.1); royalties 6296.1 (3746.9..6917.3) vs 6528.9 (3637.9..7148.0) vs 3170.9 (2606.1..3726.4) PETRI; young 20 7 d cash +0.2095 (+0.0927..+0.2836) (v6) vs +0.0341 (-0.0286..+0.2112) (v6.1), royalties 2202.9 (1753.7..2550.8) vs 1503.9 (1064.0..1980.6)
+  Royalty farmer, further options on v6.1 (150 p 7 d / young 20 7 d): farmer cash with slide_royalty_bps 0 -0.1581 (-0.1710..-0.1484) / -0.0765 (-0.1554..+0.0687); with licence_min_cells 49 -0.1561 (-0.1567..-0.1548) / -0.1581 (-0.1594..-0.1534); royalties 0.0 (0.0..0.0) / 0.0 (0.0..0.0) and 0.0 (0.0..0.0) / 0.0 (0.0..0.0) PETRI
+    Whale cash (150 p, the pulsar planters) v6.1 -1.9705 (-2.3776..-1.7654), no farmer -2.0074 (-2.3211..-1.6402), royalty 0 -1.8245 (-2.2910..-1.6901); licensed plantings v6.1 466 (350..542) (all pulsars), slide storage paid by the farmer 0.0052 (0.0052..0.0052) NEAR
+  Gas, analytic: v6.1 at p hot rows (the table holds at most 10,000), 300 TGas prepaid: generations per catch-up without / with a tide in it; plant, tide:
+    p   1500: 120 / 120 generations; plant 16 TGas, advance through a tide 56 TGas, claim with NEAR 44
+    p   5000: 120 / 120 generations; plant 41 TGas, advance through a tide 82 TGas, claim with NEAR 69
+    p  10000: 120 / 120 generations; plant 77 TGas, advance through a tide 120 TGas, claim with NEAR 105
+  30,000 colonies, 2 days | v6   : hot rows avg 17102 (17081..17124) max 27538 (27500..27577); max gas plant 237, join 222, claim 233, buy 234, sell 147, advance 206, slide 0 TGas; calls over 150 TGas 116731, over prepaid 16102; refused full 0 (413134 plants in all)
+  30,000 colonies, 2 days | v6.1 : hot rows avg 1336 (1334..1337) max 2390 (2382..2397); max gas plant 60, join 61, claim 52, buy 55, sell 54, advance 23, slide 0 TGas; calls over 150 TGas 0, over prepaid 0; refused full 0 (427546 plants in all)
+  Economics, mainnet 150 p 7 d, v6 vs v6.1: Builder -0.1931 (-0.2025..-0.1830) vs -0.1865 (-0.2041..-0.1621); Methuselah +0.4100 (+0.3366..+0.4759) vs +0.3496 (+0.2345..+0.4656); Whale -1.9995 (-2.1626..-1.6143) vs -2.0074 (-2.3211..-1.6402); Penny -0.0431 (-0.0454..-0.0379) vs -0.0460 (-0.0484..-0.0439); hot rows avg 111 (110..112) vs 24 (22..26)
+  Max gas per call, mainnet 150 p 7 d, v6 vs v6.1 (TGas): Join 21 / 22, Plant 40 / 40, Buy 7 / 6, Sell 67 / 34, Claim 68 / 68, Advance 38 / 37, Slide 5 / 5, Unsponsor 33 / 0
+  Part 2, free play reaching NEAR (testnet 150 p + 3 SybilAttach + 3 SybilTransfer operators, 7 d): NEAR paid for farmed PETRI per operator, kept rule vs none: SybilAttach +0.0000 (+0.0000..+0.0000) vs +0.0008 (+0.0000..+0.0010), SybilTransfer +0.0000 (+0.0000..+0.0000) vs +0.0470 (+0.0427..+0.0527); all its sales SybilAttach +0.0186 (+0.0168..+0.0208) vs +0.0209 (+0.0182..+0.0218), SybilTransfer +0.0194 (+0.0182..+0.0206) vs +0.0676 (+0.0601..+0.0737); cash -0.0550 (-0.0623..-0.0375) vs -0.0437 (-0.0696..-0.0399) and -0.0417 (-0.0481..-0.0336) vs -0.0030 (-0.0350..+0.0138); PETRI moved by guests' transfers 0.0 (0.0..0.0) vs 476.9 (437.3..526.3); sales and transfers refused 82 (0..230) / 10 (10..10)
+  Part 2, the kept rule on mainnet 150 p 7 d (cash with vs without): Builder -0.1865 (-0.2041..-0.1621) vs -0.1899 (-0.2104..-0.1805); Methuselah +0.3496 (+0.2345..+0.4656) vs +0.3680 (+0.2464..+0.4123); Guest +0.0000 (+0.0000..+0.0000) vs +0.0000 (+0.0000..+0.0000); SelfSponsor -0.5969 (-0.6575..-0.5273) vs -0.6195 (-0.6311..-0.5609); Seller -0.1057 (-0.1060..-0.1054) vs -0.1057 (-0.1060..-0.1054)
+  Pacts, young 5 7 d (with vs without): Builder cash -0.2500 (-0.2542..-0.2487) vs -0.2492 (-0.2542..-0.2483), cell-generations (k) 489.8 (165.2..3710.6) vs 629.6 (165.2..3894.3); Raider cash -0.2510 (-0.2529..-0.2346) vs -0.2504 (-0.2513..-0.2346); PETRI paid per builder 0.0 (0.0..16.0); raids aimed elsewhere 0.0 (0.0..1.0), plantings refused 0.0 (0.0..0.0)
+  Pacts, young 20 7 d (with vs without): Builder cash -0.2485 (-0.2495..-0.2341) vs -0.2483 (-0.2498..-0.2346), cell-generations (k) 339.0 (133.3..587.1) vs 415.4 (345.5..1328.2); Raider cash -0.2398 (-0.2493..-0.2061) vs -0.2259 (-0.2475..-0.1808); PETRI paid per builder 11.2 (4.0..25.6); raids aimed elsewhere 1.8 (0.0..9.7), plantings refused 0.8 (0.3..8.7)
+  Pacts, 150 p 7 d (with vs without): Builder cash -0.2223 (-0.2335..-0.2136) vs -0.1865 (-0.2041..-0.1621), cell-generations (k) 127.9 (80.7..165.6) vs 162.6 (139.5..215.8); Raider cash -0.1852 (-0.2059..-0.1621) vs -0.1718 (-0.1776..-0.1195); PETRI paid per builder 24.6 (18.2..28.5); raids aimed elsewhere 2.0 (1.0..3.1), plantings refused 1.6 (1.2..2.3)

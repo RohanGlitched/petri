@@ -282,6 +282,16 @@ impl Engine {
         self.dish.fits_slide(cells, bitmap, w, h)
     }
 
+    /// Whether a planting of `cells` breaks a pact: "" if no planted cell has a living cell of a `protected` colony
+    /// within `radius` cells (a square, wrapping), else "planted,protected,colony" for the first one found, as the
+    /// contract refuses it (see `Dish::pact_breach`).
+    pub fn pact_breach(&self, cells: &[u32], protected: &[u16], radius: u16) -> String {
+        match self.dish.pact_breach(cells, protected, radius) {
+            Some((p, q, c)) => format!("{},{},{}", p, q, c),
+            None => String::new(),
+        }
+    }
+
     /// Exact credit one colony won at the tides since this engine started, from the credit pool and as vault shares
     /// (yoctoNEAR, decimal string).
     pub fn credit_won_of(&self, colony: u16) -> String {
@@ -395,6 +405,13 @@ pub fn sell_quote(petri: &str, agar: &str, petri_price: &str, max_supply: &str, 
 
 /// PETRI units that `near` yoctoNEAR buys from an agar of `agar` units, with `petri_price` yoctoNEAR per PETRI at
 /// launch and `max_supply` units in all.
+/// The PETRI of a purchase of `units` that `credit` of `total` yoctoNEAR paid for, which the contract keeps in the dish
+/// (see `petri_core::credit_share`).
+#[wasm_bindgen]
+pub fn credit_share(units: &str, credit: &str, total: &str) -> String {
+    petri_core::credit_share(units.parse().unwrap_or(0), credit.parse().unwrap_or(0), total.parse().unwrap_or(0)).to_string()
+}
+
 #[wasm_bindgen]
 pub fn buy_quote(near: &str, agar: &str, petri_price: &str, max_supply: &str) -> String {
     let k = petri_price.parse::<u128>().unwrap_or(0) / 1_000_000 * max_supply.parse::<u128>().unwrap_or(0);

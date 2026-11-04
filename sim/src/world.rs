@@ -1,6 +1,13 @@
-//! The v6 contract mirrored in memory, and the scripted players.
+//! The v6.1 contract mirrored in memory (and v6's layout and rules behind the `v6` switches), and the scripted players.
 //!
-//! What follows contract/src/lib.rs v6: the vault and the credit pool; storage paid from credit first; per-colony books
+//! v6.1 (contract/src): the hot table holds only colonies that earned since the last tide or that have living cells and
+//! a stake that can still earn (never the house), at most 10,000 rows; rows leave (32 a call) at the end of a catch-up;
+//! stake waits in the 69-byte cold slot (pages of 32) and decays lazily; the catch-up reserves the purse part only when
+//! a tide falls in it; compact entries (PETRI in u64, a 130-byte tide); licences only for slides of at least
+//! `licence_min_cells`; royalties from colonies that never attached NEAR go to the agar; the keeper pot to any outside
+//! caller whose call ran a generation; the site prepays 300 TGas.
+//!
+//! What follows contract/src/lib.rs v6 and stays in v6.1: the vault and the credit pool; storage paid from credit first; per-colony books
 //! (`attached`, earnings, NEAR owed, credit won) with the hot table of colonies that have stake; tides of `tide_bps` of
 //! the vault every `tide_every` generations, skipped when no colony outside the house earned since the last one (no
 //! entry, no decay, the sale allowance unchanged); a colony that never attached NEAR paid its tide shares, sales and
@@ -8,9 +15,15 @@
 //! keeper pot; one grant per sponsor, won credit spent first, a sponsor reclaims only its own unspent grant a day after
 //! the last draw; slides as pattern licences (discount, royalty to the holder from anyone else); the catch-up's gas
 //! limit `min(180, prepaid - 40 - hot table write)`; dormancy skips.
+//!
+//! v6.1 part 2 (`kept_rule`): PETRI a colony earned, bought with credit or was paid in royalties before its first NEAR,
+//! and PETRI bought with credit since, is kept: plantings and slides spend it first, and while any is held the colony
+//! cannot sell PETRI for NEAR or send it; a guest sends no PETRI at all and takes no keeper pot. Pacts (`pacts`): a
+//! payer's PETRI for its promisor's promise not to plant within `pact_radius` of the payer's living cells, which the
+//! contract enforces by refusing the planting.
 
 use crate::model::*;
-use petri_core::{decay_stake, feed_per_cell, feed_sparse, licensed_cost, patterns, petri_for_near, planting_cost, royalty, sell_back, tide_split_sparse, ColonyId, Dish, EMPTY, STAKE_UNIT};
+use petri_core::{credit_share, decay_stake, feed_per_cell, feed_sparse, licensed_cost, patterns, petri_for_near, planting_cost, royalty, sell_back, tide_split_sparse, ColonyId, Dish, EMPTY, STAKE_UNIT};
 use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -54,13 +67,20 @@ pub enum Kind {
     /// One operator sponsoring 10 of its own full-access sub-accounts with 0.05 NEAR each; each attaches 0.001 NEAR
     /// once so it is paid in NEAR, plays on credit, claims; a day before the end it stops and the operator unsponsors.
     SelfSponsor,
+    /// Part 2's exit (b): one operator's 10 relayer guests farm blocks on free credit for a day, hoarding what they
+    /// earn; then each attaches 0.01 NEAR (a wNEAR purchase the operator pays for) and sells everything after every
+    /// tide. It keeps planting blocks, so kept PETRI is spent and later earnings sell.
+    SybilAttach,
+    /// Part 2's exit (a): one operator's wallet plus 10 relayer guests that farm blocks on free credit and ft_transfer
+    /// all their PETRI to the wallet after every tide; the wallet sells it for NEAR.
+    SybilTransfer,
     /// The testnet bench: three team wallets that play by the strains' written rules with their own NEAR.
     Bench,
     /// The five house strains (agents/run.mjs + strategies.mjs + council.mjs).
     House,
 }
 
-pub const KINDS: [Kind; 19] = [
+pub const KINDS: [Kind; 21] = [
     Kind::Penny,
     Kind::Builder,
     Kind::Raider,
@@ -78,6 +98,8 @@ pub const KINDS: [Kind; 19] = [
     Kind::SybilGuest,
     Kind::SybilRoyalty,
     Kind::SelfSponsor,
+    Kind::SybilAttach,
+    Kind::SybilTransfer,
     Kind::Bench,
     Kind::House,
 ];
@@ -128,17 +150,20 @@ impl Call {
     pub fn idx(self) -> usize {
         self as usize
     }
-    /// Prepaid TGas: the site's wallet.ts (plant/buy/sell/join 200, claim/advance/mint 250); the agents' plant 200, buy
-    /// and claim 150, keeper advance 250.
-    pub fn prepaid(self, house: bool) -> f64 {
+    /// Prepaid TGas: the site's wallet.ts (v6.1: join/plant/buy/sell/claim/advance/mint 300; v6: plant/buy/sell/join 200,
+    /// claim/advance/mint 250); the agents' plant 200, buy and claim 150, keeper advance 250 (unchanged).
+    pub fn prepaid(self, house: bool, site_v6: bool) -> f64 {
         1_000.0
             * match (self, house) {
                 (Call::Buy | Call::Claim, true) => 150.0,
                 (Call::Slide, true) => 200.0,
-                (Call::Join | Call::Plant | Call::Buy | Call::Sell, _) => 200.0,
-                (Call::Claim | Call::Advance | Call::Slide, _) => 250.0,
+                (Call::Join | Call::Plant | Call::Sell, true) => 200.0,
+                (Call::Advance, true) => 250.0,
                 (Call::Sponsor, _) => 30.0,
                 (Call::Unsponsor, _) => 50.0,
+                (_, false) if !site_v6 => 300.0,
+                (Call::Join | Call::Plant | Call::Buy | Call::Sell, _) => 200.0,
+                (Call::Claim | Call::Advance | Call::Slide, _) => 250.0,
             }
     }
 }
@@ -262,6 +287,19 @@ pub struct Acct {
     pub licensed: u32,
     pub sieges: u32,
     pub failed_calls: u32,
+    // Part 2: kept PETRI (see `Rules::kept_rule`; counted with or without the rule, enforced only with it), sales and
+    // transfers it refused, NEAR paid for kept PETRI (only without the rule), PETRI moved by transfer, and pacts.
+    pub kept: u128,
+    pub farm_sold: u128,
+    pub transfer_refused: bool,
+
+    pub kept_refused: u32,
+    pub moved_out: u128,
+    pub moved_in: u128,
+    pub pact_paid: u128,
+    pub pact_in: u128,
+    pub pact_refused: u32,
+    pub pact_diverted: u32,
     // Locker: block spots (lattice first, then renewal) and progress.
     pub spots: Vec<(i32, i32)>,
     pub lattice_len: usize,
@@ -374,12 +412,25 @@ pub struct GroupOut {
     pub royalty_out: u128,
     pub tide_share: u128,
     pub slide_storage: u128,
+    /// PETRI received from the keeper pot.
+    pub pot: u128,
     pub live: u32,
     pub live_gens: u64,
     pub unpaid_gens: u64,
     pub plants: u32,
     pub licensed: u32,
     pub failed: u32,
+    /// Part 2: sales and transfers refused by kept PETRI, PETRI moved to another account by transfer, and pacts.
+    pub kept_refused: u32,
+    pub kept_left: u128,
+    /// NEAR the vault paid for PETRI earned before the seller's first NEAR (or bought with credit, or moved to it by a
+    /// guest's transfer).
+    pub farm_sold: u128,
+    pub moved: u128,
+    pub pact_paid: u128,
+    pub pact_in: u128,
+    pub pact_refused: u32,
+    pub pact_diverted: u32,
 }
 
 impl GroupOut {
@@ -450,6 +501,14 @@ pub struct WorldOut {
     pub hot_avg: f64,
     pub partial_catchups: u64,
     pub plant_fail_behind: u64,
+    /// v6.1: plantings refused because the hot table held `MAX_PLAYING` rows.
+    pub plant_refused_full: u64,
+    /// Calls over the 150 TGas target (payout reservations included), per call kind.
+    pub over_target: [u64; 9],
+    /// Rows that left the hot table.
+    pub hot_left: u64,
+    /// v6.1: royalties that planters which never attached NEAR paid to the agar.
+    pub royalties_to_agar: u128,
     pub skips: u64,
     pub skipped: u64,
     pub tides: u64,
@@ -526,6 +585,8 @@ pub struct World {
     win_list: Vec<ColonyId>,
     live: Vec<u32>,
     hot: Vec<bool>,
+    /// 1 + the generation of each colony's last planting (its cells are on the board but not yet stepped).
+    planted_at: Vec<u64>,
     hot_rows: usize,
     alive: Vec<(ColonyId, u32)>,
     gen: u64,
@@ -589,6 +650,10 @@ pub struct World {
     call_count: [u64; 9],
     partial_catchups: u64,
     plant_fail_behind: u64,
+    plant_refused_full: u64,
+    over_target: [u64; 9],
+    hot_left: u64,
+    royalties_to_agar: u128,
     first_outsider: Option<ColonyId>,
     first_share_sum: u128,
     first_tides90: u64,
@@ -598,6 +663,8 @@ pub struct World {
     house_plants_today: u32,
     slides: Vec<SlideRec>,
     by_pat: Vec<Vec<usize>>,
+    /// Accepted pacts: (payer, promisor, until), as account indices.
+    pacts: Vec<(usize, usize, u64)>,
     timeline: Vec<TideRow>,
     days: Vec<DayRow>,
 }
@@ -720,7 +787,7 @@ impl World {
                 for j in 0..sp.per {
                     let role = match kind {
                         Kind::Guest => Role::Guest,
-                        Kind::SybilGuest | Kind::SybilRoyalty => {
+                        Kind::SybilGuest | Kind::SybilRoyalty | Kind::SybilAttach | Kind::SybilTransfer => {
                             if j == 0 {
                                 Role::Wallet
                             } else {
@@ -732,12 +799,12 @@ impl World {
                     };
                     let join_at = match kind {
                         Kind::SplitWhale => gjoin + rng.range(gpd / 2),
-                        Kind::SybilGuest | Kind::SybilRoyalty | Kind::SelfSponsor => gjoin + 3 * j as u64,
+                        Kind::SybilGuest | Kind::SybilRoyalty | Kind::SybilAttach | Kind::SybilTransfer | Kind::SelfSponsor => gjoin + 3 * j as u64,
                         Kind::House => rng.range(6),
                         _ => gjoin,
                     };
                     let home = match kind {
-                        Kind::SybilGuest | Kind::SybilRoyalty | Kind::SelfSponsor => (ghome.0 + rng.range(41) as i32 - 20, ghome.1 + rng.range(41) as i32 - 20),
+                        Kind::SybilGuest | Kind::SybilRoyalty | Kind::SybilAttach | Kind::SybilTransfer | Kind::SelfSponsor => (ghome.0 + rng.range(41) as i32 - 20, ghome.1 + rng.range(41) as i32 - 20),
                         _ => (rng.range(w as u64) as i32, rng.range(h as u64) as i32),
                     };
                     let every = match kind {
@@ -758,7 +825,7 @@ impl World {
                         Kind::Farmer => 3 * NEAR / 10,
                         Kind::House | Kind::Bench => HOUSE_JOIN,
                         Kind::Guest | Kind::SelfSponsor => NEAR / 50,
-                        Kind::SybilGuest | Kind::SybilRoyalty => {
+                        Kind::SybilGuest | Kind::SybilRoyalty | Kind::SybilAttach | Kind::SybilTransfer => {
                             if j == 0 {
                                 NEAR / 20
                             } else {
@@ -787,7 +854,7 @@ impl World {
                         Kind::Guest => 0,
                         // A sub-account's wallet is the operator's NEAR for its one-off attach and gas.
                         Kind::SelfSponsor => NEAR / 50,
-                        Kind::SybilGuest | Kind::SybilRoyalty => {
+                        Kind::SybilGuest | Kind::SybilRoyalty | Kind::SybilAttach | Kind::SybilTransfer => {
                             if j == 0 {
                                 NEAR / 4
                             } else {
@@ -909,6 +976,7 @@ impl World {
             win_list: Vec::new(),
             live: vec![0; n + 1],
             hot: vec![false; n + 1],
+            planted_at: vec![0; n + 1],
             hot_rows: 0,
             alive: Vec::new(),
             gen: 0,
@@ -969,6 +1037,10 @@ impl World {
             call_count: [0; 9],
             partial_catchups: 0,
             plant_fail_behind: 0,
+            plant_refused_full: 0,
+            over_target: [0; 9],
+            hot_left: 0,
+            royalties_to_agar: 0,
             first_outsider: None,
             first_share_sum: 0,
             first_tides90: 0,
@@ -978,6 +1050,7 @@ impl World {
             house_plants_today: 0,
             slides: Vec::new(),
             by_pat: vec![Vec::new(); PATS],
+            pacts: Vec::new(),
             timeline: Vec::new(),
             days: Vec::new(),
             r,
@@ -1020,11 +1093,26 @@ impl World {
         g
     }
 
+    fn v6(&self) -> bool {
+        self.r.layout_v6
+    }
+
+    /// Colony `id`'s cold page, in bytes, as long as it is now.
+    fn cold_len(&self, id: ColonyId) -> f64 {
+        let (pg, cl) = (page(self.v6()), cold(self.v6()));
+        let i = id as usize - 1;
+        let len = if i / pg == (self.n_col.max(1) - 1) / pg { (self.n_col - 1) % pg + 1 } else { pg };
+        (len as u128 * cl) as f64
+    }
+
     /// A cold page read and written back (colony `id`'s page as long as it is now).
     fn cold_rw(&self, id: ColonyId) -> f64 {
-        let i = id as usize - 1;
-        let len = if i / PAGE == (self.n_col.max(1) - 1) / PAGE { (self.n_col - 1) % PAGE + 1 } else { PAGE };
-        2.0 * G_SOP + (len as u128 * COLD) as f64 * (G_RB + G_WB)
+        2.0 * G_SOP + self.cold_len(id) * (G_RB + G_WB)
+    }
+
+    /// A cold page read.
+    fn cold_read(&self, id: ColonyId) -> f64 {
+        G_SOP + self.cold_len(id) * G_RB
     }
 
     fn gen_gas(&self, live: u32, alive: usize, chain: bool) -> f64 {
@@ -1053,7 +1141,7 @@ impl World {
         }
         g += self.hot_store(feed_dirty || catch, purse_dirty || tide || flushed > 0);
         if flushed > 0 {
-            g += flushed as f64 * (2.0 * G_SOP + (PAGE as u128 * COLD) as f64 * (G_RB + G_WB));
+            g += flushed as f64 * (2.0 * G_SOP + (page(self.v6()) as u128 * cold(self.v6())) as f64 * (G_RB + G_WB));
         }
         let mut payouts = payouts;
         let bounty = std::mem::take(&mut self.unbilled_bounty);
@@ -1083,7 +1171,8 @@ impl World {
         // Fix experiment: the keeper pot goes to whoever's call ran a generation.
         if self.r.pot_any_call && catch && self.keeper_pot > 0 {
             if let Payer::Acct(i) = p {
-                if self.accts[i].kind() != Kind::House {
+                // Part 2: free play takes no keeper pot.
+                if self.accts[i].kind() != Kind::House && !(self.r.kept_rule && !self.accts[i].attached_flag) {
                     let pot = std::mem::take(&mut self.keeper_pot);
                     self.accts[i].balance += pot;
                     self.accts[i].pot += pot;
@@ -1101,8 +1190,11 @@ impl World {
             self.gas_max[c][ti] = limit;
             self.gas_rows_at_max[c][ti] = self.hot_rows;
         }
-        if limit > call.prepaid(house) {
+        if limit > call.prepaid(house, self.r.site_gas_v6) {
             self.over_prepaid[c] += 1;
+        }
+        if limit > G_TARGET {
+            self.over_target[c] += 1;
         }
         self.calls += 1;
         self.gas_total += burn;
@@ -1150,13 +1242,13 @@ impl World {
     fn plant_deposit(&self, i: usize, cells: u32, note: Option<u128>, slide: Option<usize>) -> u128 {
         let holder = slide.map(|s| self.accts[self.slides[s].holder].name_len);
         let _ = i;
-        plant_deposit_bytes(cells as u128, note, holder, self.hot_rows == 0) * BYTE + self.r.cell_fee * cells as u128
+        plant_deposit_bytes(cells as u128, note, holder, self.hot_rows == 0, self.v6()) * BYTE + self.r.cell_fee * cells as u128
     }
 
     /// Set the current transaction before its catch-up.
     fn begin(&mut self, p: Payer, call: Call) {
         self.caller = p;
-        self.prepaid = call.prepaid(self.is_house_payer(p));
+        self.prepaid = call.prepaid(self.is_house_payer(p), self.r.site_gas_v6);
     }
 
     /// `catch_up(max_catchup)`: skip ahead if dormant, then step up to `max_catchup` due generations, stopping after
@@ -1179,9 +1271,18 @@ impl World {
         let target = due.min(self.gen + room);
         let from = self.gen;
         let board_before = self.board_bytes();
-        // limit = min(180, prepaid - 40 - writing the hot table back), against what the call has used so far.
-        let store = self.hot_rows as f64 * HOT_ROW as f64 * G_HOT_WRITE_BYTE;
-        let limit = G_CATCHUP_LIMIT.min(self.prepaid - G_RESERVE - store);
+        // v6: limit = min(180, prepaid - 40 - writing the whole hot table back). v6.1: min(110, prepaid - 40 - the feed
+        // part, the purse part only when a tide falls in the catch-up, and the cold pages rows may leave to).
+        let limit = if self.v6() {
+            let store = self.hot_rows as f64 * HOT_ROW as f64 * G_HOT_WRITE_BYTE;
+            G_CATCHUP_LIMIT.min(self.prepaid - G_RESERVE - store)
+        } else {
+            let te = self.r.tide_every;
+            let tide_ahead = (self.gen / te + 1) * te <= target;
+            let rows = self.hot_rows as f64;
+            let store = rows * HOT_FEED as f64 * G_HOT_WRITE_BYTE_V61 + if tide_ahead { rows * HOT_PURSE as f64 * G_HOT_WRITE_BYTE_V61 } else { 0.0 } + FLUSH_MAX as f64 * G_FLUSH_PAGE_RESERVE;
+            G_CATCHUP_LIMIT_V61.min(self.prepaid - G_RESERVE - store)
+        };
         let used0 = G_CALL + self.unbilled_gas + if self.unbilled_gens == 0 { self.hot_load() + 2.0 * G_SOP + self.board_bytes() as f64 * G_RB } else { 0.0 };
         let mut g = 0.0;
         while self.gen < target {
@@ -1191,34 +1292,58 @@ impl World {
                 break;
             }
         }
-        // Rows whose stake is gone leave the hot table, at most 16 a call, lowest ids first.
+        // Rows leave the hot table, lowest ids first. v6: once the stake is gone (16 a call). v6.1: once the row has no
+        // window and either no living cells or a stake that can no longer earn (32 a call); the stake waits in the cold
+        // slot.
         g += self.hot_rows as f64 * W_FLUSH_SCAN_ROW * G_OP;
+        let pages = self.flush(if self.v6() { 16 } else { FLUSH_MAX });
+        self.unbilled_flushed += pages;
+        self.storage_contract += (self.board_bytes() as i128 - board_before as i128) * BYTE as i128;
+        self.unbilled_gas += g;
+        self.unbilled_gens += self.gen - from;
+        self.gen - from
+    }
+
+    /// Whether hot row `c` may leave now. Returns the cold pages written.
+    fn may_leave(&self, c: usize) -> bool {
+        if !self.hot[c] || self.window[c] != 0 {
+            return false;
+        }
+        if self.v6() {
+            self.stake[c] == 0 || self.stake[c] < self.r.hot_evict_stake
+        } else {
+            (self.live[c] == 0 && self.planted_at[c] != self.gen + 1) || petri_core::feed_weight(1, self.stake[c], self.r.reach) == 0
+        }
+    }
+
+    /// Move up to `max` rows that may leave back to their cold slots. Returns the cold pages written.
+    fn flush(&mut self, max: usize) -> usize {
+        let pg_of = page(self.v6());
         let mut moved = 0;
         let mut pages: Vec<usize> = Vec::new();
         for c in 1..=self.n_col {
-            if moved >= 16 {
+            if moved >= max {
                 break;
             }
-            if self.hot[c] && self.window[c] == 0 && (self.stake[c] == 0 || self.stake[c] < self.r.hot_evict_stake) {
-                self.stake[c] = 0;
+            if self.may_leave(c) {
+                if self.v6() {
+                    self.stake[c] = 0;
+                }
                 self.hot[c] = false;
                 self.hot_rows -= 1;
+                self.hot_left += 1;
                 moved += 1;
                 self.storage_contract -= (HOT_ROW * BYTE) as i128;
                 if self.hot_rows == 0 {
                     self.storage_contract -= (HOT_RECORDS * BYTE) as i128;
                 }
-                let pg = (c - 1) / PAGE;
+                let pg = (c - 1) / pg_of;
                 if !pages.contains(&pg) {
                     pages.push(pg);
                 }
             }
         }
-        self.unbilled_flushed += pages.len();
-        self.storage_contract += (self.board_bytes() as i128 - board_before as i128) * BYTE as i128;
-        self.unbilled_gas += g;
-        self.unbilled_gens += self.gen - from;
-        self.gen - from
+        pages.len()
     }
 
     /// One generation: Life, the capped feed (never the house) into unclaimed earnings, the window and the keeper pot,
@@ -1287,7 +1412,8 @@ impl World {
             self.tide_row(false, 0, 0, 0, 0, 0, 0.0, 0.0, scan);
             return scan;
         }
-        let storage_cost = self.r.tide_bytes() * BYTE;
+        let tide_bytes = self.r.tide_bytes(self.tides);
+        let storage_cost = tide_bytes * BYTE;
         let pay = self.vault * self.r.tide_bps as u128 / 10_000;
         let full_bounty = (pay * self.r.tide_bounty_bps as u128 / 10_000).min(self.r.max_bounty);
         let storage = storage_cost.min(pay - full_bounty);
@@ -1350,15 +1476,17 @@ impl World {
             self.window[c as usize] = 0;
         }
         self.win_list.clear();
+        // Every stake decays: a hot row's at once, a cold slot's when it is next read (v6.1, the same numbers); in v6
+        // only hot rows have any.
         for c in 1..=self.n_col {
-            if self.hot[c] {
+            if self.stake[c] > 0 {
                 self.stake[c] = decay_stake(self.stake[c], self.r.stake_keep_bps);
             }
         }
         self.sell_left = self.vault * self.r.sell_cap_bps as u128 / 10_000;
         self.unbilled_tide = true;
         let winners = split.len().max(csplit.len());
-        let gas = 4.0 * G_SOP + self.r.tide_bytes() as f64 * G_WB + self.hot_rows as f64 * W_TIDE_ROW * G_OP + winners as f64 * W_WINNER * G_OP + scan;
+        let gas = 4.0 * G_SOP + tide_bytes as f64 * G_WB + self.hot_rows as f64 * W_TIDE_ROW * G_OP + winners as f64 * W_WINNER * G_OP + scan;
         let fs = if total > 0 { first_got as f64 / total as f64 } else { 0.0 };
         let ts = if total > 0 { top as f64 / total as f64 } else { 0.0 };
         self.tide_row(true, pay, total, storage, bounty, winners, fs, ts, gas);
@@ -1370,7 +1498,7 @@ impl World {
         let (free, block_free) = lockout(&self.d, self.r.buffer as i32, &self.house);
         let siege = block_free == 0.0;
         let newcomer_petri = self.cost(4, siege);
-        let deposit = plant_deposit_bytes(4, None, None, self.hot_rows == 0) * BYTE + 4 * self.r.cell_fee;
+        let deposit = plant_deposit_bytes(4, None, None, self.hot_rows == 0, self.v6()) * BYTE + 4 * self.r.cell_fee;
         let newcomer_near = newcomer_petri * self.k / self.agar + deposit;
         let siege_near = self.cost(4, true) * self.k / self.agar + deposit;
         let outsiders = self.accts.iter().filter(|a| a.joined && a.kind() != Kind::House && a.kind() != Kind::Bench).count();
@@ -1439,10 +1567,24 @@ impl World {
 
     fn attach(&mut self, i: usize, near: u128) -> bool {
         if near > 0 && !self.accts[i].attached_flag {
-            self.accts[i].attached_flag = true;
+            let a = &mut self.accts[i];
+            a.attached_flag = true;
+            // Part 2: what it earned before and has not claimed is kept too.
+            a.kept += a.unclaimed;
             return true;
         }
         false
+    }
+
+    /// Part 2: PETRI bought with credit is kept (for a guest, all of it).
+    fn keep_bought(&mut self, i: usize, units: u128, near: u128, credit: u128) {
+        self.accts[i].kept += credit_share(units as u64, credit, near + credit) as u128;
+    }
+
+    /// Part 2: kept PETRI is spent first.
+    fn spend_kept(&mut self, i: usize, units: u128) {
+        let a = &mut self.accts[i];
+        a.kept = a.kept.saturating_sub(units);
     }
 
     fn join(&mut self, i: usize) {
@@ -1467,10 +1609,10 @@ impl World {
         self.catch_up();
         let id = self.accts[i].id as usize;
         self.n_col = self.n_col.max(id);
-        let new_page = (id - 1) % PAGE == 0;
+        let new_page = (id - 1) % page(self.v6()) == 0;
         let house_extra = if self.accts[i].kind() == Kind::House { 2 } else { 0 };
         let name = if self.accts[i].kind() == Kind::House { 14 } else { NAME_LEN };
-        let storage = (join_bytes(self.accts[i].name_len, name, new_page) + house_extra) * BYTE;
+        let storage = (join_bytes(self.accts[i].name_len, name, new_page, self.v6()) + house_extra) * BYTE;
         if deposit <= storage {
             return;
         }
@@ -1483,8 +1625,9 @@ impl World {
         self.credit_pool += cr;
         self.credit_in += cr;
         self.storage_players += storage;
-        // The purchase entry is 105 or 121 bytes, not the 140 charged: the contract keeps the rest.
-        self.storage_contract -= ((BUY_BYTES - buy_entry(cred > 0)) * BYTE) as i128;
+        // The purchase entry is smaller than the bytes charged for it: the contract keeps the rest.
+        self.storage_contract -= ((buy_bytes(self.v6()) - buy_entry(cred > 0, self.v6())) * BYTE) as i128;
+        self.keep_bought(i, units, near, cr);
         let a = &mut self.accts[i];
         a.balance += units;
         a.joined = true;
@@ -1501,7 +1644,7 @@ impl World {
         let p = Payer::Acct(i);
         self.begin(p, Call::Buy);
         self.catch_up();
-        let storage = BUY_BYTES * BYTE;
+        let storage = buy_bytes(self.v6()) * BYTE;
         if amount <= storage {
             return false;
         }
@@ -1515,9 +1658,10 @@ impl World {
         self.credit_pool += cr;
         self.credit_in += cr;
         self.storage_players += storage;
-        self.storage_contract -= ((BUY_BYTES - buy_entry(cred > 0)) * BYTE) as i128;
+        self.storage_contract -= ((buy_bytes(self.v6()) - buy_entry(cred > 0, self.v6())) * BYTE) as i128;
         self.accts[i].balance += units;
         let changed = self.attach(i, near);
+        self.keep_bought(i, units, near, cr);
         let id = self.accts[i].id as usize;
         let hot = self.hot[id];
         let mut base = G_CALL + 8.0 * G_SOP + 300.0 * G_WB;
@@ -1528,11 +1672,37 @@ impl World {
         true
     }
 
+    /// A purchase of `near` attached NEAR for a guest that cannot attach NEAR itself: wNEAR its operator sends through
+    /// NEAR Intents for it (the operator's NEAR, counted as the guest's attached deposit).
+    fn intent_buy(&mut self, i: usize, near: u128) {
+        let p = Payer::Acct(i);
+        self.begin(p, Call::Buy);
+        self.catch_up();
+        let storage = buy_bytes(self.v6()) * BYTE;
+        let paid = near - storage;
+        let units = petri_for_near(paid, self.agar, self.k);
+        self.agar -= units;
+        self.vault += paid;
+        self.vault_in += paid;
+        self.storage_players += storage;
+        self.near_attached += near;
+        self.accts[i].attached += near;
+        self.accts[i].balance += units;
+        self.attach(i, paid);
+        let id = self.accts[i].id;
+        let base = G_CALL + 10.0 * G_SOP + 300.0 * G_WB + self.cold_rw(id);
+        self.bill(p, Call::Buy, base, true, false, true, 0);
+    }
+
     /// Move earnings into the balance (inside plant, claim, sell, mint). Returns whether the books changed.
     fn claim_petri(&mut self, i: usize) -> bool {
         let a = &mut self.accts[i];
         if a.unclaimed == 0 {
             return false;
+        }
+        // Part 2: what a guest earns stays in the dish.
+        if !a.attached_flag {
+            a.kept += a.unclaimed;
         }
         a.balance += std::mem::take(&mut a.unclaimed);
         true
@@ -1547,9 +1717,10 @@ impl World {
         let owed = self.accts[i].owed;
         let mut payouts = 0;
         let mut purse = false;
-        if owed > (CLAIM_BYTES + PAYOUT_RESERVE) * BYTE {
-            let near = owed - CLAIM_BYTES * BYTE;
-            self.storage_players += CLAIM_BYTES * BYTE;
+        let cb = claim_bytes(self.v6());
+        if owed > (cb + PAYOUT_RESERVE) * BYTE {
+            let near = owed - cb * BYTE;
+            self.storage_players += cb * BYTE;
             let a = &mut self.accts[i];
             a.owed = 0;
             a.claimed += near;
@@ -1584,6 +1755,17 @@ impl World {
         let id = self.accts[i].id as usize;
         let earned = self.claim_petri(i);
         let mut base = G_CALL + 14.0 * G_SOP + self.board_rw() + 1_000.0 * n as f64 * G_OP + 500.0 * G_WB;
+        // Pacts binding this colony: the contract refuses a planting within pact_radius of a protected colony's cells.
+        let bound = self.protected(i);
+        if !bound.is_empty() {
+            base += bound.len() as f64 * 2.0 * G_SOP + (n as f64 * ((2 * self.r.pact_radius as u32 + 1).pow(2)) as f64 * 50.0) * G_OP;
+            if self.d.pact_breach(&cells, &bound, self.r.pact_radius).is_some() {
+                self.accts[i].pact_refused += 1;
+                self.accts[i].failed_calls += 1;
+                self.bill(p, Call::Plant, base, true, earned && self.hot[id], false, 0);
+                return false;
+            }
+        }
         let base_cost = self.cost(n, siege);
         let house = self.accts[i].kind() == Kind::House;
         let (cost, holder, toll) = match slide {
@@ -1604,6 +1786,21 @@ impl World {
             self.bill(p, Call::Plant, base, true, earned && self.hot[id], false, 0);
             return false;
         }
+        // v6.1: the house never has a hot row; anyone else's first planting since it last played makes one, unless the
+        // table is full even after the rows that may leave have left.
+        let wants_row = !self.hot[id] && (self.v6() || !house);
+        if wants_row && !self.v6() && self.hot_rows >= MAX_PLAYING {
+            let pages = self.flush(FLUSH_MAX);
+            base += pages as f64 * (2.0 * G_SOP + (page(false) as u128 * cold(false)) as f64 * (G_RB + G_WB)) + self.hot_rows as f64 * W_FLUSH_SCAN_ROW * G_OP + 30.0 * self.total_live as f64 * G_OP;
+            if self.hot_rows >= MAX_PLAYING {
+                // "the dish has 10,000 colonies playing at once, its most"
+                self.plant_refused_full += 1;
+                self.accts[i].failed_calls += 1;
+                self.bill(p, Call::Plant, base, true, earned && self.hot[id], pages > 0, 0);
+                return false;
+            }
+            // The rows that left change the table's size; the planting writes both parts back anyway (it enters).
+        }
         let burn = cost * self.r.burn_bps as u128 / 10_000;
         self.burned += burn;
         self.agar += cost - burn;
@@ -1611,7 +1808,9 @@ impl World {
             self.accts[i].balance -= toll;
             self.accts[i].royalty_out += toll;
             if self.r.royalty_guest_to_agar && !self.accts[i].attached_flag {
+                // v6.1: a planter that never attached NEAR pays its royalty to the agar.
                 self.agar += toll;
+                self.royalties_to_agar += toll;
             } else {
                 self.accts[h].balance += toll;
                 self.accts[h].royalty_in += toll;
@@ -1623,25 +1822,34 @@ impl World {
             base += 3.0 * G_SOP + 200.0 * (G_RB + G_WB);
         }
         if let Some(s) = slide {
-            self.slides[s].royalties += toll;
+            if !(self.r.royalty_guest_to_agar && !self.accts[i].attached_flag) {
+                self.slides[s].royalties += toll;
+            }
             self.slides[s].plantings += 1;
             self.accts[i].licensed += 1;
             base += 2.0 * G_SOP + 150.0 * (G_RB + G_WB);
         }
         self.d.plant_unchecked(id as ColonyId, &cells);
         self.total_live += n;
-        let entering = !self.hot[id];
+        let entering = wants_row;
         let table_empty = self.hot_rows == 0;
         if entering {
-            // Inserting the row moves the rows after it.
+            // Inserting the row moves the rows after it; v6.1 reads its stake from the cold slot.
             base += self.hot_rows as f64 * 80.0 * 0.125 * G_OP;
+            if !self.v6() {
+                base += self.cold_read(id as ColonyId);
+            }
             self.hot[id] = true;
             self.hot_rows += 1;
+        } else if !self.hot[id] {
+            // v6.1, the house: its stake is kept in its cold slot.
+            base += self.cold_rw(id as ColonyId);
         }
         self.stake[id] += n as u64 * STAKE_UNIT;
+        self.planted_at[id] = self.gen + 1;
         let first = !self.accts[i].planted_once;
         let lic = slide.map(|_| holder.map(|h| self.accts[h].name_len));
-        let storage = plant_stored(n as u128, first, cred > 0, note, lic, entering, table_empty) * BYTE;
+        let storage = plant_stored(n as u128, first, cred > 0, note, lic, entering, table_empty, self.v6()) * BYTE;
         let won_used = cred.min(self.accts[i].won) > 0;
         self.take(i, att, cred);
         let (near, cr) = split_after_storage(att, cred, storage);
@@ -1651,6 +1859,7 @@ impl World {
         self.credit_in += cr;
         self.storage_players += storage;
         let changed = self.attach(i, near);
+        self.spend_kept(i, cost + toll);
         let a = &mut self.accts[i];
         a.balance -= cost;
         a.spent += cost;
@@ -1673,8 +1882,17 @@ impl World {
         if self.accts[i].kind() == Kind::House {
             return;
         }
-        let storage = SELL_BYTES * BYTE;
+        let storage = sell_bytes(self.v6()) * BYTE;
         let as_credit = !self.accts[i].attached_flag;
+        // Part 2: a colony that has attached NEAR sells only once it holds no kept PETRI (refused before any work).
+        if self.r.kept_rule && !as_credit && self.accts[i].kept > 0 {
+            self.accts[i].kept_refused += 1;
+            self.accts[i].failed_calls += 1;
+            let p = Payer::Acct(i);
+            self.begin(p, Call::Sell);
+            self.bill(p, Call::Sell, G_CALL + 4.0 * G_SOP, false, false, false, 0);
+            return;
+        }
         let reserve = if as_credit { 0 } else { PAYOUT_RESERVE * BYTE };
         if self.sell_left <= storage + reserve {
             return;
@@ -1704,6 +1922,12 @@ impl World {
         let near = self.sell_quote(units);
         if units == 0 || near <= storage + reserve + BYTE * 50 {
             return;
+        }
+        // Kept PETRI sold: for credit by a guest (allowed), or for NEAR only without the kept rule (then counted).
+        let farmed = units.min(self.accts[i].kept);
+        self.accts[i].kept -= farmed;
+        if !as_credit {
+            self.accts[i].farm_sold += (near - storage) * farmed / units;
         }
         self.accts[i].balance -= units;
         self.agar += units;
@@ -1743,7 +1967,8 @@ impl World {
             Payer::Keeper => self.s.keeper_registered,
         };
         // The pot goes to a registered caller outside the house, if this call ran a generation.
-        if ran > 0 && self.keeper_pot > 0 && registered && !self.is_house_payer(p) {
+        let guest = matches!(p, Payer::Acct(i) if self.r.kept_rule && !self.accts[i].attached_flag);
+        if ran > 0 && self.keeper_pot > 0 && registered && !self.is_house_payer(p) && !guest {
             let pot = std::mem::take(&mut self.keeper_pot);
             g += 2.0 * G_SOP;
             if let Payer::Acct(i) = p {
@@ -1781,7 +2006,7 @@ impl World {
             return false;
         }
         let first = self.accts[i].last_slide == 0;
-        let storage = slide_bytes(self.accts[i].name_len, w, h, title.map(|t| t + 5).unwrap_or(1) - 1, first) * BYTE;
+        let storage = slide_bytes(self.accts[i].name_len, w, h, title.map(|t| t + 5).unwrap_or(1) - 1, first, self.v6()) * BYTE;
         let deposit = slide_deposit_bytes(w, h, title) * BYTE;
         // Credit pays the storage first, then the attached deposit; the excess is sent back.
         let c = self.accts[i].credit().min(storage);
@@ -1792,6 +2017,7 @@ impl World {
         self.take(i, att, c);
         self.storage_players += storage;
         self.burned += cost;
+        self.spend_kept(i, cost);
         let a = &mut self.accts[i];
         a.balance -= cost;
         a.slide_storage += storage;
@@ -1824,6 +2050,10 @@ impl World {
     /// The licence a player would plant `pat` under: its own slide of it, else anyone's (the first minted).
     fn licence_for(&self, i: usize, pat: Pat) -> Option<usize> {
         if !self.s.licences || self.accts[i].kind() == Kind::House {
+            return None;
+        }
+        // v6.1: only a slide of at least `licence_min_cells` cells is a licence.
+        if (pat.cells().len() as u32) < self.r.licence_min_cells {
             return None;
         }
         let v = &self.by_pat[pat.idx()];
@@ -1923,7 +2153,21 @@ impl World {
     fn raid(&mut self, i: usize) {
         let me = self.accts[i].id;
         let home = self.accts[i].home;
-        let target = self.rival_cell(me).unwrap_or(home);
+        // A raider bound by pacts aims elsewhere (as the agents drop such candidates); the contract refuses the rest.
+        let bound = self.protected(i);
+        let mut target = self.rival_cell(me).unwrap_or(home);
+        if !bound.is_empty() {
+            let owner = |w: &World, t: (i32, i32)| w.d.cells[w.d.index(t.0, t.1)];
+            if bound.contains(&owner(self, target)) {
+                self.accts[i].pact_diverted += 1;
+                for _ in 0..8 {
+                    target = self.rival_cell(me).unwrap_or(home);
+                    if !bound.contains(&owner(self, target)) {
+                        break;
+                    }
+                }
+            }
+        }
         let (w, h) = (self.w, self.h);
         let bal = self.accts[i].balance + self.accts[i].unclaimed;
         if self.rng.range(3) == 0 {
@@ -2105,7 +2349,14 @@ impl World {
             }
             match (a.kind(), a.role()) {
                 (Kind::House, _) | (Kind::Bench, _) => {}
-                (Kind::Seller, _) | (Kind::Racer, _) | (Kind::Sniper, _) | (Kind::Farmer, _) | (Kind::SybilGuest, _) | (Kind::SybilRoyalty, _) => bots.push(i),
+                (Kind::Seller, _) | (Kind::Racer, _) | (Kind::Sniper, _) | (Kind::Farmer, _) | (Kind::SybilGuest, _) | (Kind::SybilRoyalty, _) | (Kind::SybilTransfer, _) => bots.push(i),
+                // Its guests hoard until they have attached NEAR, then sell everything.
+                (Kind::SybilAttach, Role::Wallet) => bots.push(i),
+                (Kind::SybilAttach, Role::Guest) => {
+                    if a.attached_flag {
+                        bots.push(i);
+                    }
+                }
                 _ => {
                     if self.rng.range(4) == 0 {
                         humans.push(i);
@@ -2113,14 +2364,16 @@ impl World {
                 }
             }
         }
+        self.transfer_round();
+        self.pact_round();
         self.rng.shuffle(&mut bots);
         self.rng.shuffle(&mut humans);
         for i in bots.into_iter().chain(humans) {
-            if self.sell_left <= SELL_BYTES * BYTE {
+            if self.sell_left <= sell_bytes(self.v6()) * BYTE {
                 break;
             }
             let reserve = match (self.accts[i].kind(), self.accts[i].role()) {
-                (Kind::Seller | Kind::Racer | Kind::Farmer, _) | (Kind::SybilGuest, Role::Guest) | (Kind::SybilRoyalty, Role::Wallet) => 0,
+                (Kind::Seller | Kind::Racer | Kind::Farmer, _) | (Kind::SybilGuest, Role::Guest) | (Kind::SybilRoyalty, Role::Wallet) | (Kind::SybilTransfer, Role::Wallet) | (Kind::SybilAttach, _) => 0,
                 (Kind::SybilRoyalty, Role::Guest) => self.cost(24, false),
                 _ => self.cost(16, false),
             };
@@ -2128,6 +2381,98 @@ impl World {
             if bal > reserve {
                 self.sell(i, bal - reserve);
             }
+        }
+    }
+
+    /// Part 2's exit (a): each SybilTransfer guest sends all its PETRI to its operator's wallet (ft_transfer), which
+    /// the contract refuses under the kept rule (a guest cannot send PETRI).
+    fn transfer_round(&mut self) {
+        for i in 0..self.accts.len() {
+            let a = &self.accts[i];
+            if !a.joined || a.kind() != Kind::SybilTransfer || a.role() != Role::Guest {
+                continue;
+            }
+            let group = a.group;
+            let Some(op) = self.accts.iter().position(|b| b.group == group && b.role() == Role::Wallet && b.joined) else { continue };
+            // One refusal teaches it: it stops trying.
+            if self.accts[i].transfer_refused {
+                continue;
+            }
+            if self.accts[i].unclaimed > 0 {
+                self.claim(i);
+            }
+            // Everything but what its next block costs.
+            let amount = self.accts[i].balance.saturating_sub(self.cost(8, false));
+            if amount == 0 {
+                continue;
+            }
+            // An ft_transfer: 1 yoctoNEAR and about 3 TGas, which the guest's own key could not attach; the operator
+            // pays it from a full-access key on the guest account.
+            self.accts[op].gas += (3.0 * YOCTO_PER_GGAS * 1000.0) as u128;
+            if self.r.kept_rule && !self.accts[i].attached_flag {
+                self.accts[i].kept_refused += 1;
+                self.accts[i].transfer_refused = true;
+                continue;
+            }
+            let farmed = amount.min(self.accts[i].kept);
+            self.accts[i].kept -= farmed;
+            self.accts[i].balance -= amount;
+            self.accts[i].moved_out += amount;
+            self.accts[op].balance += amount;
+            self.accts[op].moved_in += amount;
+            self.accts[op].kept += farmed;
+        }
+    }
+
+    /// The colonies whose living cells colony account `i` may not plant near: accepted pacts it promised, still in force.
+    fn protected(&self, i: usize) -> Vec<ColonyId> {
+        let g = self.gen;
+        self.pacts.iter().filter(|&&(_, to, until)| to == i && g < until).map(|&(from, _, _)| self.accts[from].id).collect()
+    }
+
+    /// Pacts (`Rules::pacts`): after every tide each Builder pays the Raider nearest its home 2 PETRI for a pact that
+    /// keeps the raider `pact_radius` cells from the builder's living cells for a tide window. The raider accepts. The
+    /// builder pays the offer's storage (0.0042 NEAR, about 0.0038 used) and both calls' gas.
+    fn pact_round(&mut self) {
+        if !self.r.pacts {
+            return;
+        }
+        let g = self.gen;
+        self.pacts.retain(|&(_, _, until)| until > g);
+        let raiders: Vec<usize> = (0..self.accts.len()).filter(|&j| self.accts[j].joined && self.accts[j].kind() == Kind::Raider).collect();
+        if raiders.is_empty() {
+            return;
+        }
+        let price = 2 * UNIT;
+        let (w, h) = (self.w, self.h);
+        let storage = 380 * BYTE;
+        let gas = (20.0 * YOCTO_PER_GGAS * 1000.0) as u128;
+        for i in 0..self.accts.len() {
+            let a = &self.accts[i];
+            if !a.joined || a.kind() != Kind::Builder || a.balance < price + self.cost(8, false) || a.wallet < storage + gas {
+                continue;
+            }
+            let home = a.home;
+            let d = |j: usize| {
+                let o = self.accts[j].home;
+                let dx = (o.0 - home.0).rem_euclid(w).min((home.0 - o.0).rem_euclid(w));
+                let dy = (o.1 - home.1).rem_euclid(h).min((home.1 - o.1).rem_euclid(h));
+                dx * dx + dy * dy
+            };
+            let j = *raiders.iter().min_by_key(|&&j| d(j)).unwrap();
+            // Only a raider close enough to be a threat is worth paying.
+            if d(j) > 40 * 40 {
+                continue;
+            }
+            let a = &mut self.accts[i];
+            a.balance -= price;
+            a.pact_paid += price;
+            a.wallet -= storage + gas;
+            a.gas += storage + gas;
+            self.storage_players += storage;
+            self.accts[j].balance += price;
+            self.accts[j].pact_in += price;
+            self.pacts.push((i, j, g + self.r.tide_every.min(self.r.pact_max_gens as u64)));
         }
     }
 
@@ -2143,7 +2488,7 @@ impl World {
                 }
             }
             (Kind::Guest | Kind::SelfSponsor | Kind::SybilRoyalty, _) => {
-                if a.top_ups < 3 && a.credit() >= NEAR / 100 + BUY_BYTES * BYTE && t >= a.join_at + self.r.gens_per_day() / 4 && bal < 2 * self.cost(6, false) {
+                if a.top_ups < 3 && a.credit() >= NEAR / 100 + buy_bytes(self.v6()) * BYTE && t >= a.join_at + self.r.gens_per_day() / 4 && bal < 2 * self.cost(6, false) {
                     let amt = a.credit().min(NEAR / 50);
                     self.accts[i].top_ups += 1;
                     self.buy(i, amt);
@@ -2162,7 +2507,7 @@ impl World {
         }
         match (a.kind(), a.role()) {
             (Kind::Builder | Kind::Late | Kind::Raider | Kind::Defender, _) | (Kind::SybilGuest | Kind::SybilRoyalty, Role::Wallet) => a.top_ups < 2 && a.wallet >= NEAR / 50,
-            (Kind::Guest | Kind::SelfSponsor | Kind::SybilRoyalty, _) => a.top_ups < 3 && a.credit() >= NEAR / 100 + BUY_BYTES * BYTE,
+            (Kind::Guest | Kind::SelfSponsor | Kind::SybilRoyalty, _) => a.top_ups < 3 && a.credit() >= NEAR / 100 + buy_bytes(self.v6()) * BYTE,
             (Kind::Penny, _) => a.wallet >= NEAR / 50,
             _ => false,
         }
@@ -2201,7 +2546,7 @@ impl World {
             self.buy(i, HOUSE_TOP_UP);
         }
         // Claims (the bench wins tides; the house never does).
-        if bench && self.accts[i].owed > (CLAIM_BYTES + PAYOUT_RESERVE) * BYTE && self.t % 240 < 120 {
+        if bench && self.accts[i].owed > (claim_bytes(self.v6()) + PAYOUT_RESERVE) * BYTE && self.t % 240 < 120 {
             self.claim(i);
         }
         if !bench {
@@ -2359,7 +2704,8 @@ impl World {
         let pats = [Pat::Beehive, Pat::Loaf, Pat::Eater, Pat::Glider, Pat::Lwss, Pat::RPent, Pat::Toad, Pat::Pulsar];
         let me = self.accts[i].id;
         for pat in pats {
-            if !self.by_pat[pat.idx()].is_empty() {
+            // v6.1: a slide under `licence_min_cells` licenses nothing, so the farmer mints only those that do.
+            if !self.by_pat[pat.idx()].is_empty() || (pat.cells().len() as u32) < self.r.licence_min_cells {
                 continue;
             }
             let (w, h) = (self.w, self.h);
@@ -2443,8 +2789,20 @@ impl World {
                         let center = if kind == Kind::Whale { (self.rng.range(self.w as u64) as i32, self.rng.range(self.h as u64) as i32) } else { home };
                         self.plant_near(i, s, center, 30, 10, true, None);
                     }
-                    (Kind::SybilGuest, Role::Guest) => {
+                    (Kind::SybilGuest | Kind::SybilTransfer, Role::Guest) => {
                         self.plant_near(i, Pat::Block, home, 12, 5, true, None);
+                    }
+                    (Kind::SybilAttach, Role::Guest) => {
+                        // A day of free farming, then 0.01 NEAR attached through a purchase the operator pays for; it
+                        // plants nothing more until it has sold what it farmed (planting would spend it), or the
+                        // contract has refused the sale.
+                        if !self.accts[i].attached_flag && t >= self.accts[i].join_at + self.r.gens_per_day() {
+                            self.intent_buy(i, NEAR / 100);
+                        }
+                        let a = &self.accts[i];
+                        if !a.attached_flag || a.kept == 0 || a.kept_refused > 0 {
+                            self.plant_near(i, Pat::Block, home, 12, 5, true, None);
+                        }
                     }
                     (Kind::SybilRoyalty, Role::Wallet) => {
                         // Its own slide first; then a builder.
@@ -2559,7 +2917,7 @@ impl World {
             if t % gpd == gpd / 2 {
                 for i in 0..n {
                     let a = &self.accts[i];
-                    if a.joined && a.kind() != Kind::House && a.kind() != Kind::Bench && a.owed > (CLAIM_BYTES + PAYOUT_RESERVE) * BYTE {
+                    if a.joined && a.kind() != Kind::House && a.kind() != Kind::Bench && a.owed > (claim_bytes(self.v6()) + PAYOUT_RESERVE) * BYTE {
                         self.claim(i);
                     }
                 }
@@ -2583,7 +2941,7 @@ impl World {
         self.advance(Payer::Keeper);
         for i in 0..n {
             let a = &self.accts[i];
-            if a.joined && a.kind() != Kind::House && a.owed > (CLAIM_BYTES + PAYOUT_RESERVE) * BYTE {
+            if a.joined && a.kind() != Kind::House && a.owed > (claim_bytes(self.v6()) + PAYOUT_RESERVE) * BYTE {
                 self.claim(i);
             }
         }
@@ -2594,7 +2952,7 @@ impl World {
     }
 
     fn finish(self, secs: f64) -> RunOut {
-        let storage = SELL_BYTES * BYTE;
+        let storage = sell_bytes(self.v6()) * BYTE;
         let mut groups: Vec<Option<GroupOut>> = vec![None; self.groups];
         let mut held_total = 0u128;
         let mut house_paid = 0u128;
@@ -2641,13 +2999,30 @@ impl World {
                 royalty_out: 0,
                 tide_share: 0,
                 slide_storage: 0,
+                pot: 0,
                 live: 0,
                 live_gens: 0,
                 unpaid_gens: 0,
                 plants: 0,
                 licensed: 0,
                 failed: 0,
+                kept_refused: 0,
+                kept_left: 0,
+                farm_sold: 0,
+                moved: 0,
+                pact_paid: 0,
+                pact_in: 0,
+                pact_refused: 0,
+                pact_diverted: 0,
             });
+            e.kept_refused += a.kept_refused;
+            e.kept_left += a.kept;
+            e.farm_sold += a.farm_sold;
+            e.moved += a.moved_out;
+            e.pact_paid += a.pact_paid;
+            e.pact_in += a.pact_in;
+            e.pact_refused += a.pact_refused;
+            e.pact_diverted += a.pact_diverted;
             e.accounts += 1;
             e.first_join = e.first_join.min(a.join_at);
             e.attached += a.attached;
@@ -2674,6 +3049,7 @@ impl World {
             e.royalty_out += a.royalty_out;
             e.tide_share += a.tide_share;
             e.slide_storage += a.slide_storage;
+            e.pot += a.pot;
             e.live += self.live.get(a.id as usize).copied().unwrap_or(0);
             e.live_gens += a.live_gens;
             e.unpaid_gens += a.unpaid_gens;
@@ -2735,6 +3111,10 @@ impl World {
                 hot_avg: self.hot_sum as f64 / self.hot_samples.max(1) as f64,
                 partial_catchups: self.partial_catchups,
                 plant_fail_behind: self.plant_fail_behind,
+                plant_refused_full: self.plant_refused_full,
+                over_target: self.over_target,
+                hot_left: self.hot_left,
+                royalties_to_agar: self.royalties_to_agar,
                 skips: self.skips,
                 skipped: self.skipped,
                 tides: self.tides,

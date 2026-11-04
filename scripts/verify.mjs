@@ -12,13 +12,23 @@
 // crate the contract runs, compiled to WebAssembly) and compares: the history chain and board hash, the living cells,
 // that every planting was legal and paid the formula's price and its fee, that every planting under a slide's licence
 // was exactly the slide's pattern at the licence's price and paid the royalty to the slide's holder at that point,
-// that every purchase and sale followed the curve and the sale allowance, every tide's chain, shares, bounty (none for
-// a tide the house ran) and storage (and that a tide ran at exactly the tide generations where some colony outside the
-// house had earned), that colonies which never attached NEAR were paid their vault shares, sales and the bounties of
-// tides they ran as credit, that every specimen slide is exactly its colony's living cells as the board stood at the
+// that every purchase and sale followed the curve and the sale allowance, every tide's chain and the storage it
+// recorded (its shares, bounty, none for a tide the house ran, and storage are worked out from the ledger before it,
+// since a v6.1 Tide entry keeps only what a replay cannot know; and a tide ran at exactly the tide generations where
+// some colony outside the house had earned), that colonies which never attached NEAR were paid their vault shares,
+// sales and the bounties of tides they ran as credit, and paid their licence royalties to the agar, that every
+// licence was a slide of at least licence_min_cells cells, that every specimen slide is exactly its colony's living cells as the board stood at the
 // rule's price (burned), that every claim took exactly what its colony was owed and every refund matches the payout it
 // refunds, the agar and every PETRI counter, the vault, the credit pool and every NEAR and credit counter, each
-// colony's earnings and winnings, each slide's holder, moves and royalties. Every term of the solvency check (the
+// colony's earnings and winnings, each slide's holder, moves and royalties. It rebuilds every colony's kept PETRI (what
+// it earned, bought with credit or was paid in royalties before its first NEAR, and PETRI bought with credit since, less
+// what it planted or minted since) and checks that no colony holding kept PETRI sold PETRI for NEAR or paid for a pact,
+// and that every colony's kept PETRI is what the contract holds back. Transfers are not in the ledger: no transfer
+// changes kept PETRI, and the contract refuses every transfer by a guest or by a colony holding kept PETRI. It rebuilds
+// every pact (offer, acceptance, end) and checks that no planting broke a pact binding its colony (no cell within
+// pact_radius of a protected colony's living cells as the board stood), that offers kept to the rules (one open offer
+// to a colony, at most 8 pacts a colony, only PETRI its maker could sell, none of the house's to a player), and the
+// PETRI the dish holds for open offers. Every term of the solvency check (the
 // vault, the credit pool, credit given, won, sold, spent and reclaimed, NEAR owed, pending NEAR) is recomputed from the
 // ledger alone, compared with the contract's own counters, and the contract's NEAR must cover them. It also checks the
 // deployed code hash (--code-hash, by default the hash of `cargo near build reproducible-wasm` at the commit the
@@ -32,7 +42,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkg = path.join(here, "..", "web", "src", "engine", "pkg");
-const { initSync, Engine, quote, buy_quote, sell_quote, licence } = await import(pathToFileURL(path.join(pkg, "petri.js")).href);
+const { initSync, Engine, quote, buy_quote, sell_quote, licence, credit_share } = await import(pathToFileURL(path.join(pkg, "petri.js")).href);
 initSync({ module: fs.readFileSync(path.join(pkg, "petri_bg.wasm")) });
 
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit. */
@@ -53,6 +63,10 @@ const HOUSE_RUNNER = 0xffff;
 const PAYOUT = { CLAIM: 0, SALE: 1, BOUNTY: 2, UNSPONSOR: 3, PENDING: 4 };
 /** Most a tide or refund record can cost in storage (about 200 bytes at 10^19 yoctoNEAR a byte). */
 const RECORD_STORAGE_MAX = 3n * 10n ** 21n;
+/** NEAR's storage price, yoctoNEAR a byte. */
+const BYTE = 10n ** 19n;
+/** What a Tide entry and its place in the tide index store: 126 + 4 bytes, and 45 more on the tide that starts an index page. */
+const TIDE_BYTES = [130, 175];
 
 async function rpc(method, params) {
   let last;
@@ -145,10 +159,31 @@ let sold = 0n, burned = 0n, returned = 0n, boughtBack = 0n, vault = 0n, pool = 0
 let given = 0n, spent = 0n, reclaimed = 0n, owed = 0n, pending = 0n, royalties = 0n;
 const claimed = new Map();
 const refunded = new Set();
+/** The bounty each tide paid, by its ledger index (a Refund of a bounty must give back exactly that). */
+const tideBounty = new Map();
+/** Ledger index of each entry. */
+const indexOf = new Map(ledger.map((x, i) => [x, i]));
 /** Each slide's pattern and its holder as last seen: { bitmap, w, h, moves, holder, royalties }. */
 const slides = [];
-const count = { plants: 0, licensed: 0, buys: 0, sells: 0, tides: 0, idle: 0, slides: 0, claims: 0, refunds: 0 };
-const bad = { legal: null, price: null, fee: null, licence: null, buy: null, sell: null, tide: null, slide: null, claim: null, refund: null };
+const count = { plants: 0, licensed: 0, buys: 0, sells: 0, tides: 0, idle: 0, slides: 0, claims: 0, refunds: 0, pacts: 0, bound: 0, kept: 0 };
+const bad = { legal: null, price: null, fee: null, licence: null, buy: null, sell: null, tide: null, slide: null, claim: null, refund: null, kept: null, pact: null };
+/** Each colony's kept PETRI as the ledger gives it, and its earnings when last counted (a guest's count as kept). */
+const kept = new Map();
+const synced = new Map();
+const keptOf = (c) => kept.get(c) ?? 0n;
+const sync = (c) => {
+  const now = BigInt(e.earned_of(c));
+  if (!e.has_attached(c)) kept.set(c, keptOf(c) + now - (synced.get(c) ?? 0n));
+  synced.set(c, now);
+};
+const spend = (c, units) => {
+  const k = keptOf(c);
+  kept.set(c, k > units ? k - units : 0n);
+};
+/** Every pact: { from, to, petri, until, accepted, ended }, and the PETRI held for open offers. */
+const pacts = [];
+let escrow = 0n;
+const livePacts = (c) => pacts.filter((p) => (p.from === c || p.to === c) && !p.ended).length;
 const popcount = (b) => {
   let n = 0;
   for (let v = b; v; v &= v - 1) n++;
@@ -188,6 +223,9 @@ for (;;) {
       nearIn += BigInt(x.Buy.near);
       pool += BigInt(x.Buy.credit);
       spent += spentOf(x.Buy);
+      // What a guest earned is kept until it first attaches; PETRI bought with credit is kept.
+      sync(x.Buy.colony);
+      kept.set(x.Buy.colony, keptOf(x.Buy.colony) + BigInt(credit_share(x.Buy.petri, x.Buy.credit, paid.toString())));
       if (BigInt(x.Buy.near) > 0n) e.attach(x.Buy.colony);
     } else if (x.Sell) {
       count.sells++;
@@ -197,6 +235,10 @@ for (;;) {
       else if (BigInt(x.Sell.near) > sellLeft) flag("sell", g, `sold beyond the allowance (${sellLeft} left)`);
       else if (x.Sell.as_credit === e.has_attached(x.Sell.colony)) flag("sell", g, `colony ${x.Sell.colony} paid in ${x.Sell.as_credit ? "credit" : "NEAR"}, but it ${x.Sell.as_credit ? "has" : "never"} attached NEAR`);
       else if (house.includes(x.Sell.colony)) flag("sell", g, `house colony ${x.Sell.colony} sold PETRI back`);
+      sync(x.Sell.colony);
+      if (x.Sell.as_credit) spend(x.Sell.colony, BigInt(x.Sell.petri));
+      else if (keptOf(x.Sell.colony) > 0n) flag("kept", g, `colony ${x.Sell.colony} sold PETRI for NEAR while it held ${fmt(keptOf(x.Sell.colony))} kept PETRI`);
+      if (!x.Sell.as_credit) count.kept++;
       if (x.Sell.as_credit) creditSold += BigInt(x.Sell.paid);
       e.set_agar((BigInt(e.agar()) + BigInt(x.Sell.petri)).toString());
       boughtBack += BigInt(x.Sell.petri);
@@ -210,6 +252,20 @@ for (;;) {
       const siege = legal.startsWith("siege:");
       if (legal !== "" && !siege) flag("legal", g, `colony ${p.colony}: ${legal}`);
       else if (siege !== p.siege) flag("legal", g, `colony ${p.colony}: siege flag ${p.siege}, replay ${siege}`);
+      // No cell within pact_radius of a colony an accepted pact binding this one protects, as the board stood.
+      const protect = pacts.filter((q) => q.to === p.colony && q.accepted && !q.ended && g < q.until).map((q) => q.from);
+      if (protect.length > 0) {
+        count.bound++;
+        const breach = e.pact_breach(cells, new Uint16Array(protect), rules.pact_radius);
+        if (breach !== "") flag("pact", g, `colony ${p.colony}'s planting broke its pact with colony ${breach.split(",")[2]}`);
+      }
+      // Kept PETRI is spent first, the royalty too; a royalty to a guest holder is kept.
+      sync(p.colony);
+      spend(p.colony, BigInt(p.cost) + BigInt(p.licence?.royalty ?? 0));
+      if (p.licence?.holder && !p.licence.to_agar) {
+        const h = colonies.find((c) => c.account === p.licence.holder);
+        if (h && !e.has_attached(h.id)) kept.set(h.id, keptOf(h.id) + BigInt(p.licence.royalty));
+      }
       const base = quote(e.agar(), rules.feed_ppm, rules.keeper_bps, e.counted(), rules.live_floor, rules.payback, rules.min_cell_price, p.cells.length, p.siege, rules.siege_x);
       const l = p.licence;
       if (!l) {
@@ -219,8 +275,12 @@ for (;;) {
         const [cost, toll] = licence(base, rules.slide_discount_bps, rules.slide_royalty_bps).split(",");
         const s = slides[Number(l.token) - 1];
         const who = l.holder ?? accountOf(p.colony);
+        // A planter that has never attached NEAR (before this planting) pays its royalty to the agar.
+        const toAgar = !!l.holder && !e.has_attached(p.colony);
         if (!s) flag("licence", g, `slide ${l.token} does not exist yet`);
+        else if (s.cells < (rules.licence_min_cells ?? 0)) flag("licence", g, `slide ${l.token} holds ${s.cells} cells, under the ${rules.licence_min_cells} a licence needs`);
         else if (!e.fits_slide(cells, s.bitmap, s.w, s.h)) flag("licence", g, `colony ${p.colony}'s planting is not slide ${l.token}'s pattern`);
+        else if (!!l.to_agar !== toAgar) flag("licence", g, `colony ${p.colony}'s royalty went to ${l.to_agar ? "the agar" : "the holder"}, but it ${toAgar ? "never" : "has"} attached NEAR`);
         else if (cost !== p.cost) flag("price", g, `licensed planting paid ${p.cost}, the licence gives ${cost}`);
         else if (l.moves < s.moves || (l.moves === s.moves && who !== s.holder)) flag("licence", g, `slide ${l.token}'s holder was ${s.holder} (after ${s.moves} moves), not ${who}`);
         else if (l.holder === accountOf(p.colony)) flag("licence", g, `colony ${p.colony} paid its own slide a royalty`);
@@ -229,9 +289,13 @@ for (;;) {
         if (s) {
           s.moves = Math.max(s.moves, l.moves);
           s.holder = who;
-          s.royalties += BigInt(l.royalty);
+          if (!l.to_agar) s.royalties += BigInt(l.royalty);
         }
-        royalties += BigInt(l.royalty);
+        if (l.to_agar) {
+          // Back into the agar, as a planting's returned half is.
+          returned += BigInt(l.royalty);
+          e.set_agar((BigInt(e.agar()) + BigInt(l.royalty)).toString());
+        } else royalties += BigInt(l.royalty);
       }
       if (BigInt(p.near) + BigInt(p.credit) < BigInt(rules.cell_fee) * BigInt(p.cells.length)) flag("fee", g, `colony ${p.colony} paid less than the cell fee`);
       const cost = BigInt(p.cost);
@@ -249,7 +313,7 @@ for (;;) {
       const r = x.Refund;
       count.refunds++;
       const of = ledger[Number(r.of)] ?? {};
-      const sent = r.kind === PAYOUT.CLAIM ? of.Claim?.paid : r.kind === PAYOUT.SALE ? (of.Sell && !of.Sell.as_credit ? of.Sell.paid : undefined) : r.kind === PAYOUT.BOUNTY ? of.Tide?.bounty : r.kind === PAYOUT.UNSPONSOR ? of.Unsponsor?.amount : r.kind === PAYOUT.PENDING ? of.Unpend?.paid : undefined;
+      const sent = r.kind === PAYOUT.CLAIM ? of.Claim?.paid : r.kind === PAYOUT.SALE ? (of.Sell && !of.Sell.as_credit ? of.Sell.paid : undefined) : r.kind === PAYOUT.BOUNTY ? (of.Tide ? tideBounty.get(Number(r.of))?.toString() : undefined) : r.kind === PAYOUT.UNSPONSOR ? of.Unsponsor?.amount : r.kind === PAYOUT.PENDING ? of.Unpend?.paid : undefined;
       const storage = BigInt(r.storage);
       if (sent === undefined) flag("refund", g, `refund of entry ${r.of}, which is no payout of kind ${r.kind}`);
       else if (sent !== r.near) flag("refund", g, `refund of ${r.near} for a payout of ${sent}`);
@@ -271,10 +335,12 @@ for (;;) {
       else if (want.length !== got.length || want.some((b, i) => b !== got[i])) flag("slide", g, `slide ${sl.token} is not colony ${sl.colony}'s cells as the dish stood`);
       else if (cells !== sl.cells || cells < rules.slide_min_cells) flag("slide", g, `slide ${sl.token} holds ${cells} cells, recorded ${sl.cells}`);
       else if (BigInt(sl.cost) !== price) flag("slide", g, `slide ${sl.token} burned ${sl.cost}, rule gives ${price}`);
+      sync(sl.colony);
+      spend(sl.colony, BigInt(sl.cost));
       burned += BigInt(sl.cost);
       slidesBurned += BigInt(sl.cost);
       spent += spentOf(sl);
-      slides.push({ bitmap: new Uint8Array(want), w: sl.w, h: sl.h, moves: 0, holder: accountOf(sl.colony), royalties: 0n });
+      slides.push({ bitmap: new Uint8Array(want), w: sl.w, h: sl.h, cells, moves: 0, holder: accountOf(sl.colony), royalties: 0n });
     } else if (x.Sponsor) {
       given += BigInt(x.Sponsor.amount);
     } else if (x.Unsponsor) {
@@ -297,33 +363,68 @@ for (;;) {
       nearIn += BigInt(x.Dust.near);
     } else if (x.Burn) {
       burned += BigInt(x.Burn.petri);
+    } else if (x.PactOffer) {
+      const o = x.PactOffer;
+      count.pacts++;
+      const petri = BigInt(o.petri);
+      const until = Number(o.until);
+      if (o.pact !== pacts.length + 1) flag("pact", g, `pact ${o.pact} is out of order`);
+      else if (o.from === o.to || until <= g || until > g + rules.pact_max_gens) flag("pact", g, `pact ${o.pact} runs to generation ${until}`);
+      else if (livePacts(o.from) >= 8 || livePacts(o.to) >= 8) flag("pact", g, `pact ${o.pact}: a colony party to 8 pacts already`);
+      else if (pacts.some((q) => q.from === o.from && q.to === o.to && !q.accepted && !q.ended)) flag("pact", g, `pact ${o.pact}: a second open offer from colony ${o.from} to ${o.to}`);
+      else if (petri > 0n && house.includes(o.from) && !house.includes(o.to)) flag("pact", g, `pact ${o.pact}: house PETRI offered to a player`);
+      // Only PETRI its maker could sell pays for a pact (the house's PETRI stays in the house, so it is not held back).
+      if (petri > 0n && !house.includes(o.from)) {
+        sync(o.from);
+        count.kept++;
+        if (!e.has_attached(o.from) || keptOf(o.from) > 0n) flag("kept", g, `colony ${o.from} paid for pact ${o.pact} with PETRI it could not sell`);
+      }
+      spent += spentOf(o);
+      escrow += petri;
+      pacts.push({ from: o.from, to: o.to, petri, until, accepted: false, ended: false });
+    } else if (x.PactAccept) {
+      const q = pacts[x.PactAccept.pact - 1];
+      if (!q || q.accepted || q.ended || g >= q.until) flag("pact", g, `pact ${x.PactAccept.pact} accepted while not open`);
+      else {
+        q.accepted = true;
+        escrow -= q.petri;
+      }
+    } else if (x.PactEnd) {
+      const q = pacts[x.PactEnd.pact - 1];
+      if (!q || q.ended || (q.accepted && g < q.until)) flag("pact", g, `pact ${x.PactEnd.pact} ended before its time`);
+      else {
+        if (!q.accepted) escrow -= q.petri;
+        q.ended = true;
+      }
     } else if (x.Tide) {
+      // A Tide entry keeps the chain, the bytes it stored and who ran it; everything it paid follows from the ledger
+      // before it, and is worked out here.
       const t = x.Tide;
       count.tides++;
       const pay = (vault * BigInt(rules.tide_bps)) / 10000n;
       const full = (pay * BigInt(rules.tide_bounty_bps)) / 10000n;
       const capped = full < BigInt(rules.max_bounty) ? full : BigInt(rules.max_bounty);
-      const storage = BigInt(t.storage);
-      const creditPay = (pool * BigInt(rules.tide_bps)) / 10000n;
+      const cost = BigInt(t.bytes) * BYTE;
       const left = pay - capped;
-      const [paidS, creditS, asCreditS] = e.tide((left > storage ? left - storage : 0n).toString(), creditPay.toString()).split(",");
+      const storage0 = cost < left ? cost : left;
+      const creditPay = (pool * BigInt(rules.tide_bps)) / 10000n;
+      const [paidS, creditS, asCreditS] = e.tide((left - storage0).toString(), creditPay.toString()).split(",");
       const paid = BigInt(paidS);
       const creditPaid = BigInt(creditS);
       const asCredit = BigInt(asCreditS);
       const winners = paid + asCredit > 0n;
+      // Without winners only the storage leaves the vault, as much of it as the vault holds.
+      const storage = winners ? storage0 : cost < vault ? cost : vault;
       // A tide the house ran (a house colony, or a keeper) pays no bounty: it stays in the vault.
       const houseRunner = t.by === HOUSE_RUNNER || house.includes(t.by);
       const bounty = winners && !houseRunner ? capped : 0n;
+      tideBounty.set(indexOf.get(x), bounty);
       // A guest (a colony that never attached NEAR) that ran the tide is paid its bounty as credit.
-      const bountyCredit = t.by > 0 && t.by !== HOUSE_RUNNER && !e.has_attached(t.by) ? BigInt(t.bounty) : 0n;
+      const bountyCredit = t.by > 0 && t.by !== HOUSE_RUNNER && !e.has_attached(t.by) ? bounty : 0n;
       if (bountyCredit > 0n) e.add_credit_won(t.by, bountyCredit.toString());
       if (e.chain_hex() !== t.chain) flag("tide", g, "history chain differs");
-      else if (pay !== BigInt(t.pay) || paid !== BigInt(t.paid)) flag("tide", g, `paid ${t.paid} of ${t.pay}, replay ${paid} of ${pay}`);
-      else if (asCredit !== BigInt(t.as_credit)) flag("tide", g, `paid ${t.as_credit} of the vault as credit, replay ${asCredit}`);
-      else if (BigInt(t.bounty) !== bounty) flag("tide", g, `bounty ${t.bounty}, rules give ${bounty}${houseRunner ? " (the house ran it)" : ""}`);
-      else if (storage > RECORD_STORAGE_MAX) flag("tide", g, `charged ${t.storage} yocto of storage for one record`);
-      else if (creditPay !== BigInt(t.credit_pay) || creditPaid !== BigInt(t.credit_paid)) flag("tide", g, `credit pool paid ${t.credit_paid} of ${t.credit_pay}, replay ${creditPaid} of ${creditPay}`);
-      vault -= paid + asCredit + BigInt(t.bounty) + storage;
+      else if (!TIDE_BYTES.includes(Number(t.bytes))) flag("tide", g, `stored ${t.bytes} bytes; a tide stores ${TIDE_BYTES.join(" or ")}`);
+      vault -= paid + asCredit + bounty + storage;
       pool -= creditPaid;
       owed += paid;
       nearTides += paid;
@@ -343,6 +444,8 @@ const ms = performance.now() - t0;
 const earnedBad = colonies.filter((c, i) => e.earned_of(c.id) !== earnings[i]);
 const wonBad = colonies.filter((c, i) => e.won_of(c.id) !== winnings[i]);
 const creditBad = colonies.filter((c) => e.credit_won_of(c.id) !== c.credit_won);
+for (const c of colonies) sync(c.id);
+const keptBad = colonies.filter((c) => keptOf(c.id).toString() !== String(c.kept ?? "0"));
 // Each slide ends with the holder the replay last saw, unless it moved since; and with the royalties the ledger paid it.
 const slideBad = slidesView.filter((v, i) => {
   const s = slides[i];
@@ -368,6 +471,10 @@ const checks = [
   rule("tide", count.tides, "tides"),
   rule("claim", count.claims, "claims of exactly what was owed"),
   rule("refund", count.refunds, "refunds tied to their payouts"),
+  rule("kept", count.kept, "sales for NEAR and pact payments by colonies holding no kept PETRI"),
+  rule("pact", count.pacts + count.bound, "pacts kept to the rules and plantings under pacts"),
+  ["PETRI held for pact offers", fmt(state.pact_escrow ?? 0), fmt(escrow)],
+  ["Pacts", String(state.pacts ?? 0), String(pacts.length)],
   ["Specimens", `${state.slides} of ${state.slides} match the dish`, bad.slide ? `differs at ${bad.slide}` : `${count.slides} of ${state.slides} match the dish`],
   ["Slide holders and royalties", `${slidesView.length} of ${slidesView.length}`, `${slidesView.length - slideBad.length} of ${slidesView.length}`],
   ["Agar", fmt(state.agar), fmt(e.agar())],
@@ -393,6 +500,7 @@ const checks = [
   ["NEAR owed to colonies", fmtNear(state.tides_owed), fmtNear(owed)],
   ["Pending NEAR", fmtNear(state.pending), fmtNear(pending)],
   all("Colony credit winnings", creditBad),
+  all("Colony kept PETRI", keptBad),
   ["Solvent (NEAR held >= owed, from the ledger)", "yes", free >= owedAll ? "yes" : `no: ${fmtNear(free)} held, ${fmtNear(owedAll)} owed`],
   ...(DUMP ? [] : [["Deployed code hash", CODE_HASH, account.code_hash], ["Full-access keys", "0", String(fullKeys)]]),
 ];
@@ -404,6 +512,7 @@ for (const [name, want, got] of checks) {
 }
 for (const c of earnedBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmt(earnings[c.id - 1])}, replay ${fmt(e.earned_of(c.id))}`);
 for (const c of wonBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmtNear(winnings[c.id - 1])} NEAR won, replay ${fmtNear(e.won_of(c.id))}`);
+for (const c of keptBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmt(c.kept ?? 0)} kept PETRI, replay ${fmt(keptOf(c.id))}`);
 for (const v of slideBad.slice(0, 10)) console.log(`  slide ${v.token_id}: contract holder ${v.owner_id} after ${v.moves} moves, royalties ${fmt(v.royalties)}`);
 if (meta) console.log(`Source: ${meta.link ?? "no link"}; built with ${meta.build_info?.build_command?.join(" ") ?? "no build info"} in ${meta.build_info?.build_environment ?? "?"}`);
 if (count.idle > 0) console.log(`${count.idle} tide generation(s) had nobody to pay and were skipped, as the rules say.`);

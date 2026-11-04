@@ -99,11 +99,11 @@ const THREATS: Threat[] = [
     threat: "Collect the 2% keeper share without doing useful work, or keep others from collecting it.",
     defense: (
       <>
-        The pot goes only to a caller whose <C>advance</C> ran at least one generation, which is exactly the work it pays for, only if the caller can hold PETRI, and never to one of the dish&rsquo;s own accounts (a house strain or a keeper). Anyone else may advance, so the pot is a race, and racing costs gas.
+        The pot goes only to the account whose call stepped at least one generation, which is exactly the work it pays for (any of <C>plant</C>, <C>buy</C>, <C>join</C>, <C>sell</C>, <C>claim</C>, <C>advance</C>, <C>mint_slide</C>, or a wNEAR order settled for an account), only if that account can hold PETRI, and never to one of the dish&rsquo;s own accounts (a house strain or a keeper). Anyone may make such a call, so the pot is a race, and racing costs gas. Before v6.1 only <C>advance</C> paid it, and it could pile up for days when nobody advanced: 1,480 PETRI stood in it after a week on a young simulated dish.
       </>
     ),
-    tests: ["the_keeper_pot_goes_to_whoever_advances_the_clock", "a_keeper_takes_no_keeper_pot"],
-    limit: "In the simulator a Racer that only advances for the pot and bounties lost 0.05 to 0.06 NEAR a week.",
+    tests: ["the_keeper_pot_goes_to_whoever_advances_the_clock", "any_call_that_runs_a_generation_takes_the_keeper_pot", "a_keeper_takes_no_keeper_pot"],
+    limit: "In the v5 simulator a Racer that only advances for the pot and bounties lost 0.05 to 0.06 NEAR a week; in the v6.1 simulator, where players' calls take the pot too, it loses 0.005 and the pot left after a week is 1.1 PETRI.",
   },
   {
     id: "t-house",
@@ -179,13 +179,13 @@ const THREATS: Threat[] = [
     ),
     defense: (
       <>
-        v6 keeps each colony&rsquo;s numbers in exactly one of two places. Cold pages hold 64 colonies a key; a join appends one slot to the last page, so it costs the same however many colonies came before. The hot table holds only the colonies that play (those with stake), in a feed part and a purse part: a colony enters it when it plants and leaves it, 16 a call, once its stake has decayed to nothing. The feed, the tides and the decay read and write only the hot table, once per call. Living cells are counted sparsely, so a generation costs what the living cost. A catch-up stops before its gas limit (leaving room to write the hot table back) and the next call carries on. Views that read many colonies are paged: <C>earnings</C> and <C>tide_winnings</C> at most 500 a call, <C>stakes</C> 2,000.
+        v6 split each colony&rsquo;s numbers between cold pages and a hot table; v6.1 keeps them in exactly one of two places and bounds the table. Cold pages hold 32 colonies a key, 69 bytes a colony, with its stake decayed lazily; a join appends one slot to the last page, so it costs the same however many colonies came before. The hot table holds only the colonies that play now, in a feed part and a purse part: those that earned since the last tide, and those with living cells and a stake that can still earn (never the house). A colony enters it when it plants; up to 32 rows a call that have no window and no living cell or too little stake move back to their cold slots. v6 kept every colony with stake, which lingers about a day, and a simulated busy dish of 30,000 colonies had up to 27,538 rows and a planting that cost 237 TGas; v6.1 averaged 1,315 rows and the largest call was 60 TGas. The table holds at most 10,000 rows: a colony with no row that plants while it is full waits for the next tide, so no number of colonies can push a call past its gas, where about 35,000 colonies earning within one tide window could have halted v6 for good. The feed, the tides and the decay read and write only the hot table, once per call. Living cells are counted sparsely, so a generation costs what the living cost. A catch-up stops at 110 TGas, or the prepaid gas less 40, less what is still to write (the feed part of the table, the purse part only if a tide falls in the window, and the idle rows' pages), and the next call carries on. The site prepays 300 TGas. Views that read many colonies are paged: <C>earnings</C> and <C>tide_winnings</C> at most 500 a call, <C>stakes</C> 2,000.
       </>
     ),
-    tests: ["thirty_thousand_colonies_join_plant_tide_and_claim_well_under_the_gas_limit", "thirty_thousand_colonies_all_playing_still_fit", "a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit", "a_colony_whose_stake_is_gone_leaves_the_hot_table_with_its_numbers", "many_living_colonies_advance_with_one_summary_log", "sparse_stepping_matches_full_stepping (core)", "sparse_tides_and_feeds_match_the_dense_ones (core)", "catch_up_is_capped_and_plant_waits_for_the_clock"],
+    tests: ["thirty_thousand_colonies_with_stake_every_call_under_150_tgas_on_the_real_network", "a_full_hot_table_keeps_every_call_under_150_tgas_on_the_real_network", "the_catch_up_reserves_only_what_the_rest_of_the_call_needs", "a_full_hot_table_waits_for_the_tide_and_makes_room_when_rows_can_leave", "a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit", "a_colony_whose_stake_is_gone_leaves_the_hot_table_with_its_numbers", "a_colony_without_living_cells_leaves_the_hot_table_and_keeps_its_stake", "a_colony_whose_stake_cannot_earn_leaves_the_hot_table_while_it_lives", "many_living_colonies_advance_with_one_summary_log", "sparse_stepping_matches_full_stepping (core)", "sparse_tides_and_feeds_match_the_dense_ones (core)", "catch_up_is_capped_and_plant_waits_for_the_clock"],
     limit: (
       <>
-        The unit runtime charges host calls (storage, logs, promises), not wasm execution, so these figures measure what used to grow with every colony; the wasm left over is Life on the board and loops over the playing colonies only. With 30,000 colonies, 1,501 of them playing: a join 1.53 TGas, a planting 7.23, an advance through a tide paying every winner 36.6, a playing colony&rsquo;s claim 34.6. With all 30,000 playing: a planting 118.83, the tide 148.2. Every NEAR payout figure includes about 30 TGas for the transfer and its callback. A tide with 1,500 winners measured 6.65 TGas of host calls plus 29.74 TGas for the bounty payout (the test asserts under 20 TGas for the tide); in v5 it was about 11 TGas with the arrays.
+        The unit runtime charges host calls (storage, logs, promises), not wasm execution or the real price per rewritten byte, so the contract&rsquo;s own gas tests scale its host calls by that price (×1.83, measured in the test) and add an estimate of the wasm. On 30,000 colonies that all have stake, with 1,500 playing, the largest call is 67.5 TGas (advance through a paying tide; a planting 20.4, a claim with NEAR 47.7); with a full table, 9,999 playing, 125.7 (advance through a tide; claim with NEAR 115.6, planting 88.3); the tests assert every call stays under 150 TGas. The analytic worst case, 10,000 rows all paid at a tide, is 120 TGas for the tide, 105 for a claim with NEAR and 77 for a planting. Every NEAR payout figure includes about 30 TGas for the transfer and its callback. A tide with 1,500 winners is asserted at under 20 TGas of host calls; in v5 it was about 11 TGas with the arrays.
       </>
     ),
   },
@@ -300,16 +300,16 @@ const THREATS: Threat[] = [
     title: "Abusing a slide's licence",
     threat: (
       <>
-        Found in review before v6: owning a slide changed nothing. v6 makes a slide a pattern licence, which opens new ways to cheat: plant some other shape at the licence&rsquo;s price, use a licence to make a rival&rsquo;s ground cheap, or pay the royalty to the wrong holder.
+        Found in review before v6: owning a slide changed nothing. v6 makes a slide a pattern licence, which opens new ways to cheat: plant some other shape at the licence&rsquo;s price, use a licence to make a rival&rsquo;s ground cheap, or pay the royalty to the wrong holder. The v6 simulator found two more: mint slides of the small common patterns at launch and collect 10% of everyone&rsquo;s planting of them, and plant under a licence from free play so that a royalty lands in a wallet that can sell the PETRI.
       </>
     ),
     defense: (
       <>
-        A planting under a licence must be exactly the slide&rsquo;s pattern, moved anywhere (wrapping) but not turned (<C>petri_core::fits_slide</C>); it costs <C>slide_discount_bps</C> (25%) less, the same for everyone. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap to take. A planter that does not hold the slide pays its current holder <C>slide_royalty_bps</C> (10%) of the discounted cost in PETRI. Each Plant entry records the slide, its move count, the holder paid and the royalty, and both replays check the shape, the price and royalty, that the holder is the minter until the slide&rsquo;s first move and one account between moves, and each slide&rsquo;s final owner, moves and royalties against the <C>slides</C> view.
+        A planting under a licence needs a slide that captured at least <C>licence_min_cells</C> (12) cells, so blocks, blinkers, beehives, loaves, gliders, lightweight spaceships and small oscillators cannot be licensed. The planting must be exactly the slide&rsquo;s pattern, moved anywhere (wrapping) but not turned (<C>petri_core::fits_slide</C>); it costs <C>slide_discount_bps</C> (25%) less, the same for everyone. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap to take. A planter that does not hold the slide pays its current holder <C>slide_royalty_bps</C> (10%) of the discounted cost in PETRI, unless it has never attached NEAR: then the royalty goes to the agar and the holder gets nothing. Each Plant entry records the slide, its move count, the holder, the royalty and <C>to_agar</C>, and both replays check the shape, the 12-cell minimum, the price and royalty, that the holder is the minter until the slide&rsquo;s first move and one account between moves, and each slide&rsquo;s final owner, moves and royalties against the <C>slides</C> view.
       </>
     ),
-    tests: ["the_holder_plants_its_slide_at_the_licence_discount", "a_stranger_plants_a_slide_and_pays_its_holder_a_royalty", "a_planting_of_another_shape_is_not_licensed", "a_turned_slide_is_not_licensed", "after_a_transfer_royalties_go_to_the_new_holder", "the_house_pays_no_royalty_to_players", "a_slide_licence_is_the_same_shape_anywhere (core)"],
-    limit: "Moves are not logged in the ledger (a transfer carries one yoctoNEAR, too little to pay for an entry), so the replays check that holders are consistent with the move counts, not who held a slide between two moves; the NEP-171 transfer events show that.",
+    tests: ["the_holder_plants_its_slide_at_the_licence_discount", "a_stranger_plants_a_slide_and_pays_its_holder_a_royalty", "a_small_slide_is_a_keepsake_not_a_licence", "a_guest_pays_its_royalty_to_the_agar", "a_planting_of_another_shape_is_not_licensed", "a_turned_slide_is_not_licensed", "after_a_transfer_royalties_go_to_the_new_holder", "the_house_pays_no_royalty_to_players", "a_slide_licence_is_the_same_shape_anywhere (core)"],
+    limit: "Moves are not logged in the ledger (a transfer carries one yoctoNEAR, too little to pay for an entry), so the replays check that holders are consistent with the move counts, not who held a slide between two moves; the NEP-171 transfer events show that. A farmer who mints the first slide of a large pattern others plant (the pulsar, 48 cells, or the Gosper gun, 36) still collects 10% of those plantings: +0.08 NEAR a week at 150 players in the v6.1 simulator, down from +0.29.",
   },
   {
     id: "t-agar",
@@ -328,11 +328,11 @@ const THREATS: Threat[] = [
     threat: "v6 has a method that deletes a dish's state and starts over. Used on a running dish, it would wipe the players' colonies, PETRI and NEAR owed.",
     defense: (
       <>
-        <C>relaunch(rules, accounts)</C> is <C>#[private]</C> and <C>#[init(ignore_state)]</C>: only a transaction from the contract account itself, signed with its full-access key, can run it. It clears only what v5 stored, refuses an account that already ran v6 (&ldquo;this account already ran v6; relaunch only clears v5&rdquo;), and logs any pending NEAR v5 still owed. It was used once, to start <C>petri-dish.near</C> again from generation 0 when v6 was deployed there.
+        <C>relaunch(rules, accounts)</C> is <C>#[private]</C> and <C>#[init(ignore_state)]</C>: only a transaction from the contract account itself, signed with its full-access key, can run it. It clears only what v6 stored, refuses an account with no v6 dish (&ldquo;no v6 dish here&rdquo;) and one that already runs v6.1 (&ldquo;this account already runs v6.1&rdquo;), and logs any pending NEAR v6 still owed. It was used to start <C>petri-dish.near</C> from generation 0 when v6 was deployed there, and again on both dishes when v6.1 was.
       </>
     ),
-    tests: ["relaunch_leaves_nothing_of_v5"],
-    limit: "The refusal of a v6 account is a check in the code, not a test. While the full-access key exists, its holder could deploy different code anyway; once it is deleted, nobody can call relaunch or deploy.",
+    tests: ["relaunch_leaves_nothing_of_v6", "relaunch_refuses_an_account_without_a_v6_dish", "relaunch_refuses_a_dish_that_runs_v6_1"],
+    limit: "While the full-access key exists, its holder could deploy different code anyway; once it is deleted, nobody can call relaunch or deploy.",
   },
 ];
 
@@ -359,7 +359,7 @@ export default function Page() {
 
       <H2 id="threats">Threats and defenses</H2>
       <p>
-        Test names are the functions in <C>contract/src/tests.rs</C>, or <C>core/src/tests.rs</C> where marked core. Simulator figures are from <C>sim/out-v5</C>, which ran the v5 rules; v6 has not been simulated. Threats marked &ldquo;found in review before v6&rdquo; were reported against v5 and are fixed in the code both dishes run now.
+        Test names are the functions in <C>contract/src/tests.rs</C>, or <C>core/src/tests.rs</C> where marked core. Simulator figures are from <C>sim/out-v5</C>, which ran the v5 rules, unless a threat names v6 or v6.1: <C>sim/out-v6.1</C> re-ran v6.1 against v6 on the same seeds. Threats marked &ldquo;found in review before v6&rdquo; were reported against v5 and are fixed in the code both dishes run now.
       </p>
       {THREATS.map((t) => (
         <section key={t.id}>
@@ -384,7 +384,7 @@ export default function Page() {
       <H2 id="limits">Known limits</H2>
       <ul>
         <li>
-          <strong>The code is not locked yet.</strong> Each contract account has one full-access key. Until it is deleted, the owner could deploy different code or run <C>relaunch</C> on a v5 account; after it is deleted, nobody can fix a bug.
+          <strong>The code is not locked yet.</strong> Each contract account has one full-access key. Until it is deleted, the owner could deploy different code or run <C>relaunch</C> on a v6 account; after it is deleted, nobody can fix a bug.
         </li>
         <li>
           <strong>Most players lose NEAR.</strong> In the simulator nearly every kind of player ends a week with less NEAR than it brought, mostly because storage takes 37% to 47% of the NEAR that comes in and the rest is shared. Petri is a game with a live economy, not an investment. See <Doc to="simulations" hash="losses">What loses money</Doc>.
@@ -399,7 +399,7 @@ export default function Page() {
           <strong>Server limits are per instance.</strong> The relay and guest rate limits are kept in each server instance&rsquo;s memory.
         </li>
         <li>
-          <strong>Relayed gas is capped at 250 TGas.</strong> A guest call that needs more is refused by the relay.
+          <strong>Relayed gas is capped at 300 TGas.</strong> A guest call that needs more is refused by the relay.
         </li>
         <li>
           <strong>Replays trust their RPC.</strong> See <Doc to="verification" hash="limits">What verification does not prove</Doc>.
@@ -410,7 +410,7 @@ export default function Page() {
       </ul>
 
       <H2 id="tests">Running the tests that cover these</H2>
-      <Code lang="sh" title="Shell, from the repository root">{`# everything: 109 contract tests and 32 core tests
+      <Code lang="sh" title="Shell, from the repository root">{`# everything: 119 contract tests and 33 core tests
 cargo test -p petri-core -p petri-contract
 
 # one threat at a time

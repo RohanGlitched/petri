@@ -113,7 +113,8 @@ export function makeRng(seed) {
  * gun, a spaceship, an eater wall, a pulsar or a methuselah) when one is affordable.
  * world: { engine, cells, rules, colonies, totalLive }, me: { id, temperament, cap, maxCost }, balance: PETRI units
  * (maxCost, if set, is the most one planting may cost: the mainnet house keeps a daily PETRI budget).
- * pact: promises in force this window: { avoid: Set of colony ids never to target or crowd, banRegions: Set of
+ * pact: promises in force this window: { avoid: Set of colony ids never to target or crowd, protected: colony ids an
+ * on-chain pact forbids planting within `radius` cells of (the contract refuses such plantings), banRegions: Set of
  * quarters to stay out of, strike: the colony id this strain was paid to raid }.
  */
 export function candidates(world, me, balance, rng, limit = 6, pact = {}) {
@@ -150,6 +151,8 @@ export function candidates(world, me, balance, rng, limit = 6, pact = {}) {
     if (seen.has(key)) return false;
     // The house never lays siege: strains plant only outside every rival's buffer.
     if (engine.check_plant(me.id, new Uint32Array(idx), rules.buffer, rules.max_plant_cells) !== "") return false;
+    // Nor anywhere a pact binding it forbids: the contract would refuse it.
+    if (pact.protected?.length && engine.pact_breach(new Uint32Array(idx), new Uint16Array(pact.protected), pact.radius ?? 8) !== "") return false;
     const cost = price(idx.length);
     if (cost > balance * 0.6 || (me.maxCost != null && cost > me.maxCost)) return false;
     seen.add(key);

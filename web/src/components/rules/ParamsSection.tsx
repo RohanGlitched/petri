@@ -91,6 +91,37 @@ const EMPTY: [string, string, string, string][] = [
   ["Only the house, with no budget limit", "957,383", "29.22", "The house paid 75.59 NEAR, gas included; with nobody else to win it, the vault grew to 29.22."],
 ];
 
+const CHANGES_V61: [string, string][] = [
+  [
+    "Gas at 30,000 colonies",
+    "The hot table holds only the colonies that play now: those that earned since the last tide and those with living cells and a stake that can still earn, never the house, at most 10,000 rows and 32 leaving a call. The rest wait in 69-byte cold slots (pages of 32) whose stake decays lazily when read, and the catch-up stops at 110 TGas less what is still to write. In the simulator the hot rows fell from 17,102 to 1,315 on average, the largest call from 237 to 60 TGas, and calls over 150 TGas from 116,731 to 0.",
+  ],
+  [
+    "Smaller ledger entries",
+    "A tide entry is 130 bytes, not 289: it stores the chain, its bytes and its caller, and a replay works out the amounts, which a new tide event logs. PETRI amounts in entries are u64, a planting's fixed storage is 180 bytes (was 240) and a purchase's 113 (was 140).",
+  ],
+  [
+    "Licences need 12 cells",
+    "A planting under a slide's licence needs a slide that captured at least licence_min_cells (12). Smaller slides are keepsakes. In the simulator the royalty farmer's licensed plantings fell from 7,852 to 402 and its cash from +0.29 to +0.08 NEAR a week.",
+  ],
+  [
+    "A guest's royalty goes to the agar",
+    "A planter that has never attached NEAR pays its licence royalty to the agar, not to the holder, so free play cannot route PETRI to a wallet through royalties. In the simulator the sybil wallet's royalties from such planters fell from 56 to 0 PETRI.",
+  ],
+  [
+    "The keeper pot goes to any caller",
+    "The catch-up pays the pot to the account whose call ran at least one generation, whichever call it was, if the account can hold PETRI and is not a house account or keeper. In the simulator the pot left after a week fell from 1,480 to 1.1 PETRI on a young dish.",
+  ],
+  [
+    "Site gas",
+    "The site prepays 300 TGas for join, plant, buy, sell, claim, advance and mint_slide (unused gas is refunded), and the relay accepts up to 300.",
+  ],
+  [
+    "Started again",
+    "Both dishes were relaunched in place with relaunch, which deleted everything v6 stored and started a fresh dish from generation 0. v6.1 keeps per-account data, cold pages, the hot table and the tide index under new key prefixes, so nothing a wrong account list leaves behind can be read as v6.1 state.",
+  ],
+];
+
 const CHANGES_V6: [string, string][] = [
   [
     "Sponsored credit",
@@ -102,7 +133,7 @@ const CHANGES_V6: [string, string][] = [
   ],
   [
     "Gas as the dish grows",
-    "Each colony's numbers live in cold pages of 64 colonies and in a hot table of the colonies that have stake. A join appends one slot; the feed, tides and decay touch only the hot table. In the contract's 30,000-colony unit test (1,501 of them playing), a join measures 1.53 TGas of host calls, a planting 7.23 and an advance through a tide 36.6.",
+    "Each colony's numbers live in cold pages of 64 colonies and in a hot table of the colonies that have stake. A join appends one slot; the feed, tides and decay touch only the hot table. (The simulator later showed that table still grew to 27,538 rows on a busy dish; v6.1 narrowed it, below.)",
   ],
   [
     "Paying with any token",
@@ -122,7 +153,7 @@ const CHANGES_V6: [string, string][] = [
   ],
   [
     "Slides that do something",
-    "A slide is a pattern licence: planting its exact pattern, moved anywhere but not turned, costs 25% less, and anyone but the holder pays the holder 10% of that cost in PETRI.",
+    "A slide is a pattern licence: planting its exact pattern, moved anywhere but not turned, costs 25% less, and anyone but the holder pays the holder 10% of that cost in PETRI. (v6.1 limits this to slides of 12 or more cells.)",
   ],
   [
     "Token standards",
@@ -234,7 +265,7 @@ export function ParamsSection() {
     ["generation_ms", int(Number(r.generation_ms)), "Milliseconds between generations."],
     ["max_supply", `${fmtPetri(r.max_supply, 0)} PETRI`, "Minted once, into the agar."],
     ["feed_ppm", String(r.feed_ppm), "Parts per million of the agar fed to the living each generation."],
-    ["keeper_bps", `${r.keeper_bps} (${r.keeper_bps / 100}%)`, "Share of the feed set aside in the keeper pot, paid to whoever advances the clock (never a house account or keeper)."],
+    ["keeper_bps", `${r.keeper_bps} (${r.keeper_bps / 100}%)`, "Share of the feed set aside in the keeper pot, paid to the account whose call ran the generation (never a house account or keeper)."],
     ["reach", String(r.reach), "Most living cells a colony is paid for, per cell of stake."],
     ["stake_keep_bps", `${r.stake_keep_bps} (${r.stake_keep_bps / 100}%)`, "Share of every colony's stake left after each tide that runs."],
     ["burn_bps", `${r.burn_bps} (${r.burn_bps / 100}%)`, "Share of a planting burned; the rest returns to the agar."],
@@ -257,8 +288,9 @@ export function ParamsSection() {
     ["max_lag", String(r.max_lag), "Generations behind the clock past which the clock skips ahead to max_catchup behind."],
     ["slide_cells_price", `${fmtPetri(r.slide_cells_price)} PETRI`, "PETRI per captured cell a specimen slide burns."],
     ["slide_min_cells", String(r.slide_min_cells), "Fewest of its own living cells a slide must capture."],
+    ["licence_min_cells", String(r.licence_min_cells ?? "none"), "Fewest cells a slide must have captured to be a licence. A smaller slide is a keepsake: a planting under it is refused."],
     ["slide_discount_bps", `${r.slide_discount_bps} (${r.slide_discount_bps / 100}%)`, "How much less a planting of a slide's exact pattern costs under its licence."],
-    ["slide_royalty_bps", `${r.slide_royalty_bps} (${r.slide_royalty_bps / 100}%)`, "Share of a licensed planting's cost that anyone but the slide's holder pays the holder, in PETRI."],
+    ["slide_royalty_bps", `${r.slide_royalty_bps} (${r.slide_royalty_bps / 100}%)`, "Share of a licensed planting's cost that anyone but the slide's holder pays the holder, in PETRI (to the agar, from a planter that has never attached NEAR)."],
     ["wnear", r.wnear ?? "none", "The wNEAR contract whose transfers join or buy (pay with any token)."],
     ["house", r.house.join(", "), "The dish's own strains: never fed, no tide share, never sell, send PETRI only to other house accounts, take no tide bounty or keeper pot, and their cells never make a siege."],
     ["keepers", (r.keepers ?? []).join(", ") || "none", "The dish's keepers, house accounts too: no tide bounty, no keeper pot, and PETRI only to other house accounts."],
@@ -269,11 +301,12 @@ export function ParamsSection() {
         <div className="section-head">
           <h2 id="params-title" className={s.h2}>How the parameters were chosen</h2>
           <p className="lede">
-            The numbers are set once, when a dish starts, and no method changes them while it runs. The dish now runs v6 as
+            The numbers are set once, when a dish starts, and no method changes them while it runs. The dish now runs v6.1 as
             petri-v6.testnet and, with the same build, as petri-dish.near on mainnet. Earlier testnet dishes (petri-dish.testnet,
             then petri-v2 to petri-v5) were left behind as reviews found problems; each time the rules were changed, tested, and
             launched on a new contract that started again from an empty board. petri-dish.near ran v5 first and was relaunched in
-            place for v6: the private relaunch method deleted everything v5 stored and started again from generation 0.
+            place for v6, and both dishes were relaunched again for v6.1: the private relaunch method deleted everything the
+            earlier version stored and started again from generation 0.
           </p>
         </div>
 
@@ -289,7 +322,7 @@ export function ParamsSection() {
               published runs predate three launched changes: they paid 10% tides (now 5%), paid guests&rsquo; winnings in NEAR
               their accounts could not move (now credit), and ran tides with nobody to pay (now skipped). It estimates storage
               and gas rather than measuring them on chain. The runs also predate v6, in which a keeper takes no keeper pot and no
-              tide bounty and the house cannot sell (the simulated house never sold).
+              tide bounty and the house cannot sell (the simulated house never sold), and v6.1; sim/out-v6.1 reruns v6.1's rules against v6's on the same seeds.
             </p>
             <h3 className="h3">What the runs show</h3>
             <ul className={s.findings}>
@@ -321,6 +354,21 @@ export function ParamsSection() {
             </ul>
           </div>
           <div>
+            <details className={s.fold}>
+              <summary>
+                What changed for v6.1 <small>{CHANGES_V61.length} changes, v6 to v6.1</small>
+              </summary>
+              <div className={s.foldBody}>
+                <dl className={s.changeList}>
+                  {CHANGES_V61.map(([was, now]) => (
+                    <div key={was} className={s.change}>
+                      <dt>{was}</dt>
+                      <dd>{now}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </details>
             <details className={s.fold}>
               <summary>
                 What changed for v6 <small>{CHANGES_V6.length} changes, v5 to v6</small>
@@ -402,7 +450,7 @@ export function ParamsSection() {
                 <p className="muted small">
                   From the contract&rsquo;s <code className={s.code}>rules</code> view. Fixed in code: names of 1 to 24 ASCII
                   characters, notes of at most 140 characters, slide titles of at most 40, slides 4 to 32 cells a side, the
-                  chain folded every 16 generations, catch-up stopping at 180 TGas, sponsored credit reclaimable after 5,760
+                  chain folded every 16 generations, catch-up stopping at 110 TGas less what is still to be written, sponsored credit reclaimable after 5,760
                   generations of wall-clock time unused (each sponsor its own grant, at most 8 sponsors an account, at least 0.01
                   NEAR a sponsorship), and wNEAR never refunded (any amount waits as pending NEAR, or goes to the vault as dust).
                 </p>

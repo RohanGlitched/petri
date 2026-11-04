@@ -75,19 +75,19 @@ export function BoardSection() {
               <code className={s.code}>sell</code>, <code className={s.code}>plant</code>, <code className={s.code}>claim</code>,{" "}
               <code className={s.code}>mint_slide</code> and <code className={s.code}>advance</code> call first steps that board
               through the generations the clock says are due, up to {r.max_catchup} in one call, and stops early once the call
-              has used 180 TGas, so no backlog can push a call past NEAR&rsquo;s gas limit. A planting is refused if the dish is
+              has used 110 TGas (or its prepaid gas less 40) less what is still to be written, so no backlog can push a call
+              past NEAR&rsquo;s gas limit; it always steps at least one. A planting is refused if the dish is
               still behind after that. If nobody touches the dish for more than {r.max_lag} generations, the next call skips the
               clock ahead to {r.max_catchup} behind instead of replaying the quiet stretch, and writes a{" "}
               <code className={s.code}>Skip</code> entry to the ledger.
             </p>
             <h3 className="h3">A keeper pot pays for the steps</h3>
             <p>
-              Each generation sets {r.keeper_bps / 100}% of its feed aside in a keeper pot. Whoever calls{" "}
-              <code className={s.code}>advance</code> takes the whole pot, but only if that call ran at least one generation and
-              the account can hold PETRI (a colony, or an account registered with{" "}
+              Each generation sets {r.keeper_bps / 100}% of its feed aside in a keeper pot. Whoever&rsquo;s call catches the dish up
+              (<code className={s.code}>advance</code>, or a join, purchase, sale, planting, claim or slide mint) takes the whole
+              pot, but only if that call ran at least one generation and the account can hold PETRI (a colony, or an account registered with{" "}
               <code className={s.code}>storage_deposit</code>) and is not one of the house&rsquo;s (a house strain or a keeper):
-              for those the pot keeps waiting. Calling <code className={s.code}>advance</code> on a dish that is already current
-              pays nothing. Whoever&rsquo;s call runs an hourly tide also gets a small bounty, in NEAR, or as credit to a colony
+              for those the pot keeps waiting. A call on a dish that is already current pays nothing. Whoever&rsquo;s call runs an hourly tide also gets a small bounty, in NEAR, or as credit to a colony
               that has never attached NEAR (see the tides); a house colony or a keeper gets none, and it stays in the vault. The
               project&rsquo;s keeper, <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, is listed in{" "}
               <code className={s.code}>rules.keepers</code>, so it takes neither the pot nor a bounty. On testnet it advances once

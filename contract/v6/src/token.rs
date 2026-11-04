@@ -1,15 +1,20 @@
 //! PETRI as a NEP-141 token, with NEP-148 metadata and NEP-145 storage registration.
 //!
 //! An account must be registered (by joining the dish or with `storage_deposit`) before it can receive PETRI, and it
-//! pays for its own balance record. The contract's own balance is what the dish holds (the agar, unclaimed earnings and the keeper pot): it never sends or receives PETRI through
-//! the token methods.
+//! pays for its own balance record (a slide's holder is registered by the planting that pays it its first royalty).
+//! The contract's own balance is what the dish holds (the agar, unclaimed earnings and the keeper pot): it never sends
+//! or receives PETRI through the token methods. The house's accounts move PETRI only among themselves: what they hold
+//! they bought with NEAR, and it never reaches a player who could sell it back to the vault.
+//!
+//! As in near-contract-standards, PETRI refunded to a sender that unregistered meanwhile is burned, and a forced
+//! unregistration burns the balance; both are `Burn` entries in the ledger, so the replays' burn count stays exact.
 
 use crate::*;
 
 const GAS_FOR_RESOLVE: Gas = Gas::from_tgas(10);
 const GAS_FOR_ON_TRANSFER_MIN: Gas = Gas::from_tgas(10);
 /// Bytes a balance record can take (the NEP-145 convention for a 64-character account).
-const ACCOUNT_STORAGE: u128 = 125;
+pub(crate) const ACCOUNT_STORAGE: u128 = 125;
 
 #[near(serializers = [json])]
 pub struct FtMetadata {
@@ -93,6 +98,8 @@ impl Petri {
             .into()
     }
 
+    /// Returns the PETRI the receiver used. What it did not use goes back to the sender, or, if the sender has
+    /// unregistered meanwhile, is burned (and counts as used), as near-contract-standards does.
     #[private]
     pub fn ft_resolve_transfer(&mut self, sender_id: AccountId, receiver_id: AccountId, amount: U128) -> U128 {
         let unused = match env::promise_result_checked(0, 64) {
@@ -102,11 +109,15 @@ impl Petri {
         if unused > 0 {
             let held = self.balance(&receiver_id);
             let refund = unused.min(held);
-            if refund > 0 && self.balances.contains_key(&sender_id) {
+            if refund > 0 {
                 self.balances.insert(receiver_id.clone(), held - refund);
-                self.credit(&sender_id, refund);
-                emit_transfer(&receiver_id, &sender_id, refund, Some("refund"));
-                return U128(amount.0 - refund);
+                if self.balances.contains_key(&sender_id) {
+                    self.credit(&sender_id, refund);
+                    emit_transfer(&receiver_id, &sender_id, refund, Some("refund"));
+                    return U128(amount.0 - refund);
+                }
+                // The sender's registration is gone: burn the refund.
+                self.burn_outside(&receiver_id, refund, "refund to an unregistered sender");
             }
         }
         amount
@@ -168,19 +179,30 @@ impl Petri {
         StorageBalance { total: U128(min_storage()), available: U128(0) }
     }
 
-    /// Remove an empty registration and refund its storage. Colonies stay registered for as long as the dish lives.
+    /// Remove a registration and refund its storage. With PETRI still in it the call fails, unless `force` is true:
+    /// then the PETRI is burned (a `Burn` entry, paid from the refund). A colony's account cannot unregister, forced or
+    /// not, for as long as the dish lives: its colony is paid its earnings into this balance.
     #[payable]
     pub fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         require!(env::attached_deposit() == NearToken::from_yoctonear(1), "requires exactly 1 yoctoNEAR");
-        let _ = force;
         let account = env::predecessor_account_id();
         if !self.balances.contains_key(&account) {
             return false;
         }
-        require!(self.balance(&account) == 0, "the account still holds PETRI");
-        require!(!self.colony_of.contains_key(&account), "colonies cannot unregister");
+        require!(!self.colony_of.contains_key(&account), "a colony's account stays registered for as long as the dish lives: its colony is paid into it");
+        let held = self.balance(&account);
+        require!(held == 0 || force == Some(true), "the account still holds PETRI; unregister with force to burn it");
+        let before = env::storage_usage();
         self.balances.remove(&account);
-        let _ = Promise::new(account).transfer(NearToken::from_yoctonear(min_storage()));
+        if held > 0 {
+            self.burn_outside(&account, held, "forced unregistration");
+        }
+        self.flush();
+        let grown = env::storage_usage().saturating_sub(before) as u128 * env::storage_byte_cost().as_yoctonear();
+        let refund = min_storage().saturating_sub(grown);
+        if refund > 0 {
+            let _ = Promise::new(account).transfer(NearToken::from_yoctonear(refund));
+        }
         true
     }
 
@@ -194,10 +216,19 @@ impl Petri {
 }
 
 impl Petri {
+    /// Burn `amount` of PETRI already taken from `account`'s balance, with a `Burn` entry.
+    fn burn_outside(&mut self, account: &AccountId, amount: u128, memo: &str) {
+        self.burned += amount;
+        self.ledger.push(Entry::Burn { generation: U64(self.generation), account: account.clone(), petri: U128(amount) });
+        self.ledger.flush();
+        emit_burn(account, amount, memo);
+    }
+
     fn internal_transfer(&mut self, from: &AccountId, to: &AccountId, amount: u128, memo: Option<&str>) {
         require!(amount > 0, "amount must be positive");
         require!(*to != env::current_account_id(), "PETRI goes back to the agar only by planting or selling");
         require!(from != to, "sender and receiver are the same account");
+        require!(!self.is_house(from) || self.is_house(to), "the house's PETRI stays in the house: it plants with it and never hands it to players");
         require!(self.balances.contains_key(to), "the receiver is not registered; it needs storage_deposit first");
         let b = self.balance(from);
         require!(b >= amount, "not enough PETRI");

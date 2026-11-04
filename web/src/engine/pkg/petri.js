@@ -345,6 +345,39 @@ export class Engine {
         return this;
     }
     /**
+     * Whether a planting of `cells` breaks a pact: "" if no planted cell has a living cell of a `protected` colony
+     * within `radius` cells (a square, wrapping), else "planted,protected,colony" for the first one found, as the
+     * contract refuses it (see `Dish::pact_breach`).
+     * @param {Uint32Array | number[]} cells
+     * @param {Uint16Array | number[]} _protected
+     * @param {number} radius
+     * @returns {string}
+     */
+    pact_breach(cells, _protected, radius) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const val3 = +radius;
+            let ptr0, len0, ptr1, len1;
+            try {
+                ptr0 = passArray32ToWasm0(cells, wasm.__wbindgen_malloc);
+                len0 = WASM_VECTOR_LEN;
+                ptr1 = passArray16ToWasm0(_protected, wasm.__wbindgen_malloc);
+                len1 = WASM_VECTOR_LEN;
+            } catch (e) {
+                if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 2, 2); }
+                if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 4, 4); }
+                throw e;
+            }
+            const ret = wasm.engine_pact_breach(this.__wbg_ptr, ptr0, len0, ptr1, len1, val3);
+            deferred4_0 = ret[0];
+            deferred4_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+        }
+    }
+    /**
      * Plant without checks (replaying the contract's log).
      * @param {number} colony
      * @param {Uint32Array | number[]} cells
@@ -511,8 +544,6 @@ export class Engine {
 if (Symbol.dispose) Engine.prototype[Symbol.dispose] = Engine.prototype.free;
 
 /**
- * PETRI units that `near` yoctoNEAR buys from an agar of `agar` units, with `petri_price` yoctoNEAR per PETRI at
- * launch and `max_supply` units in all.
  * @param {string} near
  * @param {string} agar
  * @param {string} petri_price
@@ -546,6 +577,43 @@ export function buy_quote(near, agar, petri_price, max_supply) {
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
+ * PETRI units that `near` yoctoNEAR buys from an agar of `agar` units, with `petri_price` yoctoNEAR per PETRI at
+ * launch and `max_supply` units in all.
+ * The PETRI of a purchase of `units` that `credit` of `total` yoctoNEAR paid for, which the contract keeps in the dish
+ * (see `petri_core::credit_share`).
+ * @param {string} units
+ * @param {string} credit
+ * @param {string} total
+ * @returns {string}
+ */
+export function credit_share(units, credit, total) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        let ptr0, len0, ptr1, len1, ptr2, len2;
+        try {
+            ptr0 = passStringToWasm0(units, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(credit, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+            ptr2 = passStringToWasm0(total, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len2 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr2) { wasm.__wbindgen_free(ptr2, len2 * 1, 1); }
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.credit_share(ptr0, len0, ptr1, len1, ptr2, len2);
+        deferred4_0 = ret[0];
+        deferred4_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
     }
 }
 

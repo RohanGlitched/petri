@@ -42,8 +42,10 @@ export async function slideRoyalties(tokenId: string): Promise<number | null> {
 }
 
 export type SlideLicence = {
-  /** The dish has slide licences. */
+  /** The dish has slide licences, and this slide captured enough cells to be one. */
   live: boolean;
+  /** The dish has slide licences, but this slide captured fewer than `licence_min_cells`: a keepsake, not a licence. */
+  small: boolean;
   royaltyBps: number | null;
   /** The viewer holds the slide. */
   holder: boolean;
@@ -52,10 +54,12 @@ export type SlideLicence = {
   lifetime: number | null;
 };
 
-/** The licence terms of slide `tokenId` for `viewer`. */
-export function useSlideLicence(tokenId: string | null, viewer: string | null, owner?: string | null): SlideLicence {
+/** The licence terms of slide `tokenId` for `viewer`; `cells` is how many cells the slide captured. */
+export function useSlideLicence(tokenId: string | null, viewer: string | null, owner?: string | null, cells?: number | null): SlideLicence {
   const d = useDish();
   const bps = royaltyBps(d.rules);
+  const min = d.rules?.licence_min_cells;
+  const small = bps !== null && typeof min === "number" && typeof cells === "number" && cells < min;
   const [lifetime, setLifetime] = useState<number | null>(null);
   const [holderOf, setHolderOf] = useState<string | null>(owner ?? null);
   useEffect(() => {
@@ -72,5 +76,5 @@ export function useSlideLicence(tokenId: string | null, viewer: string | null, o
     };
   }, [tokenId, bps, owner]);
   const holderAccount = owner ?? holderOf;
-  return { live: bps !== null, royaltyBps: bps, holder: !!viewer && !!holderAccount && viewer === holderAccount, perk: HOLDER_PERK, lifetime };
+  return { live: bps !== null && !small, small, royaltyBps: bps, holder: !!viewer && !!holderAccount && viewer === holderAccount, perk: HOLDER_PERK, lifetime };
 }

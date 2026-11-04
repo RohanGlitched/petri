@@ -83,20 +83,20 @@ function txs(net: "mainnet" | "testnet") {
   const tail = `sign-as ${me} network-config ${net} sign-with-keychain send`;
   const c = dish(net);
   return `# Join with 0.02 NEAR: storage for the colony, the rest buys PETRI. color is 0xRRGGBB as a number (0xF2B45A here).
-near contract call-function as-transaction ${c} join json-args '{"name":"My Colony","color":15905882,"credit":null}' prepaid-gas '200.0 Tgas' attached-deposit '0.02 NEAR' ${tail}
+near contract call-function as-transaction ${c} join json-args '{"name":"My Colony","color":15905882,"credit":null}' prepaid-gas '300.0 Tgas' attached-deposit '0.02 NEAR' ${tail}
 
-# Plant a block at (40, 40): cells are y * 128 + x. Attach what plant_deposit says (0.00373 NEAR for 4 cells and no note
+# Plant a block at (40, 40): cells are y * 128 + x. Attach what plant_deposit says (0.00313 NEAR for 4 cells and no note
 # at the time of writing; what storage does not use goes to the vault). "slide" names a specimen to plant under its licence.
-near contract call-function as-transaction ${c} plant json-args '{"cells":[5160,5161,5288,5289],"note":null,"credit":null,"slide":null}' prepaid-gas '200.0 Tgas' attached-deposit '0.00373 NEAR' ${tail}
+near contract call-function as-transaction ${c} plant json-args '{"cells":[5160,5161,5288,5289],"note":null,"credit":null,"slide":null}' prepaid-gas '300.0 Tgas' attached-deposit '0.00313 NEAR' ${tail}
 
 # Buy more PETRI with 0.01 NEAR
-near contract call-function as-transaction ${c} buy json-args '{"credit":null}' prepaid-gas '150.0 Tgas' attached-deposit '0.01 NEAR' ${tail}
+near contract call-function as-transaction ${c} buy json-args '{"credit":null}' prepaid-gas '300.0 Tgas' attached-deposit '0.01 NEAR' ${tail}
 
 # Collect earnings into your balance and NEAR won at tides
-near contract call-function as-transaction ${c} claim json-args '{}' prepaid-gas '150.0 Tgas' attached-deposit '0 NEAR' ${tail}
+near contract call-function as-transaction ${c} claim json-args '{}' prepaid-gas '300.0 Tgas' attached-deposit '0 NEAR' ${tail}
 
 # Step the stored board up to the clock (anyone may)
-near contract call-function as-transaction ${c} advance json-args '{}' prepaid-gas '250.0 Tgas' attached-deposit '0 NEAR' ${tail}`;
+near contract call-function as-transaction ${c} advance json-args '{}' prepaid-gas '300.0 Tgas' attached-deposit '0 NEAR' ${tail}`;
 }
 
 export default function Page() {
@@ -136,7 +136,7 @@ export default function Page() {
         <li>
           Press <strong>Use my NEAR wallet instead</strong> and connect through NEAR Connect (the wallet code runs in its own sandboxed iframe).
         </li>
-        <li>Name the colony and start it. Your wallet signs <C>join</C> with 0.02 NEAR attached and 200 TGas.</li>
+        <li>Name the colony and start it. Your wallet signs <C>join</C> with 0.02 NEAR attached and 300 TGas.</li>
         <li>
           Each planting attaches what <C>plant_deposit</C> returns: the storage of the planting record (with room for the colony&rsquo;s first row in the table of playing colonies) plus 0.0001 NEAR per cell. What is left after storage goes to the vault, which pays the tides.
         </li>
@@ -262,25 +262,26 @@ Owed, from the ledger: 0.22886 NEAR (vault, credit pool, unspent credit, unclaim
             <td>
               <C>petri-contract</C>
             </td>
-            <td className="n">109</td>
-            <td>Every method and its errors, the economy closing to the yoctoNEAR (most tests end by checking every PETRI and NEAR is accounted for), a full ledger replay, guests, credit per sponsor, the house&rsquo;s limits, slides and their licences, intents and pending orders, failed payouts, the token standards&rsquo; edge cases, the relaunch, and gas at 1,500 tide winners and at 30,000 colonies.</td>
+            <td className="n">119</td>
+            <td>Every method and its errors, the economy closing to the yoctoNEAR (most tests end by checking every PETRI and NEAR is accounted for), a full ledger replay, guests, credit per sponsor, the house&rsquo;s limits, slides and their licences, intents and pending orders, failed payouts, the token standards&rsquo; edge cases, the relaunch, and gas at 1,500 tide winners, at 30,000 colonies and with a full hot table.</td>
           </tr>
           <tr>
             <td>
               <C>petri-core</C>
             </td>
-            <td className="n">32</td>
+            <td className="n">33</td>
             <td>Life against a plain reference implementation (property tests), ownership and contested births, plant checks, the feed, the curves, tides, stake decay, slides, their SVG and their licence shape.</td>
           </tr>
         </tbody>
       </Table>
       <p>
-        Both counts were run on 4 November 2026 with the contract and core sources of commit <C>{BUILD_COMMIT_SHORT}</C>, the deployed build: <C>109 passed</C> and <C>32 passed</C>. The contract and core sources have not changed since. To build the contract and compare its hash, see <Doc to="verification" hash="rebuild">Rebuild the wasm</Doc>.
+        Both counts are of the v6.1 sources, the build both dishes run: <C>119 passed</C> and <C>33 passed</C>. To build the contract and compare its hash, see <Doc to="verification" hash="rebuild">Rebuild the wasm</Doc>.
       </p>
       <H3 id="tests-sim">The simulator</H3>
       <Code lang="sh" title="Shell">{`cd sim   # the simulator reads ../contract/launch-rules.json by default
 cargo run --release -- out-v5 all     # writes out-v5/summary.txt and the CSVs
-cargo run --release -- out-v5 fixes   # writes out-v5/fixes.txt`}</Code>
+cargo run --release -- out-v5 fixes   # writes out-v5/fixes.txt
+cargo run --release -- out-v6.1 all --seeds 8   # the v6.1 rules against v6: out-v6.1/summary.txt and fixes.txt`}</Code>
       <p>
         See <Doc to="simulations">Economics and simulations</Doc> for what it measures.
       </p>

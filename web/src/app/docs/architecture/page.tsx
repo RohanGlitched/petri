@@ -68,7 +68,7 @@ export default function Page() {
               <C>petri-core</C> (<C>core/</C>)
             </td>
             <td>
-              The rules, <C>no_std</C>: the bit-sliced Life step with owners, planting checks and sieges, the feed with reach and the floor, prices, the buy and sell-back curves, the tide split, the history chain, the board&rsquo;s compact form and hash, slide bitmaps, their SVG and their licence (<C>fits_slide</C>, <C>licensed_cost</C>, <C>royalty</C>), the named patterns. Depends only on <C>sha2</C>. 32 tests, including property tests against a reference Life.
+              The rules, <C>no_std</C>: the bit-sliced Life step with owners, planting checks and sieges, the feed with reach and the floor, prices, the buy and sell-back curves, the tide split, the history chain, the board&rsquo;s compact form and hash, slide bitmaps, their SVG and their licence (<C>fits_slide</C>, <C>licensed_cost</C>, <C>royalty</C>), the named patterns. Depends only on <C>sha2</C>. 33 tests, including property tests against a reference Life.
             </td>
           </tr>
           <tr>
@@ -76,7 +76,7 @@ export default function Page() {
               <C>petri-contract</C> (<C>contract/</C>)
             </td>
             <td>
-              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> 6.0.0): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> from v5 (<C>relaunch.rs</C>). 109 tests.
+              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> 6.1.0): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table of the colonies that play now (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> from v6 (<C>relaunch.rs</C>). 119 tests.
             </td>
           </tr>
           <tr>
@@ -104,7 +104,7 @@ cd web && npm install && npm run dev                 # the site on http://localh
 
       <H3 id="crates-storage">The contract&rsquo;s storage</H3>
       <p>
-        Every v6 key prefix differs from every v5 one, so nothing v5 left behind on <C>petri-dish.near</C> can be read as v6 state. Each colony&rsquo;s numbers (unclaimed earnings, NEAR won and not claimed, credit won, whether it attached NEAR, and while it plays its stake and tide window) are in exactly one of two places: a cold page, or the hot table of colonies that have stake. A join appends one slot to the last cold page; the feed, tides and decay read and write only the hot table, so no call costs more as more colonies join.
+        Everything per account (balances, colony ids, names, grants, owned slides, pending NEAR), the cold pages, the hot table and the tide index have key prefixes v6 never used, so nothing a wrong account list leaves behind when <C>relaunch</C> clears v6 can be read as v6.1 state; it only keeps its storage. Each colony&rsquo;s numbers (unclaimed earnings, NEAR won and not claimed, credit won, whether it attached NEAR, its stake, and while it plays its tide window) are in exactly one of two places: a 69-byte slot in a cold page of 32 colonies, or the hot table of the colonies that play now (at most 10,000). A join appends one slot to the last cold page; the feed, tides and decay read and write only the hot table, so no call costs more as more colonies join.
       </p>
       <Table>
         <thead>
@@ -118,20 +118,20 @@ cd web && npm install && npm run dev                 # the site on http://localh
             ["STATE", "The contract's own fields: rules, clock, counters"],
             ["board", "The board in compact form"],
             ["C", "Colonies (a vector)"],
-            ["O", "Colony id by account"],
-            ["M", "Colony names in use, lower-cased"],
+            ["F", "Colony id by account"],
+            ["A", "Colony names in use, lower-cased"],
             ["L", "The ledger"],
-            ["I", "The planting index (ledger positions of Plant entries)"],
-            ["K", "The tide index (ledger positions of Tide entries)"],
-            ["B", "PETRI balances (NEP-141 registrations)"],
-            ["G", "Sponsored credit: each account's grants, one per sponsor"],
+            ["I", "The planting index (ledger positions of Plant entries, u32; 49 bytes a planting)"],
+            ["V + page (u32)", "The tide index: ledger positions of Tide entries, 4 bytes each, 256 to a key"],
+            ["R", "PETRI balances (NEP-141 registrations)"],
+            ["E", "Sponsored credit: each account's grants, one per sponsor"],
             ["D", "Specimen slides"],
-            ["W", "Each owner's slides, for enumeration"],
-            ["Y", "Pending NEAR, with the order it may still be spent on"],
-            ["U + page (u16)", "Cold pages of 64 colonies each"],
-            ["H", "The hot table's feed part: id, stake, window, earnings (26 bytes a row); every catch-up rewrites it"],
-            ["J", "The hot table's purse part: id, NEAR owed, credit won and held, attached (51 bytes a row); only tides and a playing colony's own moves rewrite it"],
-            ["N + ledger index (u64)", "Lab notes"],
+            ["T", "Each owner's slides, for enumeration"],
+            ["Z", "Pending NEAR, with the order it may still be spent on"],
+            ["X + page (u16)", "Cold pages of 32 colonies each, 69 bytes a colony (its numbers, its stake and the tide count the stake was last decayed at)"],
+            ["h", "The hot table's feed part: id, stake, window, earnings (26 bytes a row); every catch-up rewrites it"],
+            ["j", "The hot table's purse part: id, NEAR owed, credit won and held, attached (51 bytes a row); only tides and a playing colony's own moves rewrite it"],
+            ["N + ledger index (u32)", "Lab notes (5-byte keys)"],
           ].map(([k, v]) => (
             <tr key={k}>
               <td>
@@ -271,7 +271,7 @@ contract/        the NEAR contract: lib.rs (dish, economy, views), books.rs (col
   launch-rules.json            testnet rules (petri-v6.testnet)
   launch-rules-mainnet.json    mainnet rules (petri-dish.near)
 wasm/            petri-core for the browser (wasm-bindgen)
-sim/             the economy simulator; out-v5/ holds its latest results (on the v5 rules)
+sim/             the economy simulator; out-v6.1/ holds its latest results (on the v6.1 rules and v6's, same seeds), out-v5/ the v5 ones
 scripts/         verify.mjs (the CLI replay), build-engine.sh
 agents/          run.mjs (keeper and strains), council.mjs, forecast.mjs, memory.mjs, model.mjs,
                  strategies.mjs, lib.mjs

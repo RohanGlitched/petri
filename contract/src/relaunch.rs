@@ -1,20 +1,22 @@
-//! Starting a dish again from generation zero on an account that ran v5 (petri-dish.near).
+//! Starting a dish again from generation zero on an account that ran v6 (petri-dish.near and petri-v6.testnet).
 //!
-//! v5's layout, every key it could write: its state (`STATE`, overwritten here), the board (`board`), seven packed
-//! per-colony arrays (`u`, `t`, `p`, `w`, `v`, `x`, `a`), lab notes (`n` + ledger index), the vectors of colonies
-//! (`c`), the ledger (`l`), the planting and tide indexes (`i`, `k`) and slides (`S`), each entry at prefix + u32
-//! index, and maps keyed by prefix + borsh: colony ids (`o`), names (`m`), PETRI balances (`b`), sponsored credit
-//! (`s`), slides by owner (`Q`) and pending NEAR (`P`). Vectors are found by probing their indexes; colony accounts,
-//! names and slide owners are read from their records; accounts that hold a balance, credit or pending NEAR without
-//! a colony are passed in `accounts`. v6 writes under different prefixes (and the same `board`), so a key a wrong
-//! account list leaves behind is never read as v6 state: it only keeps its storage.
+//! v6's layout, every key it could write: its state (`STATE`, overwritten here), the board (`board`), the vectors of
+//! colonies (`C`), the ledger (`L`), the planting index (`I`, u64 ledger positions), the tide index (`K`) and slides
+//! (`D`), each element at prefix + u32 index; lab notes (`N` + u64 ledger index); maps keyed by prefix + borsh: colony
+//! ids (`O`), names (`M`), PETRI balances (`B`), sponsors' grants (`G`), slides by owner (`W`) and pending NEAR (`Y`);
+//! the cold pages (`U` + u16 page, 64 colonies a page) and the hot table (`H`, `J`). Vectors are found by probing their
+//! indexes, notes from the planting index and cold pages from the number of colonies; colony accounts, names and
+//! slide owners are read from their records; accounts that hold a balance, credit or pending NEAR without a colony or a
+//! slide are passed in `accounts`. v6.1 keeps the vectors, notes and board under the same keys (all deleted here) and
+//! everything per account, the pages, the hot table and the tide index under prefixes v6 never used, so a key a wrong
+//! account list leaves behind is never read as v6.1 state: it only keeps its storage.
 //!
 //! The method is private: only a transaction signed with the contract account's own full-access key can run it, at
-//! the deploy. Once that key is deleted nobody can, and a dish that has started cannot be started again.
+//! the deploy. Once that key is deleted nobody can, and nothing can change the rules.
 
 use crate::*;
 
-const V5_ARRAYS: [&[u8]; 8] = [b"board", b"u", b"t", b"p", b"w", b"v", b"x", b"a"];
+const V6_PAGE: u32 = 64;
 
 fn key(prefix: &[u8], rest: &[u8]) -> Vec<u8> {
     let mut k = prefix.to_vec();
@@ -34,7 +36,7 @@ fn read_str(b: &[u8], at: usize) -> (String, usize) {
     (String::from_utf8(b[at + 4..at + 4 + n].to_vec()).unwrap(), at + 4 + n)
 }
 
-/// Every element of a v5 vector: removed, and handed to `each` first.
+/// Every element of a vector: removed, and handed to `each` first.
 fn drain_vector(prefix: &[u8], mut each: impl FnMut(&[u8])) -> u32 {
     let mut i = 0u32;
     loop {
@@ -52,50 +54,55 @@ fn drain_vector(prefix: &[u8], mut each: impl FnMut(&[u8])) -> u32 {
 
 #[near]
 impl Petri {
-    /// Delete everything v5 stored and launch a fresh dish with `rules`, as `new` does. `accounts` are the accounts
-    /// with a v5 PETRI registration, sponsored credit or pending NEAR that had no colony (the keeper, guests). Logs any
-    /// pending NEAR v5 still owed, so it can be settled by hand.
+    /// Delete everything v6 stored and launch a fresh dish with `rules`, as `new` does. `accounts` are the accounts
+    /// with a v6 PETRI registration, sponsored credit or pending NEAR that had neither a colony nor a slide (keepers,
+    /// guests sponsored before they joined, accounts paid for with wNEAR). Logs any pending NEAR v6 still owed, so it
+    /// can be settled by hand.
     #[private]
     #[init(ignore_state)]
     pub fn relaunch(rules: Rules, accounts: Vec<AccountId>) -> Self {
-        // Only a v5 dish: v6 keeps colonies' numbers in pages this method does not clear.
-        require!(!env::storage_has_key(&[b'U', 0, 0]) && !env::storage_has_key(b"H"), "this account already ran v6; relaunch only clears v5");
+        // Only a v6 dish: its first cold page exists once anyone joined, and v6.1 writes its pages under another prefix.
+        require!(env::storage_has_key(&[b'U', 0, 0]), "no v6 dish here: relaunch clears a v6 dish that has colonies");
+        require!(!env::storage_has_key(&books::cold_key(0)) && !env::storage_has_key(b"h"), "this account already runs v6.1");
         let mut owners: Vec<String> = accounts.iter().map(|a| a.to_string()).collect();
         let mut names: Vec<String> = Vec::new();
-        let colonies = drain_vector(b"c", |v| {
-            // A v5 colony begins with its id (u16), its account and its name.
+        let colonies = drain_vector(b"C", |v| {
+            // A v6 colony begins with its id (u16), its account and its name.
             let (account, at) = read_str(v, 2);
             let (name, _) = read_str(v, at);
             owners.push(account);
             names.push(name.to_lowercase());
         });
         let mut notes: Vec<u64> = Vec::new();
-        drain_vector(b"i", |v| notes.push(u64::from_le_bytes(v[..8].try_into().unwrap())));
+        drain_vector(b"I", |v| notes.push(u64::from_le_bytes(v[..8].try_into().unwrap())));
         for n in notes {
-            env::storage_remove(&key(b"n", &n.to_le_bytes()));
+            env::storage_remove(&key(b"N", &n.to_le_bytes()));
         }
-        let entries = drain_vector(b"l", |_| {});
-        drain_vector(b"k", |_| {});
-        // A v5 slide begins with its owner.
-        let slides = drain_vector(b"S", |v| owners.push(read_str(v, 0).0));
+        let entries = drain_vector(b"L", |_| {});
+        drain_vector(b"K", |_| {});
+        // A v6 slide begins with its owner.
+        let slides = drain_vector(b"D", |v| owners.push(read_str(v, 0).0));
         owners.sort();
         owners.dedup();
         for a in &owners {
             let b = borsh_str(a);
-            if let Some(p) = env::storage_read(&key(b"P", &b)) {
+            if let Some(p) = env::storage_read(&key(b"Y", &b)) {
                 let near = u128::from_le_bytes(p[..16].try_into().unwrap());
                 if near > 0 {
-                    log!("v5 owed {} pending NEAR to {}", fmt_near(near), a);
+                    log!("v6 owed {} pending NEAR to {}", fmt_near(near), a);
                 }
             }
-            for prefix in [b"o", b"b", b"s", b"P", b"Q"] {
+            for prefix in [b"O", b"B", b"G", b"W", b"Y"] {
                 env::storage_remove(&key(prefix, &b));
             }
         }
         for n in &names {
-            env::storage_remove(&key(b"m", &borsh_str(n)));
+            env::storage_remove(&key(b"M", &borsh_str(n)));
         }
-        for k in V5_ARRAYS {
+        for page in 0..colonies.div_ceil(V6_PAGE) {
+            env::storage_remove(&key(b"U", &(page as u16).to_le_bytes()));
+        }
+        for k in [&b"board"[..], b"H", b"J"] {
             env::storage_remove(k);
         }
         emit("relaunch", json!({ "colonies": colonies, "entries": entries, "slides": slides, "accounts": owners.len() }));

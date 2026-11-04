@@ -435,6 +435,25 @@ fn stake_decays_tide_by_tide() {
     assert_eq!(feed_weight(4, 400, 8), 3);
 }
 
+/// An idle colony's stake decayed lazily, many tides at once, is exactly what tide-by-tide decay leaves; and a stake
+/// below STAKE_UNIT / reach earns nothing however many cells it has.
+#[test]
+fn lazy_decay_matches_tide_by_tide_and_the_earning_threshold_is_exact() {
+    for start in [0u64, 1, 124, 125, 4_000, 64_000, 9_999_999, u64::MAX / 10_001] {
+        for keep in [0u16, 5_000, 8_750, 9_999, 10_000] {
+            let mut s = start;
+            for n in 0..200u64 {
+                assert_eq!(decay_stake_times(start, keep, n), s, "start {} keep {} after {}", start, keep, n);
+                s = decay_stake(s, keep);
+            }
+        }
+    }
+    assert!(!can_earn(124, 8) && can_earn(125, 8) && !can_earn(0, 8));
+    assert_eq!(feed_weight(1_000, 124, 8), 0);
+    assert_eq!(feed_weight(1_000, 125, 8), 1);
+    assert!(can_earn(1_000, 1) && !can_earn(999, 1));
+}
+
 #[test]
 fn house_cells_never_make_a_siege() {
     let mut d = Dish::new(32, 32);
@@ -535,4 +554,32 @@ fn a_slide_licence_is_the_same_shape_anywhere() {
     assert_eq!(licensed_cost(1_000, 2_500), 750);
     assert_eq!(royalty(750, 1_000), 75);
     assert_eq!(licensed_cost(3, 2_500), 3, "rounding favours the dish");
+}
+
+#[test]
+fn a_pact_breach_is_any_planted_cell_within_the_radius_of_a_protected_colony_wrapping_at_the_edges() {
+    let mut d = Dish::new(32, 32);
+    place(&mut d, 1, 30, 30, patterns::BLOCK);
+    place(&mut d, 2, 10, 10, patterns::BLOCK);
+    // Colony 1's block covers (30..=31, 30..=31); (5, 5) is 6 across and 6 down from (31, 31) once the dish wraps.
+    let near = d.index(5, 5) as u32;
+    assert_eq!(d.pact_breach(&[near], &[1], 6), Some((near, d.index(31, 31) as u32, 1)));
+    assert_eq!(d.pact_breach(&[near], &[1], 5), None);
+    // Only protected colonies count, and none means no check at all.
+    assert_eq!(d.pact_breach(&[d.index(12, 12) as u32], &[1], 2), None);
+    assert_eq!(d.pact_breach(&[d.index(12, 12) as u32], &[1, 2], 2).map(|b| b.2), Some(2));
+    assert_eq!(d.pact_breach(&[d.index(12, 12) as u32], &[], 8), None);
+    // A radius wider than the dish looks at every cell once.
+    assert_eq!(d.pact_breach(&[0], &[2], 200).map(|b| b.2), Some(2));
+}
+
+#[test]
+fn the_credit_share_of_a_purchase_is_exact_for_small_amounts_and_never_overflows() {
+    assert_eq!(credit_share(1_000, 0, 5), 0);
+    assert_eq!(credit_share(1_000, 5, 5), 1_000);
+    assert_eq!(credit_share(1_000, 1, 4), 250);
+    // A thousand NEAR of credit in a purchase of a million PETRI: no overflow, and within one unit of exact.
+    let near = 1_000_000_000_000_000_000_000_000u128;
+    assert_eq!(credit_share(1_000_000_000_000, 1_000 * near, 3_000 * near), 333_333_333_333);
+    assert_eq!(credit_share(u64::MAX, u128::MAX / 2, u128::MAX), u64::MAX / 2);
 }

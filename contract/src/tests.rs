@@ -74,6 +74,11 @@ fn cells(x: i32, y: i32, shape: &[(i32, i32)]) -> Vec<u32> {
     shape.iter().map(|&(dx, dy)| d.index(x + dx, y + dy) as u32).collect()
 }
 
+/// Two beehives side by side, five cells apart: a still life of 12 cells, the smallest licence the launch rules allow.
+fn two_beehives() -> Vec<(i32, i32)> {
+    patterns::BEEHIVE.iter().copied().chain(patterns::BEEHIVE.iter().map(|&(x, y)| (x + 5, y))).collect()
+}
+
 fn acct(who: &str) -> AccountId {
     who.parse().unwrap()
 }
@@ -90,6 +95,15 @@ fn all_ledger(c: &Petri) -> Vec<Entry> {
     (0..c.state().ledger.0).step_by(1_000).flat_map(|from| c.ledger(Some(from), Some(1_000))).collect()
 }
 
+/// The replay's count of kept PETRI: what a colony earned while it had never attached NEAR is kept, counted when the
+/// ledger next touches the colony (the contract counts it when the colony claims, or first attaches).
+fn sync(kept: &mut [u128], synced: &mut [u128], earned: &[u128], attached: &[bool], i: usize) {
+    if !attached[i] {
+        kept[i] += earned[i] - synced[i];
+    }
+    synced[i] = earned[i];
+}
+
 /// Nothing is created or lost: every PETRI is in an account or held by the dish (agar, unclaimed earnings, keeper
 /// pot), or burned. The NEAR books close: what came in is in the vault or went out at tides, bounties and sales. And
 /// every term of the solvency check (credit given, spent, reclaimed and outstanding, NEAR owed, pending NEAR) comes out
@@ -100,7 +114,7 @@ fn conserved(c: &Petri, holders: &[&str]) {
     assert_eq!(s.total_supply.0, MAX - s.burned.0, "supply = launch supply - burned");
     let held: u128 = holders.iter().map(|h| bal(c, h)).sum();
     assert_eq!(held + bal(c, "petri.testnet"), s.total_supply.0, "balances + the dish's own = supply");
-    assert_eq!(bal(c, "petri.testnet"), s.agar.0 + s.unclaimed.0 + s.keeper_pot.0);
+    assert_eq!(bal(c, "petri.testnet"), s.agar.0 + s.unclaimed.0 + s.keeper_pot.0 + s.pact_escrow.0);
     let ids: Vec<u16> = (1..=s.colonies).collect();
     let books: Vec<Books> = c.read_books(&ids).into_iter().map(|(b, _)| b).collect();
     assert_eq!(books.iter().map(|b| b.earned as u128).sum::<u128>(), s.unclaimed.0, "the unclaimed counter matches the books");
@@ -109,14 +123,21 @@ fn conserved(c: &Petri, holders: &[&str]) {
     let (mut slide_burns, mut slides, mut royalties) = (0u128, 0u64, 0u128);
     let (mut given, mut reclaimed, mut spent, mut tides_paid, mut claimed, mut pending_in, mut pending_out) = (0u128, 0u128, 0u128, 0u128, 0u128, 0u128, 0u128);
     let (mut plant_burns, mut other_burns) = (0u128, 0u128);
-    for e in all_ledger(c) {
+    // PETRI held for pact offers not yet accepted, and the pacts' states.
+    let (mut escrow, mut offers) = (0u128, Vec::<(u128, bool, bool)>::new());
+    // A Tide entry keeps only what a replay cannot work out; what each tide paid is in its `tide` event, which the
+    // replay test checks against the ledger alone.
+    let tide_out: HashMap<u64, TideOut> = TIDE_LOG.with(|t| t.borrow().iter().cloned().collect());
+    for (i, e) in all_ledger(c).into_iter().enumerate() {
         match e {
-            Entry::Tide { bounty, storage, paid, as_credit, credit_paid, .. } => {
-                out += bounty.0 + storage.0 + paid.0 + as_credit.0;
-                credit_out += credit_paid.0;
-                as_credit_out += as_credit.0;
-                bounties += bounty.0;
-                tides_paid += paid.0;
+            Entry::Tide { bytes, .. } => {
+                let t = tide_out[&(i as u64)];
+                assert!(t.storage.0 <= bytes as u128 * byte());
+                out += t.bounty.0 + t.storage.0 + t.paid.0 + t.as_credit.0;
+                credit_out += t.credit_paid.0;
+                as_credit_out += t.as_credit.0;
+                bounties += t.bounty.0;
+                tides_paid += t.paid.0;
             }
             Entry::Sell { near, .. } => out += near.0,
             Entry::Refund { kind, near, storage, .. } => {
@@ -131,14 +152,15 @@ fn conserved(c: &Petri, holders: &[&str]) {
             Entry::Slide { token, cost, spent: s, .. } => {
                 slides += 1;
                 assert_eq!(token.0, slides, "slides are numbered in order");
-                slide_burns += cost.0;
+                slide_burns += cost.0 as u128;
                 spent += s.map(|s| s.0).unwrap_or(0);
             }
             Entry::Buy { spent: s, .. } => spent += s.map(|s| s.0).unwrap_or(0),
             Entry::Plant { cost, spent: s, licence, .. } => {
                 spent += s.map(|s| s.0).unwrap_or(0);
-                plant_burns += cost.0 * r.burn_bps as u128 / 10_000;
-                royalties += licence.map(|l| l.royalty.0).unwrap_or(0);
+                plant_burns += cost.0 as u128 * r.burn_bps as u128 / 10_000;
+                // Royalties paid to holders; a guest's goes to the agar.
+                royalties += licence.filter(|l| !l.to_agar).map(|l| l.royalty.0 as u128).unwrap_or(0);
             }
             Entry::Sponsor { amount, .. } => given += amount.0,
             Entry::Unsponsor { amount, .. } => reclaimed += amount.0,
@@ -148,10 +170,31 @@ fn conserved(c: &Petri, holders: &[&str]) {
             }
             Entry::Pending { near, .. } => pending_in += near.0,
             Entry::Unpend { near, .. } => pending_out += near.0,
-            Entry::Burn { petri, .. } => other_burns += petri.0,
+            Entry::Burn { petri, .. } => other_burns += petri.0 as u128,
+            Entry::PactOffer { pact, petri, spent: s, .. } => {
+                spent += s.map(|s| s.0).unwrap_or(0);
+                assert_eq!(pact as usize, offers.len() + 1, "pacts are numbered in order");
+                escrow += petri.0 as u128;
+                offers.push((petri.0 as u128, false, false));
+            }
+            Entry::PactAccept { pact, .. } => {
+                let o = &mut offers[pact as usize - 1];
+                assert!(!o.1 && !o.2, "only an open offer is accepted");
+                escrow -= o.0;
+                o.1 = true;
+            }
+            Entry::PactEnd { pact, .. } => {
+                let o = &mut offers[pact as usize - 1];
+                assert!(!o.2, "a pact ends once");
+                if !o.1 {
+                    escrow -= o.0;
+                }
+                o.2 = true;
+            }
             Entry::Join { .. } | Entry::Skip { .. } | Entry::Dust { .. } => {}
         }
     }
+    assert_eq!((escrow, offers.len() as u64), (s.pact_escrow.0, s.pacts.0), "the PETRI held for pact offers, from the ledger");
     assert_eq!(s.vault.0 + out, s.near_in.0 + back, "vault = NEAR in - everything paid out + bounty refunds");
     assert_eq!(s.credit_pool.0 + credit_out, s.credit_in.0, "credit pool = credit in - credit paid out");
     // Vault shares and guests' bounties paid as credit.
@@ -213,6 +256,11 @@ fn plant_on_credit(c: &mut Petri, who: &str, ms: u64, cs: Vec<u32>) {
 /// The last tide's entry.
 fn last_tide(c: &Petri) -> Entry {
     all_ledger(c).into_iter().filter(|e| matches!(e, Entry::Tide { .. })).last().expect("a tide ran")
+}
+
+/// What the last tide paid (its `tide` event).
+fn last_paid() -> TideOut {
+    TIDE_LOG.with(|t| t.borrow().last().expect("a tide ran").1)
 }
 
 fn last_entry(c: &Petri) -> Entry {
@@ -318,7 +366,7 @@ fn planting_charges_the_payback_price_and_half_comes_back() {
     assert_eq!(s.agar.0, before.agar.0 + price - price / 2);
     assert!(s.vault.0 > before.vault.0, "the planting fee went to the vault");
     let p = &c.plants(None, None)[0];
-    assert_eq!(p.cost.0, price);
+    assert_eq!(p.cost.0 as u128, price);
     assert!(!p.siege && p.slide.is_none());
     assert_eq!(p.note.as_deref(), Some("first block"));
     conserved(&c, &["alice.testnet"]);
@@ -445,7 +493,7 @@ fn tides_pay_by_what_was_earned_since_the_last_tide() {
     let pay = vault * r.tide_bps as u128 / 10_000;
     let bounty = (pay * r.tide_bounty_bps as u128 / 10_000).min(r.max_bounty.0);
     assert_eq!(s.near_bounties.0, bounty, "the caller who ran the tide got its capped bounty");
-    let storage = c.ledger(None, None).iter().find_map(|e| if let Entry::Tide { storage, .. } = e { Some(storage.0) } else { None }).unwrap();
+    let storage = TIDE_LOG.with(|t| t.borrow()[0].1.storage.0);
     assert!(alice + bob <= pay - bounty - storage && alice + bob + 10 > pay - bounty - storage, "the rest went to colonies, less the tide's storage");
     at("alice.testnet", T0 + 8 * GEN_MS);
     let got = c.claim().near.0;
@@ -526,7 +574,8 @@ fn the_agar_buys_back_at_half_price_up_to_a_tenth_of_the_vault() {
     let share = s.vault.0 / (s.total_supply.0 - s.agar.0) * units;
     let want = (full / 2).min(share);
     assert!(quote.abs_diff(want) < NEAR / 1_000_000, "{} vs {}", quote, want);
-    let held = bal(&c, "alice.testnet");
+    // A sale claims the seller's earnings first.
+    let held = bal(&c, "alice.testnet") + c.claimable(acct("alice.testnet")).petri.0;
     at("alice.testnet", T0 + 8 * GEN_MS);
     let paid = c.sell(U128(units)).0;
     assert!(paid < quote && paid > quote - NEAR / 500, "the sale's record is paid from it");
@@ -612,8 +661,12 @@ fn many_living_colonies_advance_with_one_summary_log() {
     at("keeper.testnet", T0 + 40 * GEN_MS);
     c.advance(None);
     let logs = get_logs();
-    let bytes: usize = logs.iter().map(|l| l.len()).sum();
-    assert!(logs.len() <= 3, "catch-up logs a summary, not one line per colony: {}", logs.len());
+    // One `tide` event per tide (five here), the same size however many colonies are paid.
+    let (tides, other): (Vec<&String>, Vec<&String>) = logs.iter().partition(|l| l.contains("\"event\":\"tide\""));
+    let bytes: usize = other.iter().map(|l| l.len()).sum();
+    assert_eq!(tides.len(), 5);
+    assert!(tides.iter().all(|l| l.len() < 500), "a tide event is short");
+    assert!(other.len() <= 3, "catch-up logs a summary, not one line per colony: {}", other.len());
     assert!(bytes < 1_500, "{} bytes of logs", bytes);
     assert!(c.earnings(None, None).iter().all(|e| e.0 > 0), "every colony earned");
     let refs: Vec<&str> = holders.iter().map(|s| s.as_str()).collect();
@@ -632,7 +685,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     join(&mut c, "alice.testnet", t, "Alice", 1, NEAR / 5);
     plant(&mut c, "alice.testnet", t, cells(2, 2, patterns::GLIDER), Some("off we go"));
     join(&mut c, "bob.testnet", t, "Bob", 2, NEAR / 5);
-    plant(&mut c, "bob.testnet", t, cells(18, 18, patterns::BEEHIVE), None);
+    plant(&mut c, "bob.testnet", t, cells(18, 18, &two_beehives()), None);
     join(&mut c, "house.testnet", t, "House", 3, NEAR / 20);
     // A guest on sponsored credit alone: its vault shares and its sale are paid as credit.
     let g4 = "g-4.relayer.testnet";
@@ -644,6 +697,57 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     plant(&mut c, w, t, cells(10, 24, patterns::BLOCK), None);
     for g in 0..41u64 {
         t += GEN_MS;
+        if g == 2 {
+            // Alice pays the wallet colony for its promise to keep 8 cells from her colony until generation 20; Bob
+            // offers Alice a pact she declines; Bob's offer to the wallet colony is never answered.
+            let d = PACT_DEPOSIT;
+            ctx("alice.testnet", t, d);
+            assert_eq!(c.pact_offer(acct(w), U128(10 * P), U64(20), None), 1);
+            ctx("bob.testnet", t, d);
+            c.pact_offer(acct("alice.testnet"), U128(5 * P), U64(30), None);
+            at("alice.testnet", t);
+            c.pact_cancel(2);
+            at(w, t);
+            c.pact_accept(1);
+            // Bob pays this one's storage from credit a friend sponsored.
+            ctx("friend.testnet", t, NEAR / 50);
+            c.sponsor(acct("bob.testnet"));
+            at("bob.testnet", t);
+            c.pact_offer(acct(w), U128(3 * P), U64(40), Some(U128(PACT_DEPOSIT)));
+        }
+        if g == 10 {
+            // The wallet colony may not plant near Alice now: the dish refuses it.
+            let d = c.plant_deposit(4, None, None).0;
+            ctx(w, t, d);
+            let broke = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                c.plant(cells(8, 8, patterns::BLOCK), None, None, None);
+            }));
+            assert!(broke.is_err(), "a planting that breaks pact 1 is refused");
+        }
+        if g == 11 {
+            // Far enough from Alice's cells, it may.
+            plant(&mut c, w, t, cells(2, 17, patterns::BLOCK), None);
+        }
+        if g == 22 {
+            // Pact 1 is over; anyone may end it.
+            at("keeper.testnet", t);
+            c.pact_cancel(1);
+        }
+        if g == 34 {
+            // The guest attaches NEAR for the first time: what it earned or bought with credit before is kept PETRI. It
+            // can sell none of it, but it plants with it.
+            ctx(g4, t, NEAR / 100);
+            c.buy(None);
+            let kept = kept_petri(&c, g4).0;
+            assert!(kept > 0);
+            at(g4, t);
+            assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                c.sell(U128(P));
+            }))
+            .is_err());
+            plant(&mut c, g4, t, cells(29, 14, patterns::BLOCK), None);
+            assert!(kept_petri(&c, g4).0 < kept, "kept PETRI is spent first");
+        }
         if g == 15 {
             // The guest tends the dish at the second tide, so it runs it and is paid the bounty as credit.
             at(g4, t);
@@ -678,17 +782,28 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
             c.mint_slide(0, 26, 32, 6, Some("Row 28".into()), None);
         }
         if g == 26 {
-            // A slide of Bob's beehive; Alice plants it under the licence and pays Bob the royalty.
-            let d = c.slide_deposit(6, 5, None).0;
+            // A slide of Bob's two beehives (12 cells, a licence); Alice plants it under the licence and pays Bob the
+            // royalty.
+            let d = c.slide_deposit(11, 5, None).0;
             ctx("bob.testnet", t, d);
-            c.mint_slide(17, 17, 6, 5, None, None);
-            plant_slide(&mut c, "alice.testnet", t, cells(4, 12, patterns::BEEHIVE), "2");
+            c.mint_slide(17, 17, 11, 5, None, None);
+            plant_slide(&mut c, "alice.testnet", t, cells(4, 12, &two_beehives()), "2");
         }
         if g == 28 {
             // Bob passes the slide on; its new holder plants it free.
             ctx("bob.testnet", t, 1);
             c.nft_transfer(acct(w), "2".into(), None, None);
-            plant_slide(&mut c, w, t, cells(22, 10, patterns::BEEHIVE), "2");
+            plant_slide(&mut c, w, t, cells(20, 10, &two_beehives()), "2");
+        }
+        if g == 29 {
+            // The guest plants it on credit: it never attached NEAR, so its royalty goes to the agar, not the holder.
+            let d = c.plant_deposit(12, None, Some("2".into())).0;
+            ctx(g4, t, 0);
+            let held = bal(&c, w);
+            c.plant(cells(14, 0, &two_beehives()), None, Some(U128(d)), Some("2".into()));
+            let Entry::Plant { licence: Some(l), .. } = last_entry(&c) else { panic!("the guest's licensed planting") };
+            assert!(l.to_agar && l.royalty.0 > 0 && l.holder == Some(acct(w)));
+            assert_eq!(bal(&c, w), held, "the holder is paid nothing by a guest");
         }
         if g == 33 {
             // Winnings claimed, one payout that fails (and is pending for the colony), and a sale that fails too.
@@ -716,6 +831,17 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
         }
         at("keeper.testnet", t);
         c.advance(None);
+        if g == 31 {
+            // The bounty of the tide at generation 32 fails to arrive and goes back to the vault.
+            let index = all_ledger(&c).iter().rposition(|e| matches!(e, Entry::Tide { .. })).unwrap() as u64;
+            let Entry::Tide { by, generation, .. } = last_tide(&c) else { unreachable!() };
+            assert_eq!(generation.0, 32);
+            let runner = if by == 0 { acct("keeper.testnet") } else { c.colonies(Some(by as u32 - 1), Some(1))[0].account.clone() };
+            let bounty = last_paid().bounty;
+            assert!(bounty.0 > 0);
+            callback(t, None);
+            c.on_payout(U64(index), PAYOUT_BOUNTY, by, runner, bounty);
+        }
     }
     let s = c.state();
     let r = c.rules();
@@ -728,16 +854,23 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     let mut window = vec![0u64; n];
     let mut planted = vec![0u64; n];
     let mut attached = vec![false; n];
+    // Each colony's kept PETRI as the ledger gives it, and its earnings when last counted (a guest's count as kept).
+    let (mut kept, mut synced) = (vec![0u128; n], vec![0u128; n]);
+    // Every pact: (from, to, petri, until, accepted, ended).
+    let mut pacts: Vec<(u16, u16, u128, u64, bool, bool)> = vec![];
+    let mut escrow = 0u128;
+    let mut breaches_checked = 0;
     let mut house: Vec<u16> = vec![];
     let colonies_view = c.colonies(None, None);
     let account_of = |id: u16| colonies_view[id as usize - 1].account.clone();
     let mut colonies = 0u16;
     let log = all_ledger(&c);
-    let (mut tides_seen, mut credit_sales, mut slides_seen, mut guest_bounties, mut licensed, mut refunds) = (0, 0, 0, 0, 0, 0);
+    let (mut tides_seen, mut credit_sales, mut slides_seen, mut guest_bounties, mut licensed, mut refunds, mut guest_royalties) = (0, 0, 0, 0, 0, 0, 0);
+    let mut tide_bounty: HashMap<u64, u128> = HashMap::new();
     // The solvency terms, recomputed.
     let (mut given, mut spent, mut reclaimed, mut owed, mut pending) = (0u128, 0u128, 0u128, 0u128, 0u128);
-    // Each slide's pattern, and its holder as last seen: (bitmap, w, h, moves, holder).
-    let mut slides: Vec<(Vec<u8>, u16, u16, u32, AccountId)> = vec![];
+    // Each slide's pattern, and its holder as last seen: (bitmap, w, h, moves, holder, cells).
+    let mut slides: Vec<(Vec<u8>, u16, u16, u32, AccountId, u32)> = vec![];
     let mut li = 0;
     let mut g = 0u64;
     loop {
@@ -757,7 +890,10 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                 | Entry::Pending { generation, .. }
                 | Entry::Unpend { generation, .. }
                 | Entry::Dust { generation, .. }
-                | Entry::Burn { generation, .. } => generation.0,
+                | Entry::Burn { generation, .. }
+                | Entry::PactOffer { generation, .. }
+                | Entry::PactAccept { generation, .. }
+                | Entry::PactEnd { generation, .. } => generation.0,
             };
             if gen != g {
                 break;
@@ -771,25 +907,46 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                     }
                 }
                 Entry::Buy { colony, petri, near, credit, spent: s, .. } => {
-                    assert_eq!(petri_for_near(near.0 + credit.0, agar, k), petri.0, "purchase on the curve");
-                    agar -= petri.0;
+                    assert_eq!(petri_for_near(near.0 + credit.0, agar, k), petri.0 as u128, "purchase on the curve");
+                    let i = *colony as usize;
+                    sync(&mut kept, &mut synced, &earned, &attached, i);
+                    kept[i] += credit_share(petri.0, credit.0, near.0 + credit.0) as u128;
+                    agar -= petri.0 as u128;
                     vault += near.0;
                     pool += credit.0;
                     spent += s.map(|s| s.0).unwrap_or(0);
                     attached[*colony as usize] |= near.0 > 0;
                 }
                 Entry::Plant { colony, cells, cost, near, credit, siege, spent: s, licence, .. } => {
+                    let cost = cost.0 as u128;
                     let cells: Vec<u32> = cells.iter().map(|&c| c as u32).collect();
                     let check = dish.check_plant(*colony, &cells, r.buffer, r.max_plant_cells, &house).expect("a legal planting");
+                    // No planting breaks a pact that binds its colony.
+                    let bound: Vec<u16> = pacts.iter().filter(|p| p.1 == *colony && p.4 && !p.5 && g < p.3).map(|p| p.0).collect();
+                    assert_eq!(dish.pact_breach(&cells, &bound, r.pact_radius), None, "colony {} broke a pact", colony);
+                    breaches_checked += bound.len();
+                    // Kept PETRI is spent first, the royalty included; a royalty to a guest holder is kept.
+                    let i = *colony as usize;
+                    sync(&mut kept, &mut synced, &earned, &attached, i);
+                    let toll = licence.as_ref().map(|l| l.royalty.0 as u128).unwrap_or(0);
+                    kept[i] = kept[i].saturating_sub(cost + toll);
+                    if let Some(h) = licence.as_ref().filter(|l| !l.to_agar).and_then(|l| l.holder.clone()) {
+                        if let Some(hc) = colonies_view.iter().find(|v| v.account == h) {
+                            if !attached[hc.id as usize] {
+                                kept[hc.id as usize] += toll;
+                            }
+                        }
+                    }
                     assert_eq!(check.siege, *siege);
                     let per = feed_per_cell(agar, r.feed_ppm, r.keeper_bps, counted, r.live_floor);
                     let base = planting_cost(per, r.payback, r.min_cell_price.0, cells.len() as u32, *siege, r.siege_x);
                     match licence {
-                        None => assert_eq!(base, cost.0, "price at generation {}", g),
+                        None => assert_eq!(base, cost, "price at generation {}", g),
                         Some(l) => {
-                            let (bitmap, w, h, moves, holder) = &mut slides[l.token.0 as usize - 1];
+                            let (bitmap, w, h, moves, holder, cells_in) = &mut slides[l.token.0 as usize - 1];
+                            assert!(*cells_in >= r.licence_min_cells, "only a slide of licence_min_cells is a licence");
                             assert!(fits_slide(32, 32, &cells, bitmap, *w, *h), "the slide's own pattern");
-                            assert_eq!(licensed_cost(base, r.slide_discount_bps), cost.0, "the licence's price");
+                            assert_eq!(licensed_cost(base, r.slide_discount_bps), cost, "the licence's price");
                             let who = l.holder.clone().unwrap_or_else(|| account_of(*colony));
                             // The holder is the minter until the slide first moves, and one account between two moves.
                             assert!(l.moves >= *moves);
@@ -797,13 +954,19 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                                 assert_eq!(&who, holder, "the slide's holder at that point");
                             }
                             (*moves, *holder) = (l.moves, who);
-                            assert_eq!(l.royalty.0, if l.holder.is_some() { royalty(cost.0, r.slide_royalty_bps) } else { 0 });
+                            assert_eq!(l.royalty.0 as u128, if l.holder.is_some() { royalty(cost, r.slide_royalty_bps) } else { 0 });
                             assert!(l.holder.as_ref() != Some(&account_of(*colony)), "a holder pays itself no royalty");
+                            // A planter that never attached NEAR pays its royalty to the agar.
+                            assert_eq!(l.to_agar, l.holder.is_some() && !attached[*colony as usize]);
+                            if l.to_agar {
+                                agar += l.royalty.0 as u128;
+                                guest_royalties += 1;
+                            }
                             licensed += 1;
                         }
                     }
-                    agar += cost.0 - cost.0 * r.burn_bps as u128 / 10_000;
-                    burned += cost.0 * r.burn_bps as u128 / 10_000;
+                    agar += cost - cost * r.burn_bps as u128 / 10_000;
+                    burned += cost * r.burn_bps as u128 / 10_000;
                     planted[*colony as usize] += cells.len() as u64 * petri_core::STAKE_UNIT;
                     vault += near.0;
                     pool += credit.0;
@@ -812,22 +975,32 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                     dish.plant_unchecked(*colony, &cells);
                 }
                 Entry::Sell { colony, petri, near, as_credit, .. } => {
+                    let i = *colony as usize;
+                    sync(&mut kept, &mut synced, &earned, &attached, i);
+                    if *as_credit {
+                        kept[i] = kept[i].saturating_sub(petri.0 as u128);
+                    } else {
+                        assert_eq!(kept[i], 0, "a colony holding kept PETRI sold for NEAR");
+                    }
                     let outstanding = MAX - burned - agar;
-                    assert_eq!(petri_core::sell_back(petri.0, agar, k, r.sell_bps, vault, outstanding), near.0, "sale on the curve");
+                    assert_eq!(petri_core::sell_back(petri.0 as u128, agar, k, r.sell_bps, vault, outstanding), near.0, "sale on the curve");
                     assert_eq!(*as_credit, !attached[*colony as usize], "a colony that never attached NEAR is paid in credit");
                     credit_sales += *as_credit as u32;
-                    agar += petri.0;
+                    agar += petri.0 as u128;
                     vault -= near.0;
                 }
                 Entry::Tide { .. } => panic!("a tide is recorded while stepping"),
                 Entry::Slide { colony, x, y, w, h, cells, bitmap, cost, spent: s, .. } => {
+                    let i = *colony as usize;
+                    sync(&mut kept, &mut synced, &earned, &attached, i);
+                    kept[i] = kept[i].saturating_sub(cost.0 as u128);
                     let (bits, n) = dish.region_bitmap(*colony, *x, *y, *w, *h);
                     assert_eq!((&bits, n), (&bitmap.0, *cells), "the slide is the colony's own cells, as the dish stood");
                     assert!(n >= r.slide_min_cells);
-                    assert_eq!(cost.0, r.slide_cells_price.0 * n as u128);
-                    burned += cost.0;
+                    assert_eq!(cost.0 as u128, r.slide_cells_price.0 * n as u128);
+                    burned += cost.0 as u128;
                     spent += s.map(|s| s.0).unwrap_or(0);
-                    slides.push((bits, *w, *h, 0, account_of(*colony)));
+                    slides.push((bits, *w, *h, 0, account_of(*colony), n));
                     slides_seen += 1;
                 }
                 Entry::Skip { .. } => {}
@@ -836,7 +1009,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                     let sent = match &log[of.0 as usize] {
                         Entry::Claim { paid, .. } if *kind == PAYOUT_CLAIM => paid.0,
                         Entry::Sell { paid, as_credit: false, .. } if *kind == PAYOUT_SALE => paid.0,
-                        Entry::Tide { bounty, .. } if *kind == PAYOUT_BOUNTY => bounty.0,
+                        Entry::Tide { .. } if *kind == PAYOUT_BOUNTY => tide_bounty[&of.0],
                         Entry::Unsponsor { amount, .. } if *kind == PAYOUT_UNSPONSOR => amount.0,
                         Entry::Unpend { paid, .. } if *kind == PAYOUT_PENDING => paid.0,
                         e => panic!("a refund of {:?}", e),
@@ -858,7 +1031,37 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
                 Entry::Pending { near, .. } => pending += near.0,
                 Entry::Unpend { near, .. } => pending -= near.0,
                 Entry::Dust { near, .. } => vault += near.0,
-                Entry::Burn { petri, .. } => burned += petri.0,
+                Entry::Burn { petri, .. } => burned += petri.0 as u128,
+                Entry::PactOffer { pact, from, to, petri, until, spent: s, .. } => {
+                    spent += s.map(|s| s.0).unwrap_or(0);
+                    assert_eq!(*pact as usize, pacts.len() + 1);
+                    assert!(from != to && until.0 > g && until.0 <= g + r.pact_max_gens as u64);
+                    let live = |c: u16| pacts.iter().filter(|p| (p.0 == c || p.1 == c) && !p.5).count();
+                    assert!(live(*from) < MAX_PACTS && live(*to) < MAX_PACTS, "at most MAX_PACTS pacts a colony");
+                    assert!(!pacts.iter().any(|p| p.0 == *from && p.1 == *to && !p.4 && !p.5), "one open offer to a colony at a time");
+                    if petri.0 > 0 {
+                        // Only PETRI its maker could sell (never a guest's, never kept), or the house's to the house.
+                        sync(&mut kept, &mut synced, &earned, &attached, *from as usize);
+                        assert!(house.contains(from) || (attached[*from as usize] && kept[*from as usize] == 0));
+                        assert!(!house.contains(from) || house.contains(to));
+                    }
+                    escrow += petri.0 as u128;
+                    pacts.push((*from, *to, petri.0 as u128, until.0, false, false));
+                }
+                Entry::PactAccept { pact, .. } => {
+                    let p = &mut pacts[*pact as usize - 1];
+                    assert!(!p.4 && !p.5 && g < p.3, "only an open, unexpired offer is accepted");
+                    escrow -= p.2;
+                    p.4 = true;
+                }
+                Entry::PactEnd { pact, .. } => {
+                    let p = &mut pacts[*pact as usize - 1];
+                    assert!(!p.5 && (!p.4 || g >= p.3), "an accepted pact ends only at its until");
+                    if !p.4 {
+                        escrow -= p.2;
+                    }
+                    p.5 = true;
+                }
             }
             li += 1;
         }
@@ -878,37 +1081,44 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
             window[i as usize] += v as u64;
         }
         if g % r.tide_every as u64 == 0 && tide_due(&window, &house) {
-            let Entry::Tide { generation, chain: ch, pay, bounty, storage, paid, as_credit, credit_pay, credit_paid, by } = &log[li] else { panic!("tide entry at {}", g) };
+            // Everything a tide paid follows from the ledger before it: the entry keeps the chain, its bytes and its
+            // runner, and the replay works out the rest (checked against the `tide` event's amounts).
+            let Entry::Tide { generation, chain: ch, bytes, by } = &log[li] else { panic!("tide entry at {}", g) };
             assert_eq!(generation.0, g);
             assert_eq!(*ch, hex::encode(chain));
-            assert_eq!(pay.0, vault * r.tide_bps as u128 / 10_000);
-            let capped = (pay.0 * r.tide_bounty_bps as u128 / 10_000).min(r.max_bounty.0);
-            let (split, total) = tide_split((pay.0 - capped).saturating_sub(storage.0), &window, &house);
-            assert_eq!(total, paid.0 + as_credit.0);
+            assert!(*bytes >= 126 && *bytes <= 126 + 4 + 45, "a tide stores its entry and four bytes of index: {}", bytes);
+            let pay = vault * r.tide_bps as u128 / 10_000;
+            let capped = (pay * r.tide_bounty_bps as u128 / 10_000).min(r.max_bounty.0);
+            let cost = *bytes as u128 * byte();
+            let storage0 = cost.min(pay - capped);
+            let (split, total) = tide_split(pay - capped - storage0, &window, &house);
+            let storage = if total > 0 { storage0 } else { cost.min(vault) };
             let house_runner = *by == HOUSE_RUNNER || house.contains(by);
-            assert_eq!(bounty.0, if total > 0 && !house_runner { capped } else { 0 }, "a house runner's bounty stays in the vault");
-            let mut credited = 0u128;
+            let bounty = if total > 0 && !house_runner { capped } else { 0 };
+            let (mut credited, mut paid) = (0u128, 0u128);
             for (i, v) in split {
                 if attached[i as usize] {
                     won[i as usize] += v;
                     owed += v;
+                    paid += v;
                 } else {
                     credit_won[i as usize] += v;
                     credited += v;
                 }
             }
-            assert_eq!(credited, as_credit.0, "the shares of colonies that never attached NEAR");
-            vault -= paid.0 + as_credit.0 + bounty.0 + storage.0;
-            assert_eq!(credit_pay.0, pool * r.tide_bps as u128 / 10_000);
-            let (csplit, ctotal) = tide_split(credit_pay.0, &window, &house);
-            assert_eq!(ctotal, credit_paid.0);
+            vault -= paid + credited + bounty + storage;
+            let credit_pay = pool * r.tide_bps as u128 / 10_000;
+            let (csplit, ctotal) = tide_split(credit_pay, &window, &house);
             for (i, v) in csplit {
                 credit_won[i as usize] += v;
             }
-            pool -= credit_paid.0;
+            pool -= ctotal;
+            let event = TIDE_LOG.with(|t| t.borrow().iter().find(|(i, _)| *i == li as u64).map(|(_, o)| *o)).expect("the tide's event");
+            assert_eq!(event, TideOut { pay: U128(pay), bounty: U128(bounty), storage: U128(storage), paid: U128(paid), as_credit: U128(credited), credit_pay: U128(credit_pay), credit_paid: U128(ctotal) }, "the tide's amounts, from the ledger alone, are its event's");
+            tide_bounty.insert(li as u64, bounty);
             // A guest that ran the tide was paid its bounty as credit.
-            if *by > 0 && *by != HOUSE_RUNNER && !attached[*by as usize] && bounty.0 > 0 {
-                credit_won[*by as usize] += bounty.0;
+            if *by > 0 && *by != HOUSE_RUNNER && !attached[*by as usize] && bounty > 0 {
+                credit_won[*by as usize] += bounty;
                 guest_bounties += 1;
             }
             window.iter_mut().for_each(|w| *w = 0);
@@ -920,10 +1130,20 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
         }
     }
     assert!(tides_seen >= 4);
+    // Every colony's kept PETRI, from the ledger alone, is what the contract holds back; and the PETRI held for offers.
+    for i in 1..n {
+        sync(&mut kept, &mut synced, &earned, &attached, i);
+        assert_eq!(colonies_view[i - 1].kept.0 as u128, kept[i], "colony {}'s kept PETRI", i);
+    }
+    assert!(kept[4] > 0, "the guest that attached still holds kept PETRI");
+    assert_eq!((escrow, pacts.len() as u64), (s.pact_escrow.0, s.pacts.0));
+    assert_eq!(pacts.iter().map(|p| (p.4, p.5)).collect::<Vec<_>>(), vec![(true, true), (false, true), (false, false)]);
+    assert!(breaches_checked >= 1, "a planting under a pact was checked");
     assert_eq!(credit_sales, 1, "the guest's sale");
     assert_eq!(slides_seen, 2, "alice's slide and bob's");
-    assert_eq!(licensed, 2, "alice's royalty to bob and the new holder's own planting");
-    assert_eq!(refunds, 2, "a claim and a sale failed");
+    assert_eq!(licensed, 3, "alice's royalty to bob, the new holder's own planting and the guest's");
+    assert_eq!(guest_royalties, 1, "the guest's royalty, to the agar");
+    assert_eq!(refunds, 3, "a claim, a sale and a bounty failed");
     assert_eq!(guest_bounties, 1, "the tide the guest ran");
     assert_eq!(li, log.len(), "every entry replayed");
     assert_eq!(hex::encode(chain), s.chain);
@@ -931,7 +1151,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     assert_eq!((agar, burned, vault, pool), (s.agar.0, s.burned.0, s.vault.0, s.credit_pool.0));
     assert_eq!((given, spent, reclaimed, owed, pending), (s.credit_given.0, s.credit_spent.0, s.credit_reclaimed.0, s.tides_owed.0, s.pending.0), "every solvency term from the ledger alone");
     // Slides end with the holders the replay last saw, unless they moved since.
-    for (i, (_, _, _, moves, holder)) in slides.iter().enumerate() {
+    for (i, (_, _, _, moves, holder, _)) in slides.iter().enumerate() {
         let v = c.slide((i + 1).to_string()).unwrap();
         assert!(v.moves >= *moves);
         if v.moves == *moves {
@@ -946,7 +1166,8 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
         assert_eq!(colonies_view[i].credit_won.0, credit_won[i + 1]);
     }
     assert_eq!(won[3], 0, "the house won nothing");
-    assert_eq!(won[4], 0, "the guest won no NEAR");
+    // The guest won NEAR only at the tide after it first attached NEAR (generation 40); before, credit.
+    assert!(won[4] > 0 && won[4] < won[1], "the guest won NEAR once it had attached NEAR");
     assert!(credit_won[4] > colonies_view[0].credit_won.0, "but credit in its place");
     conserved(&c, &["alice.testnet", "bob.testnet", "house.testnet", g4, w, "keeper.testnet"]);
     // PETRI_DUMP=<file> writes what the views return, so the browser's and the script's replays can be run on it too
@@ -1115,7 +1336,7 @@ fn a_guest_wins_credit_where_a_wallet_wins_near() {
     let vault = c.state().vault.0;
     at("keeper.testnet", T0 + 8 * GEN_MS);
     c.advance(None);
-    let Entry::Tide { paid, as_credit, credit_paid, .. } = last_tide(&c) else { unreachable!() };
+    let TideOut { paid, as_credit, credit_paid, .. } = last_paid();
     assert_eq!(c.claimable(acct(g)).near.0, 0, "no NEAR for a colony that never attached any");
     let alice = c.claimable(acct("alice.testnet")).near.0;
     assert!(alice > 0 && alice == paid.0, "the NEAR went to the wallet colony");
@@ -1403,7 +1624,8 @@ fn house_bounties_stay_in_the_vault() {
         let vault = c.state().vault.0;
         at(who, T0 + gen * GEN_MS);
         c.advance(None);
-        let Entry::Tide { pay, bounty, storage, paid, as_credit, by, .. } = last_tide(&c) else { unreachable!() };
+        let Entry::Tide { by, .. } = last_tide(&c) else { unreachable!() };
+        let TideOut { pay, bounty, storage, paid, as_credit, .. } = last_paid();
         let house = who != "stranger.testnet";
         assert_eq!(by, match who { "house.testnet" => 1, "dish-keeper.testnet" => HOUSE_RUNNER, _ => 0 });
         let capped = (pay.0 * 100 / 10_000).min(rules().max_bounty.0);
@@ -1461,6 +1683,8 @@ fn crowd(c: &mut Petri, n: u32) {
             near_sold: U128(0),
             credit_won: U128(0),
             proxy: false,
+            attached: id % 2 == 0,
+            kept: U64(0),
         });
         c.colony_of.insert(account.clone(), id);
         c.names.insert(format!("c{}", id));
@@ -1470,11 +1694,53 @@ fn crowd(c: &mut Petri, n: u32) {
     c.flush();
 }
 
-/// A dish of 30,000 colonies, every `every`-th of them playing (stake, and a share of the coming tide to collect,
-/// half of them wallets, spread across every cold page), takes a new colony's join, its planting, the catch-up through
-/// a tide that pays every playing colony, and claims by a playing colony, the newcomer and an idle colony. Returns the
-/// gas each call used.
-fn thirty_thousand(every: u16) -> Vec<(&'static str, u64)> {
+/// Gas the real network charges per byte a write replaces (storage_write_value_byte 31.02 + storage_write_evicted_byte
+/// 32.12 + the memory and register copies 7.6 Mgas), and per wasm instruction (regular_op_cost 822,756). The unit
+/// runtime charges host calls but not wasm, and less per byte.
+const REAL_WRITE_BYTE: f64 = 70.7e6;
+const REAL_OP: f64 = 822_756.0;
+/// A function call's fixed cost on the real network that the unit runtime does not charge: the transaction, its
+/// receipt and loading the contract (the simulator's calibration against testnet).
+const REAL_CALL: f64 = 2.5e12;
+
+/// What the unit runtime charges per byte a write replaces, measured: the multiplier from it to the real network.
+fn unit_write_byte() -> f64 {
+    at("deployer.testnet", T0);
+    let big = vec![7u8; 100_000];
+    env::storage_write(b"calibrate", &big);
+    let g0 = env::used_gas().as_gas();
+    env::storage_write(b"calibrate", &big);
+    let g1 = env::used_gas().as_gas();
+    env::storage_write(b"calibrate", &[1]);
+    let g2 = env::used_gas().as_gas();
+    env::storage_write(b"calibrate", &[1]);
+    let g3 = env::used_gas().as_gas();
+    env::storage_remove(b"calibrate");
+    ((g1 - g0) as f64 - (g3 - g2) as f64) / 99_999.0
+}
+
+/// One call's gas on the real network, conservatively: its host calls as the unit runtime charged them, scaled by the
+/// real price of a rewritten byte over the unit runtime's (no byte costs more than that much more; base costs are the
+/// same), less the payouts' fixed allowance (the same on both), plus the call's fixed cost and an estimate of its wasm:
+/// Life and the feed for `gens` generations of `live` cells in `alive` colonies (20,000 + 60 a cell + 150 a colony
+/// instructions, the simulator's model), `rows` hot rows parsed and written back (1,000 each, + 460 at a tide), and
+/// 3 million instructions for everything else (argument parsing, the contract state, the board, borsh).
+#[allow(clippy::too_many_arguments)]
+fn real_gas(unit: u64, payouts: u64, scale: f64, gens: u64, live: u64, alive: u64, rows: u64, tide: bool) -> f64 {
+    // Only payouts the call made: none if it scheduled no transfer.
+    let payouts = if scheduled().iter().any(|r| r.1 == "transfer") { payouts.min(unit) } else { 0 };
+    let host = (unit - payouts) as f64 * scale + payouts as f64;
+    let ops = gens as f64 * (20_000.0 + 60.0 * live as f64 + 150.0 * alive as f64) + rows as f64 * (1_000.0 + if tide { 460.0 } else { 0.0 }) + 3e6;
+    host + REAL_CALL + ops * REAL_OP
+}
+
+/// A dish of 30,000 colonies that all played in the last day (each has stake in its cold slot), on a full 128 x 128
+/// board: 1,000 colonies alive with a block each, and `playing` hot rows in all (the living colonies, and others that
+/// earned since the last tide and will be paid at it; half of them wallets). A new colony joins and plants; the
+/// catch-up runs through a tide that pays every playing colony; a playing wallet colony, the newcomer and an idle
+/// colony claim. Returns (call, unit-runtime gas, real-network estimate) for each, and the multiplier used.
+fn thirty_thousand(playing: usize) -> (Vec<(&'static str, u64, f64)>, f64) {
+    let scale = (REAL_WRITE_BYTE / unit_write_byte()).max(1.0);
     // A call with `tgas`, on an account whose storage is as large as this dish's really is (the unit runtime starts
     // every context at 300 KB, and a write subtracts the value it replaces first).
     let ctx_gas = |who: &str, ms: u64, deposit: u128, tgas: u64| {
@@ -1489,88 +1755,133 @@ fn thirty_thousand(every: u16) -> Vec<(&'static str, u64)> {
     let mut c = Petri::new(Rules { tide_every: 8, house: vec![], ..launch() });
     join(&mut c, "funder.testnet", T0, "Funder", 1, 200 * NEAR);
     crowd(&mut c, 29_999);
+    // Every colony played in the last day: stake in its cold slot.
+    for first in (1..=30_000u16).step_by(320) {
+        at("deployer.testnet", T0);
+        let chunk: Vec<(u16, Cold)> = (first..(first + 320).min(30_001)).map(|id| (id, Cold { books: books::cold_get(id).books, stake: 4_000, stake_tide: 0 })).collect();
+        books::cold_set_many(&chunk);
+    }
+    // 1,000 living blocks, 4 cells apart, owned by colonies 2..=1001.
+    let mut dish = Dish::new(128, 128);
+    for k in 0..1_000u32 {
+        let (x, y) = ((k % 32) as i32 * 4, (k / 32) as i32 * 4);
+        let cs: Vec<u32> = patterns::BLOCK.iter().map(|&(dx, dy)| dish.index(x + dx, y + dy) as u32).collect();
+        dish.plant_unchecked(k as u16 + 2, &cs);
+    }
+    c.store_dish(&dish);
+    c.total_live = 4_000;
     {
         let hot = c.hot_table();
-        for id in (every.max(2)..=30_000u16).step_by(every as usize) {
-            hot.rows.push(Hot { id, stake: 4_000, window: 1_000, books: Books { attached: id % (2 * every) == 0, ..Default::default() } });
+        let mut ids: Vec<u16> = (2..=1_001u16).collect();
+        let more = playing.saturating_sub(1_000);
+        let step = (28_999 / more.max(1)).max(1);
+        ids.extend((1_002..=30_000u16).step_by(step).take(more));
+        for id in ids {
+            hot.rows.push(Hot { id, stake: 4_000, window: 1_000, books: Books { attached: id % 2 == 0, ..Default::default() } });
         }
         hot.dirty = true;
         hot.purse_dirty = true;
     }
     c.flush();
-    let playing = c.state().playing;
-    assert_eq!((c.state().colonies, playing), (30_000, (30_000 / every as u32) - (every == 1) as u32));
+    let rows = c.state().playing as u64;
+    assert_eq!((c.state().colonies, rows), (30_000, playing.max(1_000) as u64));
     let block = |x: i32, y: i32| -> Vec<u32> { patterns::BLOCK.iter().map(|&(dx, dy)| ((y + dy) * 128 + x + dx) as u32).collect() };
+    // What a NEAR payout's transfer and callback cost in the unit runtime: the same on the real network.
+    ctx_gas("funder.testnet", T0, 0, 300);
+    c.pay_out(&acct("funder.testnet"), PAYOUT_BOUNTY, 0, 0, &acct("funder.testnet"), 1);
+    let payout = env::used_gas().as_gas();
     let mut report = vec![];
     // The 30,001st colony joins: one cold page, however many came before.
     ctx_gas("newcomer.testnet", T0, NEAR / 2, 300);
     fresh(&mut c);
     c.join("Newcomer".into(), 7, None);
-    report.push(("join", env::used_gas().as_gas()));
+    let g = env::used_gas().as_gas();
+    report.push(("join", g, real_gas(g, 0, scale, 0, 0, 0, 0, false)));
     let d = c.plant_deposit(4, None, None).0;
-    ctx_gas("newcomer.testnet", T0, d, 200);
+    ctx_gas("newcomer.testnet", T0, d, 300);
     fresh(&mut c);
-    c.plant(block(60, 60), None, None, None);
-    report.push(("plant", env::used_gas().as_gas()));
+    c.plant(block(126, 126), None, None, None);
+    let g = env::used_gas().as_gas();
+    report.push(("plant", g, real_gas(g, 0, scale, 0, 4_004, 1_001, rows + 1, false)));
     // The catch-up through the tide: eight generations, then every playing colony paid.
-    ctx_gas("keeper.testnet", T0 + 8 * GEN_MS, 0, 250);
+    ctx_gas("keeper.testnet", T0 + 8 * GEN_MS, 0, 300);
     fresh(&mut c);
     c.advance(None);
-    report.push(("advance through a tide", env::used_gas().as_gas()));
+    let g = env::used_gas().as_gas();
+    report.push(("advance through a tide", g, real_gas(g, payout, scale, 8, 4_004, 1_001, rows + 1, true)));
     assert_eq!((c.state().generation.0, c.state().tides.0), (8, 1));
-    let Entry::Tide { paid, as_credit, .. } = last_tide(&c) else { unreachable!() };
+    let TideOut { paid, as_credit, .. } = last_paid();
     assert!(paid.0 > 0 && as_credit.0 > 0);
+    let left = c.state().playing as u64;
     // A playing wallet colony and the newcomer claim; an idle colony's claim reads one cold page.
-    let wallet = format!("c{}.testnet", 2 * every);
-    ctx_gas(&wallet, T0 + 8 * GEN_MS, 0, 150);
+    ctx_gas("c2.testnet", T0 + 8 * GEN_MS, 0, 300);
     fresh(&mut c);
     c.claim();
-    report.push(("claim (a playing colony)", env::used_gas().as_gas()));
-    ctx_gas("newcomer.testnet", T0 + 8 * GEN_MS, 0, 150);
+    let g = env::used_gas().as_gas();
+    report.push(("claim (a playing colony)", g, real_gas(g, payout, scale, 0, 0, 0, left, false)));
+    ctx_gas("newcomer.testnet", T0 + 8 * GEN_MS, 0, 300);
     fresh(&mut c);
     c.claim();
-    report.push(("claim (the newcomer)", env::used_gas().as_gas()));
-    if every > 1 {
-        ctx_gas(&format!("c{}.testnet", every + 1), T0 + 8 * GEN_MS, 0, 150);
-        fresh(&mut c);
-        c.claim();
-        report.push(("claim (an idle colony)", env::used_gas().as_gas()));
-    }
-    for (what, g) in &report {
-        eprintln!("30,000 colonies, {} playing: {} {:.2} TGas of host calls", playing + 1, what, *g as f64 / 1e12);
+    let g = env::used_gas().as_gas();
+    report.push(("claim (the newcomer)", g, real_gas(g, payout, scale, 0, 0, 0, left, false)));
+    ctx_gas("c29999.testnet", T0 + 8 * GEN_MS, 0, 300);
+    fresh(&mut c);
+    c.claim();
+    let g = env::used_gas().as_gas();
+    report.push(("claim (an idle colony)", g, real_gas(g, 0, scale, 0, 0, 0, left, false)));
+    for (what, g, real) in &report {
+        eprintln!("30,000 colonies, {} playing: {} {:.2} TGas of host calls in the unit runtime, {:.1} TGas on the real network (x{:.2} a byte)", rows, what, *g as f64 / 1e12, real / 1e12, scale);
     }
     // Every winner was paid: the wallets in NEAR, the others as credit.
-    assert!(c.tide_winnings(Some(2 * every as u32 - 1), Some(1))[0].0 > 0, "a wallet won NEAR");
-    let guest = if every == 1 { 3 } else { every as u32 };
-    assert!(c.colonies(Some(guest - 1), Some(1))[0].credit_won.0 > 0, "a guest won credit");
-    report
+    assert!(c.tide_winnings(Some(1), Some(1))[0].0 > 0, "a wallet won NEAR");
+    assert!(c.colonies(Some(2), Some(1))[0].credit_won.0 > 0, "a guest won credit");
+    (report, scale)
 }
 
-/// v5 rewrote seven arrays covering every colony on each join, three on each catch-up and four at each tide, and
-/// looped over every colony at every tide: it would have halted at about 27,000 colonies. Here 30,000 colonies, 1,500
-/// of them playing. The unit runtime charges host calls (storage reads and writes, logs, promises) but not wasm
-/// execution, so this measures what used to grow with every colony; the wasm left over (Life on the board, and loops
-/// over the playing colonies only) is the same as on a dish of 1,500. The transfers of the bounty and the claims, with
-/// the 15 TGas each callback is given, are about 30 TGas of every figure.
+/// v5 rewrote seven arrays covering every colony on each join; v6 kept a hot row for every colony with stake, which
+/// lingers about a day, so on an active 30,000-colony dish a planting cost over 230 TGas on the real network (the
+/// simulator, sim/out-v6). v6.1 keeps rows only for colonies alive or paid at the coming tide. Here 30,000 colonies
+/// that all have stake, 1,500 of them playing (the simulator's busiest 30,000-colony dish had 2,409): every call stays
+/// under 150 TGas on the real network, with the unit runtime's host calls scaled to the real price per byte and the
+/// wasm the unit runtime does not charge estimated.
 #[test]
-fn thirty_thousand_colonies_join_plant_tide_and_claim_well_under_the_gas_limit() {
-    let report = thirty_thousand(20);
-    for (what, g) in &report {
-        assert!(*g < Gas::from_tgas(60).as_gas(), "{}: {:.1} TGas", what, *g as f64 / 1e12);
+fn thirty_thousand_colonies_with_stake_every_call_under_150_tgas_on_the_real_network() {
+    let (report, scale) = thirty_thousand(1_500);
+    assert!(scale >= 1.5, "the unit runtime charges {:.1}x less per byte than the network", scale);
+    for (what, _, real) in &report {
+        assert!(*real < 150e12, "{}: {:.1} TGas", what, real / 1e12);
     }
-    assert!(report[0].1 < Gas::from_tgas(5).as_gas(), "a join stays small");
+    assert!(report[0].2 < 10e12, "a join stays small");
 }
 
-/// The worst case: all 30,000 colonies playing at once (each paid to plant in the last few days) and every one of
-/// them paid at the tide. Every call still fits, with room to spare.
+/// The worst case: the hot table full (`MAX_PLAYING` colonies alive or paid at the coming tide, on a dish of 30,000
+/// that all have stake). Every call still stays under 150 TGas on the real network.
 #[test]
-fn thirty_thousand_colonies_all_playing_still_fit() {
-    for (what, g) in thirty_thousand(1) {
-        assert!(g < Gas::from_tgas(200).as_gas(), "{}: {:.1} TGas", what, g as f64 / 1e12);
+fn a_full_hot_table_keeps_every_call_under_150_tgas_on_the_real_network() {
+    let (report, _) = thirty_thousand(MAX_PLAYING - 1);
+    for (what, _, real) in &report {
+        assert!(*real < 150e12, "{}: {:.1} TGas", what, real / 1e12);
     }
 }
 
-/// The simulator found that a tide writing every winner's colony and credit records needed about 0.26 TGas per
+/// The catch-up reserves only what the rest of the call will write: the feed part of the hot table, the purse part
+/// only when a tide can run (or a purse already changed), and the idle rows' pages. With the table full and no tide
+/// ahead, a 300 TGas call keeps over 80 TGas to step generations in; with a tide ahead, over 50.
+#[test]
+fn the_catch_up_reserves_only_what_the_rest_of_the_call_needs() {
+    let full_no_tide = catchup_limit(MAX_PLAYING, false, Gas::from_tgas(300));
+    let full_tide = catchup_limit(MAX_PLAYING, true, Gas::from_tgas(300));
+    let small = catchup_limit(100, true, Gas::from_tgas(300));
+    assert!(full_no_tide > Gas::from_tgas(80) && full_tide > Gas::from_tgas(40), "{} / {}", full_no_tide, full_tide);
+    assert!(full_tide < full_no_tide && small > Gas::from_tgas(95));
+    // A generation on a full board is about 0.3 TGas of wasm: 120 of them fit even with a tide ahead.
+    assert!(full_tide.as_gas() as f64 > 120.0 * (20_000.0 + 60.0 * 4_000.0 + 150.0 * 1_000.0) * REAL_OP);
+    assert!(tide_between(7, 8, 8) && !tide_between(8, 15, 8) && tide_between(15, 17, 8));
+    // A call with too little prepaid gas keeps its reserve.
+    assert_eq!(catchup_limit(100, false, Gas::from_tgas(30)), Gas::from_gas(0));
+}
+
+// The simulator found that a tide writing every winner's colony and credit records needed about 0.26 TGas per
 /// winner and ran out of gas at about 1,100 winners. Winnings now go into the hot table, read and written once per
 /// call. The bounty's transfer and its callback cost the same however many colonies win, and are measured apart.
 #[test]
@@ -1593,7 +1904,7 @@ fn a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit() {
     {
         let hot = c.hot_table();
         for id in 1..=n as u16 {
-            let r = hot.enter(id);
+            let r = hot.enter(id, 0, 8_750);
             r.stake = 1_000;
             r.window = 1_000;
         }
@@ -1610,7 +1921,7 @@ fn a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit() {
     eprintln!("a generation and a tide with {} winners: {:.2} TGas of host calls, plus {:.2} TGas for the bounty payout", n, tide as f64 / 1e12, bounty as f64 / 1e12);
     assert!(tide < Gas::from_tgas(20).as_gas(), "{} gas", tide);
     assert!(used < Gas::from_tgas(60).as_gas(), "{} gas", used);
-    let Entry::Tide { paid, as_credit, credit_paid, .. } = last_tide(&c) else { unreachable!() };
+    let TideOut { paid, as_credit, credit_paid, .. } = last_paid();
     assert!(paid.0 > 0 && as_credit.0 > 0 && credit_paid.0 > 0);
     let winnings: Vec<U128> = (0..n).step_by(500).flat_map(|from| c.tide_winnings(Some(from), Some(500))).collect();
     let views: Vec<Colony> = (0..n).step_by(500).flat_map(|from| c.colonies(Some(from), Some(500))).collect();
@@ -1981,8 +2292,12 @@ fn transfers_never_outgrow_the_storage_a_slide_paid_for() {
 // ---------- slides as pattern licences (finding 9) ----------
 
 /// Alice's glider slide (5 cells, token 1), and Bob, a second colony with PETRI to plant with.
+/// Alice's glider slide (5 cells). The launch rules license only slides of 12 cells or more, so these tests of the
+/// licence's mechanics lower `licence_min_cells` to 5; `a_small_slide_is_a_keepsake_not_a_licence` checks the launched
+/// rule.
 fn glider_slide() -> Petri {
-    let mut c = new_dish();
+    at("deployer.testnet", T0);
+    let mut c = Petri::new(Rules { licence_min_cells: 5, ..rules() });
     join(&mut c, "alice.testnet", T0, "Alice", 0xc8431f, NEAR / 5);
     plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::GLIDER), None);
     mint(&mut c, "alice.testnet", T0, (1, 1, 5, 5), None);
@@ -2003,7 +2318,7 @@ fn the_holder_plants_its_slide_at_the_licence_discount() {
     plant_slide(&mut c, "alice.testnet", t, cells(20, 20, patterns::GLIDER), "1");
     assert_eq!(held + earned - bal(&c, "alice.testnet"), full - full / 4, "a quarter off, and no royalty to herself");
     let Entry::Plant { cost, licence: Some(l), .. } = last_entry(&c) else { panic!("a licensed planting") };
-    assert_eq!((cost.0, l.token.0, l.moves, l.holder, l.royalty.0), (full - full / 4, 1, 0, None, 0));
+    assert_eq!((cost.0 as u128, l.token.0, l.moves, l.holder, l.royalty.0, l.to_agar), (full - full / 4, 1, 0, None, 0, false));
     assert_eq!(c.plants(None, None)[1].slide.as_deref(), Some("1"));
     assert_eq!(c.slide_royalties("1".into()).0, 0);
     conserved(&c, &["alice.testnet", "bob.testnet", "keeper.testnet"]);
@@ -2020,7 +2335,7 @@ fn a_stranger_plants_a_slide_and_pays_its_holder_a_royalty() {
     assert_eq!(bob - bal(&c, "bob.testnet"), cost + toll, "the discounted price and a tenth of it to the holder");
     assert_eq!(bal(&c, "alice.testnet") - alice, toll, "transferred to the holder, not burned");
     let Entry::Plant { licence: Some(l), .. } = last_entry(&c) else { panic!() };
-    assert_eq!((l.holder, l.royalty.0), (Some(acct("alice.testnet")), toll));
+    assert_eq!((l.holder, l.royalty.0 as u128, l.to_agar), (Some(acct("alice.testnet")), toll, false));
     assert_eq!((c.slide_royalties("1".into()).0, c.state().royalties.0), (toll, toll));
     assert!(get_logs().iter().any(|l| l.contains("slide royalty")));
     conserved(&c, &["alice.testnet", "bob.testnet"]);
@@ -2053,14 +2368,14 @@ fn after_a_transfer_royalties_go_to_the_new_holder() {
     plant_slide(&mut c, "bob.testnet", T0, cells(20, 20, patterns::GLIDER), "1");
     let Entry::Plant { licence: Some(l), .. } = last_entry(&c) else { panic!() };
     assert_eq!((l.moves, l.holder.clone()), (1, Some(acct("carol.testnet"))));
-    assert_eq!(bal(&c, "carol.testnet"), l.royalty.0, "the new holder is paid");
+    assert_eq!(bal(&c, "carol.testnet"), l.royalty.0 as u128, "the new holder is paid");
     assert_eq!(bal(&c, "alice.testnet"), alice, "the old one is not");
     assert!(c.storage_balance_of(acct("carol.testnet")).is_some());
     // Alice, no longer the holder, pays the royalty too.
     plant_slide(&mut c, "alice.testnet", T0 + GEN_MS, cells(10, 26, patterns::GLIDER), "1");
     let Entry::Plant { licence: Some(l2), .. } = last_entry(&c) else { panic!() };
     assert_eq!(l2.holder, Some(acct("carol.testnet")));
-    assert_eq!(bal(&c, "carol.testnet"), l.royalty.0 + l2.royalty.0);
+    assert_eq!(bal(&c, "carol.testnet"), (l.royalty.0 + l2.royalty.0) as u128);
     conserved(&c, &["alice.testnet", "bob.testnet", "carol.testnet"]);
 }
 
@@ -2096,7 +2411,7 @@ fn a_refund_to_an_unregistered_sender_is_burned() {
     assert_eq!(c.state().burned.0, burned + 2 * P);
     assert_eq!(c.ft_total_supply().0, MAX - c.state().burned.0);
     assert!(get_logs().iter().any(|l| l.contains("\"ft_burn\"")));
-    assert!(matches!(last_entry(&c), Entry::Burn { petri, .. } if petri.0 == 2 * P));
+    assert!(matches!(last_entry(&c), Entry::Burn { petri, .. } if petri.0 as u128 == 2 * P));
     conserved(&c, &["alice.testnet", "bob.testnet", "vault.testnet"]);
 }
 
@@ -2114,7 +2429,7 @@ fn a_forced_unregistration_burns_the_balance() {
     assert!(c.storage_balance_of(acct("dan.testnet")).is_none(), "the registration is closed");
     let refund: u128 = scheduled().iter().filter(|r| r.0 == "dan.testnet").map(|r| r.3).sum();
     assert!(refund > 0 && refund < 125 * byte(), "the storage back, less the Burn entry");
-    assert!(matches!(last_entry(&c), Entry::Burn { petri, .. } if petri.0 == 5 * P));
+    assert!(matches!(last_entry(&c), Entry::Burn { petri, .. } if petri.0 as u128 == 5 * P));
     conserved(&c, &["alice.testnet", "bob.testnet"]);
 }
 
@@ -2541,7 +2856,8 @@ fn a_guest_that_runs_a_tide_is_paid_its_bounty_as_credit() {
     let credit = c.credit_of(acct(g)).0;
     at(g, T0 + 8 * GEN_MS);
     c.advance(None);
-    let Entry::Tide { bounty, by, .. } = last_tide(&c) else { unreachable!() };
+    let Entry::Tide { by, .. } = last_tide(&c) else { unreachable!() };
+    let bounty = last_paid().bounty;
     assert!(bounty.0 > 0);
     assert_eq!(by, 2, "the guest ran it");
     assert!(scheduled().iter().all(|r| r.1 != "transfer"), "no NEAR left the dish");
@@ -2555,7 +2871,8 @@ fn a_guest_that_runs_a_tide_is_paid_its_bounty_as_credit() {
     for (who, gen) in [("keeper.testnet", 16), ("alice.testnet", 24)] {
         at(who, T0 + gen * GEN_MS);
         c.advance(None);
-        let Entry::Tide { bounty, by, .. } = last_tide(&c) else { unreachable!() };
+        let Entry::Tide { by, .. } = last_tide(&c) else { unreachable!() };
+        let bounty = last_paid().bounty;
         assert_eq!(by, if who == "keeper.testnet" { 0 } else { 1 });
         assert!(scheduled().contains(&transfer(who, bounty.0)), "{} paid in NEAR", who);
     }
@@ -2569,7 +2886,7 @@ fn a_failed_bounty_goes_back_to_the_vault() {
     plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
     at("stranger.testnet", T0 + 8 * GEN_MS);
     c.advance(None);
-    let Entry::Tide { bounty, .. } = last_tide(&c) else { unreachable!() };
+    let bounty = last_paid().bounty;
     let index = all_ledger(&c).iter().rposition(|e| matches!(e, Entry::Tide { .. })).unwrap() as u64;
     let vault = c.state().vault.0;
     callback(T0 + 8 * GEN_MS, None);
@@ -2594,7 +2911,7 @@ fn transfer_calls_fit_in_a_transaction() {
     assert_eq!(scheduled()[0].1, "nft_on_transfer");
 }
 
-// ---------- relaunching a v5 dish ----------
+// ---------- relaunching a v6 dish ----------
 
 /// The trie as it stands (the unit runtime keeps it across contexts, but restarts `storage_usage` with each one).
 fn trie() -> HashMap<Vec<u8>, Vec<u8>> {
@@ -2611,35 +2928,36 @@ fn trie_usage() -> u64 {
     trie().iter().map(|(k, v)| (k.len() + v.len() + 40) as u64).sum()
 }
 
-/// Both dishes are hours old, so v6 starts them again from generation zero. A real v5 dish (the frozen v5 code, run
-/// through joins, plantings with notes, a tide, a slide that changed hands, a guest, a registered keeper, credit for an
-/// account that never joined and pending wNEAR) is relaunched, and leaves exactly what a fresh v6 launch leaves: the
-/// same keys, the same bytes, the same storage.
+/// Both dishes are hours old, so v6.1 starts them again from generation zero. A real v6 dish (the frozen v6 code, run
+/// through joins, plantings with notes, a licensed planting with a royalty that registers its holder, tides, a slide
+/// that changed hands, a guest, a registered keeper, credit for an account that never joined, a sale and pending wNEAR,
+/// so it has cold pages, a hot table and every map) is relaunched, and leaves exactly what a fresh v6.1 launch leaves:
+/// the same keys, the same bytes, the same storage.
 #[test]
-fn relaunch_leaves_nothing_of_v5() {
-    // A fresh v6 dish, as the deploy's `new` leaves it.
+fn relaunch_leaves_nothing_of_v6() {
+    // A fresh v6.1 dish, as the deploy's `new` leaves it.
     at("deployer.testnet", T0);
     let fresh = Petri::new(rules());
     env::state_write(&fresh);
     drop(fresh);
     let want = trie();
-    // Wipe the trie and run v5.
+    // Wipe the trie and run v6.
     for k in want.keys() {
         env::storage_remove(k);
     }
     assert_eq!(trie_usage(), 0);
-    use petri_contract_v5 as v5;
-    let v5_rules: v5::Rules = near_sdk::serde_json::from_value(near_sdk::serde_json::to_value(rules()).unwrap()).unwrap();
+    use petri_contract_v6 as v6;
+    let v6_rules: v6::Rules = near_sdk::serde_json::from_value(near_sdk::serde_json::to_value(rules()).unwrap()).unwrap();
     at("deployer.testnet", T0);
-    let mut old = v5::Petri::new(v5_rules);
-    for (who, name, near) in [("alice.testnet", "Alice", NEAR / 5), ("house.testnet", "House", NEAR / 20)] {
+    let mut old = v6::Petri::new(v6_rules);
+    for (who, name, near) in [("alice.testnet", "Alice", NEAR / 5), ("house.testnet", "House", NEAR / 20), ("bob.testnet", "Bob", NEAR / 5)] {
         ctx(who, T0, near);
         old.join(name.into(), 1, None);
     }
-    for (who, xy, shape, note) in [("alice.testnet", (2, 2), patterns::BEEHIVE, Some("hello")), ("house.testnet", (20, 20), patterns::BLOCK, None)] {
-        let d = old.plant_deposit(shape.len() as u32, note.map(|n: &str| n.len() as u32)).0;
+    for (who, xy, shape, note) in [("alice.testnet", (2, 2), patterns::BEEHIVE, Some("hello")), ("house.testnet", (20, 20), patterns::BLOCK, None), ("bob.testnet", (12, 2), patterns::BLOCK, Some("bob"))] {
+        let d = old.plant_deposit(shape.len() as u32, note.map(|n: &str| n.len() as u32), None).0;
         ctx(who, T0, d);
-        old.plant(cells(xy.0, xy.1, shape), note.map(String::from), None);
+        old.plant(cells(xy.0, xy.1, shape), note.map(String::from), None, None);
     }
     ctx("relayer.testnet", T0, NEAR / 10);
     old.sponsor(acct("g-1.relayer.testnet"));
@@ -2654,29 +2972,811 @@ fn relaunch_leaves_nothing_of_v5() {
     old.mint_slide(1, 1, 6, 5, Some("Hi".into()), None);
     ctx("alice.testnet", T0, 1);
     old.nft_transfer(acct("collector.testnet"), "1".into(), None, None);
+    // Bob plants the slide's beehive under its licence: the royalty registers its new holder.
+    at("keeper.testnet", T0 + GEN_MS);
+    old.advance(None);
+    let d = old.plant_deposit(6, None, Some("1".into())).0;
+    ctx("bob.testnet", T0 + GEN_MS, d);
+    old.plant(cells(20, 4, patterns::BEEHIVE), None, None, Some("1".into()));
     let mut b = VMContextBuilder::new();
     b.predecessor_account_id(acct(WNEAR)).current_account_id(acct("petri.testnet")).account_balance(NearToken::from_near(1_000)).block_timestamp(T0 * MS).prepaid_gas(Gas::from_tgas(20));
     testing_env!(b.build());
     let _ = old.ft_on_transfer(acct("intents.testnet"), U128(NEAR / 10), r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#.into());
-    at("keeper.testnet", T0 + 8 * GEN_MS);
-    old.advance(None);
+    for gen in [8u64, 16] {
+        at("keeper.testnet", T0 + gen * GEN_MS);
+        old.advance(None);
+    }
+    at("alice.testnet", T0 + 16 * GEN_MS);
+    old.claim();
+    old.sell(U128(200 * P));
     env::state_write(&old);
     drop(old);
-    let v5_usage = trie_usage();
-    assert!(v5_usage > 4_000, "v5 stored {} bytes", v5_usage);
-    // Relaunch, as the deploy's batch calls it, with the accounts that held something without a colony.
+    let v6_usage = trie_usage();
+    let has = |k: &[u8]| trie().contains_key(k);
+    assert!(v6_usage > 6_000 && has(&[b'U', 0, 0]) && has(b"H") && has(b"J"), "v6 stored {} bytes, its pages and its hot table", v6_usage);
+    // Relaunch, as the deploy's batch calls it, with the accounts that held something without a colony or a slide.
     let mut b = VMContextBuilder::new();
-    b.current_account_id(acct("petri.testnet")).predecessor_account_id(acct("petri.testnet")).block_timestamp(T0 * MS).account_balance(NearToken::from_near(1_000)).storage_usage(v5_usage);
+    b.current_account_id(acct("petri.testnet")).predecessor_account_id(acct("petri.testnet")).block_timestamp(T0 * MS).account_balance(NearToken::from_near(1_000)).storage_usage(v6_usage);
     testing_env!(b.build());
     let fresh = Petri::relaunch(rules(), vec![acct("g-2.relayer.testnet"), acct("keeper.testnet"), acct("pat.testnet")]);
     env::state_write(&fresh);
     let usage = env::storage_usage();
-    assert!(get_logs().iter().any(|l| l.contains("pending NEAR to pat.testnet")), "v5's pending NEAR is reported");
+    assert!(get_logs().iter().any(|l| l.contains("pending NEAR to pat.testnet")), "v6's pending NEAR is reported");
     drop(fresh);
     let got = trie();
     let mut stale: Vec<String> = got.keys().filter(|k| !want.contains_key(*k)).map(|k| String::from_utf8_lossy(k).to_string()).collect();
     stale.sort();
-    assert!(stale.is_empty(), "v5 keys left behind: {:?}", stale);
+    assert!(stale.is_empty(), "v6 keys left behind: {:?}", stale);
     assert_eq!(got, want, "exactly a fresh launch's state");
     assert_eq!(usage, want.iter().map(|(k, v)| (k.len() + v.len() + 40) as u64).sum::<u64>(), "storage_usage back to a fresh init's");
+}
+
+/// Relaunch clears only a v6 dish: it refuses an account with no v6 colonies, and one that already runs v6.1.
+#[test]
+#[should_panic(expected = "no v6 dish here")]
+fn relaunch_refuses_an_account_without_a_v6_dish() {
+    let mut b = VMContextBuilder::new();
+    b.current_account_id(acct("petri.testnet")).predecessor_account_id(acct("petri.testnet")).block_timestamp(T0 * MS);
+    testing_env!(b.build());
+    Petri::relaunch(rules(), vec![]);
+}
+
+#[test]
+#[should_panic(expected = "already runs v6.1")]
+fn relaunch_refuses_a_dish_that_runs_v6_1() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 50);
+    env::storage_write(&[b'U', 0, 0], &[0]);
+    let mut b = VMContextBuilder::new();
+    b.current_account_id(acct("petri.testnet")).predecessor_account_id(acct("petri.testnet")).block_timestamp(T0 * MS);
+    testing_env!(b.build());
+    Petri::relaunch(rules(), vec![]);
+}
+
+// ---------- v6.1: what the v6 simulator found ----------
+
+/// The launch rules license only slides of at least 12 cells: a glider (5) can be minted as a keepsake but planting it
+/// under its licence is refused, so nobody collects royalties on patterns everyone plants anyway. A 12-cell slide is a
+/// licence.
+#[test]
+fn a_small_slide_is_a_keepsake_not_a_licence() {
+    let mut c = new_dish();
+    assert_eq!(c.rules().licence_min_cells, 12);
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 5);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::GLIDER), None);
+    mint(&mut c, "alice.testnet", T0, (1, 1, 5, 5), None);
+    plant(&mut c, "alice.testnet", T0 + GEN_MS, cells(12, 12, &two_beehives()), None);
+    mint(&mut c, "alice.testnet", T0 + GEN_MS, (11, 11, 11, 5), None);
+    join(&mut c, "bob.testnet", T0 + GEN_MS, "Bob", 2, NEAR / 5);
+    let small = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| plant_slide(&mut c, "bob.testnet", T0 + 2 * GEN_MS, cells(20, 24, patterns::GLIDER), "1")));
+    let msg = small.unwrap_err().downcast_ref::<String>().cloned().unwrap_or_default();
+    assert!(msg.contains("only a slide of at least 12 cells is a licence"), "{}", msg);
+    plant_slide(&mut c, "bob.testnet", T0 + 2 * GEN_MS, cells(2, 24, &two_beehives()), "2");
+    let Entry::Plant { licence: Some(l), .. } = last_entry(&c) else { panic!("a licensed planting") };
+    assert!(l.royalty.0 > 0 && !l.to_agar && l.holder == Some(acct("alice.testnet")));
+    conserved(&c, &["alice.testnet", "bob.testnet", "keeper.testnet"]);
+}
+
+/// A planter that has never attached NEAR (a guest on sponsored credit) pays its royalty to the agar, not to the
+/// slide's holder: free play hands no holder PETRI it could sell for vault NEAR.
+#[test]
+fn a_guest_pays_its_royalty_to_the_agar() {
+    let mut c = glider_slide();
+    let g = "g-1.relayer.testnet";
+    guest(&mut c, g, T0, "Guest", 3);
+    let (alice, agar) = (bal(&c, "alice.testnet"), c.state().agar.0);
+    let full = c.quote(5, None, None).0;
+    let cost = full - full / 4;
+    let toll = cost / 10;
+    let d = c.plant_deposit(5, None, Some("1".into())).0;
+    ctx(g, T0, 0);
+    let held = bal(&c, g);
+    c.plant(cells(20, 20, patterns::GLIDER), None, Some(U128(d)), Some("1".into()));
+    assert_eq!(held - bal(&c, g), cost + toll, "the guest pays the discounted price and the royalty");
+    assert_eq!(bal(&c, "alice.testnet"), alice, "the holder is paid nothing");
+    assert_eq!(c.state().agar.0, agar + (cost - cost / 2) + toll, "the royalty went back into the agar");
+    let Entry::Plant { licence: Some(l), .. } = last_entry(&c) else { panic!() };
+    assert_eq!((l.holder, l.royalty.0 as u128, l.to_agar), (Some(acct("alice.testnet")), toll, true));
+    assert_eq!((c.slide_royalties("1".into()).0, c.state().royalties.0), (0, 0), "no royalty reached a holder");
+    // Once it attaches NEAR it is a wallet like any other, and pays the holder.
+    plant(&mut c, g, T0 + GEN_MS, cells(10, 26, patterns::GLIDER), None);
+    plant_slide(&mut c, g, T0 + 2 * GEN_MS, cells(2, 14, patterns::GLIDER), "1");
+    let Entry::Plant { licence: Some(l), .. } = last_entry(&c) else { panic!() };
+    assert!(!l.to_agar && bal(&c, "alice.testnet") == alice + l.royalty.0 as u128);
+    conserved(&c, &["alice.testnet", "bob.testnet", g]);
+}
+
+/// The keeper pot goes to whoever's call runs a generation, whatever the call (here a planting and a sale), when the
+/// caller is registered and is not one of the house's; the house and keepers never take it.
+#[test]
+fn any_call_that_runs_a_generation_takes_the_keeper_pot() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 5);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    join(&mut c, "house.testnet", T0, "House", 2, NEAR / 20);
+    join(&mut c, "bob.testnet", T0, "Bob", 3, NEAR / 5);
+    // The house's planting runs three generations: the pot waits.
+    plant(&mut c, "house.testnet", T0 + 3 * GEN_MS, cells(20, 20, patterns::BLOCK), None);
+    let pot = c.state().keeper_pot.0;
+    assert!(pot > 0 && c.state().keeper_paid.0 == 0, "the house takes no pot");
+    // Bob's planting runs the next two and takes it all.
+    let before = bal(&c, "bob.testnet");
+    plant(&mut c, "bob.testnet", T0 + 5 * GEN_MS, cells(12, 26, patterns::BLOCK), None);
+    let s = c.state();
+    let Entry::Plant { cost, .. } = last_entry(&c) else { panic!() };
+    assert_eq!(s.keeper_pot.0, 0);
+    assert!(s.keeper_paid.0 > pot);
+    assert_eq!(bal(&c, "bob.testnet"), before + s.keeper_paid.0 - cost.0 as u128, "bob was paid the pot and paid for his block");
+    assert!(get_logs().iter().any(|l| l.contains("keeper pot")));
+    // A sale that catches up keeps the pot it was paid (its balance is read after the catch-up).
+    at("alice.testnet", T0 + 9 * GEN_MS);
+    let held = bal(&c, "alice.testnet");
+    let claimed0 = c.colony_of(acct("alice.testnet")).unwrap().petri_claimed.0;
+    c.sell(U128(50 * P));
+    let paid = c.state().keeper_paid.0 - s.keeper_paid.0;
+    assert!(paid > 0);
+    // The sale also claimed what Alice had earned, through its own catch-up too.
+    let claimed = c.colony_of(acct("alice.testnet")).unwrap().petri_claimed.0 - claimed0;
+    assert_eq!(c.claimable(acct("alice.testnet")).petri.0, 0, "the sale claimed every earning");
+    assert_eq!(bal(&c, "alice.testnet"), held + paid + claimed - 50 * P, "the pot is kept, the sale taken");
+    // A keeper never takes it.
+    ctx("dish-keeper.testnet", T0, NEAR / 100);
+    c.storage_deposit(None, None);
+    at("dish-keeper.testnet", T0 + 12 * GEN_MS);
+    c.advance(None);
+    assert_eq!(bal(&c, "dish-keeper.testnet"), 0);
+    conserved(&c, &["alice.testnet", "house.testnet", "bob.testnet", "dish-keeper.testnet"]);
+}
+
+/// A colony whose cells have all died leaves the hot table at the next catch-up after its last tide share, and its
+/// stake goes to its cold slot with the tide count: read later, it is exactly what tide-by-tide decay leaves, and it
+/// comes back with the colony when it plants again. The house never has a row.
+#[test]
+fn a_colony_without_living_cells_leaves_the_hot_table_and_keeps_its_stake() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 5);
+    join(&mut c, "bob.testnet", T0, "Bob", 2, NEAR / 5);
+    join(&mut c, "house.testnet", T0, "House", 3, NEAR / 20);
+    // A lone pair of cells dies at the first generation.
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, &[(0, 0), (1, 0)]), None);
+    plant(&mut c, "bob.testnet", T0, cells(20, 20, patterns::BLOCK), None);
+    plant(&mut c, "house.testnet", T0, cells(10, 26, patterns::BLOCK), None);
+    assert!(HotTable::load().get(3).is_none(), "the house has no hot row");
+    assert_eq!(c.stakes(None, None)[2].0, 4 * STAKE_UNIT, "its stake is in its cold slot");
+    assert_eq!(c.state().playing, 2);
+    at("keeper.testnet", T0 + GEN_MS);
+    c.advance(None);
+    assert!(HotTable::load().get(1).is_none(), "alice's cells died and she earned nothing: her row left");
+    assert_eq!(c.stakes(None, None)[0].0, 2 * STAKE_UNIT, "with her stake");
+    // Three tides later her stake is what three decays leave.
+    for k in 1..=3u64 {
+        at("keeper.testnet", T0 + 8 * k * GEN_MS);
+        c.advance(None);
+    }
+    assert_eq!(c.state().tides.0, 3);
+    let three = (0..3).fold(2 * STAKE_UNIT, |s, _| petri_core::decay_stake(s, 8_750));
+    assert_eq!(c.stakes(None, None)[0].0, three);
+    assert_eq!(c.stakes(None, None)[2].0, (0..3).fold(4 * STAKE_UNIT, |s, _| petri_core::decay_stake(s, 8_750)), "the house's too");
+    plant(&mut c, "alice.testnet", T0 + 24 * GEN_MS, cells(2, 2, patterns::BLOCK), None);
+    assert_eq!(HotTable::load().get(1).unwrap().stake, three + 4 * STAKE_UNIT, "back in the table with its decayed stake");
+    conserved(&c, &["alice.testnet", "bob.testnet", "house.testnet", "keeper.testnet"]);
+}
+
+/// A colony that still has living cells but whose stake has decayed below STAKE_UNIT / reach (125) earns nothing, so it
+/// leaves the hot table even while it lives; the feed pays exactly what it would have (nothing), and every number
+/// still adds up.
+#[test]
+fn a_colony_whose_stake_cannot_earn_leaves_the_hot_table_while_it_lives() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 2);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    join(&mut c, "bob.testnet", T0, "Bob", 2, NEAR / 2);
+    let mut t = T0;
+    let mut i = 0;
+    while c.stakes(None, None)[0].0 >= 125 {
+        t += 8 * GEN_MS;
+        plant(&mut c, "bob.testnet", t, cells(1 + (i % 10) * 3, 12 + (i / 10) * 4, patterns::BLOCK), None);
+        i += 1;
+        assert!(i < 60, "the stake never fell below 125");
+    }
+    at("keeper.testnet", t + 8 * GEN_MS);
+    c.advance(None);
+    assert!(HotTable::load().get(1).is_none(), "alice's block lives on but cannot earn: no row");
+    assert!(c.load_dish().cells.contains(&1), "her block is still alive");
+    let earned = c.earnings(None, None)[0].0;
+    at("keeper.testnet", t + 16 * GEN_MS);
+    c.advance(None);
+    assert_eq!(c.earnings(None, None)[0].0, earned, "and it earns nothing, row or not");
+    conserved(&c, &["alice.testnet", "bob.testnet", "keeper.testnet"]);
+}
+
+/// The hot table holds at most `MAX_PLAYING` rows. A colony without a row cannot plant while the table is full of rows
+/// that cannot leave (all to be paid at the next tide); once rows can leave, its planting makes room first.
+#[test]
+fn a_full_hot_table_waits_for_the_tide_and_makes_room_when_rows_can_leave() {
+    // Contexts on an account as large as this dish really is (the unit runtime starts every one at 300 KB).
+    let big = |who: &str, deposit: u128| {
+        let mut b = VMContextBuilder::new();
+        b.predecessor_account_id(acct(who)).current_account_id(acct("petri.testnet")).account_balance(NearToken::from_near(1_000)).block_timestamp(T0 * MS).attached_deposit(NearToken::from_yoctonear(deposit)).storage_usage(100_000_000);
+        testing_env!(b.build());
+    };
+    at("deployer.testnet", T0);
+    let mut c = Petri::new(Rules { width: 128, height: 128, tide_every: 8, ..rules() });
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 5);
+    crowd(&mut c, MAX_PLAYING as u32);
+    {
+        let hot = c.hot_table();
+        for id in 2..=(MAX_PLAYING as u16 + 1) {
+            hot.rows.push(Hot { id, stake: 4_000, window: 1_000, books: Books::default() });
+        }
+        hot.dirty = true;
+        hot.purse_dirty = true;
+    }
+    big("deployer.testnet", 0);
+    c.flush();
+    c.hot = None;
+    let block = |x: i32, y: i32| -> Vec<u32> { patterns::BLOCK.iter().map(|&(dx, dy)| ((y + dy) * 128 + x + dx) as u32).collect() };
+    let d = c.plant_deposit(4, None, None).0;
+    big("alice.testnet", d);
+    let full = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.plant(block(60, 60), None, None, None)));
+    let msg = full.unwrap_err().downcast_ref::<String>().cloned().unwrap_or_default();
+    assert!(msg.contains("the most the dish holds"), "{}", msg);
+    // Rows with nothing to be paid and no living cell can leave: the planting moves some out and goes in.
+    c.hot = None;
+    big("deployer.testnet", 0);
+    {
+        let hot = c.hot_table();
+        for r in hot.rows.iter_mut().take(5) {
+            r.window = 0;
+        }
+        hot.dirty = true;
+    }
+    c.flush();
+    c.hot = None;
+    big("alice.testnet", d);
+    c.plant(block(60, 60), None, None, None);
+    let hot = HotTable::load();
+    assert!(hot.get(1).is_some() && hot.rows.len() == MAX_PLAYING - 4, "five rows left, alice came in: {}", hot.rows.len());
+}
+
+/// What each ledger entry stores, before (v6) and now; the Tide entry most of all, since every tide pays for its own
+/// from the vault.
+#[test]
+fn ledger_entries_are_as_small_as_the_replay_allows() {
+    let a = || acct("g-0123456789.petri-guests.testnet");
+    let entries = [
+        ("Join", Entry::Join { generation: U64(1), colony: 1 }, 0),
+        ("Buy (spent)", Entry::Buy { generation: U64(1), colony: 1, petri: U64(1), near: U128(1), credit: U128(1), spent: Some(U128(1)) }, 121),
+        ("Plant, 4 cells, spent", Entry::Plant { generation: U64(1), colony: 1, cells: vec![0; 4], cost: U64(1), near: U128(1), credit: U128(1), siege: false, spent: Some(U128(1)), licence: None }, 135),
+        ("Sell", Entry::Sell { generation: U64(1), colony: 1, petri: U64(1), near: U128(1), paid: U128(1), as_credit: false }, 105),
+        ("Tide", Entry::Tide { generation: U64(1), chain: hex::encode([0u8; 32]), bytes: 130, by: 1 }, 236),
+        ("Claim", Entry::Claim { generation: U64(1), colony: 1, petri: U64(1), near: U128(1), paid: U128(1) }, 104),
+        ("Burn", Entry::Burn { generation: U64(1), account: a(), petri: U64(1) }, 0),
+        ("Slide 4x4", Entry::Slide { generation: U64(1), colony: 1, token: U64(1), x: 0, y: 0, w: 4, h: 4, cells: 5, bitmap: Base64VecU8(vec![0; 2]), cost: U64(1), spent: None }, 99),
+    ];
+    for (name, e, v6) in entries {
+        let now = entry_bytes(&e) as u64;
+        eprintln!("{:<22} {:>4} bytes stored (v6: {})", name, now, if v6 > 0 { v6.to_string() } else { "-".into() });
+        if v6 > 0 {
+            assert!(now <= v6 - 8, "{} did not shrink: {} (v6 {})", name, now, v6);
+        }
+    }
+    let licence = Licence { token: U64(1), moves: 0, holder: Some(acct("alice.testnet")), royalty: U64(1), to_agar: false };
+    let with = Entry::Plant { generation: U64(1), colony: 1, cells: vec![0; 4], cost: U64(1), near: U128(1), credit: U128(1), siege: false, spent: None, licence: Some(licence) };
+    let without = Entry::Plant { generation: U64(1), colony: 1, cells: vec![0; 4], cost: U64(1), near: U128(1), credit: U128(1), siege: false, spent: None, licence: None };
+    assert_eq!(entry_bytes(&with) - entry_bytes(&without), 8 + 4 + 1 + 4 + 13 + 8 + 1, "the licence, as plant_deposit charges it");
+    // A tide stores its entry and four bytes of the tide index: 130 bytes (289 in v6).
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 5);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    for k in 1..=3u64 {
+        at("keeper.testnet", T0 + 8 * k * GEN_MS);
+        let before = env::storage_usage();
+        c.advance(None);
+        let Entry::Tide { bytes, .. } = last_tide(&c) else { unreachable!() };
+        assert_eq!(bytes as u64, env::storage_usage() - before, "the entry names the bytes it took");
+        assert_eq!(bytes, if k == 1 { 126 + 4 + 45 } else { 126 + 4 }, "a new index page only every 256 tides");
+        assert_eq!(last_paid().storage.0, bytes as u128 * byte());
+    }
+    assert_eq!(c.checkpoints(None, None).len(), 4, "generation zero and three tides");
+    assert_eq!(c.checkpoints(Some(2), Some(5)).iter().map(|p| p.generation.0).collect::<Vec<_>>(), vec![16, 24]);
+    conserved(&c, &["alice.testnet", "keeper.testnet"]);
+}
+
+// ---------- kept PETRI: free play never reaches NEAR ----------
+
+/// The kept PETRI `who`'s colony view shows.
+fn kept_petri(c: &Petri, who: &str) -> U64 {
+    c.colony_of(acct(who)).map(|v| v.kept).unwrap_or(U64(0))
+}
+
+/// What `f` was refused with (it must panic).
+fn refusal(f: impl FnOnce()) -> String {
+    let e = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).expect_err("the call is refused");
+    e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
+}
+
+/// A guest that farmed: it joined and planted on sponsored credit, and a tide later claimed what its block earned.
+fn farmed_guest(c: &mut Petri, g: &str, x: i32, y: i32) {
+    guest(c, g, T0, &format!("Guest {} {}", x, y), 2 + x as u32);
+    plant_on_credit(c, g, T0, cells(x, y, patterns::BLOCK));
+    at(g, T0 + 8 * GEN_MS);
+    c.claim();
+}
+
+#[test]
+fn guest_cannot_transfer_free_petri() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    let g = "g-1.relayer.testnet";
+    farmed_guest(&mut c, g, 20, 20);
+    let held = bal(&c, g);
+    assert!(held > 0);
+    assert_eq!(kept_petri(&c, g).0 as u128, held, "everything a guest holds stays in the dish");
+    // It cannot hand its PETRI to a wallet that would sell it, with or without a call.
+    ctx(g, T0 + 8 * GEN_MS, 1);
+    let why = refusal(|| c.ft_transfer(acct("alice.testnet"), U128(held), None));
+    assert!(why.contains("free play's PETRI stays in the dish"), "{}", why);
+    ctx_gas(g, T0 + 8 * GEN_MS, 1, 300);
+    let why = refusal(|| {
+        let _ = c.ft_transfer_call(acct("alice.testnet"), U128(1), None, "".into());
+    });
+    assert!(why.contains("never attached NEAR cannot send PETRI"), "{}", why);
+    assert_eq!(bal(&c, g), held);
+    // It still plants with it, and sells it back for credit.
+    at(g, T0 + 8 * GEN_MS);
+    assert!(c.sell(U128(30 * P)).0 > 0);
+    assert!(matches!(last_entry(&c), Entry::Sell { as_credit: true, .. }));
+    assert_eq!(kept_petri(&c, g).0 as u128, held - 30 * P);
+    conserved(&c, &["alice.testnet", g, "keeper.testnet"]);
+}
+
+#[test]
+fn guest_that_attaches_cannot_sell_what_it_farmed() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    let g = "g-1.relayer.testnet";
+    farmed_guest(&mut c, g, 20, 20);
+    let t = T0 + 9 * GEN_MS;
+    at("keeper.testnet", t);
+    c.advance(None);
+    // What it farmed: its balance and what it has earned since its claim.
+    let farmed = bal(&c, g) + c.claimable(acct(g)).petri.0;
+    assert_eq!(kept_petri(&c, g).0 as u128, farmed);
+    // It attaches 0.01 NEAR with a purchase: the PETRI that buys is its own to sell, what it farmed is not.
+    ctx(g, t, NEAR / 100);
+    let bought = c.buy(None).0;
+    assert!(c.colony_of(acct(g)).unwrap().attached);
+    assert_eq!(kept_petri(&c, g).0 as u128, farmed, "earned before its first NEAR, so kept");
+    assert_eq!(bal(&c, g) + c.claimable(acct(g)).petri.0, farmed + bought);
+    at(g, t);
+    let why = refusal(|| {
+        c.sell(U128(P));
+    });
+    assert!(why.contains("stays in the dish") && why.contains("kept PETRI"), "{}", why);
+    ctx(g, t, 1);
+    let why = refusal(|| c.ft_transfer(acct("alice.testnet"), U128(P), None));
+    assert!(why.contains("kept PETRI"), "{}", why);
+    assert_eq!(c.state().near_sold.0, 0, "no NEAR left the vault for farmed PETRI");
+    conserved(&c, &["alice.testnet", g, "keeper.testnet"]);
+}
+
+/// 64 empty cells in two rows: a planting large enough to spend a guest's kept PETRI at once.
+fn band(y: i32) -> Vec<u32> {
+    (0..32).flat_map(|x| [y as u32 * 32 + x, (y as u32 + 1) * 32 + x]).collect()
+}
+
+#[test]
+fn attached_player_sells_what_it_earned_after() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    let g = "g-1.relayer.testnet";
+    farmed_guest(&mut c, g, 20, 20);
+    let t = T0 + 9 * GEN_MS;
+    ctx(g, t, NEAR / 20);
+    c.buy(None);
+    let kept = kept_petri(&c, g).0;
+    assert!(kept > 0);
+    // A planting large enough spends every kept PETRI (it is spent first).
+    plant(&mut c, g, t, band(10), None);
+    let Entry::Plant { cost, .. } = last_entry(&c) else { panic!() };
+    assert!(cost.0 >= kept, "{} {}", cost.0, kept);
+    assert_eq!(kept_petri(&c, g).0, 0);
+    // What it earns from now on, and what it bought with NEAR, it sells for NEAR.
+    let t = T0 + 17 * GEN_MS;
+    at(g, t);
+    let paid = c.sell(U128(50 * P)).0;
+    assert!(paid > 0);
+    assert!(matches!(last_entry(&c), Entry::Sell { as_credit: false, .. }));
+    assert_eq!(c.state().near_sold.0, paid);
+    conserved(&c, &["alice.testnet", g, "keeper.testnet"]);
+}
+
+#[test]
+fn kept_petri_can_still_be_planted() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    let g = "g-1.relayer.testnet";
+    farmed_guest(&mut c, g, 20, 20);
+    let t = T0 + 9 * GEN_MS;
+    ctx(g, t, NEAR / 100);
+    c.buy(None);
+    let kept = kept_petri(&c, g).0;
+    // A planting spends kept PETRI first.
+    plant(&mut c, g, t, cells(10, 10, patterns::BEEHIVE), None);
+    let Entry::Plant { cost, .. } = last_entry(&c) else { panic!() };
+    assert_eq!(kept_petri(&c, g).0, kept - cost.0);
+    // So does a slide.
+    let token = mint(&mut c, g, t, (9, 9, 6, 5), None);
+    let s = c.slide(token).unwrap();
+    assert_eq!(kept_petri(&c, g).0, kept - cost.0 - s.cells as u64 * P as u64);
+    assert!(kept_petri(&c, g).0 > 0, "some is left, so it still cannot sell");
+    at(g, t);
+    assert!(refusal(|| {
+        c.sell(U128(P));
+    })
+    .contains("kept PETRI"));
+    conserved(&c, &["alice.testnet", g, "keeper.testnet"]);
+}
+
+/// Sybils: ten guests farm for free and each attaches 0.01 NEAR, then tries to sell what it farmed or send it to one
+/// wallet that would sell it. None of it reaches the vault's NEAR, and the guests took no keeper pot.
+#[test]
+fn sybil_guests_that_attach_reach_no_vault_near() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    let guests: Vec<String> = (0..10).map(|i| format!("g-{}.relayer.testnet", i)).collect();
+    for (i, g) in guests.iter().enumerate() {
+        guest(&mut c, g, T0, &format!("Guest {}", i), 2 + i as u32);
+        plant_on_credit(&mut c, g, T0, cells((i as i32 % 5) * 6 + 1, 10 + (i as i32 / 5) * 8, patterns::BLOCK));
+    }
+    for g in &guests {
+        at(g, T0 + 8 * GEN_MS);
+        c.claim();
+    }
+    assert_eq!(c.state().keeper_paid.0, 0, "guests take no keeper pot");
+    let t = T0 + 17 * GEN_MS;
+    let mut farmed = 0u128;
+    for g in &guests {
+        ctx(g, t, NEAR / 100);
+        c.buy(None);
+        let kept = kept_petri(&c, g).0 as u128;
+        farmed += kept;
+        at(g, t);
+        assert!(refusal(|| {
+            c.sell(U128(kept));
+        })
+        .contains("kept PETRI"));
+        ctx(g, t, 1);
+        assert!(refusal(|| c.ft_transfer(acct("alice.testnet"), U128(kept), None)).contains("kept PETRI"));
+    }
+    assert!(farmed > 10 * P);
+    let s = c.state();
+    assert_eq!(s.near_sold.0, 0, "no vault NEAR paid for farmed PETRI");
+    assert!(!all_ledger(&c).iter().any(|e| matches!(e, Entry::Sell { as_credit: false, .. })));
+    let refs: Vec<&str> = guests.iter().map(|s| s.as_str()).chain(["alice.testnet", "keeper.testnet"]).collect();
+    conserved(&c, &refs);
+}
+
+/// Credit never turns into NEAR: PETRI bought with credit is kept, even by a colony that attached NEAR long before.
+#[test]
+fn petri_bought_with_credit_is_kept() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    assert_eq!(kept_petri(&c, "alice.testnet").0, 0);
+    ctx("friend.testnet", T0, NEAR / 10);
+    c.sponsor(acct("alice.testnet"));
+    at("alice.testnet", T0);
+    let units = c.buy(Some(U128(NEAR / 40))).0;
+    assert_eq!(kept_petri(&c, "alice.testnet").0 as u128, units);
+    // Half NEAR, half credit (its record paid from the credit first): about half of it is kept.
+    ctx("alice.testnet", T0, NEAR / 40);
+    let more = c.buy(Some(U128(NEAR / 40))).0;
+    let kept = kept_petri(&c, "alice.testnet").0 as u128 - units;
+    let Entry::Buy { near, credit, .. } = last_entry(&c) else { panic!() };
+    assert_eq!(kept, credit_share(more as u64, credit.0, near.0 + credit.0) as u128);
+    assert!(kept < more / 2 && kept > more / 3, "{} of {}", kept, more);
+    conserved(&c, &["alice.testnet"]);
+}
+
+// ---------- pacts ----------
+
+#[test]
+fn pact_refuses_breaking_planting() {
+    let mut c = two_colonies();
+    // Alice pays Bob 10 PETRI to keep 8 cells from her colony until generation 100.
+    let d = PACT_DEPOSIT;
+    ctx("alice.testnet", T0, d);
+    let id = c.pact_offer(acct("bob.testnet"), U128(10 * P), U64(100), None);
+    assert!(matches!(last_entry(&c), Entry::PactOffer { pact: 1, from: 1, to: 2, .. }));
+    let bob = bal(&c, "bob.testnet");
+    at("bob.testnet", T0);
+    c.pact_accept(id);
+    let v = c.pact(id).unwrap();
+    assert!(v.binding && v.accepted == Some(U64(0)));
+    assert_eq!(bal(&c, "bob.testnet"), bob + 10 * P, "accepting pays");
+    assert_eq!(c.pacts_of(acct("alice.testnet")).len(), 1);
+    // Her beehive spans (2..5, 2..4): a block at (12, 2) is 7 cells from it, and the dish refuses it.
+    let d = c.plant_deposit(4, None, None).0;
+    ctx("bob.testnet", T0 + GEN_MS, d);
+    let why = refusal(|| {
+        c.plant(cells(12, 2, patterns::BLOCK), None, None, None);
+    });
+    assert!(why.contains("pact 1 with Alice") && why.contains("until generation 100"), "{}", why);
+    // Elsewhere Bob plants as before, and Alice is bound by nothing.
+    plant(&mut c, "bob.testnet", T0 + GEN_MS, cells(20, 20, patterns::BLOCK), None);
+    plant(&mut c, "alice.testnet", T0 + GEN_MS, cells(10, 6, patterns::BLOCK), None);
+    // Nobody can end an accepted pact early.
+    at("alice.testnet", T0 + GEN_MS);
+    assert!(refusal(|| {
+        c.pact_cancel(1);
+    })
+    .contains("an accepted pact binds"));
+    conserved(&c, &["alice.testnet", "bob.testnet", "keeper.testnet"]);
+}
+
+#[test]
+fn pact_expires_and_planting_is_allowed() {
+    let mut c = two_colonies();
+    let d = PACT_DEPOSIT;
+    ctx("alice.testnet", T0, d);
+    c.pact_offer(acct("bob.testnet"), U128(P), U64(5), None);
+    at("bob.testnet", T0);
+    c.pact_accept(1);
+    let d = c.plant_deposit(4, None, None).0;
+    ctx("bob.testnet", T0 + 4 * GEN_MS, d);
+    assert!(refusal(|| {
+        c.plant(cells(12, 2, patterns::BLOCK), None, None, None);
+    })
+    .contains("pact 1"));
+    // From generation 5 the pact binds no longer.
+    plant(&mut c, "bob.testnet", T0 + 5 * GEN_MS, cells(12, 2, patterns::BLOCK), None);
+    assert!(!c.pact(1).unwrap().binding);
+    // Anyone may end it now; it leaves both colonies' lists.
+    at("keeper.testnet", T0 + 5 * GEN_MS);
+    c.pact_cancel(1);
+    assert_eq!(c.pact(1).unwrap().ended, Some(U64(5)));
+    assert!(c.pacts_of(acct("bob.testnet")).is_empty() && c.pacts_of(acct("alice.testnet")).is_empty());
+    assert!(matches!(last_entry(&c), Entry::PactEnd { pact: 1, .. }));
+    conserved(&c, &["alice.testnet", "bob.testnet", "keeper.testnet"]);
+}
+
+#[test]
+fn unaccepted_offer_refunds() {
+    let mut c = two_colonies();
+    let d = PACT_DEPOSIT;
+    let alice = bal(&c, "alice.testnet");
+    ctx("alice.testnet", T0, d);
+    c.pact_offer(acct("bob.testnet"), U128(10 * P), U64(50), None);
+    assert_eq!(bal(&c, "alice.testnet"), alice - 10 * P);
+    assert_eq!(c.state().pact_escrow.0, 10 * P);
+    conserved(&c, &["alice.testnet", "bob.testnet"]);
+    // One open offer to a colony at a time; a stranger cannot end it early.
+    ctx("alice.testnet", T0, d);
+    assert!(refusal(|| {
+        c.pact_offer(acct("bob.testnet"), U128(P), U64(50), None);
+    })
+    .contains("still open"));
+    at("mallory.testnet", T0);
+    assert!(refusal(|| {
+        c.pact_cancel(1);
+    })
+    .contains("only the two colonies"));
+    // Withdrawn: the PETRI goes back.
+    at("alice.testnet", T0);
+    c.pact_cancel(1);
+    assert_eq!((bal(&c, "alice.testnet"), c.state().pact_escrow.0), (alice, 0));
+    // Declined by Bob: back too.
+    ctx("alice.testnet", T0, d);
+    c.pact_offer(acct("bob.testnet"), U128(4 * P), U64(50), None);
+    at("bob.testnet", T0);
+    c.pact_cancel(2);
+    assert_eq!(bal(&c, "alice.testnet"), alice);
+    // Expired: it can no longer be accepted, and anyone ends it and sends the PETRI back.
+    ctx("alice.testnet", T0, d);
+    c.pact_offer(acct("bob.testnet"), U128(3 * P), U64(3), None);
+    // (Accepting and ending read the stored generation, so the dish is tended first.)
+    at("keeper.testnet", T0 + 3 * GEN_MS);
+    c.advance(None);
+    at("bob.testnet", T0 + 3 * GEN_MS);
+    assert!(refusal(|| {
+        c.pact_accept(3);
+    })
+    .contains("no longer open"));
+    at("mallory.testnet", T0 + 3 * GEN_MS);
+    c.pact_cancel(3);
+    assert_eq!(c.state().pact_escrow.0, 0);
+    assert!(bal(&c, "alice.testnet") >= alice, "every offer came back (and the keeper pot may have come too)");
+    conserved(&c, &["alice.testnet", "bob.testnet", "keeper.testnet", "mallory.testnet"]);
+}
+
+#[test]
+fn kept_petri_cannot_pay_a_pact() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    let g = "g-1.relayer.testnet";
+    farmed_guest(&mut c, g, 20, 20);
+    let t = T0 + 9 * GEN_MS;
+    let d = PACT_DEPOSIT;
+    // A guest's PETRI pays for no pact.
+    ctx(g, t, d);
+    assert!(refusal(|| {
+        c.pact_offer(acct("alice.testnet"), U128(P), U64(100), None);
+    })
+    .contains("never attached NEAR"));
+    // Nor does kept PETRI, once it has attached NEAR.
+    ctx(g, t, NEAR / 100);
+    c.buy(None);
+    ctx(g, t, d);
+    assert!(refusal(|| {
+        c.pact_offer(acct("alice.testnet"), U128(P), U64(100), None);
+    })
+    .contains("kept PETRI"));
+    // A pact that carries no PETRI is still a pact, and its storage can be paid from credit.
+    at(g, t);
+    let credit = c.credit_of(acct(g)).0;
+    assert_eq!(c.pact_offer(acct("alice.testnet"), U128(0), U64(100), Some(U128(PACT_DEPOSIT))), 1);
+    assert!(c.credit_of(acct(g)).0 < credit && credit - c.credit_of(acct(g)).0 <= PACT_DEPOSIT);
+    conserved(&c, &["alice.testnet", g, "keeper.testnet"]);
+}
+
+#[test]
+fn house_pact_stays_in_house() {
+    at("deployer.testnet", T0);
+    let mut c = Petri::new(Rules { house: vec![acct("house.testnet"), acct("house2.testnet")], ..rules() });
+    join(&mut c, "house.testnet", T0, "House", 1, NEAR / 20);
+    plant(&mut c, "house.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    // The second house strain plays on sponsored credit, as the testnet strains do: the house is not held by kept PETRI,
+    // since its PETRI cannot leave the house anyway.
+    guest(&mut c, "house2.testnet", T0, "House Two", 2);
+    assert!(!c.colony_of(acct("house2.testnet")).unwrap().attached);
+    join(&mut c, "alice.testnet", T0, "Alice", 3, NEAR / 5);
+    let d = PACT_DEPOSIT;
+    // The house pays no player PETRI for a pact.
+    ctx("house.testnet", T0, d);
+    assert!(refusal(|| {
+        c.pact_offer(acct("alice.testnet"), U128(P), U64(100), None);
+    })
+    .contains("the house's PETRI stays in the house"));
+    // A pact without PETRI binds the player all the same.
+    ctx("house.testnet", T0, d);
+    c.pact_offer(acct("alice.testnet"), U128(0), U64(100), None);
+    at("alice.testnet", T0);
+    c.pact_accept(1);
+    let p = c.plant_deposit(4, None, None).0;
+    ctx("alice.testnet", T0, p);
+    assert!(refusal(|| {
+        c.plant(cells(8, 2, patterns::BLOCK), None, None, None);
+    })
+    .contains("pact 1 with House"));
+    // A player may pay the house; house strains pay each other.
+    ctx("alice.testnet", T0, d);
+    c.pact_offer(acct("house.testnet"), U128(2 * P), U64(100), None);
+    let held = bal(&c, "house.testnet");
+    at("house.testnet", T0);
+    c.pact_accept(2);
+    assert_eq!(bal(&c, "house.testnet"), held + 2 * P);
+    ctx("house.testnet", T0, d);
+    c.pact_offer(acct("house2.testnet"), U128(P), U64(100), None);
+    let held2 = bal(&c, "house2.testnet");
+    at("house2.testnet", T0);
+    c.pact_accept(3);
+    assert_eq!(bal(&c, "house2.testnet"), held2 + P);
+    at("house2.testnet", T0);
+    c.pact_offer(acct("house.testnet"), U128(P), U64(100), Some(U128(PACT_DEPOSIT)));
+    // But never to a player.
+    at("house2.testnet", T0);
+    assert!(refusal(|| {
+        c.pact_offer(acct("alice.testnet"), U128(P), U64(100), Some(U128(PACT_DEPOSIT)));
+    })
+    .contains("the house's PETRI stays in the house"));
+    conserved(&c, &["house.testnet", "house2.testnet", "alice.testnet"]);
+}
+
+#[test]
+fn a_colony_is_party_to_at_most_eight_pacts() {
+    let mut c = new_dish();
+    join(&mut c, "bob.testnet", T0, "Bob", 1, NEAR);
+    let d = PACT_DEPOSIT;
+    for i in 0..MAX_PACTS {
+        let who = format!("p{}.testnet", i);
+        join(&mut c, &who, T0, &format!("P{}", i), 2 + i as u32, NEAR / 50);
+        ctx(&who, T0, d);
+        c.pact_offer(acct("bob.testnet"), U128(0), U64(10), None);
+    }
+    join(&mut c, "late.testnet", T0, "Late", 99, NEAR / 50);
+    ctx("late.testnet", T0, d);
+    assert!(refusal(|| {
+        c.pact_offer(acct("bob.testnet"), U128(0), U64(10), None);
+    })
+    .contains("party to at most 8 pacts"));
+    // Once they expire they make room by themselves.
+    ctx("late.testnet", T0 + 10 * GEN_MS, d);
+    c.pact_offer(acct("bob.testnet"), U128(0), U64(20), None);
+    assert_eq!(c.pacts_of(acct("bob.testnet")).len(), 1);
+    let refs: Vec<String> = (0..MAX_PACTS).map(|i| format!("p{}.testnet", i)).collect();
+    let refs: Vec<&str> = refs.iter().map(|s| s.as_str()).chain(["bob.testnet", "late.testnet"]).collect();
+    conserved(&c, &refs);
+}
+
+/// The cost of pacts on a crowded dish: 30,000 colonies, 1,000 of them alive with a block each and 1,500 playing, and
+/// a newcomer bound by `MAX_PACTS` pacts that plants 64 cells, so the scan looks at all 64 x 17 x 17 cells. The unit
+/// runtime charges the host calls (reading the pacts); the scan's wasm is estimated at 50 instructions a cell.
+#[test]
+fn pacts_gas_at_scale() {
+    let scale = (REAL_WRITE_BYTE / unit_write_byte()).max(1.0);
+    let ctx_gas = |who: &str, ms: u64, deposit: u128, tgas: u64| {
+        let mut b = VMContextBuilder::new();
+        b.predecessor_account_id(acct(who)).current_account_id(acct("petri.testnet")).account_balance(NearToken::from_near(1_000)).block_timestamp(ms * MS).attached_deposit(NearToken::from_yoctonear(deposit)).prepaid_gas(Gas::from_tgas(tgas)).storage_usage(100_000_000);
+        testing_env!(b.build());
+    };
+    at("deployer.testnet", T0);
+    let mut c = Petri::new(Rules { tide_every: 8, house: vec![], ..launch() });
+    join(&mut c, "funder.testnet", T0, "Funder", 1, 200 * NEAR);
+    crowd(&mut c, 29_999);
+    let mut dish = Dish::new(128, 128);
+    for k in 0..1_000u32 {
+        let (x, y) = ((k % 32) as i32 * 4, (k / 32) as i32 * 4);
+        let cs: Vec<u32> = patterns::BLOCK.iter().map(|&(dx, dy)| dish.index(x + dx, y + dy) as u32).collect();
+        dish.plant_unchecked(k as u16 + 2, &cs);
+    }
+    c.store_dish(&dish);
+    c.total_live = 4_000;
+    {
+        let hot = c.hot_table();
+        let ids: Vec<u16> = (2..=1_001u16).chain((1_002..=30_000u16).step_by(58).take(500)).collect();
+        for id in ids {
+            hot.rows.push(Hot { id, stake: 4_000, window: 1_000, books: Books { attached: id % 2 == 0, ..Default::default() } });
+        }
+        hot.dirty = true;
+        hot.purse_dirty = true;
+    }
+    c.flush();
+    let rows = c.state().playing as u64;
+    for (who, name) in [("bound.testnet", "Bound"), ("free.testnet", "Free")] {
+        ctx_gas(who, T0, NEAR / 2, 300);
+        c.hot = None;
+        c.join(name.into(), 7, None);
+    }
+    // Colonies 2..=9 (blocks on rows 0 and 1) each hold an accepted pact binding the first newcomer.
+    let me = 30_001u16;
+    at("deployer.testnet", T0);
+    for (k, from) in (2..=9u16).enumerate() {
+        pacts::write_pact(k as u32 + 1, &Pact { from, to: me, petri: U64(0), offered: U64(0), until: U64(1_000), accepted: Some(U64(0)), ended: None });
+        pacts::write_list(from, &[k as u32 + 1]);
+    }
+    pacts::write_list(me, &(1..=MAX_PACTS as u32).collect::<Vec<_>>());
+    c.pact_count = MAX_PACTS as u32;
+    // 64 empty cells on two rows far from the blocks the pacts protect: legal, so the whole scan runs.
+    let row = |y: u32| -> Vec<u32> { (0..32).flat_map(|i| [y * 128 + 4 * i + 2, (y + 4) * 128 + 4 * i + 2]).collect() };
+    let mut report = vec![];
+    for (who, y) in [("bound.testnet", 66u32), ("free.testnet", 82)] {
+        let d = c.plant_deposit(64, None, None).0;
+        ctx_gas(who, T0, d, 300);
+        c.hot = None;
+        c.plant(row(y), None, None, None);
+        let g = env::used_gas().as_gas();
+        let scan = if who == "bound.testnet" { 64.0 * 17.0 * 17.0 * 50.0 * REAL_OP } else { 0.0 };
+        report.push((who, g, real_gas(g, 0, scale, 0, 4_128, 1_003, rows + 2, false) + scan));
+    }
+    // A planting that breaks a pact is refused.
+    let d = c.plant_deposit(4, None, None).0;
+    ctx_gas("bound.testnet", T0 + GEN_MS, d, 300);
+    c.hot = None;
+    assert!(refusal(|| {
+        c.plant(patterns::BLOCK.iter().map(|&(dx, dy)| ((6 + dy) * 128 + 10 + dx) as u32).collect(), None, None, None);
+    })
+    .contains("pact"));
+    for (who, g, real) in &report {
+        eprintln!("30,000 colonies, {} playing: 64-cell planting by {} {:.2} TGas of host calls, {:.1} TGas on the real network", rows, who, *g as f64 / 1e12, real / 1e12);
+    }
+    let (bound, free) = (report[0].2, report[1].2);
+    eprintln!("8 pacts add {:.2} TGas to a 64-cell planting", (bound - free) / 1e12);
+    assert!(bound < 150e12 && bound - free < 5e12, "{} / {}", bound, free);
 }

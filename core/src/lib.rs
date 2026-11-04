@@ -480,6 +480,40 @@ impl Dish {
     pub fn fits_slide(&self, cells: &[u32], bitmap: &[u8], w: u16, h: u16) -> bool {
         fits_slide(self.width, self.height, cells, bitmap, w, h)
     }
+
+    /// A planting that breaks a pact: the first of `cells` (in order) with a living cell of one of the `protected`
+    /// colonies within `radius` cells across or down (a square, wrapping at the edges), as (that planted cell, the
+    /// protected cell, its colony). Each square is scanned row by row, and every cell of the dish is looked at once at
+    /// most, so the work is at most `cells.len() × (2 radius + 1)²` and never more than the dish. The contract refuses
+    /// such a planting by a colony bound by a pact, and both replays repeat the check.
+    pub fn pact_breach(&self, cells: &[u32], protected: &[ColonyId], radius: u16) -> Option<(u32, u32, ColonyId)> {
+        if protected.is_empty() || cells.is_empty() {
+            return None;
+        }
+        let r = radius.min(self.width.min(self.height) / 2) as i32;
+        let mut seen = vec![0u64; (self.cells.len() + 63) / 64];
+        for &i in cells {
+            if i as usize >= self.cells.len() {
+                continue;
+            }
+            let (x, y) = self.xy(i as usize);
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    let j = self.index(x + dx, y + dy);
+                    let (word, bit) = (j / 64, 1u64 << (j % 64));
+                    if seen[word] & bit != 0 {
+                        continue;
+                    }
+                    seen[word] |= bit;
+                    let c = self.cells[j];
+                    if c != EMPTY && protected.contains(&c) {
+                        return Some((i, j as u32, c));
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 /// Whether `cells` (flat indices on a `width` × `height` dish) are exactly a specimen slide's pattern moved to another
@@ -638,6 +672,28 @@ pub fn decay_stake(stake: u64, stake_keep_bps: u16) -> u64 {
     (stake as u128 * stake_keep_bps as u128 / 10_000) as u64
 }
 
+/// Stake after `tides` tides: `decay_stake` applied that many times, exactly as tide-by-tide decay would leave it (it
+/// stops early once the stake is gone or no longer changes). The contract keeps an idle colony's stake with the tide
+/// count it was last decayed at and catches it up this way when it is read.
+pub fn decay_stake_times(stake: u64, stake_keep_bps: u16, tides: u64) -> u64 {
+    let mut s = stake;
+    for _ in 0..tides {
+        let next = decay_stake(s, stake_keep_bps);
+        if next == s {
+            break;
+        }
+        s = next;
+    }
+    s
+}
+
+/// Whether a colony with `stake` could earn anything from the feed: its pay cap (`feed_weight`) is at least one cell.
+/// Below `STAKE_UNIT / reach` (125 at reach 8) a colony earns nothing however many cells it has, and only planting
+/// raises its stake again.
+pub fn can_earn(stake: u64, reach: u32) -> bool {
+    feed_weight(1, stake, reach) > 0
+}
+
 /// One generation's feed from the agar.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Feed {
@@ -766,6 +822,21 @@ pub fn feed_per_cell(agar: u128, feed_ppm: u32, keeper_bps: u16, counted: u32, l
 /// fills, and a planting only pays for itself if its cells survive about `payback` generations.
 pub fn plant_price(per_cell_feed: u128, payback: u32, floor: u128, cells: u32) -> u128 {
     (per_cell_feed * payback as u128).max(floor) * cells as u128
+}
+
+/// The part of a purchase of `units` PETRI that `credit` paid for, of `total` brought (credit and attached NEAR):
+/// `units × credit / total`, rounded down, with both amounts first shifted right until `total` fits in 64 bits, so the
+/// product fits in 128. The contract keeps that much of the purchase in the dish; both replays recompute it.
+pub fn credit_share(units: u64, credit: u128, total: u128) -> u64 {
+    if credit == 0 || total == 0 {
+        return 0;
+    }
+    if credit >= total {
+        return units;
+    }
+    let shift = (128 - total.leading_zeros()).saturating_sub(64);
+    let (c, t) = (credit >> shift, total >> shift);
+    (units as u128 * c / t) as u64
 }
 
 /// A planting made under a specimen slide's licence (its exact pattern, translated) costs `discount_bps` less.

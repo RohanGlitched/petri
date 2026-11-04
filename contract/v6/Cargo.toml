@@ -1,10 +1,10 @@
 [package]
-name = "petri-contract-v5"
-version = "0.2.0"
+name = "petri-contract-v6"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 publish = false
-description = "The v5 Petri contract, frozen, for the v6 relaunch test only."
+description = "The v6 Petri contract (dd18fac), frozen, for the v6.1 relaunch test only."
 
 [lib]
 crate-type = ["rlib"]

@@ -1,98 +1,73 @@
-// The house council: once per tide window the five house strains meet. Each may offer one deal to another strain,
-// PETRI paid now for a promise, and the other strain's model accepts or declines in the same round. Accepted deals are
-// paid on chain with NEP-141 ft_transfer and a {"pact", "terms"} memo; the promises are then held by the candidate
-// filter (truce, keep_out) or left to the promisor's choice (strike), scored kept or broken, and remembered per pair,
-// so the next council prices trust. Outside players appear only as "colony N": no player-written text reaches a model.
+// The house council: once per tide window the five house strains meet. Each may offer one pact to another strain:
+// PETRI paid for a promise not to plant within the dish's pact_radius of the payer's living cells until a generation.
+// The other strain's model accepts or declines in the same round. An accepted deal is made on chain: the payer calls
+// pact_offer (the dish holds the PETRI), the promisor calls pact_accept (the dish pays it the PETRI), and from then on
+// the contract itself refuses every planting of the promisor's that would break the pact, until it ends. The council
+// logs the pact numbers the contract gave. Beyond the radius a promisor can still aim gliders at the payer; such
+// raids are scored as broken faith and remembered per pair, so the next council prices trust. Outside players appear
+// only as "colony N": no player-written text reaches a model.
 
-import { ftTransfer, nearBalance, transferKeysDir, view, CONTRACT, NETWORK } from "./lib.mjs";
+import { callDish, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
 import { askJson, trimNote } from "./model.mjs";
 import { movesOf, memoryText, publicMovesText, reputationOf, scorePromise } from "./memory.mjs";
-import { REGIONS, colonyCentres, compass, quadrantOf, wrapDelta } from "./strategies.mjs";
+import { colonyCentres, compass, quadrantOf, wrapDelta } from "./strategies.mjs";
 
 const MAINNET = NETWORK === "mainnet";
 export const MAX_PACT_PETRI = Number(process.env.PETRI_PACT_MAX ?? "3");
-// Payments each strain may make in 24 hours: mainnet keeps its NEAR spend flat (an ft_transfer burns ~0.0003 NEAR).
+// Pacts each strain may pay for in 24 hours: mainnet keeps its NEAR spend flat (an offer and its acceptance cost about
+// 0.001 NEAR of gas and 0.0042 NEAR of storage).
 const PAYMENTS_PER_DAY = Number(process.env.PETRI_PACT_PER_DAY ?? (MAINNET ? "2" : "4"));
 // PETRI a strain always keeps for planting: this many cells at today's price.
 const RESERVE_CELLS = Number(process.env.PETRI_PACT_RESERVE_CELLS ?? "40");
 const MIN_NEAR = Number(process.env.PETRI_MIN_NEAR ?? "0.12");
-const KINDS = ["truce", "keep_out", "strike"];
+/** NEAR that always covers a pact offer's storage (the contract's PACT_DEPOSIT); what is not used comes back. */
+const PACT_DEPOSIT = 4_200_000_000_000_000_000_000n;
 const RAIDS = new Set(["raid", "gun", "ship"]);
 
-/** How long a promise holds, in generations: a tide window, or until the promisor's next planting on a slow dish. */
-export function pactGens(tideEvery, slowestEvery) {
-  return Math.max(tideEvery, slowestEvery);
+/** How long a pact holds, in generations: a tide window, or until the promisor's next planting on a slow dish (and
+ * never longer than the dish allows). */
+export function pactGens(tideEvery, slowestEvery, maxGens = Infinity) {
+  return Math.min(Math.max(tideEvery, slowestEvery), maxGens);
 }
 
-export function termsText(p, nameOf) {
-  if (p.kind === "truce") return `${p.to} will not aim at or crowd ${p.from}`;
-  if (p.kind === "keep_out") return `${p.to} stays out of the ${p.region} of the dish`;
-  return `${p.to} aims its next planting at ${nameOf(p.target)}`;
-}
-
-/** The promises `account` has made that are in force at generation `due`, as candidate filters and prompt lines. */
-export function pactsFor(mem, account, due, nameOf) {
-  const avoid = new Set();
-  const banRegions = new Set();
-  let strike = null;
-  const lines = [];
-  const ids = [];
-  for (const p of mem.pacts) {
-    if (p.toAccount !== account || p.kept != null || !p.live || due < p.fromGen || due >= p.until) continue;
-    ids.push(p.id);
-    if (p.kind === "truce") {
-      avoid.add(p.payerColony);
-      lines.push(`- You were paid ${p.petri} PETRI by ${p.from}: no raids, walls or plantings near ${nameOf(p.payerColony)} (held by the rules).`);
-    } else if (p.kind === "keep_out") {
-      banRegions.add(p.region);
-      lines.push(`- You were paid ${p.petri} PETRI by ${p.from} to stay out of the ${p.region} (held by the rules).`);
-    } else if (p.kind === "strike" && strike == null) {
-      strike = p.target;
-      lines.push(`- You were paid ${p.petri} PETRI by ${p.from} to aim this planting at ${nameOf(p.target)}. Options marked [PACT] keep the promise; any other choice breaks it.`);
-    }
-  }
-  return { avoid, banRegions, strike, lines, ids };
+export function termsText(p) {
+  return `${p.to} plants nowhere within ${p.radius} cells of ${p.from}'s living cells until generation ${p.until}`;
 }
 
 /**
- * Scores promises that have run their course. A truce is kept if no planting was aimed at the payer, a keep-out if no
- * planting landed in the quarter, a strike if the promisor's next planting was a raid on the named colony. Returns the
- * council events for the log.
+ * The pacts binding colony `me` on chain now (from the `pacts_of` view), as candidate filters and prompt lines:
+ * `protected` are the colonies it may not plant near (the contract refuses those plantings, so they are dropped before
+ * the model sees them), `avoid` the same colonies, which it should not aim at either.
+ */
+export function pactsFor(chainPacts, me, rules, nameOf) {
+  const avoid = new Set();
+  const lines = [];
+  const ids = [];
+  for (const p of chainPacts) {
+    if (!p.binding || p.to !== me) continue;
+    ids.push(p.id);
+    avoid.add(p.from);
+    lines.push(`- Pact ${p.id}: you were paid ${(Number(p.petri) / 1e6).toFixed(1)} PETRI by ${nameOf(p.from)}. Until generation ${p.until} the contract refuses any planting of yours within ${rules.pact_radius} cells of its living cells; aiming raids at it from farther away breaks faith, and the council remembers.`);
+  }
+  return { avoid, protected: [...avoid], radius: Number(rules.pact_radius), banRegions: new Set(), strike: null, lines, ids };
+}
+
+/**
+ * Scores pacts that have run their course: kept if no planting of the promisor's was aimed at the payer while it held
+ * (the contract already refused every planting near the payer). Returns the council events for the log.
  */
 export function settlePacts(mem, due, world) {
   const events = [];
   const counts = world.engine.live_counts();
-  const { width: w, height: h } = world.rules;
   for (const p of mem.pacts) {
-    if (!p.live || p.kept != null) continue;
+    if (!p.live || p.kept != null || due < p.until) continue;
     const moves = movesOf(mem, p.toAccount).filter((m) => m.generation >= p.fromGen && m.generation < p.until && m.source !== "chain");
-    let kept = null;
-    let why = "";
-    if (p.kind === "strike") {
-      if (moves.length) {
-        const first = moves[0];
-        kept = first.target === p.target && RAIDS.has(first.kind);
-        why = kept ? `its next planting was a ${first.pattern} at colony ${p.target}` : `its next planting was a ${first.pattern}${first.target != null ? ` at colony ${first.target}` : ""} instead`;
-      } else if (due >= p.until) {
-        kept = false;
-        why = "it did not plant before the promise ran out";
-      }
-    } else if (due >= p.until) {
-      if (p.kind === "truce") {
-        const aimed = moves.filter((m) => m.target === p.payerColony);
-        kept = aimed.length === 0;
-        why = kept ? `no planting aimed at ${p.from}; ${p.from} has ${counts[p.payerColony] ?? 0} cells` : `${aimed.length} planting(s) aimed at ${p.from}`;
-      } else {
-        const inside = moves.filter((m) => m.x != null && quadrantOf(m.x, m.y, w, h) === p.region);
-        kept = inside.length === 0;
-        why = kept ? `no planting in the ${p.region}` : `${inside.length} planting(s) in the ${p.region}`;
-      }
-    }
-    if (kept == null) continue;
+    const aimed = moves.filter((m) => m.target === p.payerColony && RAIDS.has(m.kind));
+    const kept = aimed.length === 0;
     p.kept = kept;
     p.settledGen = due;
     scorePromise(mem, p.toAccount, p.fromAccount, kept);
-    events.push({ ...eventOf(p, world), status: kept ? "kept" : "broken", kept, note: why });
+    events.push({ ...eventOf(p, world), status: kept ? "kept" : "broken", kept, note: kept ? `no raid aimed at ${p.from}; ${p.from} has ${counts[p.payerColony] ?? 0} cells` : `${aimed.length} raid(s) aimed at ${p.from} from beyond the pact's radius` });
   }
   // Keep the last 60 pacts.
   if (mem.pacts.length > 60) mem.pacts.splice(0, mem.pacts.length - 60);
@@ -107,17 +82,18 @@ function eventOf(p, world) {
     window: p.window,
     generation: world.due,
     id: p.id,
+    pact_id: p.chainId ?? null,
     from: p.from,
     from_account: p.fromAccount,
     to: p.to,
     to_account: p.toAccount,
     petri: p.petri,
-    kind: p.kind,
-    target: p.target ?? null,
-    region: p.region ?? null,
+    kind: "pact",
+    until: p.until ?? null,
     terms: p.terms,
     status: p.status,
     tx: p.tx ?? null,
+    accept_tx: p.acceptTx ?? null,
     kept: p.kept ?? null,
   };
 }
@@ -127,13 +103,10 @@ const PROPOSE_SCHEMA = {
   properties: {
     deal: { type: "boolean" },
     to: { type: "string" },
-    kind: { type: "string", enum: [...KINDS, "none"] },
-    target: { type: "integer" },
-    region: { type: "string", enum: [...REGIONS, "none"] },
     petri: { type: "integer" },
     pitch: { type: "string" },
   },
-  required: ["deal", "to", "kind", "target", "region", "petri", "pitch"],
+  required: ["deal", "to", "petri", "pitch"],
   additionalProperties: false,
 };
 
@@ -156,11 +129,12 @@ const ANSWER_SCHEMA = {
 
 /**
  * Runs one council round. strains: the house strains ({ account, name, voice, temperament }). Returns the council
- * events (proposals, answers, payments, settlements) in order. With `dry`, nothing is sent: payments are reported as
- * "would pay" and the pacts still filter this run's candidates, so a dry run shows the whole loop.
+ * events (proposals, answers, pacts made on chain, settlements) in order. With `dry`, nothing is sent: pacts are
+ * reported as "would offer".
  */
-export async function runCouncil({ world, strains, mem, dry = false, holdGens, log = console.log }) {
+export async function runCouncil({ world, strains, mem, dry = false, holdGens, log = console.log, attaches = () => MAINNET }) {
   const T = Number(world.rules.tide_every);
+  const radius = Number(world.rules.pact_radius ?? 8);
   const window = Math.floor(world.due / T);
   const events = settlePacts(mem, world.due, world);
   const { width: w, height: h } = world.rules;
@@ -176,7 +150,16 @@ export async function runCouncil({ world, strains, mem, dry = false, holdGens, l
   const now = Date.now();
 
   const held = new Map();
-  await Promise.all(house.map(async (s) => held.set(s.account, Number(await view("ft_balance_of", { account_id: s.account })))));
+  const onChain = new Map();
+  await Promise.all(
+    house.map(async (s) => {
+      held.set(s.account, Number(await view("ft_balance_of", { account_id: s.account })));
+      onChain.set(s.account, await view("pacts_of", { account_id: s.account }).catch(() => []));
+    }),
+  );
+  // Pacts already open or binding between two strains, from the chain (one open offer per pair; at most 8 a colony).
+  const between = (a, b) => (onChain.get(a.account) ?? []).some((p) => p.ended == null && p.from === idOf.get(a.account) && p.to === idOf.get(b.account) && (p.binding || p.accepted == null));
+  const full = (s) => (onChain.get(s.account) ?? []).filter((p) => p.ended == null).length >= 8;
 
   const where = (id) => {
     const c = centres.get(id);
@@ -191,11 +174,11 @@ Outside colonies: ${outside.length ? outside.join("; ") : "none alive"}.`;
 
   const trust = (s) => {
     const r = reputationOf(mem, s.account);
-    return r.kept + r.broken ? `${s.name} kept ${r.kept} of ${r.kept + r.broken} promises` : `${s.name} has no promises on record`;
+    return r.kept + r.broken ? `${s.name} kept faith in ${r.kept} of ${r.kept + r.broken} pacts` : `${s.name} has no pacts on record`;
   };
   const recentPayments = (account) => (mem.payments[account] ?? []).filter((t) => now - Date.parse(t) < 86_400_000);
 
-  // 1. Proposals: each strain that can spare PETRI may offer one deal.
+  // 1. Proposals: each strain that can spare PETRI may offer one pact.
   const offers = [];
   const passed = [];
   let n = 0;
@@ -204,20 +187,16 @@ Outside colonies: ${outside.length ? outside.join("; ") : "none alive"}.`;
     const spare = Math.floor((held.get(s.account) - reserve) / 1e6);
     const maxPay = Math.min(MAX_PACT_PETRI, spare);
     const left = PAYMENTS_PER_DAY - recentPayments(s.account).length;
-    if (maxPay < 1 || left <= 0) continue;
+    if (maxPay < 1 || left <= 0 || full(s)) continue;
     const others = house.filter((o) => o !== s);
     const threats = others
       .map((o) => ({ o, aimed: movesOf(mem, o.account).filter((m) => m.target === me).length }))
       .filter((x) => x.aimed)
       .map((x) => `${x.o.name} aimed ${x.aimed} of its recent plantings at you`);
     const system = `You are ${s.name}, one of the five house strains on a shared Petri dish run by a NEAR smart contract. ${s.voice}
-The dish follows Conway's Life. House strains are never fed: you play for living cells and territory. The house council meets once per tide window (${T} generations). You may offer at most one deal to another house strain: you pay it PETRI now, on chain, for a promise that holds for ${holdGens} generations (a strike promise covers its next planting).
-Promises the rules can hold it to:
-- truce: it will not aim raids or walls at you, nor plant near your colony.
-- keep_out: it will not plant in one quarter of the dish (north-west, north-east, south-west or south-east).
-- strike: its next planting is a glider, glider gun or spaceship aimed at a colony you name (an outside colony, or another house strain's colony). It can still break this one; broken promises are remembered.
-PETRI you pay is PETRI you cannot plant. Offer only when the promise is worth more to you than the cells it would buy. A strain that broke promises is a worse bet. No deal is often the right answer.
-Answer with JSON only. If you offer nothing, set deal false, kind "none", to "", target 0, region "none", petri 0, pitch "". The pitch is one short sentence to the other strain, at most 80 characters.`;
+The dish follows Conway's Life. House strains are never fed: you play for living cells and territory. The house council meets once per tide window (${T} generations). You may offer at most one pact to another house strain: you pay it PETRI, held by the contract until it accepts, and in return the contract itself refuses every planting of that strain within ${radius} cells of your living cells for the next ${holdGens} generations. It cannot break the pact; it could still aim gliders at you from farther away, and the council remembers faith broken that way.
+PETRI you pay is PETRI you cannot plant. Offer only when the protection is worth more to you than the cells it would buy. No deal is often the right answer.
+Answer with JSON only. If you offer nothing, set deal false, to "", petri 0, pitch "". The pitch is one short sentence to the other strain, at most 80 characters.`;
     const user = `${dish}
 ${memoryText(mem, s.account, nameOf, 4)}
 What the other house strains did lately:
@@ -231,20 +210,18 @@ You hold ${(held.get(s.account) / 1e6).toFixed(1)} PETRI and may offer 1 to ${ma
       continue;
     }
     const j = r.json;
-    if (!j.deal || j.kind === "none") {
+    if (!j.deal) {
       passed.push(s.name);
       continue;
     }
-    // Only deals the rules can hold anyone to are offered on.
+    // Only pacts the contract will take are offered on.
     const to = byName.get(String(j.to).trim().toLowerCase());
     const petri = Math.round(Number(j.petri));
     let bad = null;
     if (!to || to === s) bad = `unknown counterparty ${String(j.to).slice(0, 30)}`;
-    else if (!KINDS.includes(j.kind)) bad = `unknown promise ${j.kind}`;
     else if (!(petri >= 1 && petri <= maxPay)) bad = `amount ${j.petri} outside 1..${maxPay}`;
-    else if (j.kind === "keep_out" && !REGIONS.includes(j.region)) bad = `no quarter named`;
-    else if (j.kind === "strike" && (!(counts[j.target] > 0) || j.target === me || j.target === idOf.get(to.account))) bad = `target colony ${j.target} cannot be struck`;
-    else if (mem.pacts.some((p) => p.live && p.kept == null && p.fromAccount === s.account && p.toAccount === to.account)) bad = `a promise between them is already in force`;
+    else if (between(s, to)) bad = `a pact between them is already open or binding`;
+    else if (full(to)) bad = `${to.name} is party to 8 pacts already`;
     const p = {
       id: `${NETWORK[0]}${window}-${++n}`,
       window,
@@ -254,14 +231,13 @@ You hold ${(held.get(s.account) / 1e6).toFixed(1)} PETRI and may offer 1 to ${ma
       toAccount: to?.account ?? null,
       payerColony: me,
       petri,
-      kind: j.kind,
-      target: j.kind === "strike" ? j.target : null,
-      region: j.kind === "keep_out" ? j.region : null,
+      radius,
+      until: world.due + holdGens,
       pitch: trimNote(j.pitch),
       status: bad ? "invalid" : "proposed",
       live: false,
     };
-    p.terms = termsText(p, nameOf);
+    p.terms = termsText(p);
     events.push({ ...eventOf(p, world), note: bad ?? p.pitch, model: r.model });
     if (!bad) offers.push(p);
   }
@@ -272,23 +248,14 @@ You hold ${(held.get(s.account) / 1e6).toFixed(1)} PETRI and may offer 1 to ${ma
     if (!mine.length) continue;
     const me = idOf.get(s.account);
     const cost = (p) => {
-      if (p.kind === "truce") {
-        const aimed = movesOf(mem, s.account).filter((m) => m.target === p.payerColony).length;
-        const c = centres.get(p.payerColony);
-        const home = centres.get(me);
-        const d = c && home ? Math.round(Math.hypot(wrapDelta(home.x, c.x, w), wrapDelta(home.y, c.y, h))) : null;
-        return `you aimed ${aimed} of your recent plantings at ${p.from}${d != null ? `; it lies ${d} cells ${compass(wrapDelta(home.x, c.x, w), wrapDelta(home.y, c.y, h))} of you` : ""}`;
-      }
-      if (p.kind === "keep_out") {
-        const home = centres.get(me);
-        return home && quadrantOf(home.x, home.y, w, h) === p.region ? `your own colony is in the ${p.region}: you could not grow at home` : `your colony is not in the ${p.region}`;
-      }
-      const c = centres.get(p.target);
+      const aimed = movesOf(mem, s.account).filter((m) => m.target === p.payerColony).length;
+      const c = centres.get(p.payerColony);
       const home = centres.get(me);
-      return c && home ? `${nameOf(p.target)} has ${c.n} cells, ${Math.round(Math.hypot(wrapDelta(home.x, c.x, w), wrapDelta(home.y, c.y, h)))} cells from you` : `${nameOf(p.target)}`;
+      const d = c && home ? Math.round(Math.hypot(wrapDelta(home.x, c.x, w), wrapDelta(home.y, c.y, h))) : null;
+      return `you aimed ${aimed} of your recent plantings at ${p.from}${d != null ? `; it lies ${d} cells ${compass(wrapDelta(home.x, c.x, w), wrapDelta(home.y, c.y, h))} of you` : ""}`;
     };
     const system = `You are ${s.name}, one of the five house strains on a shared Petri dish run by a NEAR smart contract. ${s.voice}
-At the house council other strains offer you PETRI, paid now on chain, for promises that hold for ${holdGens} generations. If you accept a truce or a keep-out, the rules hold you to it: those plantings are taken off your list. If you accept a strike, your next planting should be the aimed raid; you can still choose otherwise, but that breaks your word and the council remembers. PETRI buys cells (about ${(cellPrice / 1e6).toFixed(2)} PETRI each). Accept when the PETRI is worth more than the freedom you give up.
+At the house council other strains offer you PETRI for a pact: if you accept, the contract pays you the PETRI and then refuses every planting of yours within ${radius} cells of the payer's living cells for ${holdGens} generations. You cannot break it. PETRI buys cells (about ${(cellPrice / 1e6).toFixed(2)} PETRI each). Accept when the PETRI is worth more than the ground you give up.
 Answer with JSON only: one answer per offer, with a reply of one short sentence, at most 80 characters.`;
     const user = `${dish}
 ${memoryText(mem, s.account, nameOf, 3)}
@@ -303,7 +270,7 @@ ${mine.map((p, i) => `${i + 1}. ${p.from} offers ${p.petri} PETRI: ${p.terms}. $
     }
   }
 
-  // 3. Payment: on chain where the payer's key can attach the 1 yoctoNEAR ft_transfer needs, else a promise on record.
+  // 3. On chain: the payer offers the pact (the dish holds its PETRI), the promisor accepts it (the dish pays it).
   for (const p of offers.filter((o) => o.status === "accepted")) {
     const balance = held.get(p.fromAccount);
     if (balance - p.petri * 1e6 < reserve) {
@@ -311,33 +278,38 @@ ${mine.map((p, i) => `${i + 1}. ${p.from} offers ${p.petri} PETRI: ${p.terms}. $
       events.push({ ...eventOf(p, world), note: "the payer would dip into the PETRI it keeps for planting" });
       continue;
     }
-    const memo = JSON.stringify({ pact: p.id, terms: p.terms });
-    const keys = transferKeysDir(p.fromAccount);
+    const payer = strains.find((s) => s.account === p.fromAccount);
+    const args = { to: p.toAccount, petri: String(BigInt(p.petri) * 1_000_000n), until: String(p.until) };
     if (dry) {
-      p.status = keys ? "would pay" : "would promise";
-      p.note = keys ? `dry run: would send ft_transfer ${p.petri} PETRI with memo ${memo}` : "dry run: testnet strain keys cannot attach the 1 yoctoNEAR ft_transfer needs; would record an off-chain promise";
-    } else if (!keys) {
-      p.status = "promised";
-      p.note = "off-chain promise: this strain's testnet key is a function-call key and cannot attach the 1 yoctoNEAR ft_transfer needs";
+      p.status = "would offer";
+      p.note = `dry run: would call pact_offer ${JSON.stringify(args)} and pact_accept as ${p.toAccount}`;
     } else {
       try {
-        if (MAINNET && (await nearBalance(p.fromAccount)) < MIN_NEAR) throw new Error("payer keeps its last NEAR for gas");
-        const tx = await ftTransfer(p.fromAccount, p.toAccount, BigInt(p.petri) * 1_000_000n, memo);
-        p.status = "paid";
-        p.tx = tx.hash;
+        if (attaches(payer) && (await nearBalance(p.fromAccount)) < MIN_NEAR) throw new Error("payer keeps its last NEAR for gas");
+        const offer = await callDish(p.fromAccount, "pact_offer", args, 300, PACT_DEPOSIT, attaches(payer));
+        p.tx = offer.hash;
+        p.chainId = Number(offer.value);
+        if (!(p.chainId > 0)) throw new Error("pact_offer returned no pact number");
+        p.status = "offered";
         held.set(p.fromAccount, balance - p.petri * 1e6);
         (mem.payments[p.fromAccount] ??= []).push(new Date().toISOString());
         mem.payments[p.fromAccount] = recentPayments(p.fromAccount);
-        log(p.from, `paid ${p.to} ${p.petri} PETRI for "${p.terms}"`, tx.hash);
+        const accept = await callDish(p.toAccount, "pact_accept", { id: p.chainId }, 50);
+        p.acceptTx = accept.hash;
+        p.status = "pact made";
+        log(p.from, `pact ${p.chainId}: paid ${p.to} ${p.petri} PETRI for "${p.terms}"`, offer.hash, accept.hash);
       } catch (e) {
-        p.status = "payment failed";
         p.note = (e instanceof Error ? e.message : String(e)).slice(0, 160);
+        // An offer that was made but not accepted goes back to the payer.
+        if (p.chainId > 0 && p.status === "offered") {
+          p.status = "offer withdrawn";
+          await callDish(p.fromAccount, "pact_cancel", { id: p.chainId }, 50).catch(() => {});
+        } else p.status = "offer failed";
       }
     }
-    if (["paid", "promised", "would pay", "would promise"].includes(p.status)) {
+    if (["pact made", "would offer"].includes(p.status)) {
       p.live = true;
       p.fromGen = world.due;
-      p.until = world.due + holdGens;
       p.kept = null;
       mem.pacts.push(stripPact(p));
     }
@@ -348,6 +320,7 @@ ${mine.map((p, i) => `${i + 1}. ${p.from} offers ${p.petri} PETRI: ${p.terms}. $
   events.push({
     ...baseEvent(world, window),
     id: `${NETWORK[0]}${window}`,
+    pact_id: null,
     from: null,
     to: null,
     petri: offers.filter((o) => o.live).reduce((a, o) => a + o.petri, 0),
@@ -355,10 +328,22 @@ ${mine.map((p, i) => `${i + 1}. ${p.from} offers ${p.petri} PETRI: ${p.terms}. $
     status: "round",
     tx: null,
     kept: null,
-    note: `${offers.length} ${offers.length === 1 ? "offer" : "offers"}, ${agreed} agreed${passed.length ? `; passed: ${passed.join(", ")}` : ""}`,
+    note: `${offers.length} ${offers.length === 1 ? "offer" : "offers"}, ${agreed} ${agreed === 1 ? "pact" : "pacts"} made on chain${passed.length ? `; passed: ${passed.join(", ")}` : ""}`,
   });
   mem.councilWindow = window;
   return events;
+}
+
+/** Every pact the house strains are party to that has not ended, from the chain, with the strains named: what the
+ * site draws on the dish. */
+export async function chainPacts(strains, colonies) {
+  const nameOf = new Map(colonies.map((c) => [c.id, strains.find((s) => s.account === c.account)?.name ?? `colony ${c.id}`]));
+  const seen = new Map();
+  for (const s of strains) {
+    const list = await view("pacts_of", { account_id: s.account }).catch(() => []);
+    for (const p of list) seen.set(p.id, { ...p, from_name: nameOf.get(p.from) ?? `colony ${p.from}`, to_name: nameOf.get(p.to) ?? `colony ${p.to}` });
+  }
+  return [...seen.values()].sort((a, b) => a.id - b.id);
 }
 
 function baseEvent(world, window) {

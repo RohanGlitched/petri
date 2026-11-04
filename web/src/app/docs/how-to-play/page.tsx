@@ -46,7 +46,7 @@ export default function Page() {
 
       <H2 id="planting">Planting</H2>
       <p>
-        <C>plant(cells, note, credit, slide)</C> brings 1 to 64 cells to life at once. It succeeds only when every cell is on the dish, empty and listed once, the stored board is at the current generation, and the colony has not already planted in this generation. With <C>slide</C> (a token id) the planting is made under that specimen slide&rsquo;s licence; see <a href="#replant">Replanting a slide</a>.
+        <C>plant(cells, note, credit, slide)</C> brings 1 to 64 cells to life at once. It succeeds only when every cell is on the dish, empty and listed once, the stored board is at the current generation, and the colony has not already planted in this generation. If 10,000 colonies are playing at once (the most the dish holds) and none can leave the table yet, a colony that is not playing yet has to wait for the next tide to plant. With <C>slide</C> (a token id) the planting is made under that specimen slide&rsquo;s licence; see <a href="#replant">Replanting a slide</a>.
       </p>
       <Table>
         <thead>
@@ -64,7 +64,7 @@ export default function Page() {
           </tr>
           <tr>
             <td>
-              NEAR: the storage of the planting record (and, for a colony&rsquo;s first planting since it last played, its 77-byte row in the hot table) plus 0.0001 NEAR per cell. For a 4-cell planting with no note that is 0.00373 NEAR (<C>plant_deposit</C>).
+              NEAR: the storage of the planting record (and, for a colony&rsquo;s first planting since it last played, its 77-byte row in the hot table) plus 0.0001 NEAR per cell. For a 4-cell planting with no note that is 0.00313 NEAR (<C>plant_deposit</C>).
             </td>
             <td>Storage pays for the record. Everything else, including anything attached beyond the deposit, goes to the vault (or, from credit, to the credit pool). Nothing is sent back.</td>
           </tr>
@@ -237,19 +237,19 @@ export default function Page() {
         <li>The token&rsquo;s image is an SVG the contract draws from the captured cells every time a wallet asks.</li>
       </ul>
       <p>
-        Details are in <Doc to="specimens">Specimens</Doc>. A slide is also a pattern licence: its exact pattern plants for less, and its holder is paid a royalty when others plant it (next section).
+        Details are in <Doc to="specimens">Specimens</Doc>. A slide that captured at least 12 cells is also a pattern licence: its exact pattern plants for less, and its holder is paid a royalty when others plant it (next section). A smaller slide (5 to 11 cells) is a keepsake; it can be minted and traded, but carries no licence.
       </p>
 
       <H2 id="replant">Replanting a slide</H2>
       <p>
-        Any slide can be loaded back into the dish page&rsquo;s stamp: open it in the <Ext href={`${SITE}/specimens`}>specimens gallery</Ext> and choose <strong>Replant this pattern</strong>, or go to <C>/dish?replant=&lt;token id&gt;</C>. The cells are read from the slide&rsquo;s bitmap and placed wherever you click; R and F turn and flip them.
+        Any slide can be loaded back into the dish page&rsquo;s stamp (only one of 12 cells or more plants under a licence; the contract refuses a planting under a smaller slide, whose pattern you can still plant as an ordinary planting without <C>slide</C>): open it in the <Ext href={`${SITE}/specimens`}>specimens gallery</Ext> and choose <strong>Replant this pattern</strong>, or go to <C>/dish?replant=&lt;token id&gt;</C>. The cells are read from the slide&rsquo;s bitmap and placed wherever you click; R and F turn and flip them.
       </p>
       <p>
         Planted as the slide fixed them (moved anywhere, wrapping at the edges, but not turned or flipped), the cells go in under the slide&rsquo;s licence: <C>plant</C> with the slide&rsquo;s token id, which the dish page passes for you. The contract checks the cells are exactly the slide&rsquo;s pattern, and then:
       </p>
       <ul>
         <li>The planting costs 25% less (<C>slide_discount_bps</C>), whoever plants it. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.</li>
-        <li>A planter that does not hold the slide also pays the holder 10% of that discounted cost (<C>slide_royalty_bps</C>) in PETRI: a transfer, not a burn. A holder with no PETRI registration is registered at the planter&rsquo;s expense.</li>
+        <li>A planter that does not hold the slide also pays the holder 10% of that discounted cost (<C>slide_royalty_bps</C>) in PETRI: a transfer, not a burn. A holder with no PETRI registration is registered at the planter&rsquo;s expense. A planter that has never attached NEAR pays that royalty to the agar instead, and the holder gets nothing.</li>
         <li>The holder plants its own slide at the discount and pays no royalty. The house plants only slides it holds.</li>
       </ul>
       <p>
@@ -258,12 +258,12 @@ export default function Page() {
 
       <H2 id="advance">Advancing the clock</H2>
       <p>
-        <C>advance(max)</C> steps the stored board up to <C>max</C> due generations (at most 120). Anyone may call it. If it ran at least one generation, the caller receives the keeper pot, provided the caller can hold PETRI (it is a colony or registered with <C>storage_deposit</C>) and is not a house strain or keeper. Tides it runs pay it their bounties, again except to a house strain or keeper.
+        <C>advance(max)</C> steps the stored board up to <C>max</C> due generations (at most 120). Anyone may call it. If it ran at least one generation, the caller receives the keeper pot (as does the caller of any other call that runs a generation: plant, buy, join, sell, claim or mint_slide), provided the caller can hold PETRI (it is a colony or registered with <C>storage_deposit</C>) and is not a house strain or keeper. Tides it runs pay it their bounties, again except to a house strain or keeper.
       </p>
       <p>
         If nobody touches the dish for more than 480 generations (two hours), the next call does not try to replay all of it: the clock skips ahead to 120 generations behind, records a <C>Skip</C> entry, and catches up from there. A planting refuses to run while the dish is behind; if a planting says <C>the dish is behind the clock; call advance first</C>, call <C>advance</C> once or twice and plant again.
       </p>
-      <Code lang="sh" title="Advance the mainnet dish yourself">{`near contract call-function as-transaction petri-dish.near advance json-args '{"max":120}' prepaid-gas '250.0 Tgas' attached-deposit '0 NEAR' sign-as YOU.near network-config mainnet sign-with-keychain send`}</Code>
+      <Code lang="sh" title="Advance the mainnet dish yourself">{`near contract call-function as-transaction petri-dish.near advance json-args '{"max":120}' prepaid-gas '300.0 Tgas' attached-deposit '0 NEAR' sign-as YOU.near network-config mainnet sign-with-keychain send`}</Code>
 
       <H2 id="strategy">Strategy notes</H2>
       <H3 id="strategy-earn">What earns</H3>

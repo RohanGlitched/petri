@@ -6,9 +6,10 @@
 //! from the stored bitmap every time a wallet asks (`petri_core::slide_svg`), and the name comes from the colony at view
 //! time.
 //!
-//! A slide is a pattern licence. Anyone may plant its exact pattern, moved anywhere on the dish, under its licence
-//! (`plant` with `slide`): the planting costs `slide_discount_bps` less, and a planter that does not hold the slide pays
-//! the holder `slide_royalty_bps` of that cost in PETRI. The ledger records each licensed planting with the slide, how
+//! A slide of at least `licence_min_cells` cells is a pattern licence (a smaller one is a keepsake). Anyone may plant its
+//! exact pattern, moved anywhere on the dish, under its licence (`plant` with `slide`): the planting costs
+//! `slide_discount_bps` less, and a planter that does not hold the slide pays `slide_royalty_bps` of that cost in PETRI,
+//! to the holder, or to the agar if the planter has never attached NEAR. The ledger records each licensed planting with the slide, how
 //! many times it had changed hands (`moves`, counted on the slide by every transfer) and the holder paid, so both
 //! replays check the shape, the price and the royalty, and that the holder is the minter until the first move and the
 //! slide's current owner after the last. Moves themselves are not logged: a transfer carries exactly one yoctoNEAR
@@ -172,7 +173,11 @@ impl Petri {
         self.slides_burned += cost;
         let index = self.slides.len();
         let token = index as u64 + 1;
-        let color = self.colony(id).color;
+        // Kept PETRI is spent first.
+        let mut c = self.colony(id);
+        c.kept = U64(c.kept.0.saturating_sub(cost as u64));
+        let color = c.color;
+        self.colonies.set(id as u32 - 1, c);
         self.slides.push(Slide {
             owner: account.clone(),
             colony: id,
@@ -194,22 +199,17 @@ impl Petri {
         self.add_owned(&account, index);
         let want = credit.map(|c| c.0).unwrap_or(0);
         let generation = U64(self.generation);
-        let entry = |spent: Option<U128>, bitmap: Vec<u8>| Entry::Slide { generation, colony: id, token: U64(token), x, y, w, h, cells, bitmap: Base64VecU8(bitmap), cost: U128(cost), spent };
+        let entry = |spent: Option<U128>, bitmap: Vec<u8>| Entry::Slide { generation, colony: id, token: U64(token), x, y, w, h, cells, bitmap: Base64VecU8(bitmap), cost: U64(cost as u64), spent };
         // The entry has the same size whatever credit it records.
         let entry_index = self.ledger.len();
         self.ledger.push(entry((want > 0).then_some(U128(0)), bitmap.clone()));
         self.flush();
         let storage = self.storage_cost_since(before) + SLIDE_RESERVE as u128 * byte_cost();
-        let from_credit = self.take_credit(&account, Some(id), Some(U128(want.min(storage))));
-        require!(attached + from_credit >= storage, format!("this slide needs {} NEAR for its storage", fmt_near(storage)));
+        let from_credit = self.pay_storage(&account, id, want, attached, storage);
         if want > 0 {
             self.ledger.set(entry_index, entry(Some(U128(from_credit)), bitmap));
         }
         self.flush();
-        let (refund, _) = split_after_storage(attached, from_credit, storage);
-        if refund > 0 {
-            let _ = Promise::new(account.clone()).transfer(NearToken::from_yoctonear(refund));
-        }
         let token_id = token.to_string();
         nft_event("nft_mint", json!({ "owner_id": account, "token_ids": [token_id] }));
         emit("slide", json!({ "token": token_id, "colony": id, "generation": U64(self.generation), "x": x, "y": y, "w": w, "h": h, "cells": cells, "cost": U128(cost) }));

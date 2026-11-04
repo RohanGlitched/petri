@@ -22,10 +22,27 @@ export type StrainAction = {
   options: string[];
 };
 
+/** A pact a house strain is party to, as the contract holds it (the `pacts_of` view) with both colonies named: `to`
+ * may not plant within rules.pact_radius of `from`'s living cells until `until` while `binding`. */
+export type StrainPact = {
+  id: number;
+  from: number;
+  to: number;
+  from_name: string;
+  to_name: string;
+  petri: string;
+  until: string;
+  accepted: string | null;
+  ended: string | null;
+  binding: boolean;
+};
+
 export type StrainLog = {
   model: string | null;
   health: { at: string; near: Record<string, number | null>; modelErrors?: number } | null;
   actions: StrainAction[];
+  /** the pacts the house strains are party to on chain now (open offers and binding pacts) */
+  pacts?: StrainPact[];
   error?: string;
 };
 

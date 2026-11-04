@@ -356,11 +356,11 @@ curl -s "${SITE}/api/strains?net=mainnet" | jq '[.council[] | {id, from, to, kin
           calls <C>unwrap_wnear</C> when the dish holds wNEAR that arrived with too little gas to unwrap, so its owners can claim it;
         </li>
         <li>
-          calls <C>advance</C> on testnet when the dish is 20 or more generations behind (or when the keeper pot holds over 50 PETRI, a condition left from v5 that no longer pays it anything), and on mainnet only once someone outside the house plays and the dish is 400 generations behind, before the clock would skip.
+          calls <C>advance</C> on testnet when the dish is 20 or more generations behind (or when the keeper pot holds over 50 PETRI, a condition left from v5 that no longer pays it anything and that players&rsquo; calls, which take the pot whenever they run a generation, rarely leave standing), and on mainnet only once someone outside the house plays and the dish is 400 generations behind, before the clock would skip.
         </li>
       </ul>
       <p>
-        Both keepers are named in the rules&rsquo; <C>keepers</C>, so the contract treats them as house: a keeper never takes the keeper pot, and a tide it runs pays no bounty (the bounty stays in the vault, and the tide&rsquo;s <C>by</C> is 65535). Its advances only keep the dish tended. The site and the strains run the dish ahead of the chain, so a few generations behind costs nothing, and every call is gas. Anyone outside the house may advance too and take the pot and the bounties; see <Doc to="security" hash="t-keeper">Gaming the keeper pot</Doc>.
+        Both keepers are named in the rules&rsquo; <C>keepers</C>, so the contract treats them as house: a keeper never takes the keeper pot, and a tide it runs pays no bounty (the bounty stays in the vault, and the tide&rsquo;s <C>by</C> is 65535). Its advances only keep the dish tended. The site and the strains run the dish ahead of the chain, so a few generations behind costs nothing, and every call is gas. Anyone outside the house whose call runs a generation takes the pot, and whoever runs a tide takes its bounty; see <Doc to="security" hash="t-keeper">Gaming the keeper pot</Doc>.
       </p>
       <H3 id="keeper-run">Run your own</H3>
       <Code lang="sh" title="Shell">{`cd agents && npm install

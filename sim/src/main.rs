@@ -1,9 +1,9 @@
-//! Petri economy simulator, v6.
+//! Petri economy simulator, v6.1 (and v6 behind the `v6` switch).
 //!
 //! Runs the real rules from `petri-core` (Life, the capped feed on decaying stake, planting prices with the siege
 //! surcharge and slide licences, the purchase and sell-back curves, the tide split) for days of generations, with
 //! scripted players including adversaries and the house strains as agents/ plays them, and reports what every kind of
-//! player ends up with **in NEAR actually withdrawn**. The contract's book-keeping is mirrored from contract/src v6
+//! player ends up with **in NEAR actually withdrawn**. The contract's book-keeping is mirrored from contract/src v6.1
 //! (see world.rs); parameters are read from the launch-rules files of both dishes.
 //!
 //! ```text
@@ -361,8 +361,8 @@ fn gas_at(p: f64, live: f64, alive: f64) -> GasAt {
     let store_feed = G_SOP + p * HOT_FEED as f64 * G_WB + p * W_STORE_FEED_ROW * G_OP;
     let store_purse = G_SOP + p * HOT_PURSE as f64 * G_WB + p * W_STORE_PURSE_ROW * G_OP;
     let gen = (20_000.0 + 60.0 * live + 150.0 * alive) * G_OP;
-    let tide = 4.0 * G_SOP + TIDE_BYTES as f64 * G_WB + p * (W_TIDE_ROW + W_WINNER + 10.0) * G_OP;
-    let cold = 2.0 * G_SOP + (PAGE as u128 * COLD) as f64 * (G_RB + G_WB);
+    let tide = 4.0 * G_SOP + TIDE_BYTES_V6 as f64 * G_WB + p * (W_TIDE_ROW + W_WINNER + 10.0) * G_OP;
+    let cold = 2.0 * G_SOP + (page(true) as u128 * cold(true)) as f64 * (G_RB + G_WB);
     let gens = |prepaid: f64, store: f64| -> u64 {
         let limit = G_CATCHUP_LIMIT.min(prepaid - G_RESERVE - store);
         let used0 = G_CALL + load + 2.0 * G_SOP + board * G_RB;
@@ -387,6 +387,51 @@ fn gas_at(p: f64, live: f64, alive: f64) -> GasAt {
     }
 }
 
+struct GasAt61 {
+    join: f64,
+    plant: f64,
+    tide: f64,
+    claim_near: f64,
+    claim_idle: f64,
+    gens300: u64,
+    gens300_tide: u64,
+}
+
+/// v6.1 at `p` hot rows (every one a tide winner), the same full board: the catch-up reserves the feed part, the purse
+/// part only when a tide falls in it, and 32 cold pages; a planting also reads its cold slot and a tide call flushes up
+/// to 32 rows into pages of 32 x 69 B.
+fn gas_at_61(p: f64, live: f64, alive: f64) -> GasAt61 {
+    let board = 2048.0 + 2.0 * live;
+    let board_rw = 2.0 * G_SOP + board * (G_RB + G_WB) + 30.0 * live * G_OP;
+    let load = 2.0 * G_SOP + p * HOT_ROW as f64 * G_RB + p * W_LOAD_ROW * G_OP;
+    let store_feed = G_SOP + p * HOT_FEED as f64 * G_WB + p * W_STORE_FEED_ROW * G_OP;
+    let store_purse = G_SOP + p * HOT_PURSE as f64 * G_WB + p * W_STORE_PURSE_ROW * G_OP;
+    let gen = (20_000.0 + 60.0 * live + 150.0 * alive) * G_OP;
+    let tide = 4.0 * G_SOP + (TIDE_ENTRY_V61 + 4) as f64 * G_WB + p * (W_TIDE_ROW + W_WINNER + 10.0) * G_OP;
+    let page_rw = 2.0 * G_SOP + (page(false) as u128 * cold(false)) as f64 * (G_RB + G_WB);
+    let flush = FLUSH_MAX as f64 * page_rw + p * W_FLUSH_SCAN_ROW * G_OP;
+    let gens = |prepaid: f64, tide_ahead: bool| -> u64 {
+        let store = p * HOT_FEED as f64 * G_HOT_WRITE_BYTE_V61 + if tide_ahead { p * HOT_PURSE as f64 * G_HOT_WRITE_BYTE_V61 } else { 0.0 } + FLUSH_MAX as f64 * G_FLUSH_PAGE_RESERVE;
+        let limit = G_CATCHUP_LIMIT_V61.min(prepaid - G_RESERVE - store);
+        let used0 = G_CALL + load + 2.0 * G_SOP + board * G_RB;
+        let room = limit - used0;
+        if room <= gen {
+            1
+        } else {
+            ((room / gen) as u64 + 1).min(120)
+        }
+    };
+    GasAt61 {
+        join: G_CALL + 12.0 * G_SOP + page_rw + 400.0 * G_WB,
+        plant: G_CALL + 15.0 * G_SOP + board_rw + 4_000.0 * G_OP + 500.0 * G_WB + load + store_feed + store_purse + p * 10.0 * G_OP + page_rw / 2.0,
+        tide: G_CALL + 3.0 * G_SOP + board_rw + load + store_feed + store_purse + gen + tide + flush + G_PAYOUT_RESERVE,
+        claim_near: G_CALL + 6.0 * G_SOP + load + store_feed + store_purse + 300.0 * G_WB + G_PAYOUT_RESERVE,
+        claim_idle: G_CALL + 6.0 * G_SOP + load + page_rw,
+        gens300: gens(300_000.0, false),
+        gens300_tide: gens(300_000.0, true),
+    }
+}
+
 // ---------- the report ----------
 
 fn header(out: &mut String, r: &Rules, paths: (&str, &str), same: bool) {
@@ -407,22 +452,26 @@ fn header(out: &mut String, r: &Rules, paths: (&str, &str), same: bool) {
         "  sell_bps {}, sell_cap_bps {}, siege_x {}, buffer {}, max_plant_cells {}, max_catchup {}, max_lag {}, slide_cells_price {} PETRI, slide_min_cells {},",
         r.sell_bps, r.sell_cap_bps, r.siege_x, r.buffer, r.max_plant_cells, r.max_catchup, r.max_lag, pf(r.slide_cells_price), r.slide_min_cells
     );
-    let _ = writeln!(out, "  slide_discount_bps {}, slide_royalty_bps {}, house {} strains, keepers {:?}.", r.slide_discount_bps, r.slide_royalty_bps, r.house.len(), r.keepers);
-    let _ = writeln!(out, "Storage, from the v6 borsh layout (key + value + 40 B per record; 1e19 yocto a byte):");
-    let _ = writeln!(out, "  join {} B for a 16-char wallet (Colony {} + colony_of 63 + name 57 + balance 77 + Join entry 56 + cold slot 57 + 140 charged for the Buy entry,", join_bytes(16, 12, false), colony_bytes(16, 12));
-    let _ = writeln!(out, "    which is 105 B, 121 with `spent`); buy 140 B charged; plant_deposit = (240 + 77 [first hot row] + 82 [empty table] + 4c + note+64 + licence 33+L) B + 0.0001/cell;");
-    let _ = writeln!(out, "  stored by a planting: Plant entry 111+2c (+16 spent, +{} licence with a 16-char holder) + index 53 + board 2c + 8 first time + note 49+n + hot row 77;", licence_bytes(Some(16)));
-    let _ = writeln!(out, "    the rest of the deposit (fee included) goes to the vault or credit pool; a row leaving the hot table frees 77 B to the contract.");
-    let _ = writeln!(out, "  sell entry {} B from the proceeds (a NEAR sale must also cover {} B for a possible refund); claim entry {} B from the NEAR (claims need > {} B = {:.5} NEAR owed);", SELL_BYTES, PAYOUT_RESERVE, CLAIM_BYTES, CLAIM_BYTES + PAYOUT_RESERVE, nf((CLAIM_BYTES + PAYOUT_RESERVE) * BYTE));
-    let _ = writeln!(out, "  tide entry 236 + tide index 53 = {} B = {:.5} NEAR from the vault per tide that runs; skip entry {} B (contract);", TIDE_BYTES, nf(TIDE_BYTES * BYTE), SKIP_BYTES);
-    let _ = writeln!(out, "  sponsor (first grant) {} B for a guest (entry 78+La+Ls, grants record 77+La+Ls, Unsponsor reserve 210); slide 4x4 {} B, 16x16 {} B (record, owner list, entry, 184 reserve).", sponsor_bytes(L_GUEST, L_RELAYER, true, true), slide_bytes(16, 4, 4, 0, true), slide_bytes(22, 16, 16, 30, false));
-    let _ = writeln!(out, "  The contract's own code: {} B of wasm = {:.2} NEAR staked by the dish account.", WASM_BYTES, nf(WASM_BYTES * BYTE));
+    let _ = writeln!(out, "  slide_discount_bps {}, slide_royalty_bps {}, licence_min_cells {}, house {} strains, keepers {:?}.", r.slide_discount_bps, r.slide_royalty_bps, r.licence_min_cells, r.house.len(), r.keepers);
+    let _ = writeln!(out, "Storage, from the v6.1 borsh layout (key + value + 40 B per record; 1e19 yocto a byte; v6's in brackets where it differs):");
+    let _ = writeln!(out, "  join {} B [{}] for a 16-char wallet (Colony {} + colony_of 63 + name 57 + balance 77 + Join entry 56 + cold slot 69 [57] + 113 [140] charged for the", join_bytes(16, 12, false, false), join_bytes(16, 12, false, true), colony_bytes(16, 12));
+    let _ = writeln!(out, "    Buy entry, which is 97 B, 113 with `spent` [105/121]; a new cold page of 32 [64] adds 43); buy 113 B [140] charged;");
+    let _ = writeln!(out, "  plant_deposit = (180 [240] + 77 [first hot row] + 82 [empty table] + 4c + note+64 + licence 26+L [33+L]) B + 0.0001/cell;");
+    let _ = writeln!(out, "  stored by a planting: Plant entry 103+2c [111+2c] (+16 spent, +{} [{}] licence with a 16-char holder) + index 49 [53] + board 2c + 8 first time", licence_bytes(Some(16), false), licence_bytes(Some(16), true));
+    let _ = writeln!(out, "    + note 45+n [49+n] + hot row 77 (house colonies never have one in v6.1); the rest of the deposit (fee included) goes to the vault or credit pool; a row");
+    let _ = writeln!(out, "    leaving the hot table frees 77 B to the contract.");
+    let _ = writeln!(out, "  sell entry {} B [{}] from the proceeds (a NEAR sale must also cover {} B for a possible refund); claim entry {} B [{}] from the NEAR (claims need > {} B);", sell_bytes(false), sell_bytes(true), PAYOUT_RESERVE, claim_bytes(false), claim_bytes(true), claim_bytes(false) + PAYOUT_RESERVE);
+    let _ = writeln!(out, "  tide entry {} B + 4 B in the packed tide index (+45 on the tide that starts a 256-position page) = {} B = {:.5} NEAR from the vault per tide that runs [289 B];", TIDE_ENTRY_V61, TIDE_ENTRY_V61 + 4, nf((TIDE_ENTRY_V61 + 4) * BYTE));
+    let _ = writeln!(out, "  skip entry {} B (contract); sponsor (first grant) {} B for a guest (entry 78+La+Ls, grants record 77+La+Ls, Unsponsor reserve 210); slide 4x4 {} B, 16x16 {} B", SKIP_BYTES, sponsor_bytes(L_GUEST, L_RELAYER, true, true), slide_bytes(16, 4, 4, 0, true, false), slide_bytes(22, 16, 16, 30, false, false));
+    let _ = writeln!(out, "    (record, owner list, entry, 184 reserve). The contract's own code: ~{} B of wasm (v6.1 estimate; v6 {}) = {:.2} NEAR staked by the dish account.", WASM_BYTES, WASM_BYTES_V6, nf(WASM_BYTES * BYTE));
     let _ = writeln!(out, "Gas (NEAR protocol fee schedule; 1 TGas = 0.0001 NEAR at the minimum gas price): call {} TGas + {} Ggas per storage op + {:.1} Mgas per byte read / {:.1} Mgas", G_CALL / 1000.0, G_SOP, G_RB * 1000.0, G_WB * 1000.0);
     let _ = writeln!(out, "  per byte rewritten (value + evicted value + memory/registers) + 0.82 Mgas per wasm op. Hot table: loaded once per call that needs a colony's books (77 B a row");
     let _ = writeln!(out, "  read, ~{} ops a row to parse), the feed part (26 B) rewritten by every catch-up, the purse part (51 B) by tides and purse changes (~{} / {} ops a row to write);", W_LOAD_ROW, W_STORE_FEED_ROW, W_STORE_PURSE_ROW);
-    let _ = writeln!(out, "  a generation ~20k + 60 x live + 150 x colonies alive ops; a tide 4 writes + its 289 B + {} ops a row + {} per winner. A NEAR payout burns ~{} TGas and reserves", W_TIDE_ROW, W_WINNER, G_PAYOUT_BURN / 1000.0);
-    let _ = writeln!(out, "  {} TGas of the call's prepaid gas (counted in 'max gas'). Catch-up limit min(180, prepaid - 40 - rows x 77 B x 64 Mgas) TGas, as the contract.", G_PAYOUT_RESERVE / 1000.0);
-    let _ = writeln!(out, "  The contract's unit-runtime measurements (CHANGES-v6, host calls only) charge ~39 Mgas a rewritten byte, not ~71, so they read lower than this model.");
+    let _ = writeln!(out, "  a generation ~20k + 60 x live + 150 x colonies alive ops; a tide 4 writes + its 130 B + {} ops a row + {} per winner. A NEAR payout burns ~{} TGas and reserves", W_TIDE_ROW, W_WINNER, G_PAYOUT_BURN / 1000.0);
+    let _ = writeln!(out, "  {} TGas of the call's prepaid gas (counted in 'max gas'). v6.1 hot table: colonies that earned since the last tide, or that have living cells and a stake", G_PAYOUT_RESERVE / 1000.0);
+    let _ = writeln!(out, "  of at least STAKE_UNIT / reach = 125 (never the house), at most {} rows; at most {} rows leave a call, each into its cold page (32 x 69 B). Catch-up limit", MAX_PLAYING, FLUSH_MAX);
+    let _ = writeln!(out, "  min(110, prepaid - 40 - rows x 26 B x 72 Mgas - [rows x 51 B x 72 Mgas if a tide falls in the catch-up] - 32 x 0.35) TGas [v6: min(180, prepaid - 40 - rows x 77 x 64 M)].");
+    let _ = writeln!(out, "  Prepaid on the site: 300 TGas for join, plant, buy, sell, claim, advance and mint_slide [v6: 200 / 250]; the house's agents unchanged (plant 200, buy/claim 150).");
     let _ = writeln!(out, "The house (agents/run.mjs, strategies.mjs, council.mjs), approximated:");
     let _ = writeln!(out, "  mainnet: 5 strains attach their own NEAR (0.55 NEAR each, kept above 0.12 for gas: they stop buying there), join with 0.05, buy 0.02 when they cannot afford");
     let _ = writeln!(out, "  12 cells, act every [40..100] x 8 generations (temperament ranges), at most 60% of their PETRI and 100 PETRI a day per planting budget (10 always allowed),");
@@ -435,7 +484,8 @@ fn header(out: &mut String, r: &Rules, paths: (&str, &str), same: bool) {
     let _ = writeln!(out, "  at 20 behind or whenever the pot holds over 50 PETRI; relayer guests (0.05 NEAR credit each).");
     let _ = writeln!(out, "Players: winnings, sales and bounties go back into the wallet; claims once a day; after each tide sellers race for the allowance (bots first, then a random");
     let _ = writeln!(out, "  quarter of the rest selling above 16 cells' price). Every non-house player plants under a slide's licence when one exists for its pattern (25% off, a 10%");
-    let _ = writeln!(out, "  royalty to the holder), in the slide's orientation. Kinds: see sim/src/world.rs `Kind` (Penny = min_join 0.01 NEAR, one block kept alive and paid).");
+    let _ = writeln!(out, "  royalty to the holder; v6.1: only slides of >= licence_min_cells cells, and a planter that never attached NEAR pays the royalty to the agar), in the slide's");
+    let _ = writeln!(out, "  orientation. Kinds: see sim/src/world.rs `Kind` (Penny = min_join 0.01 NEAR, one block kept alive and paid). The Farmer mints only patterns that license.");
     let _ = writeln!(out);
 }
 
@@ -511,30 +561,53 @@ fn build(rt: &Rules, rm: &Rules, seeds: u64) -> (Vec<Scenario>, [usize; 8]) {
     for &n in &sat {
         scen.push(sc(&format!("sat {}", n), rm, mainnet(2), mixed(n, 1.0), if n >= 5000 { 2 } else { 3 }, 300 + n as u64));
     }
-    // (e) 30,000 colonies.
+    // (e) 30,000 colonies, v6.1 and v6 on the same seeds.
+    let v6m = rm.with(&[("v6", "1")]);
+    let v6t = rt.with(&[("v6", "1")]);
     scen.push(sc("scale 30000", rm, mainnet(2), mixed(30_000, 1.5), 2, 30_000));
-    scen.push(sc("FIX scale 30000 | hot rows leave below one paid cell (stake < 125)", &rm.with(&[("hot_evict_stake", "125")]), mainnet(2), mixed(30_000, 1.5), 2, 30_000));
-    scen.push(sc("FIX mainnet 150p 7d | hot rows leave below one paid cell (stake < 125)", &rm.with(&[("hot_evict_stake", "125")]), mainnet(7), society(150, Net::Mainnet), 8, 150));
+    scen.push(sc("V6 scale 30000", &v6m, mainnet(2), mixed(30_000, 1.5), 2, 30_000));
+    scen.push(sc("V6 mainnet 150p 7d", &v6m, mainnet(7), society(150, Net::Mainnet), 8, 150));
     // (f) attacks.
     let mut sybil = society(150, Net::Testnet);
     sybil.push(spec(SybilRoyalty, 3, 11));
     scen.push(sc("testnet 150p + sybil royalty 7d", rt, testnet(7), sybil.clone(), 6, 151));
-    scen.push(sc("FIX testnet sybil royalty: royalty from credit-only planters to the agar", &rt.with(&[("royalty_guest_to_agar", "true")]), testnet(7), sybil, 6, 151));
+    scen.push(sc("V6 testnet 150p + sybil royalty 7d", &v6t, testnet(7), sybil.clone(), 6, 151));
+    scen.push(sc("FIX testnet sybil royalty 7d | licence_min_cells 0 (only the royalty-to-agar fix)", &rt.with(&[("licence_min_cells", "0")]), testnet(7), sybil, 6, 151));
     let mut farm = society(150, Net::Mainnet);
     farm.push(spec(Farmer, 1, 1));
     scen.push(sc("mainnet 150p + royalty farmer 7d", rm, mainnet(7), farm.clone(), 8, 150));
-    scen.push(sc("FIX farmer: slide_royalty_bps 0", &rm.with(&[("slide_royalty_bps", "0")]), mainnet(7), farm.clone(), 8, 150));
+    scen.push(sc("V6 mainnet 150p + royalty farmer 7d", &v6m, mainnet(7), farm.clone(), 8, 150));
+    scen.push(sc("FIX farmer 150p 7d | licence_min_cells 0", &rm.with(&[("licence_min_cells", "0")]), mainnet(7), farm.clone(), 8, 150));
+    scen.push(sc("FIX farmer 150p 7d | slide_royalty_bps 0", &rm.with(&[("slide_royalty_bps", "0")]), mainnet(7), farm.clone(), 8, 150));
+    scen.push(sc("FIX farmer 150p 7d | licence_min_cells 49", &rm.with(&[("licence_min_cells", "49")]), mainnet(7), farm.clone(), 8, 150));
     let mut farm_young = young(20, Penny);
     farm_young.push(spec(Farmer, 1, 1));
-    scen.push(sc("young 20 + royalty farmer 7d", rm, mainnet(7), farm_young, seeds, 13));
-    // Fix experiments on the young mainnet.
-    for (label, set) in [("tide_cap_bps 2500", vec![("tide_cap_bps", "2500")]), ("small tide entry (120 B)", vec![("small_tide_entry", "true")]), ("tide_bps 200", vec![("tide_bps", "200")]), ("tide_every 960", vec![("tide_every", "960")])] {
+    scen.push(sc("young 20 + royalty farmer 7d", rm, mainnet(7), farm_young.clone(), seeds, 13));
+    scen.push(sc("FIX farmer young 20 7d | slide_royalty_bps 0", &rm.with(&[("slide_royalty_bps", "0")]), mainnet(7), farm_young.clone(), seeds, 13));
+    scen.push(sc("FIX farmer young 20 7d | licence_min_cells 49", &rm.with(&[("licence_min_cells", "49")]), mainnet(7), farm_young.clone(), seeds, 13));
+    scen.push(sc("V6 young 20 + royalty farmer 7d", &v6m, mainnet(7), farm_young, seeds, 13));
+    // v6 on the young mainnet, and the tide experiments on v6.1.
+    scen.push(sc("V6 young Penny alone 7d", &v6m, mainnet(7), young(1, Penny), seeds, 11));
+    scen.push(sc("V6 young 5 7d", &v6m, mainnet(7), young(5, Penny), seeds, 12));
+    scen.push(sc("V6 young 20 7d", &v6m, mainnet(7), young(20, Penny), seeds, 13));
+    for (label, set) in [("tide_cap_bps 2500", vec![("tide_cap_bps", "2500")]), ("tide_bps 200", vec![("tide_bps", "200")]), ("tide_every 960", vec![("tide_every", "960")])] {
         let r = rm.with(&set);
         scen.push(sc(&format!("FIX young Penny alone 7d | {}", label), &r, mainnet(7), young(1, Penny), seeds, 11));
         scen.push(sc(&format!("FIX young 5 7d | {}", label), &r, mainnet(7), young(5, Penny), seeds, 12));
         scen.push(sc(&format!("FIX young 20 7d | {}", label), &r, mainnet(7), young(20, Penny), seeds, 13));
     }
-    scen.push(sc("FIX mainnet 150p 7d | keeper pot to any call that runs a generation", &rm.with(&[("pot_any_call", "true")]), mainnet(7), society(150, Net::Mainnet), 8, 150));
+    // (g) part 2: free play reaching NEAR (kept PETRI), and pacts.
+    let mut exits = society(150, Net::Testnet);
+    exits.push(spec(SybilAttach, 3, 11));
+    exits.push(spec(SybilTransfer, 3, 11));
+    let nokept_t = rt.with(&[("kept", "0")]);
+    scen.push(sc("testnet 150p + sybil exits 7d", rt, testnet(7), exits.clone(), 6, 153));
+    scen.push(sc("NOKEPT testnet 150p + sybil exits 7d", &nokept_t, testnet(7), exits, 6, 153));
+    scen.push(sc("NOKEPT mainnet 150p 7d", &rm.with(&[("kept", "0")]), mainnet(7), society(150, Net::Mainnet), 8, 150));
+    let pacts_m = rm.with(&[("pacts", "1")]);
+    scen.push(sc("PACTS young 5 7d", &pacts_m, mainnet(7), young(5, Penny), seeds, 12));
+    scen.push(sc("PACTS young 20 7d", &pacts_m, mainnet(7), young(20, Penny), seeds, 13));
+    scen.push(sc("PACTS mainnet 150p 7d", &pacts_m, mainnet(7), society(150, Net::Mainnet), 8, 150));
     let mut tk = testnet(3);
     tk.keeper_registered = false;
     let quiet = vec![house(), spec(Bench, 3, 1), spec(Guest, 5, 1)];
@@ -551,7 +624,7 @@ fn all(out_dir: &str, rt: &Rules, rm: &Rules, paths: (&str, &str), seeds: u64) {
     let runs = run_all(&scen);
     let get = |name: &str| -> &[RunOut] { &runs[scen.iter().position(|s| s.name == name).unwrap_or_else(|| panic!("no scenario {}", name))][..] };
     let mut out = String::new();
-    let _ = writeln!(out, "Petri v6 economy simulation (sim/src: main.rs, world.rs, model.rs) on the launched rules of both dishes.");
+    let _ = writeln!(out, "Petri v6.1 economy simulation (sim/src: main.rs, world.rs, model.rs) on the launch rules of both dishes (contract v6.1; v6 runs marked V6).");
     let _ = writeln!(out, "All amounts NEAR unless marked. 'Cash' = NEAR actually received (tide claims, sales, bounties, sponsorship taken back) minus NEAR actually paid");
     let _ = writeln!(out, "(attached deposits with their storage, NEAR spent sponsoring, gas at 0.0001 NEAR/TGas). Each cell: median over seeds of the kind's mean player, (min..max).");
     let _ = writeln!(out, "Assumptions and the storage/gas model are in section 7. The house is modelled as agents/ plays it on mainnet (section 7).");
@@ -585,8 +658,8 @@ fn all(out_dir: &str, rt: &Rules, rm: &Rules, paths: (&str, &str), seeds: u64) {
         let _ = writeln!(out, "  {:<34} | {:>22} | {:>22} | {:>11} | {:>11} | {:>20} | {:>20} | {:>16}", name, wmed(r, &|x| x.first_share, 3), wmed(r, &|x| x.first_tides90, 3), wmed(r, &|x| x.tides as f64, 0), wmed(r, &|x| x.tides_skipped as f64, 0), wmed(r, &|x| nf(x.house_paid), 4), wmed(r, &|x| nf(x.vault), 4), wmed(r, &|x| nf(x.house_left), 4));
     }
     let _ = writeln!(out);
-    let _ = writeln!(out, "  Where the tides went on the young dish, 7 days (medians): pay = 5% of the vault per tide; storage = the tide entry's 289 B paid from it.");
-    for name in ["young Penny alone 7d", "young 5 7d", "young 20 7d"] {
+    let _ = writeln!(out, "  Where the tides went on the young dish, 7 days (medians): pay = 5% of the vault per tide; storage = the tide's 130 B (v6: 289 B) paid from it.");
+    for name in ["young Penny alone 7d", "V6 young Penny alone 7d", "young 5 7d", "V6 young 5 7d", "young 20 7d", "V6 young 20 7d"] {
         let r = get(name);
         let tot = |f: &dyn Fn(&TideRow) -> u128| med_of(r.iter().map(|x| nf(x.timeline.iter().filter(|t| t.ran).map(f).sum())).collect());
         let pay = tot(&|t| t.pay);
@@ -653,84 +726,114 @@ fn all(out_dir: &str, rt: &Rules, rm: &Rules, paths: (&str, &str), seeds: u64) {
     }
     let _ = writeln!(out);
     // ===== 5. Scale and gas =====
-    let _ = writeln!(out, "=== 5. Scale and gas under the v6 layout ===");
-    let r30 = get("scale 30000");
+    let _ = writeln!(out, "=== 5. Scale and gas: the v6.1 layout, and v6's on the same seeds ===");
     let cols30 = colonies(&scen.iter().find(|s| s.name == "scale 30000").unwrap().society);
-    let _ = writeln!(out, "  Simulated: {} colonies (mixed outsiders joining over 1.5 days + house), 2 days, {} seeds. Largest gas per call (TGas, payouts' 30 TGas reservation", cols30, r30.len());
-    let _ = writeln!(out, "  included), the hot rows when it happened, and calls whose gas would pass their prepaid gas (site: join/plant/buy/sell 200, claim/advance 250):");
-    let _ = writeln!(out, "    {:<10} | {:>22} | {:>22} | {:>12} | {:>14}", "call", "no tide in catch-up", "with a tide", "calls", "over prepaid");
-    for c in CALLS {
-        let n: u64 = r30.iter().map(|x| x.world.call_count[c.idx()]).sum();
-        if n == 0 {
-            continue;
-        }
-        let m = |ti: usize| {
-            let g = med_of(r30.iter().map(|x| x.world.gas_max[c.idx()][ti] / 1000.0).collect());
-            let rows = med_of(r30.iter().map(|x| x.world.gas_rows_at_max[c.idx()][ti] as f64).collect());
-            if g > 0.0 {
-                format!("{:.1} @ {:.0} rows", g, rows)
-            } else {
-                "-".into()
+    for (label, name, prepaid) in [("v6.1", "scale 30000", "site: 300 for every call"), ("v6", "V6 scale 30000", "site: join/plant/buy/sell 200, claim/advance 250")] {
+        let r30 = get(name);
+        let _ = writeln!(out, "  {}: {} colonies (mixed outsiders joining over 1.5 days + house), 2 days, {} seeds. Largest gas per call (TGas, payouts' 30 TGas reservation", label, cols30, r30.len());
+        let _ = writeln!(out, "  included), the hot rows when it happened, calls over the 150 TGas target and calls over their prepaid gas ({}):", prepaid);
+        let _ = writeln!(out, "    {:<10} | {:>22} | {:>22} | {:>12} | {:>12} | {:>14}", "call", "no tide in catch-up", "with a tide", "calls", "over 150", "over prepaid");
+        for c in CALLS {
+            let n: u64 = r30.iter().map(|x| x.world.call_count[c.idx()]).sum();
+            if n == 0 {
+                continue;
             }
-        };
-        let over: u64 = r30.iter().map(|x| x.world.over_prepaid[c.idx()]).sum();
-        let _ = writeln!(out, "    {:<10} | {:>22} | {:>22} | {:>12} | {:>14}", format!("{:?}", c), m(0), m(1), n / r30.len() as u64, over);
+            let m = |ti: usize| {
+                let g = med_of(r30.iter().map(|x| x.world.gas_max[c.idx()][ti] / 1000.0).collect());
+                let rows = med_of(r30.iter().map(|x| x.world.gas_rows_at_max[c.idx()][ti] as f64).collect());
+                if g > 0.0 {
+                    format!("{:.1} @ {:.0} rows", g, rows)
+                } else {
+                    "-".into()
+                }
+            };
+            let over: u64 = r30.iter().map(|x| x.world.over_prepaid[c.idx()]).sum();
+            let over150: u64 = r30.iter().map(|x| x.world.over_target[c.idx()]).sum();
+            let _ = writeln!(out, "    {:<10} | {:>22} | {:>22} | {:>12} | {:>12} | {:>14}", format!("{:?}", c), m(0), m(1), n / r30.len() as u64, over150, over);
+        }
+        let _ = writeln!(
+            out,
+            "    hot rows avg {} max {}; rows that left {}; catch-ups cut short by the gas limit {}; plantings refused as behind the clock {}; refused as the table was full {}",
+            wmed(r30, &|x| x.hot_avg, 0),
+            wmed(r30, &|x| x.hot_max as f64, 0),
+            wmed(r30, &|x| x.hot_left as f64, 0),
+            wmed(r30, &|x| x.partial_catchups as f64, 0),
+            wmed(r30, &|x| x.plant_fail_behind as f64, 0),
+            wmed(r30, &|x| x.plant_refused_full as f64, 0)
+        );
+        let _ = writeln!(out);
     }
-    let _ = writeln!(out, "    hot rows (colonies with stake) avg {} max {}; catch-ups cut short by the gas limit {}; plantings refused as behind the clock {}", wmed(r30, &|x| x.hot_avg, 0), wmed(r30, &|x| x.hot_max as f64, 0), wmed(r30, &|x| x.partial_catchups as f64, 0), wmed(r30, &|x| x.plant_fail_behind as f64, 0));
-    let _ = writeln!(out);
-    let _ = writeln!(out, "  Analytic, at p hot rows on a full board (4,000 live cells, 400 colonies alive), every row a tide winner (TGas; NEAR payouts reserve 30 TGas):");
+    let _ = writeln!(out, "  Analytic, v6.1, at p hot rows on a full board (4,000 live cells, 400 colonies alive), every row a tide winner (TGas; NEAR payouts reserve 30 TGas;");
+    let _ = writeln!(out, "  the tide call also moves 32 rows to their cold pages). The table holds at most 10,000 rows.");
+    let _ = writeln!(out, "    {:>7} | {:>6} | {:>7} | {:>19} | {:>15} | {:>13} | {:>26}", "rows p", "join", "plant", "advance through tide", "claim with NEAR", "claim, idle", "gens/catch-up @300 (tide in)");
+    for p in [100.0, 1_500.0, 3_000.0, 5_000.0, 7_500.0, 10_000.0] {
+        let g = gas_at_61(p, 4_000.0, 400.0);
+        let _ = writeln!(out, "    {:>7.0} | {:>6.1} | {:>7.1} | {:>19.1} | {:>15.1} | {:>13.1} | {:>14} ({:>3})", p, g.join / 1e3, g.plant / 1e3, g.tide / 1e3, g.claim_near / 1e3, g.claim_idle / 1e3, g.gens300, g.gens300_tide);
+    }
+    let _ = writeln!(out, "  Analytic, v6 (every colony with stake has a row), same board:");
     let _ = writeln!(out, "    {:>7} | {:>6} | {:>7} | {:>19} | {:>15} | {:>13} | {:>22} | {:>22}", "rows p", "join", "plant", "advance through tide", "claim with NEAR", "claim, idle", "gens/catch-up @200|250", "@200, reserve feed only");
     for p in [100.0, 1_500.0, 5_000.0, 10_000.0, 15_000.0, 20_000.0, 25_000.0, 30_000.0] {
         let g = gas_at(p, 4_000.0, 400.0);
         let _ = writeln!(out, "    {:>7.0} | {:>6.1} | {:>7.1} | {:>19.1} | {:>15.1} | {:>13.1} | {:>14} | {:>5} | {:>22}", p, g.join / 1e3, g.plant / 1e3, g.tide / 1e3, g.claim_near / 1e3, g.claim_idle / 1e3, g.gens200, g.gens250, g.gens200_fix);
     }
-    let _ = writeln!(out, "    Contract unit runtime (CHANGES-v6, host calls only): 1,501 playing: join 1.53, plant 7.23, advance through a tide 36.6, claim with NEAR 36.3;");
-    let _ = writeln!(out, "    30,000 playing: plant 118.8, advance through a tide 148.2, claim with NEAR 147.9. The model above adds wasm and charges the evicted bytes NEAR charges.");
-    let _ = writeln!(out, "    'gens/catch-up' = generations one call can step: the limit min(180, prepaid - 40 - p x 77 x 64 Mgas) less the hot-table load; a plant needs the dish");
-    let _ = writeln!(out, "    current, so once a call steps fewer generations than are due, plantings fail until someone advances.");
+    let _ = writeln!(out, "    'gens/catch-up' = generations one call can step: the catch-up limit less the hot-table load; a plant needs the dish current, so once a call steps");
+    let _ = writeln!(out, "    fewer generations than are due, plantings fail until someone advances.");
     let _ = writeln!(out);
     // ===== 6. Attacks =====
     let _ = writeln!(out, "=== 6. Attacks ===");
     let r = get("testnet 150p + sybil royalty 7d");
-    let rf = get("FIX testnet sybil royalty: royalty from credit-only planters to the agar");
-    let _ = writeln!(out, "  (f1) Sybil guests on the testnet rules (150 players + bench + 3 SybilGuest + 3 SybilRoyalty operators, each 1 wallet + 10 free relayer guests; 6 seeds):");
-    let _ = writeln!(out, "    {:<14} | {:>26} | {:>26} | {:>22} | {:>22} | {:>26}", "operator", "cash (NEAR)", "with the fix", "royalty in (PETRI)", "guests' credit won", "relayer NEAR per operator");
+    let rv6 = get("V6 testnet 150p + sybil royalty 7d");
+    let rl0 = get("FIX testnet sybil royalty 7d | licence_min_cells 0 (only the royalty-to-agar fix)");
+    let _ = writeln!(out, "  (f1) Sybil guests on the testnet rules (150 players + bench + 3 SybilGuest + 3 SybilRoyalty operators, each 1 wallet + 10 free relayer guests; 6 seeds).");
+    let _ = writeln!(out, "  The royalty operator mints a beehive slide (6 cells: no licence in v6.1); 'v6.1, licence_min 0' keeps its licence to isolate the royalty-to-agar rule:");
+    let _ = writeln!(out, "    {:<14} | {:>26} | {:>26} | {:>26} | {:>16} | {:>16} | {:>22}", "operator", "cash v6.1", "cash v6", "cash v6.1, licence_min 0", "royalty in v6", "royalty in l0", "guests' credit won");
     for k in [SybilGuest, SybilRoyalty, Guest, Builder] {
         let _ = writeln!(
             out,
-            "    {:<14} | {:>26} | {:>26} | {:>22} | {:>22} | {:>26}",
+            "    {:<14} | {:>26} | {:>26} | {:>26} | {:>16} | {:>16} | {:>22}",
             format!("{:?}", k),
             cell(&per_seed(r, k, &|g| g.cash()), 4),
-            cell(&per_seed(rf, k, &|g| g.cash()), 4),
-            ucell(&per_seed(r, k, &|g| pf(g.royalty_in)), 1),
-            ucell(&per_seed(r, k, &|g| nf(g.credit_won)), 4),
-            ucell(&per_seed(r, k, &|g| if g.accounts > 1 { (g.accounts as f64 - 1.0) * 0.053 } else if g.kind == Guest { 0.053 } else { 0.0 }), 3)
+            cell(&per_seed(rv6, k, &|g| g.cash()), 4),
+            cell(&per_seed(rl0, k, &|g| g.cash()), 4),
+            ucell(&per_seed(rv6, k, &|g| pf(g.royalty_in)), 1),
+            ucell(&per_seed(rl0, k, &|g| pf(g.royalty_in)), 1),
+            ucell(&per_seed(r, k, &|g| nf(g.credit_won)), 4)
         );
     }
-    let _ = writeln!(out, "    SybilRoyalty wallet: NEAR from selling PETRI {}; of its royalties, PETRI paid by colonies that never attached NEAR (its own and other free guests) {} (with the fix {}).", ucell(&per_seed(r, SybilRoyalty, &|g| nf(g.sold)), 4), ucell(&per_seed(r, SybilRoyalty, &|g| pf(g.royalty_in_credit)), 1), ucell(&per_seed(rf, SybilRoyalty, &|g| pf(g.royalty_in_credit)), 1));
-    let _ = writeln!(out, "    (One PETRI sells back for at most ~0.0001 NEAR: half the 0.0002 curve price.) Its NEAR from free guests' royalties ~ {} NEAR.", ucell(&per_seed(r, SybilRoyalty, &|g| pf(g.royalty_in_credit) * 0.0001), 4));
+    let _ = writeln!(
+        out,
+        "    SybilRoyalty wallet: of its royalties, PETRI paid by colonies that never attached NEAR: v6 {}, v6.1 licence_min 0 {}, v6.1 {}; royalties sent to the agar instead (v6.1 licence_min 0) {} PETRI.",
+        ucell(&per_seed(rv6, SybilRoyalty, &|g| pf(g.royalty_in_credit)), 1),
+        ucell(&per_seed(rl0, SybilRoyalty, &|g| pf(g.royalty_in_credit)), 1),
+        ucell(&per_seed(r, SybilRoyalty, &|g| pf(g.royalty_in_credit)), 1),
+        wmed(rl0, &|x| pf(x.royalties_to_agar), 1)
+    );
+    let _ = writeln!(out, "    NEAR from selling PETRI, SybilRoyalty wallet: v6 {}, v6.1 {}. (One PETRI sells back for at most ~0.0001 NEAR.)", ucell(&per_seed(rv6, SybilRoyalty, &|g| nf(g.sold)), 4), ucell(&per_seed(r, SybilRoyalty, &|g| nf(g.sold)), 4));
     let _ = writeln!(out, "  (f2) Self-sponsor (10 own sub-accounts, 0.05 NEAR each, 0.001 attached once so they are paid NEAR; grants taken back at the end):");
     let _ = writeln!(out, "    alone on the young dish 7 d {}; 14 d {}; in the 150-player society {}; 1,500 {}; reclaimed per operator (150 p) {}", cell(&per_seed(get("young SelfSponsor alone 7d"), SelfSponsor, &|g| g.cash()), 4), cell(&per_seed(get("young SelfSponsor alone 14d"), SelfSponsor, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 150p 7d"), SelfSponsor, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 1500p 7d"), SelfSponsor, &|g| g.cash()), 4), ucell(&per_seed(get("mainnet 150p 7d"), SelfSponsor, &|g| nf(g.reclaimed)), 4));
     let _ = writeln!(out, "  (f3) Carpet locker (1.5 NEAR lattice): alone on the young dish 7 d {}; 14 d {}; 15 p {}; 150 p {}; 1,500 p {}; 150 p 30 d {}", cell(&per_seed(get("young Locker alone 7d"), Locker, &|g| g.cash()), 4), cell(&per_seed(get("young Locker alone 14d"), Locker, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 15p 7d"), Locker, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 150p 7d"), Locker, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 1500p 7d"), Locker, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 150p 30d"), Locker, &|g| g.cash()), 4));
     let _ = writeln!(out, "  (f4) Methuselah (an R-pentomino an hour): alone 7 d {}; 14 d {}; 15 p {}; 150 p {}; 1,500 p {}; 150 p 30 d {}", cell(&per_seed(get("young Methuselah alone 7d"), Methuselah, &|g| g.cash()), 4), cell(&per_seed(get("young Methuselah alone 14d"), Methuselah, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 15p 7d"), Methuselah, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 150p 7d"), Methuselah, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 1500p 7d"), Methuselah, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 150p 30d"), Methuselah, &|g| g.cash()), 4));
     let rfa = get("mainnet 150p + royalty farmer 7d");
-    let rfz = get("FIX farmer: slide_royalty_bps 0");
+    let rfv6 = get("V6 mainnet 150p + royalty farmer 7d");
+    let rfl0 = get("FIX farmer 150p 7d | licence_min_cells 0");
     let ryf = get("young 20 + royalty farmer 7d");
-    let _ = writeln!(out, "  (f5) Slide-royalty farming: one farmer mints slides of 8 common patterns at launch; every other player plants those patterns under its licences.");
+    let ryfv6 = get("V6 young 20 + royalty farmer 7d");
+    let _ = writeln!(out, "  (f5) Slide-royalty farming: one farmer mints slides of common patterns at launch (v6: beehive, loaf, eater, glider, LWSS, R-pentomino, toad, pulsar;");
+    let _ = writeln!(out, "  v6.1: only those of >= licence_min_cells 12 cells, i.e. the pulsar); every other player plants those patterns under its licences.");
     let _ = writeln!(out, "    {:<34} | {:>26} | {:>16} | {:>16} | {:>16} | {:>18}", "", "farmer cash", "royalties PETRI", "licensed plants", "slide storage", "farmer paper");
-    for (l, rr) in [("150 p, 7 d", rfa), ("150 p, 7 d, royalty 0 (fix)", rfz), ("young 20, 7 d", ryf)] {
-        let _ = writeln!(out, "    {:<34} | {:>26} | {:>16} | {:>16} | {:>16} | {:>18}", l, cell(&per_seed(rr, Farmer, &|g| g.cash()), 4), ucell(&per_seed(rr, Farmer, &|g| pf(g.royalty_in)), 1), wmed(rr, &|_| 0.0, 0).replace("0 (0..0)", &ucell(&rr.iter().map(|x| x.slides.iter().map(|s| s.plantings as f64).sum::<f64>()).collect::<Vec<_>>(), 0)), ucell(&per_seed(rr, Farmer, &|g| nf(g.slide_storage)), 4), cell(&per_seed(rr, Farmer, &|g| g.paper()), 4));
+    for (l, rr) in [("150 p, 7 d, v6.1", rfa), ("150 p, 7 d, v6", rfv6), ("150 p, 7 d, v6.1 licence_min 0", rfl0), ("young 20, 7 d, v6.1", ryf), ("young 20, 7 d, v6", ryfv6)] {
+        let _ = writeln!(out, "    {:<34} | {:>26} | {:>16} | {:>16} | {:>16} | {:>18}", l, cell(&per_seed(rr, Farmer, &|g| g.cash()), 4), ucell(&per_seed(rr, Farmer, &|g| pf(g.royalty_in)), 1), ucell(&rr.iter().map(|x| x.slides.iter().map(|s| s.plantings as f64).sum::<f64>()).collect::<Vec<_>>(), 0), ucell(&per_seed(rr, Farmer, &|g| nf(g.slide_storage)), 4), cell(&per_seed(rr, Farmer, &|g| g.paper()), 4));
     }
-    let _ = writeln!(out, "    Other players with the farmer's licences vs without any slides (150 p, 7 d, cash):");
+    let _ = writeln!(out, "    Other players with the farmer's licences vs without the farmer (150 p, 7 d, cash; v6.1 and v6):");
     for k in [Builder, Defender, Raider, Methuselah, Whale] {
-        let _ = writeln!(out, "      {:<12} with licences {:>26}   no slides {:>26}", format!("{:?}", k), cell(&per_seed(rfa, k, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 150p 7d"), k, &|g| g.cash()), 4));
+        let _ = writeln!(out, "      {:<12} v6.1 with farmer {:>26}  without {:>26}  |  v6 with farmer {:>26}  without {:>26}", format!("{:?}", k), cell(&per_seed(rfa, k, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 150p 7d"), k, &|g| g.cash()), 4), cell(&per_seed(rfv6, k, &|g| g.cash()), 4), cell(&per_seed(get("V6 mainnet 150p 7d"), k, &|g| g.cash()), 4));
     }
-    let _ = writeln!(out, "  (f6) House-transfer laundering (house PETRI or NEAR reaching a player other than through the agar and the vault) — every path, as the v6 code has it:");
+    let _ = writeln!(out, "  (f6) House-transfer laundering (house PETRI or NEAR reaching a player other than through the agar and the vault) — every path, as the v6.1 code has it (unchanged from v6 except the keeper pot):");
     for line in [
         "ft_transfer / ft_transfer_call house -> player      refused: token.rs:231 require!(!is_house(from) || is_house(to)); keepers are house (lib.rs is_house)",
         "house sells PETRI back for vault NEAR              refused: lib.rs sell() require!(!colony.house)",
         "house plants a player's slide (royalty to player)  refused: lib.rs plant() require!(!colony.house) when the holder is not the planter",
-        "house or keeper takes the keeper pot               refused: lib.rs advance() !is_house(caller)",
+        "house or keeper takes the keeper pot               refused: lib.rs catch_up_by pays it only to a registered caller that !is_house",
         "tide bounty to a house runner (colony or keeper)   none: catch_up_by house_runner -> bounty 0, stays in the vault",
         "tide share / feed to house colonies                none: feed_with and tide_split_sparse skip `house` ids",
         "council pact house -> house, then house -> player  the second hop is the ft_transfer refusal above",
@@ -742,6 +845,7 @@ fn all(out_dir: &str, rt: &Rules, rm: &Rules, paths: (&str, &str), seeds: u64) {
     }
     let lp: Vec<f64> = runs.iter().flatten().map(|x| pf(x.world.house_to_players_petri)).collect();
     let _ = writeln!(out, "    In every simulated run (the sim mirrors these checks; a house licence plant asserts): house PETRI moved to non-house accounts = {} PETRI (max over {} runs).", lp.iter().cloned().fold(0.0, f64::max), lp.len());
+    part2(&mut out, &get);
     let _ = writeln!(out);
     // ===== 7. Model =====
     let _ = writeln!(out, "=== 7. Rules, storage and gas model, house model ===");
@@ -777,7 +881,7 @@ fn all(out_dir: &str, rt: &Rules, rm: &Rules, paths: (&str, &str), seeds: u64) {
     write_capped(&format!("{}/players", out_dir), &pc);
     // Fix experiments table.
     let mut fx = String::new();
-    let _ = writeln!(fx, "=== Measured fix experiments (same seeds as the launched-rules runs) ===");
+    let _ = writeln!(fx, "=== Measured: v6.1 against v6 (same seeds; 'V6' runs set every v6 rule and layout back) ===");
     let _ = writeln!(fx, "  Young mainnet, 7 days: median cash per player; vault left; house NEAR paid; tide-entry storage as % of tide pay.");
     let _ = writeln!(fx, "  {:<52} | {:>9} {:>9} {:>9} {:>9} {:>9} | {:>9} | {:>9} | {:>8}", "", "Penny", "Builder", "Raider", "Methus.", "Whale", "vault", "house pd", "stor%");
     let rowfx = |fx: &mut String, label: &str, name: &str| {
@@ -795,44 +899,135 @@ fn all(out_dir: &str, rt: &Rules, rm: &Rules, paths: (&str, &str), seeds: u64) {
         let st = med_of(r.iter().map(|x| nf(x.timeline.iter().filter(|t| t.ran).map(|t| t.storage).sum())).collect());
         let _ = writeln!(fx, " | {:>9.4} | {:>9.4} | {:>7.0}%", med_of(wv(r, &|x| nf(x.vault))), med_of(wv(r, &|x| nf(x.house_paid))), 100.0 * st / pay.max(1e-12));
     };
-    for (who, base) in [("Penny alone", "young Penny alone 7d"), ("5 outsiders", "young 5 7d"), ("20 outsiders", "young 20 7d")] {
-        rowfx(&mut fx, &format!("{} | launched rules", who), base);
-        for label in ["tide_cap_bps 2500", "small tide entry (120 B)", "tide_bps 200", "tide_every 960"] {
+    for (who, base, v6n) in [("Penny alone", "young Penny alone 7d", "V6 young Penny alone 7d"), ("5 outsiders", "young 5 7d", "V6 young 5 7d"), ("20 outsiders", "young 20 7d", "V6 young 20 7d")] {
+        rowfx(&mut fx, &format!("{} | v6", who), v6n);
+        rowfx(&mut fx, &format!("{} | v6.1", who), base);
+        for label in ["tide_cap_bps 2500", "tide_bps 200", "tide_every 960"] {
             let n = match who {
                 "Penny alone" => format!("FIX young Penny alone 7d | {}", label),
                 "5 outsiders" => format!("FIX young 5 7d | {}", label),
                 _ => format!("FIX young 20 7d | {}", label),
             };
-            rowfx(&mut fx, &format!("{} | {}", who, label), &n);
+            rowfx(&mut fx, &format!("{} | v6.1 + {}", who, label), &n);
         }
     }
     let _ = writeln!(fx);
     let a = get("mainnet 150p 7d");
-    let b = get("FIX mainnet 150p 7d | keeper pot to any call that runs a generation");
-    let _ = writeln!(fx, "  Keeper pot, mainnet 150 p 7 d: pot left at the end {} PETRI (launched) vs {} (pot to any call); Racer cash {} vs {}; Builder {} vs {}", wmed(a, &|x| pf(x.keeper_pot), 1), wmed(b, &|x| pf(x.keeper_pot), 1), cell(&per_seed(a, Racer, &|g| g.cash()), 4), cell(&per_seed(b, Racer, &|g| g.cash()), 4), cell(&per_seed(a, Builder, &|g| g.cash()), 4), cell(&per_seed(b, Builder, &|g| g.cash()), 4));
+    let b = get("V6 mainnet 150p 7d");
+    let y = get("young 20 7d");
+    let yv = get("V6 young 20 7d");
+    let _ = writeln!(fx, "  Keeper pot left at the end: mainnet 150 p 7 d {} PETRI (v6.1) vs {} (v6); young 20 7 d {} vs {}; Racer cash (150 p) {} vs {}; Builder {} vs {}", wmed(a, &|x| pf(x.keeper_pot), 1), wmed(b, &|x| pf(x.keeper_pot), 1), wmed(y, &|x| pf(x.keeper_pot), 1), wmed(yv, &|x| pf(x.keeper_pot), 1), cell(&per_seed(a, Racer, &|g| g.cash()), 4), cell(&per_seed(b, Racer, &|g| g.cash()), 4), cell(&per_seed(a, Builder, &|g| g.cash()), 4), cell(&per_seed(b, Builder, &|g| g.cash()), 4));
+    let pot_by = |r: &[RunOut]| -> String {
+        let mut by: Vec<(Kind, f64)> = Vec::new();
+        for k in [Penny, Builder, Raider, Defender, Methuselah, Late, Whale, Sniper, Racer, Guest, Locker] {
+            let v = med_of(per_seed(r, k, &|g| pf(g.pot)));
+            if v > 0.0 {
+                by.push((k, v));
+            }
+        }
+        by.iter().map(|(k, v)| format!("{:?} {:.1}", k, v)).collect::<Vec<_>>().join(", ")
+    };
+    let _ = writeln!(fx, "    pot received per player (median PETRI), 150 p v6.1: {}; v6: {}", pot_by(a), pot_by(b));
     let kr = get("testnet house + bench + 5 guests 3d (keeper registered)");
     let kn = get("testnet house + bench + 5 guests 3d (keeper not registered)");
-    let _ = writeln!(fx, "  Testnet keeper (agents/run.mjs advances whenever the pot > 50 PETRI if registered; v6 never pays it the pot): calls/day {} vs {} unregistered; gas/day {} vs {} NEAR at mainnet gas price (testnet's is 10x); pot left {} PETRI", wmed(kr, &|x| x.keeper.calls as f64 / 3.0, 0), wmed(kn, &|x| x.keeper.calls as f64 / 3.0, 0), wmed(kr, &|x| nf(x.keeper.gas) / 3.0, 4), wmed(kn, &|x| nf(x.keeper.gas) / 3.0, 4), wmed(kr, &|x| pf(x.keeper_pot), 1));
-    let _ = writeln!(fx, "  Testnet sybil royalty: SybilRoyalty operator cash {} (launched) vs {} (royalty from credit-only planters to the agar); royalties {} vs {} PETRI", cell(&per_seed(get("testnet 150p + sybil royalty 7d"), SybilRoyalty, &|g| g.cash()), 4), cell(&per_seed(get("FIX testnet sybil royalty: royalty from credit-only planters to the agar"), SybilRoyalty, &|g| g.cash()), 4), ucell(&per_seed(get("testnet 150p + sybil royalty 7d"), SybilRoyalty, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(get("FIX testnet sybil royalty: royalty from credit-only planters to the agar"), SybilRoyalty, &|g| pf(g.royalty_in)), 1));
-    let _ = writeln!(fx, "  Royalty farmer, 150 p 7 d: farmer cash {} (launched) vs {} (slide_royalty_bps 0)", cell(&per_seed(rfa, Farmer, &|g| g.cash()), 4), cell(&per_seed(rfz, Farmer, &|g| g.cash()), 4));
-    let _ = writeln!(fx, "  Gas: generations one call can step at p hot rows with 200 TGas prepaid, launched (reserve both parts of the hot table) vs reserving only the feed part:");
-    for p in [10_000.0, 15_000.0, 20_000.0, 25_000.0, 30_000.0] {
-        let g = gas_at(p, 4_000.0, 400.0);
-        let _ = writeln!(fx, "    p {:>6.0}: {:>3} vs {:>3} generations; plant {:.0} TGas, advance through a tide {:.0} TGas", p, g.gens200, g.gens200_fix, g.plant / 1e3, g.tide / 1e3);
+    let _ = writeln!(fx, "  Testnet keeper (agents/run.mjs, unchanged: advances whenever the pot > 50 PETRI if registered; keepers never take the pot): calls/day {} vs {} unregistered; gas/day {} vs {} NEAR at mainnet gas price (testnet's is 10x); pot left {} PETRI", wmed(kr, &|x| x.keeper.calls as f64 / 3.0, 0), wmed(kn, &|x| x.keeper.calls as f64 / 3.0, 0), wmed(kr, &|x| nf(x.keeper.gas) / 3.0, 4), wmed(kn, &|x| nf(x.keeper.gas) / 3.0, 4), wmed(kr, &|x| pf(x.keeper_pot), 1));
+    let sy = get("testnet 150p + sybil royalty 7d");
+    let syv = get("V6 testnet 150p + sybil royalty 7d");
+    let syl = get("FIX testnet sybil royalty 7d | licence_min_cells 0 (only the royalty-to-agar fix)");
+    let _ = writeln!(fx, "  Testnet sybil royalty: SybilRoyalty operator cash {} (v6) vs {} (v6.1, licence_min 0) vs {} (v6.1); royalties in {} vs {} vs {} PETRI, of them paid by credit-only planters {} vs {} vs {}", cell(&per_seed(syv, SybilRoyalty, &|g| g.cash()), 4), cell(&per_seed(syl, SybilRoyalty, &|g| g.cash()), 4), cell(&per_seed(sy, SybilRoyalty, &|g| g.cash()), 4), ucell(&per_seed(syv, SybilRoyalty, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(syl, SybilRoyalty, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(sy, SybilRoyalty, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(syv, SybilRoyalty, &|g| pf(g.royalty_in_credit)), 1), ucell(&per_seed(syl, SybilRoyalty, &|g| pf(g.royalty_in_credit)), 1), ucell(&per_seed(sy, SybilRoyalty, &|g| pf(g.royalty_in_credit)), 1));
+    let _ = writeln!(fx, "  Royalty farmer: 150 p 7 d cash {} (v6) vs {} (v6.1, licence_min 0) vs {} (v6.1); royalties {} vs {} vs {} PETRI; young 20 7 d cash {} (v6) vs {} (v6.1), royalties {} vs {}", cell(&per_seed(rfv6, Farmer, &|g| g.cash()), 4), cell(&per_seed(rfl0, Farmer, &|g| g.cash()), 4), cell(&per_seed(rfa, Farmer, &|g| g.cash()), 4), ucell(&per_seed(rfv6, Farmer, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(rfl0, Farmer, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(rfa, Farmer, &|g| pf(g.royalty_in)), 1), cell(&per_seed(ryfv6, Farmer, &|g| g.cash()), 4), cell(&per_seed(ryf, Farmer, &|g| g.cash()), 4), ucell(&per_seed(ryfv6, Farmer, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(ryf, Farmer, &|g| pf(g.royalty_in)), 1));
+    let _ = writeln!(fx, "  Royalty farmer, further options on v6.1 (150 p 7 d / young 20 7 d): farmer cash with slide_royalty_bps 0 {} / {}; with licence_min_cells 49 {} / {}; royalties {} / {} and {} / {} PETRI", cell(&per_seed(get("FIX farmer 150p 7d | slide_royalty_bps 0"), Farmer, &|g| g.cash()), 4), cell(&per_seed(get("FIX farmer young 20 7d | slide_royalty_bps 0"), Farmer, &|g| g.cash()), 4), cell(&per_seed(get("FIX farmer 150p 7d | licence_min_cells 49"), Farmer, &|g| g.cash()), 4), cell(&per_seed(get("FIX farmer young 20 7d | licence_min_cells 49"), Farmer, &|g| g.cash()), 4), ucell(&per_seed(get("FIX farmer 150p 7d | slide_royalty_bps 0"), Farmer, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(get("FIX farmer young 20 7d | slide_royalty_bps 0"), Farmer, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(get("FIX farmer 150p 7d | licence_min_cells 49"), Farmer, &|g| pf(g.royalty_in)), 1), ucell(&per_seed(get("FIX farmer young 20 7d | licence_min_cells 49"), Farmer, &|g| pf(g.royalty_in)), 1));
+    let _ = writeln!(fx, "    Whale cash (150 p, the pulsar planters) v6.1 {}, no farmer {}, royalty 0 {}; licensed plantings v6.1 {} (all pulsars), slide storage paid by the farmer {} NEAR", cell(&per_seed(rfa, Whale, &|g| g.cash()), 4), cell(&per_seed(get("mainnet 150p 7d"), Whale, &|g| g.cash()), 4), cell(&per_seed(get("FIX farmer 150p 7d | slide_royalty_bps 0"), Whale, &|g| g.cash()), 4), ucell(&rfa.iter().map(|x| x.slides.iter().map(|s| s.plantings as f64).sum::<f64>()).collect::<Vec<_>>(), 0), ucell(&per_seed(rfa, Farmer, &|g| nf(g.slide_storage)), 4));
+    let _ = writeln!(fx, "  Gas, analytic: v6.1 at p hot rows (the table holds at most 10,000), 300 TGas prepaid: generations per catch-up without / with a tide in it; plant, tide:");
+    for p in [1_500.0, 5_000.0, 10_000.0] {
+        let g = gas_at_61(p, 4_000.0, 400.0);
+        let _ = writeln!(fx, "    p {:>6.0}: {:>3} / {:>3} generations; plant {:.0} TGas, advance through a tide {:.0} TGas, claim with NEAR {:.0}", p, g.gens300, g.gens300_tide, g.plant / 1e3, g.tide / 1e3, g.claim_near / 1e3);
     }
-    for (label, name) in [("launched", "scale 30000"), ("rows leave below stake 125", "FIX scale 30000 | hot rows leave below one paid cell (stake < 125)")] {
+    for (label, name) in [("v6", "V6 scale 30000"), ("v6.1", "scale 30000")] {
         let r = get(name);
         let mx = |c: Call| med_of(r.iter().map(|x| x.world.gas_max[c.idx()][0].max(x.world.gas_max[c.idx()][1]) / 1000.0).collect());
         let over: u64 = r.iter().map(|x| x.world.over_prepaid.iter().sum::<u64>()).sum();
+        let over150: u64 = r.iter().map(|x| x.world.over_target.iter().sum::<u64>()).sum();
         let plants: u64 = r.iter().map(|x| x.world.call_count[Call::Plant.idx()]).sum();
-        let _ = writeln!(fx, "  30,000 colonies, 2 days | {:<28}: hot rows avg {} max {}; max gas plant {:.0}, join {:.0}, claim {:.0}, buy {:.0} TGas; calls over prepaid {} ({} plants in all)", label, wmed(r, &|x| x.hot_avg, 0), wmed(r, &|x| x.hot_max as f64, 0), mx(Call::Plant), mx(Call::Join), mx(Call::Claim), mx(Call::Buy), over, plants);
+        let _ = writeln!(fx, "  30,000 colonies, 2 days | {:<5}: hot rows avg {} max {}; max gas plant {:.0}, join {:.0}, claim {:.0}, buy {:.0}, sell {:.0}, advance {:.0}, slide {:.0} TGas; calls over 150 TGas {}, over prepaid {}; refused full {} ({} plants in all)", label, wmed(r, &|x| x.hot_avg, 0), wmed(r, &|x| x.hot_max as f64, 0), mx(Call::Plant), mx(Call::Join), mx(Call::Claim), mx(Call::Buy), mx(Call::Sell), mx(Call::Advance), mx(Call::Slide), over150, over, r.iter().map(|x| x.world.plant_refused_full).sum::<u64>(), plants);
     }
-    let a = get("mainnet 150p 7d");
-    let b = get("FIX mainnet 150p 7d | hot rows leave below one paid cell (stake < 125)");
-    let _ = writeln!(fx, "  Same rule, mainnet 150 p 7 d (economics should not move): Builder {} vs {}; Methuselah {} vs {}; hot rows avg {} vs {}", cell(&per_seed(a, Builder, &|g| g.cash()), 4), cell(&per_seed(b, Builder, &|g| g.cash()), 4), cell(&per_seed(a, Methuselah, &|g| g.cash()), 4), cell(&per_seed(b, Methuselah, &|g| g.cash()), 4), wmed(a, &|x| x.hot_avg, 0), wmed(b, &|x| x.hot_avg, 0));
+    let _ = writeln!(fx, "  Economics, mainnet 150 p 7 d, v6 vs v6.1: Builder {} vs {}; Methuselah {} vs {}; Whale {} vs {}; Penny {} vs {}; hot rows avg {} vs {}", cell(&per_seed(b, Builder, &|g| g.cash()), 4), cell(&per_seed(a, Builder, &|g| g.cash()), 4), cell(&per_seed(b, Methuselah, &|g| g.cash()), 4), cell(&per_seed(a, Methuselah, &|g| g.cash()), 4), cell(&per_seed(b, Whale, &|g| g.cash()), 4), cell(&per_seed(a, Whale, &|g| g.cash()), 4), cell(&per_seed(b, Penny, &|g| g.cash()), 4), cell(&per_seed(a, Penny, &|g| g.cash()), 4), wmed(b, &|x| x.hot_avg, 0), wmed(a, &|x| x.hot_avg, 0));
+    let _ = writeln!(fx, "  Max gas per call, mainnet 150 p 7 d, v6 vs v6.1 (TGas): {}", CALLS.iter().filter(|c| a.iter().any(|x| x.world.call_count[c.idx()] > 0)).map(|c| format!("{:?} {:.0} / {:.0}", c, med_of(b.iter().map(|x| x.world.gas_max[c.idx()][0].max(x.world.gas_max[c.idx()][1]) / 1000.0).collect()), med_of(a.iter().map(|x| x.world.gas_max[c.idx()][0].max(x.world.gas_max[c.idx()][1]) / 1000.0).collect()))).collect::<Vec<_>>().join(", "));
+    let ke = get("testnet 150p + sybil exits 7d");
+    let kn = get("NOKEPT testnet 150p + sybil exits 7d");
+    let _ = writeln!(fx, "  Part 2, free play reaching NEAR (testnet 150 p + 3 SybilAttach + 3 SybilTransfer operators, 7 d): NEAR paid for farmed PETRI per operator, kept rule vs none: SybilAttach {} vs {}, SybilTransfer {} vs {}; all its sales SybilAttach {} vs {}, SybilTransfer {} vs {}; cash {} vs {} and {} vs {}; PETRI moved by guests' transfers {} vs {}; sales and transfers refused {} / {}", cell(&per_seed(ke, SybilAttach, &|g| nf(g.farm_sold)), 4), cell(&per_seed(kn, SybilAttach, &|g| nf(g.farm_sold)), 4), cell(&per_seed(ke, SybilTransfer, &|g| nf(g.farm_sold)), 4), cell(&per_seed(kn, SybilTransfer, &|g| nf(g.farm_sold)), 4), cell(&per_seed(ke, SybilAttach, &|g| nf(g.sold)), 4), cell(&per_seed(kn, SybilAttach, &|g| nf(g.sold)), 4), cell(&per_seed(ke, SybilTransfer, &|g| nf(g.sold)), 4), cell(&per_seed(kn, SybilTransfer, &|g| nf(g.sold)), 4), cell(&per_seed(ke, SybilAttach, &|g| g.cash()), 4), cell(&per_seed(kn, SybilAttach, &|g| g.cash()), 4), cell(&per_seed(ke, SybilTransfer, &|g| g.cash()), 4), cell(&per_seed(kn, SybilTransfer, &|g| g.cash()), 4), ucell(&per_seed(ke, SybilTransfer, &|g| pf(g.moved)), 1), ucell(&per_seed(kn, SybilTransfer, &|g| pf(g.moved)), 1), ucell(&per_seed(ke, SybilAttach, &|g| g.kept_refused as f64), 0), ucell(&per_seed(ke, SybilTransfer, &|g| g.kept_refused as f64), 0));
+    let mk = get("NOKEPT mainnet 150p 7d");
+    let _ = writeln!(fx, "  Part 2, the kept rule on mainnet 150 p 7 d (cash with vs without): Builder {} vs {}; Methuselah {} vs {}; Guest {} vs {}; SelfSponsor {} vs {}; Seller {} vs {}", cell(&per_seed(a, Builder, &|g| g.cash()), 4), cell(&per_seed(mk, Builder, &|g| g.cash()), 4), cell(&per_seed(a, Methuselah, &|g| g.cash()), 4), cell(&per_seed(mk, Methuselah, &|g| g.cash()), 4), cell(&per_seed(a, Guest, &|g| g.cash()), 4), cell(&per_seed(mk, Guest, &|g| g.cash()), 4), cell(&per_seed(a, SelfSponsor, &|g| g.cash()), 4), cell(&per_seed(mk, SelfSponsor, &|g| g.cash()), 4), cell(&per_seed(a, Seller, &|g| g.cash()), 4), cell(&per_seed(mk, Seller, &|g| g.cash()), 4));
+    for (label, with, base) in [("young 5", "PACTS young 5 7d", "young 5 7d"), ("young 20", "PACTS young 20 7d", "young 20 7d"), ("150 p", "PACTS mainnet 150p 7d", "mainnet 150p 7d")] {
+        let (w, o) = (get(with), get(base));
+        let _ = writeln!(fx, "  Pacts, {} 7 d (with vs without): Builder cash {} vs {}, cell-generations (k) {} vs {}; Raider cash {} vs {}; PETRI paid per builder {}; raids aimed elsewhere {}, plantings refused {}", label, cell(&per_seed(w, Builder, &|g| g.cash()), 4), cell(&per_seed(o, Builder, &|g| g.cash()), 4), ucell(&per_seed(w, Builder, &|g| g.live_gens as f64 / 1000.0), 1), ucell(&per_seed(o, Builder, &|g| g.live_gens as f64 / 1000.0), 1), cell(&per_seed(w, Raider, &|g| g.cash()), 4), cell(&per_seed(o, Raider, &|g| g.cash()), 4), ucell(&per_seed(w, Builder, &|g| pf(g.pact_paid)), 1), ucell(&per_seed(w, Raider, &|g| g.pact_diverted as f64), 1), ucell(&per_seed(w, Raider, &|g| g.pact_refused as f64), 1));
+    }
     fs::write(format!("{}/fixes-measured.txt", out_dir), &fx).unwrap();
     print!("{}", fx);
     eprintln!("wall {:.0} s", t0.elapsed().as_secs_f64());
+}
+
+/// Part 2: the two exits from free play to vault NEAR with and without the kept rule, the kept rule's cost to everyone
+/// else, and pacts.
+fn part2<'a>(out: &mut String, get: &dyn Fn(&str) -> &'a [RunOut]) {
+    use Kind::*;
+    let k = get("testnet 150p + sybil exits 7d");
+    let n = get("NOKEPT testnet 150p + sybil exits 7d");
+    let _ = writeln!(out, "  (f7) Part 2, free play reaching NEAR: 150 players + bench + 3 SybilAttach and 3 SybilTransfer operators (each 1 wallet + 10 relayer guests that");
+    let _ = writeln!(out, "  farm blocks on free credit; testnet rules, 7 days, 6 seeds). SybilAttach guests hoard a day, attach 0.01 NEAR each (a purchase the operator pays");
+    let _ = writeln!(out, "  for) and then sell everything after every tide while still planting; SybilTransfer guests ft_transfer all their PETRI to the wallet, which sells.");
+    let _ = writeln!(out, "  'kept' = v6.1 part 2; 'no rule' = the same seeds without the kept rule (v6.1 part 1). Per operator (median (min..max)):");
+    let _ = writeln!(out, "  'farmed sold' = NEAR the vault paid for PETRI earned before the seller's first NEAR, bought with credit, or moved to it by a guest's transfer.");
+    let _ = writeln!(out, "    {:<14} | {:>26} | {:>26} | {:>26} | {:>26} | {:>26} | {:>26} | {:>14} | {:>16} | {:>16}", "operator", "farmed sold, kept", "farmed sold, no rule", "all sales, kept", "all sales, no rule", "cash, kept", "cash, no rule", "refused, kept", "PETRI moved, nr", "kept PETRI left");
+    for kd in [SybilAttach, SybilTransfer, SybilGuest, Guest, Builder] {
+        let _ = writeln!(
+            out,
+            "    {:<14} | {:>26} | {:>26} | {:>26} | {:>26} | {:>26} | {:>26} | {:>14} | {:>16} | {:>16}",
+            format!("{:?}", kd),
+            cell(&per_seed(k, kd, &|g| nf(g.farm_sold)), 4),
+            cell(&per_seed(n, kd, &|g| nf(g.farm_sold)), 4),
+            cell(&per_seed(k, kd, &|g| nf(g.sold)), 4),
+            cell(&per_seed(n, kd, &|g| nf(g.sold)), 4),
+            cell(&per_seed(k, kd, &|g| g.cash()), 4),
+            cell(&per_seed(n, kd, &|g| g.cash()), 4),
+            ucell(&per_seed(k, kd, &|g| g.kept_refused as f64), 0),
+            ucell(&per_seed(n, kd, &|g| pf(g.moved)), 1),
+            ucell(&per_seed(k, kd, &|g| pf(g.kept_left)), 1)
+        );
+    }
+    let _ = writeln!(out, "    Under the kept rule no sale for NEAR happens while a colony holds kept PETRI and no guest transfer happens at all, so NEAR paid for PETRI earned");
+    let _ = writeln!(out, "    before a colony's first NEAR is 0 by construction; a SybilAttach guest's sales are of PETRI it earned after attaching, once its plantings had spent");
+    let _ = writeln!(out, "    what it farmed. Vault left at the end: kept {}, no rule {}; NEAR paid out for sales in all: kept {}, no rule {}.", wmed(k, &|x| nf(x.vault), 4), wmed(n, &|x| nf(x.vault), 4), wmed(k, &|x| nf(x.sold_total), 4), wmed(n, &|x| nf(x.sold_total), 4));
+    let all_farm = |r: &[RunOut]| med_of(r.iter().map(|x| x.groups.iter().map(|g| nf(g.farm_sold)).sum::<f64>()).collect());
+    let _ = writeln!(out, "    Farmed PETRI sold for vault NEAR by every colony in the run (all kinds): kept {:.4}, no rule {:.4} NEAR.", all_farm(k), all_farm(n));
+    let m = get("mainnet 150p 7d");
+    let mn = get("NOKEPT mainnet 150p 7d");
+    let _ = writeln!(out, "    The rule's cost to everyone else, mainnet 150 p 7 d (cash, kept vs no rule): {}", [Penny, Builder, Raider, Defender, Methuselah, Late, Whale, Sniper, Seller, Guest, SelfSponsor, Locker].iter().map(|&kd| format!("{:?} {:+.4} / {:+.4}", kd, med_of(per_seed(m, kd, &|g| g.cash())), med_of(per_seed(mn, kd, &|g| g.cash())))).collect::<Vec<_>>().join(", "));
+    let _ = writeln!(out, "    Keeper pot left at the end (no guest takes it now): testnet 150 p kept {} PETRI, no rule {}.", wmed(k, &|x| pf(x.keeper_pot), 1), wmed(n, &|x| pf(x.keeper_pot), 1));
+    let _ = writeln!(out, "  (f8) Pacts: after every tide each Builder pays the Raider nearest its home, if that raider lives within 40 cells, 2 PETRI for a pact (the raider");
+    let _ = writeln!(out, "  may not plant within pact_radius 8 of the builder's living cells for a tide window; the builder pays the offer's storage, 0.0038 NEAR, and both calls'");
+    let _ = writeln!(out, "  gas); the raider accepts, aims elsewhere when its pick is a protected colony, and the contract refuses the rest. 'cell-gens' = the builder's living");
+    let _ = writeln!(out, "  cells summed over every generation (thousands).");
+    let _ = writeln!(out, "    {:<22} | {:>26} | {:>26} | {:>26} | {:>26} | {:>12} | {:>12} | {:>12} | {:>12}", "", "Builder cash", "Builder cell-gens (k)", "Raider cash", "Defender cash", "pact PETRI", "raids aimed", "refused", "pacts");
+    for (label, with, base) in [("young 5, 7 d", "PACTS young 5 7d", "young 5 7d"), ("young 20, 7 d", "PACTS young 20 7d", "young 20 7d"), ("mainnet 150 p, 7 d", "PACTS mainnet 150p 7d", "mainnet 150p 7d")] {
+        for (tag, r) in [("pacts", get(with)), ("none", get(base))] {
+            let _ = writeln!(
+                out,
+                "    {:<22} | {:>26} | {:>26} | {:>26} | {:>26} | {:>12} | {:>12} | {:>12} | {:>12}",
+                format!("{} {}", label, tag),
+                cell(&per_seed(r, Builder, &|g| g.cash()), 4),
+                ucell(&per_seed(r, Builder, &|g| g.live_gens as f64 / 1000.0), 1),
+                cell(&per_seed(r, Raider, &|g| g.cash()), 4),
+                cell(&per_seed(r, Defender, &|g| g.cash()), 4),
+                ucell(&per_seed(r, Builder, &|g| pf(g.pact_paid)), 1),
+                ucell(&per_seed(r, Raider, &|g| g.pact_diverted as f64), 1),
+                ucell(&per_seed(r, Raider, &|g| g.pact_refused as f64), 1),
+                ucell(&per_seed(r, Builder, &|g| pf(g.pact_paid) / 2.0), 0)
+            );
+        }
+    }
+    let _ = writeln!(out, "    'raids aimed' = raids whose first pick was a protected colony and that the raider aimed elsewhere; 'refused' = plantings the contract refused");
+    let _ = writeln!(out, "    (a glider or blinker that would have landed within 8 cells of a protected colony's cells). 'pacts' = pacts each builder paid for.");
 }
 
 /// Write `<base>.csv`, split into numbered parts if it would pass 5 MB.

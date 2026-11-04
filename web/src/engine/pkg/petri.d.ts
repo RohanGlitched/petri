@@ -71,6 +71,12 @@ export class Engine {
     load_compact(bytes: Uint8Array | number[], generation: number, chain_hex: string): boolean;
     constructor(width: number, height: number, feed_ppm: number, keeper_bps: number, reach: number, live_floor: number, stake_keep_bps: number);
     /**
+     * Whether a planting of `cells` breaks a pact: "" if no planted cell has a living cell of a `protected` colony
+     * within `radius` cells (a square, wrapping), else "planted,protected,colony" for the first one found, as the
+     * contract refuses it (see `Dish::pact_breach`).
+     */
+    pact_breach(cells: Uint32Array | number[], _protected: Uint16Array | number[], radius: number): string;
+    /**
      * Plant without checks (replaying the contract's log).
      */
     plant(colony: number, cells: Uint32Array | number[]): void;
@@ -124,11 +130,15 @@ export class Engine {
     won_of(colony: number): string;
 }
 
+export function buy_quote(near: string, agar: string, petri_price: string, max_supply: string): string;
+
 /**
  * PETRI units that `near` yoctoNEAR buys from an agar of `agar` units, with `petri_price` yoctoNEAR per PETRI at
  * launch and `max_supply` units in all.
+ * The PETRI of a purchase of `units` that `credit` of `total` yoctoNEAR paid for, which the contract keeps in the dish
+ * (see `petri_core::credit_share`).
  */
-export function buy_quote(near: string, agar: string, petri_price: string, max_supply: string): string;
+export function credit_share(units: string, credit: string, total: string): string;
 
 /**
  * What a planting that would cost `cost` PETRI units costs under a specimen slide's licence (`slide_discount_bps`
@@ -166,6 +176,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_engine_free: (a: number, b: number) => void;
     readonly buy_quote: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+    readonly credit_share: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly engine_add_credit_won: (a: number, b: number, c: number, d: number) => void;
     readonly engine_agar: (a: number) => [number, number];
     readonly engine_attach: (a: number, b: number) => void;
@@ -191,6 +202,7 @@ export interface InitOutput {
     readonly engine_live_counts: (a: number) => [number, number];
     readonly engine_load_compact: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
     readonly engine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
+    readonly engine_pact_breach: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
     readonly engine_region_bitmap: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly engine_set_agar: (a: number, b: number, c: number) => void;

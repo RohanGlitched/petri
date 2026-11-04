@@ -180,10 +180,11 @@ export function PlantingSection() {
             <li className={s.limit}>
               <h3 className="h3">A slide&rsquo;s pattern costs {r.slide_discount_bps / 100}% less</h3>
               <p>
-                A specimen slide is a pattern licence. Plant exactly a slide&rsquo;s cells, moved anywhere on the dish but not
+                A specimen slide that captured at least {r.licence_min_cells ?? 12} cells is a pattern licence (a smaller one is a
+                keepsake). Plant exactly a slide&rsquo;s cells, moved anywhere on the dish but not
                 turned or flipped, and name the slide: the planting costs {r.slide_discount_bps / 100}% less, for anyone. A
                 planter that does not hold the slide also pays its holder {r.slide_royalty_bps / 100}% of that discounted cost in
-                PETRI. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.
+                PETRI, or the agar, if the planter has never attached NEAR. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.
               </p>
             </li>
             <li className={s.limit}>
@@ -281,8 +282,8 @@ under a slide's licence: cost × (1 − ${r.slide_discount_bps / 100}%), plus ${
               {net.freePlay ? "a guest spends it from the credit the site sponsored for it." : "on the free-play testnet dish, a guest spends it from credit the site sponsored."}
             </p>
             <pre className={s.formula}>
-              {`bring = (317 + 4 × cells + (note bytes + 64, if there is a note)
-         + (33 + the holder's account length, under a slide's licence)
+              {`bring = (257 + 4 × cells + (note bytes + 64, if there is a note)
+         + (26 + the holder's account length, under a slide's licence)
          + (125, if that holder has no PETRI registration)
          + (82, if no colony is playing at all)) bytes × 0.00001 NEAR
       + ${near(Number(r.cell_fee), 4)} NEAR × cells`}
@@ -290,7 +291,8 @@ under a slide's licence: cost × (1 − ${r.slide_discount_bps / 100}%), plus ${
             <p>
               The <code className={s.code}>plant_deposit(cells, note_bytes, slide)</code> view returns that sum and the site sends
               it for you. It allows for the colony&rsquo;s row in the table of playing colonies, which a colony&rsquo;s first
-              planting since it last played creates; storage not used goes to the vault or the credit pool with the fee. A
+              planting since it last played creates (the table holds at most 10,000 rows; while it is full and none can
+              leave, a colony without a row waits for the next tide); storage not used goes to the vault or the credit pool with the fee. A
               royalty to a holder with no PETRI registration registers it at the planter&rsquo;s expense. A refused planting
               changes nothing: attached NEAR comes back and credit is not spent.
             </p>

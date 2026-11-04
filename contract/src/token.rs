@@ -2,6 +2,9 @@
 //!
 //! An account must be registered (by joining the dish or with `storage_deposit`) before it can receive PETRI, and it
 //! pays for its own balance record (a slide's holder is registered by the planting that pays it its first royalty).
+//! PETRI earned before a colony's first NEAR stays in the dish: a colony that has never attached NEAR cannot send
+//! PETRI, and one holding kept PETRI cannot send any until it has planted it (see `Colony::kept`). Transfers are not in
+//! the ledger; the replays check every colony's kept PETRI, which no transfer changes, and these checks are the code's.
 //! The contract's own balance is what the dish holds (the agar, unclaimed earnings and the keeper pot): it never sends
 //! or receives PETRI through the token methods. The house's accounts move PETRI only among themselves: what they hold
 //! they bought with NEAR, and it never reaches a player who could sell it back to the vault.
@@ -216,10 +219,24 @@ impl Petri {
 }
 
 impl Petri {
+    /// PETRI earned before a colony's first NEAR stays in the dish: a colony that has never attached NEAR (a guest)
+    /// cannot send PETRI at all, and one that holds kept PETRI cannot send any until it has planted it (see
+    /// `Colony::kept`). Accounts without a colony are not limited, and neither is the house, whose PETRI never leaves
+    /// the house anyway (its strains on testnet play on sponsored credit).
+    pub(crate) fn require_sendable(&self, account: &AccountId, what: &str) {
+        let Some(&id) = self.colony_of.get(account) else { return };
+        let c = self.colonies.get(id as u32 - 1).unwrap();
+        if c.house {
+            return;
+        }
+        require!(c.attached, "free play's PETRI stays in the dish: a colony that has never attached NEAR cannot send PETRI (it can plant it, or sell it back for credit)");
+        require!(c.kept.0 == 0, kept_text(c.kept.0, what));
+    }
+
     /// Burn `amount` of PETRI already taken from `account`'s balance, with a `Burn` entry.
     fn burn_outside(&mut self, account: &AccountId, amount: u128, memo: &str) {
         self.burned += amount;
-        self.ledger.push(Entry::Burn { generation: U64(self.generation), account: account.clone(), petri: U128(amount) });
+        self.ledger.push(Entry::Burn { generation: U64(self.generation), account: account.clone(), petri: U64(amount as u64) });
         self.ledger.flush();
         emit_burn(account, amount, memo);
     }
@@ -229,6 +246,7 @@ impl Petri {
         require!(*to != env::current_account_id(), "PETRI goes back to the agar only by planting or selling");
         require!(from != to, "sender and receiver are the same account");
         require!(!self.is_house(from) || self.is_house(to), "the house's PETRI stays in the house: it plants with it and never hands it to players");
+        self.require_sendable(from, "send PETRI");
         require!(self.balances.contains_key(to), "the receiver is not registered; it needs storage_deposit first");
         let b = self.balance(from);
         require!(b >= amount, "not enough PETRI");

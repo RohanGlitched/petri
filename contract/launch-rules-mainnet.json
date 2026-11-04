@@ -37,5 +37,8 @@
   "slide_min_cells": 5,
   "slide_discount_bps": 2500,
   "slide_royalty_bps": 1000,
+  "licence_min_cells": 12,
+  "pact_radius": 8,
+  "pact_max_gens": 2880,
   "wnear": "wrap.near"
 }

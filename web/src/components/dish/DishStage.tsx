@@ -456,7 +456,7 @@ export function DishStage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fcKey]);
   // A specimen's pattern loaded as the stamp: what its licence asks, when the contract has slide licences.
-  const licence = useSlideLicence(custom?.id ?? null, player?.accountId ?? null);
+  const licence = useSlideLicence(custom?.id ?? null, player?.accountId ?? null, undefined, custom ? custom.offsets.length : null);
   // A specimen planted as its slide fixed it (moved, not turned or flipped) is planted under the slide's licence:
   // slide_discount_bps off the price, and a planter that does not hold the slide pays its holder a royalty on top.
   const licensed = !!custom && licence.live && rotate === 0 && !flip;

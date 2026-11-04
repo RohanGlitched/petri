@@ -16,8 +16,8 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
     body: (
       <>
         No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over,{" "}
-        <code className={s.code}>relaunch</code>, is private (only the contract account itself can call it), clears a v5 dish
-        and refuses one that already ran v6. But <ContractLink /> still has one full-access key that could deploy other
+        <code className={s.code}>relaunch</code>, is private (only the contract account itself can call it), clears a v6 dish
+        and refuses an account with no v6 dish and one that already runs v6.1. But <ContractLink /> still has one full-access key that could deploy other
         code or relaunch. The team will delete it before judging; until then the full-access check fails on /verify and in the terminal.
       </>
     ),
@@ -48,6 +48,16 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
     body: "Entries in the same generation apply in the order the chain executes them. An earlier planting can fill a cell a later one wanted, or turn it into a siege.",
   },
   {
+    key: "Large licensed patterns can still earn royalties",
+    title: "Large licensed patterns can still earn royalties",
+    body: "A slide is a licence only from 12 captured cells, which stops the small common patterns, but whoever mints the first slide of a large pattern others plant (the pulsar, 48 cells; the Gosper gun, 36) collects 10% of every licensed planting of it. In the v6.1 simulator that farmer nets +0.08 NEAR a week at 150 players, down from +0.29; a licence minimum of 49 or no royalty would turn it into a loss of about 0.16 in the model. The launch rules keep 12.",
+  },
+  {
+    key: "A full hot table makes newcomers wait",
+    title: "A full hot table makes newcomers wait",
+    body: "At most 10,000 colonies can play at once. Past that, a colony with no row in the hot table cannot plant until the next tide pays rows out; the simulator's busiest 30,000-colony dish never passed 2,389. Filling the table would take about 10,000 earning plantings an hour, roughly 50 NEAR an hour.",
+  },
+  {
     key: "The house is a subsidy",
     title: "The house is a subsidy",
     body: "The five strains are run by the team and buy every PETRI they plant with. They are never fed, win no tides, never sell PETRI back, can send PETRI only to other house accounts, and take no tide bounty or keeper pot, so what they pay in, about 1.1 NEAR a strain a week in the simulator, goes to the other players. On mainnet that is the team's real NEAR; on testnet it is sponsored credit.",
@@ -55,22 +65,22 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
   {
     key: "Somebody has to advance it",
     title: "Somebody has to advance it",
-    body: "The stored board moves only when a transaction touches it. Each call catches up at most 120 generations and stops at 180 TGas; plantings are refused until the dish is current. Feed and tides for missed generations are worked out late, but a dish left alone for more than 480 generations skips the quiet stretch, and nothing is fed for the skipped generations.",
+    body: "The stored board moves only when a transaction touches it. Each call catches up at most 120 generations and stops at 110 TGas less what is still to be written; plantings are refused until the dish is current. Feed and tides for missed generations are worked out late, but a dish left alone for more than 480 generations skips the quiet stretch, and nothing is fed for the skipped generations.",
   },
   {
     key: "Races for the pot and the bounty",
     title: "Races for the pot and the bounty",
-    body: "The keeper pot goes to whoever advances first, and a tide's bounty to whoever's call runs it, unless that caller is a house account or a keeper: then the pot waits for the next caller and the bounty stays in the vault. A simulated racer that only did that lost 0.05 to 0.06 NEAR a week after gas; the bounty is capped at 0.001 NEAR a tide.",
+    body: "The keeper pot goes to whoever's call first runs a generation, and a tide's bounty to whoever's call runs it, unless that caller is a house account or a keeper: then the pot waits for the next caller and the bounty stays in the vault. A simulated racer that only advanced lost 0.05 to 0.06 NEAR a week after gas in the v5 runs and 0.005 in the v6.1 runs, where every call that runs a generation shares the pot; the bounty is capped at 0.001 NEAR a tide.",
   },
   {
     key: "The simulator is a model",
     title: "The simulator is a model",
-    body: "It estimates storage and gas instead of measuring them, and its players follow fixed habits. Its main runs predate three launched changes: they paid 10% tides (now 5%), paid guests' shares in NEAR their accounts could not move (now credit), and ran tides with nobody to pay (now skipped). They also predate v6, in which a keeper takes no pot and no bounty.",
+    body: "It estimates storage and gas instead of measuring them, and its players follow fixed habits. Its main runs predate three launched changes: they paid 10% tides (now 5%), paid guests' shares in NEAR their accounts could not move (now credit), and ran tides with nobody to pay (now skipped). They also predate v6, in which a keeper takes no pot and no bounty, and v6.1, which the simulator was rerun on (sim/out-v6.1).",
   },
   {
     key: "Gas at scale is measured in a unit test",
     title: "Gas at scale is measured in a unit test",
-    body: "Each colony's numbers live in cold pages of 64 colonies and a hot table of the colonies that have stake, so a join costs the same however many colonies came before, and a catch-up costs what the playing colonies cost. The contract's unit tests count host calls only, not the wasm that runs between them: with 30,000 colonies, 1,501 of them playing, a planting measures 7.23 TGas and an advance through a tide 36.6; with all 30,000 playing, 118.83 and 148.2, under the 300 TGas one transaction can buy.",
+    body: "Each colony's numbers live in cold pages of 32 colonies and a hot table of the colonies that play now (at most 10,000), so a join costs the same however many colonies came before, and a catch-up costs what the playing colonies cost. The contract's gas tests scale the unit runtime's host calls to the real price per byte and add an estimate of the wasm, which the unit runtime does not charge: with 30,000 colonies, 1,500 of them playing, the largest call is 67.5 TGas; with a full table, 9,999 playing, 125.7, under the 150 TGas they assert and the 300 one transaction can buy. In the simulator's 30,000-colony dish no call passed 60 TGas.",
   },
   {
     key: "Views come in pages",

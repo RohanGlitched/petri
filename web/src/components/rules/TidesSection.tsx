@@ -98,8 +98,9 @@ its credit share  = credit pool × ${tidePct}% × its window ÷ every window`}
               remainders and the other {100 - tidePct}% stay in the vault and the pool. A tide with nobody to pay, because no
               colony outside the house earned since the last one, does not run at all: no entry, no bounty, no decay, and the
               buy-back allowance stays as it was. Every tide that runs writes a <code className={s.code}>Tide</code> entry to
-              the ledger with the history chain, every figure above and the colony whose call ran it (0 for a caller with no
-              colony, 65535 for a keeper); those entries are the dish&rsquo;s checkpoints.
+              the ledger with the history chain, its stored bytes (130) and the colony whose call ran it (0 for a caller with no
+              colony, 65535 for a keeper); those entries are the dish&rsquo;s checkpoints. They do not carry the figures above:
+              a replay works them out from the ledger, and a <code className={s.code}>tide</code> event logs them.
             </p>
             <p>
               A colony that has attached NEAR of its own wins NEAR. It waits under the colony&rsquo;s name until it calls{" "}

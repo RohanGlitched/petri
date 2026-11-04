@@ -12,7 +12,7 @@ const PARAMS: Row[] = [
   ["generation_ms", "\"15000\"", "15 s", "Wall-clock time per generation: 5,760 a day."],
   ["max_supply", "\"1000000000000\"", "1,000,000 PETRI", "Every PETRI that will ever exist, minted once into the agar at launch."],
   ["feed_ppm", "3", "3 ppm", "Share of the agar released to the living each generation."],
-  ["keeper_bps", "200", "2%", "Share of each generation's feed set aside in the keeper pot, paid to whoever advances the clock (never a house account)."],
+  ["keeper_bps", "200", "2%", "Share of each generation's feed set aside in the keeper pot, paid to the account whose call ran the generation (never a house account)."],
   ["reach", "8", "8 cells", "A colony is paid for at most this many living cells per cell of stake."],
   ["stake_keep_bps", "8750", "87.5%", "Share of each colony's stake left after every tide."],
   ["burn_bps", "5000", "50%", "Share of a planting's cost that is burned; the rest returns to the agar."],
@@ -37,8 +37,9 @@ const PARAMS: Row[] = [
   ["keepers", "1 account", "see below", "The dish's own keepers. Like the house, they take no tide bounty and no keeper pot, and pass PETRI only to house accounts."],
   ["slide_cells_price", "\"1000000\"", "1 PETRI", "Price of a specimen slide per living cell it captures, all burned."],
   ["slide_min_cells", "5", "5 cells", "A slide must capture at least this many of the colony's own cells."],
+  ["licence_min_cells", "12", "12 cells", "A slide is a licence only if it captured at least this many cells. A smaller slide is a keepsake: a planting under it is refused."],
   ["slide_discount_bps", "2500", "25%", "A planting of a slide's exact pattern under its licence costs this share less."],
-  ["slide_royalty_bps", "1000", "10%", "Anyone but the slide's holder pays the holder this share of a licensed planting's cost, in PETRI."],
+  ["slide_royalty_bps", "1000", "10%", "Anyone but the slide's holder pays the holder this share of a licensed planting's cost, in PETRI; a planter that has never attached NEAR pays the agar instead."],
   ["wnear", "see below", "", "The wNEAR contract whose ft_transfer_call joins or buys for the account its message names."],
 ];
 
@@ -54,7 +55,7 @@ export default function Page() {
     >
       <Callout kind="check">
         <p>
-          The rules are fixed when a dish launches (<C>new</C>, or <C>relaunch</C> on an account that ran v5) and no method changes them while it runs. <C>relaunch</C> is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, and it refuses an account that already ran v6. Read the live values with the <C>rules</C> view, below.
+          The rules are fixed when a dish launches (<C>new</C>, or <C>relaunch</C> on an account that ran v6) and no method changes them while it runs. Both can be called only through the account&rsquo;s own key: <C>relaunch</C> is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, and it refuses an account with no v6 dish and one that already runs v6.1. Once that key is deleted, nobody can start the dish again or change a parameter. Read the live values with the <C>rules</C> view, below.
         </p>
       </Callout>
 
@@ -237,15 +238,16 @@ burned   = cost × burn_bps ÷ 10,000;   returned to the agar = cost − burned`
 
       <H2 id="licence">Planting under a slide&rsquo;s licence</H2>
       <p>
-        <C>plant</C> with <C>slide</C> (a token id) is a planting under that specimen slide&rsquo;s licence. The cells must be exactly the slide&rsquo;s pattern moved anywhere on the dish (wrapping at the edges), every cell once, in the same orientation: a turned or flipped copy is a different pattern and is refused (<C>fits_slide</C> in core).
+        <C>plant</C> with <C>slide</C> (a token id) is a planting under that specimen slide&rsquo;s licence, if the slide captured at least <C>licence_min_cells</C> (12) cells; otherwise it is refused (<C>slide N captured C cells; only a slide of at least 12 cells is a licence</C>). The cells must be exactly the slide&rsquo;s pattern moved anywhere on the dish (wrapping at the edges), every cell once, in the same orientation: a turned or flipped copy is a different pattern and is refused (<C>fits_slide</C> in core).
       </p>
       <Formula>{`cost     = price(n) × siege_x if siege, else price(n)                 the siege surcharge applies in full
 licensed = cost − cost × slide_discount_bps ÷ 10,000                   (licensed_cost)   what the planting costs
 royalty  = licensed × slide_royalty_bps ÷ 10,000                       (royalty)         only when the planter does not hold the slide
 burned   = licensed × burn_bps ÷ 10,000;   returned to the agar = licensed − burned
-royalty  -> transferred to the slide's holder (not burned); the holder is registered for PETRI at the planter's expense if it is not`}</Formula>
+royalty  -> transferred to the slide's holder (not burned); the holder is registered for PETRI at the planter's expense if it is not
+            -> or added to the agar (counted in returned) when the planter had never attached NEAR before this planting`}</Formula>
       <p>
-        With the full agar, a licensed block costs <C>5,644,800 − 1,411,200 = 4,233,600</C> units (4.2336 PETRI), and a planter that does not hold the slide also pays the holder <C>423,360</C> units. The house plants only slides it holds. The Plant entry carries the licence (token, the slide&rsquo;s move count, the holder paid and the royalty), so both replays check the shape, the price, the royalty and who held the slide at that point.
+        With the full agar, a licensed block costs <C>5,644,800 − 1,411,200 = 4,233,600</C> units (4.2336 PETRI), and a planter that does not hold the slide also pays the holder <C>423,360</C> units. The house plants only slides it holds. When the planter had never attached NEAR, the holder and the slide&rsquo;s <C>royalties</C> get nothing and the royalty goes to the agar; the licence says so with <C>to_agar</C>, which the replays check equals <C>holder.is_some() &amp;&amp; !attached</C>. The Plant entry carries the licence (token, the slide&rsquo;s move count, the holder, the royalty and <C>to_agar</C>), so both replays check the shape, the 12-cell minimum, the price, the royalty and who held the slide at that point.
       </p>
 
       <H2 id="buy">The buy curve</H2>
@@ -256,7 +258,7 @@ royalty  -> transferred to the slide's holder (not burned); the holder is regist
 units   = min(agar × deposit ÷ (k + deposit ÷ 2), agar)                   (petri_for_near)
 price   = k ÷ agar × 1,000,000    yoctoNEAR per whole PETRI                (state().petri_price)`}</Formula>
       <p>
-        The agar is full at launch, so one PETRI costs 0.0002 NEAR; with half the agar sold it costs 0.0004. 0.01 NEAR buys 49.99875 PETRI from a full agar. A purchase first pays 140 bytes of storage (0.0014 NEAR) for its ledger entry; the rest buys. <C>buy_quote(near)</C> applies the formula to the current agar.
+        The agar is full at launch, so one PETRI costs 0.0002 NEAR; with half the agar sold it costs 0.0004. 0.01 NEAR buys 49.99875 PETRI from a full agar. A purchase first pays 113 bytes of storage (0.00113 NEAR) for its ledger entry; the rest buys. <C>buy_quote(near)</C> applies the formula to the current agar.
       </p>
 
       <H2 id="sell">Sell-back and the allowance</H2>
@@ -276,18 +278,17 @@ after each tide: sell_left = vault × sell_cap_bps ÷ 10,000`}</Formula>
       <Formula>{`due        = generation % tide_every = 0  and  some colony outside the house has window[c] > 0
 pay        = vault × tide_bps ÷ 10,000
 bounty     = min(pay × tide_bounty_bps ÷ 10,000, max_bounty)
-storage    = min(the Tide entry's storage cost, pay − bounty)
+storage    = min(Tide.bytes × the storage byte price, pay − bounty)       (the entry and its slot in the tide index: 130 bytes, or 175 once per 256 tides)
 split      = tide_split(pay − bounty − storage, window, house)     share[c] = amount × window[c] ÷ Σ window
-              colony that attached NEAR      -> NEAR it can claim       (Tide.paid)
-              colony that never attached     -> won credit              (Tide.as_credit)
+              colony that attached NEAR      -> NEAR it can claim       (paid)
+              colony that never attached     -> won credit              (as_credit)
 credit_pay = credit_pool × tide_bps ÷ 10,000
-csplit     = tide_split(credit_pay, window, house)                      -> won credit for every share (Tide.credit_paid)
+csplit     = tide_split(credit_pay, window, house)                      -> won credit for every share (credit_paid)
 bounty     -> the caller as NEAR, or as credit when the caller's colony never attached NEAR,
-              or 0 when the caller is a house colony or keeper (it stays in the vault; Tide.bounty = 0)
-by         = the caller's colony id, 0 for a caller without one, 65535 (HOUSE_RUNNER) for a keeper without one
+              or 0 when the caller is a house colony or keeper (it stays in the vault)
 then       stake decays, window = 0, sell_left = vault × sell_cap_bps ÷ 10,000`}</Formula>
       <p>
-        If the split pays nobody (the vault&rsquo;s share is too small to divide), no bounty is paid and only the entry&rsquo;s storage leaves the vault. <C>window[c]</C> is the PETRI colony <C>c</C> earned from the feed since the last tide, so a tide follows a whole hour of earnings. Shares use <C>a ÷ d × b + (a mod d) × b ÷ d</C> to avoid overflow; rounding dust stays in the vault.
+        The Tide entry stores only <C>{"{ generation, chain, bytes, by }"}</C>. <C>by</C> is the caller&rsquo;s colony id, 0 for a caller without one, 65535 (<C>HOUSE_RUNNER</C>) for a keeper without one. Every other amount above (<C>pay</C>, the bounty, <C>storage</C>, <C>paid</C>, <C>as_credit</C>, <C>credit_pay</C>, <C>credit_paid</C>) is worked out by a replay from the ledger before the tide, and the <C>tide</C> event logs them all. If the split pays nobody (the vault&rsquo;s share is too small to divide), no bounty is paid and only the entry&rsquo;s storage, at most the vault, leaves it. <C>window[c]</C> is the PETRI colony <C>c</C> earned from the feed since the last tide, so a tide follows a whole hour of earnings. Shares use <C>a ÷ d × b + (a mod d) × b ÷ d</C> to avoid overflow; rounding dust stays in the vault.
       </p>
 
       <H2 id="dormancy">The clock, catch-up and skips</H2>
@@ -297,7 +298,7 @@ if due > generation + max_lag:                         # nobody tended the dish 
     skip      = due − generation − max_catchup
     epoch_ms += skip × generation_ms;  skipped += skip;  ledger += Skip { generation, skipped: skip }
 step up to min(due, generation + cap) generations, where cap = max_catchup (or advance's max, clamped to 1..120)
-stop early once the call has used min(180 TGas, prepaid gas − 40 TGas − the gas to write the hot table back)
+stop early once the call has used min(110 TGas, prepaid gas − 40 TGas) less what is still to be written (see CATCHUP_GAS_LIMIT below); always step one
 each generation: Life step; history chain every 16th; feed; tide if due`}</Formula>
       <p>
         A Skip moves only the clock: the board, the agar and the stakes are exactly as they were. <C>plant</C> also requires <C>generation = due</C> after its catch-up, so a planting always lands on the current board. The contract test <C>an_untended_dish_skips_ahead_instead_of_piling_up_work</C> covers this; the simulator&rsquo;s dormant dish ran one skip of 172,680 generations after 30 idle days.
@@ -332,11 +333,11 @@ each generation: Life step; history chain every 16th; feed; tide if due`}</Formu
           </tr>
           <tr>
             <td>Planting</td>
-            <td>1 to 64 cells, each &lt; 16,384, empty, not repeated; one planting per colony per generation; only at the current generation; under a licence, exactly the slide&rsquo;s pattern, translated, not turned</td>
+            <td>1 to 64 cells, each &lt; 16,384, empty, not repeated; one planting per colony per generation; only at the current generation; under a licence, a slide of at least 12 cells and exactly its pattern, translated, not turned; a colony with no hot row needs room in the table (at most 10,000 rows)</td>
           </tr>
           <tr>
             <td>Slide</td>
-            <td>4 to 32 cells a side; corner on the dish; at least 5 of the colony&rsquo;s own living cells</td>
+            <td>4 to 32 cells a side; corner on the dish; at least 5 of the colony&rsquo;s own living cells (12 or more for it to be a licence)</td>
           </tr>
           <tr>
             <td>Colonies</td>
@@ -369,16 +370,19 @@ each generation: Life step; history chain every 16th; feed; tide if due`}</Formu
           {[
             ["CHAIN_EVERY", "16", "core: the history chain advances on generations that are multiples of 16"],
             ["STAKE_UNIT", "1,000", "core: stake per planted cell"],
-            ["PLANT_STORAGE_BASE", "240 bytes", "contract: plant_deposit's fixed part, plus the 77-byte hot row, 4 per cell, note bytes + 64 and a licence's bytes"],
-            ["CATCHUP_GAS_LIMIT", "180 TGas", "contract: a catch-up stops stepping past this, or past prepaid gas less GAS_RESERVE (40 TGas)"],
+            ["PLANT_STORAGE_BASE", "180 bytes", "contract: plant_deposit's fixed part, plus the 77-byte hot row, 4 per cell, note bytes + 64 and a licence's bytes"],
+            ["BUY_BYTES", "113 bytes", "contract: the storage a purchase's ledger entry is charged up front"],
+            ["CATCHUP_GAS_LIMIT", "110 TGas", "contract: a catch-up stops stepping past this, or past prepaid gas less GAS_RESERVE (40 TGas), in both cases less the feed part of the hot table (26 bytes a row at 72 Mgas a byte), the purse part (51 bytes a row; only if a tide falls in the window or a purse is already changed) and 32 cold pages' worth (0.35 TGas each); it always steps one generation"],
             ["RECLAIM_AFTER", "5,760 generations", "contract: a sponsor may take back its grant once a day of wall-clock time has passed since it last gave or the account last drew on it"],
             ["MIN_SPONSOR", "0.01 NEAR", "contract: the least one sponsorship brings"],
             ["MAX_GRANTS", "8", "contract: most sponsors one account's credit can come from at once"],
             ["UNSPONSOR_BYTES", "210 bytes", "contract: what a new grant sets aside for its later Unsponsor entry"],
             ["REFUND_BYTES + PENDING_RECORD_BYTES", "97 + 142 bytes", "contract: what a NEAR payout must be able to pay for, should it fail and become pending"],
             ["HOUSE_RUNNER", "65535", "contract: the by of a tide a keeper with no colony ran"],
-            ["PAGE", "64 colonies", "books: colonies per cold page"],
-            ["FLUSH_MAX", "16", "books: rows a call moves from the hot table back to their cold slots once their stake is gone"],
+            ["PAGE", "32 colonies", "books: colonies per cold page (69 bytes a slot)"],
+            ["MAX_PLAYING", "10,000", "books: most rows the hot table holds; a colony with no row cannot plant while it is full and no row can leave"],
+            ["FLUSH_MAX", "32", "books: rows a call moves from the hot table back to their cold slots, once they have no window and no living cell or a stake that cannot earn"],
+            ["TIDE_PAGE", "256", "contract: tides per key of the packed tide index (4-byte ledger positions)"],
             ["MAX_NAME_CHARS", "24", "contract: colony names"],
             ["MAX_NOTE_CHARS", "140 (280 bytes)", "contract: lab notes"],
             ["MAX_HOUSE", "16", "contract: house accounts"],

@@ -36,7 +36,6 @@ type Phase = { kind: "reading" } | { kind: "replaying"; at: number; of: number }
 function fromLedger(ledger: Entry[]) {
   let biggest: Result["biggest"] = null;
   let siege: Result["siege"] = null;
-  let firstTide: Result["firstTide"] = null;
   let tides = 0;
   let plants = 0;
   let sieges = 0;
@@ -51,12 +50,10 @@ function fromLedger(ledger: Entry[]) {
         if (!siege || row.cost > siege.cost) siege = row;
       }
     } else if ("Tide" in e) {
-      const t = e.Tide;
       tides++;
-      if (!firstTide) firstTide = { at: Number(t.generation), paid: Number(t.paid), asCredit: Number(t.as_credit), creditPaid: Number(t.credit_paid), by: t.by };
     }
   }
-  return { biggest, siege, firstTide, tides, plants, sieges };
+  return { biggest, siege, tides, plants, sieges };
 }
 
 async function compute(onProgress: (at: number, of: number) => void): Promise<{ r: Result; colonies: Colony[] }> {
@@ -87,6 +84,7 @@ async function compute(onProgress: (at: number, of: number) => void): Promise<{ 
       }
     }
   };
+  let firstTide: Result["firstTide"] = null;
   try {
     let done = false;
     let steps = 0;
@@ -99,6 +97,9 @@ async function compute(onProgress: (at: number, of: number) => void): Promise<{ 
         await new Promise((r) => setTimeout(r, 0));
       }
     }
+    // A Tide entry keeps only its chain, bytes and runner; what the first tide paid is what the replay worked out.
+    const t = rp.tidesPaid[0];
+    if (t) firstTide = { at: t.generation, paid: Number(t.paid), asCredit: Number(t.asCredit), creditPaid: Number(t.creditPaid), by: t.by };
   } finally {
     rp.free();
   }
@@ -109,7 +110,7 @@ async function compute(onProgress: (at: number, of: number) => void): Promise<{ 
   });
   best.forEach((l) => lives.push(l));
   lives.sort((a, b) => b.to - b.from - (a.to - a.from));
-  return { r: { generation: target, lives, peak, ...fromLedger(ledger) }, colonies };
+  return { r: { generation: target, lives, peak, firstTide, ...fromLedger(ledger) }, colonies };
 }
 
 function Holder({ c }: { c: Colony | undefined }) {

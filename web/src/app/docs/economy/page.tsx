@@ -57,7 +57,7 @@ export default function Page() {
             </td>
           </tr>
           <tr>
-            <td>Keeper pot, on <C>advance</C></td>
+            <td>Keeper pot, on any call that runs a generation</td>
             <td>keeper pot</td>
             <td>the caller, if its call ran a generation, it is registered for PETRI and it is not a house strain or keeper</td>
             <td>
@@ -135,14 +135,14 @@ agar                         = max_supply − sold − fed + returned + bought_b
             <td>
               <C>join</C> (at least 0.01 NEAR)
             </td>
-            <td>The colony record, its one slot at the end of the last cold page, its name, its balance record, the join entry, and 140 bytes for the purchase entry</td>
+            <td>The colony record, its one slot at the end of the last cold page, its name, its balance record, the join entry, and 113 bytes for the purchase entry</td>
             <td>Buys PETRI; attached NEAR to the vault, credit to the credit pool</td>
           </tr>
           <tr>
             <td>
               <C>buy</C>
             </td>
-            <td>140 bytes (0.0014 NEAR) for the purchase entry</td>
+            <td>113 bytes (0.00113 NEAR) for the purchase entry</td>
             <td>Buys PETRI; vault or credit pool</td>
           </tr>
           <tr>
@@ -203,6 +203,9 @@ agar                         = max_supply − sold − fed + returned + bought_b
         <li>Every other failed payout (a claim, a sale, a reclaim, a pending claim) stays the account&rsquo;s: a <C>Refund</C> entry records it, its records are paid from the NEAR that came back, and the rest becomes pending NEAR for the account it was for.</li>
         <li>Refunds of excess deposits: a slide&rsquo;s unused deposit, a second <C>storage_deposit</C>, <C>storage_unregister</C>, approvals revoked.</li>
       </ul>
+      <p>
+        A Tide entry stores only the chain, <C>bytes</C> and <C>by</C>; the amounts below (<C>bounty</C>, <C>storage</C>, <C>paid</C>, <C>as_credit</C>, <C>credit_paid</C>) are the ones a replay works out for each tide from the ledger before it, and the <C>tide</C> event logs.
+      </p>
       <Formula>{`vault + Σ tides (bounty + storage + paid + as_credit) + Σ sales (near)  = near_in + Σ bounty refunds (near − storage)
 credit_pool + Σ tides (credit_paid)                                      = credit_in
 credit_won                                                               = Σ tides (credit_paid) + near_as_credit
@@ -348,7 +351,7 @@ solvent  ⇔  free ≥ owed          surplus = free − owed`}</Formula>
           <tr>
             <td>A planting</td>
             <td>
-              <C>plant_deposit(cells, note_bytes, slide)</C> = (240 + 77 + 4 × cells + (note bytes + 64, with a note) + (82 while no colony plays) + (under a slide&rsquo;s licence: 33 + the holder&rsquo;s account length, and 125 more if the holder has no PETRI registration)) × 10<sup>19</sup> + 0.0001 NEAR × cells; 0.00373 NEAR for a block with no note. The 77 bytes are the colony&rsquo;s row in the hot table, which its first planting makes.
+              <C>plant_deposit(cells, note_bytes, slide)</C> = (180 + 77 + 4 × cells + (note bytes + 64, with a note) + (82 while no colony plays) + (under a slide&rsquo;s licence: 26 + the holder&rsquo;s account length, and 125 more if the holder has no PETRI registration)) × 10<sup>19</sup> + 0.0001 NEAR × cells; 0.00313 NEAR for a block with no note. The 77 bytes are the colony&rsquo;s row in the hot table, which its first planting makes.
             </td>
           </tr>
           <tr>
@@ -380,7 +383,7 @@ solvent  ⇔  free ≥ owed          surplus = free − owed`}</Formula>
           It joins with 0.02 NEAR. About 0.007 NEAR pays its storage (the exact amount depends on the account&rsquo;s length); about 0.013 NEAR reaches the vault and buys about 65 PETRI.
         </li>
         <li>
-          It plants a block: 4 cells × 1.4112 = 5.6448 PETRI. 2.8224 PETRI is burned and 2.8224 returns to the agar. It attaches <C>plant_deposit(4, null, null)</C> = 0.00373 NEAR; the storage actually used is paid and the rest goes to the vault. Its stake is now 4,000.
+          It plants a block: 4 cells × 1.4112 = 5.6448 PETRI. 2.8224 PETRI is burned and 2.8224 returns to the agar. It attaches <C>plant_deposit(4, null, null)</C> = 0.00313 NEAR; the storage actually used is paid and the rest goes to the vault. Its stake is now 4,000.
         </li>
         <li>
           The block earns 4 × 0.00294 = 0.01176 PETRI a generation. After 480 generations that is 5.6448 PETRI, exactly its price: that is what the payback rule means.

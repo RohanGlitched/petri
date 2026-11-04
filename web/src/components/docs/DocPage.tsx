@@ -63,7 +63,7 @@ export function DocPage({ slug, lede, children, source }: { slug: string; lede?:
           </nav>
           <footer className="d-foot">
             <p>
-              Petri is open source under the MIT licence. These pages describe the contract at commit <a href={`${REPO}/tree/${BUILD_COMMIT}`}>{BUILD_COMMIT_SHORT}</a>, the v6 build both dishes run. Where a page and the code disagree, the code is right; say so in an <a href="https://github.com/RohanGlitched/petri/issues">issue</a>.
+              Petri is open source under the MIT licence. These pages describe the contract at commit <a href={`${REPO}/tree/${BUILD_COMMIT}`}>{BUILD_COMMIT_SHORT}</a>, the v6.1 build both dishes run. Where a page and the code disagree, the code is right; say so in an <a href="https://github.com/RohanGlitched/petri/issues">issue</a>.
             </p>
           </footer>
         </article>

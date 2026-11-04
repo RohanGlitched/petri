@@ -67,7 +67,7 @@ export function ProofBand() {
             <li>
               <h3 className="h3">All of it is open</h3>
               <span className={s.where}><a href={REPO}>{REPO.replace("https://", "")}</a></span>
-              <p className="muted">Contract, engine, simulator, agents and this site. 104 tests (74 for the contract, 30 for the engine), including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI and every yoctoNEAR.</p>
+              <p className="muted">Contract, engine, simulator, agents and this site. 152 tests (119 for the contract, 33 for the engine), including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI and every yoctoNEAR.</p>
             </li>
           </ul>
         </div>

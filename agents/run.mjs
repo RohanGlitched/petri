@@ -6,7 +6,8 @@
 //                            nothing signed or sent and nothing written to the log (model calls are real)
 //
 // Each house strain forecasts every candidate on a copy of the dish, remembers what its moves really did, and meets
-// the other house strains at a council once per tide window to trade PETRI for promises (council.mjs).
+// the other house strains at a council once per tide window to make pacts the contract enforces: PETRI paid for a
+// promise not to plant near the payer (council.mjs).
 
 import fs from "node:fs";
 import http from "node:http";
@@ -17,7 +18,7 @@ import { candidates, makeRng } from "./strategies.mjs";
 import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally } from "./model.mjs";
 import { forecast, forecastText, boxOf } from "./forecast.mjs";
 import { loadMemory, saveMemory, rememberMove, measureOutcomes, bootstrapFromChain, memoryText, movesOf, OUTCOME_GENS } from "./memory.mjs";
-import { runCouncil, pactsFor, pactGens } from "./council.mjs";
+import { runCouncil, pactsFor, pactGens, chainPacts } from "./council.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
@@ -74,6 +75,8 @@ const SMALL_MOVE = 10e6;
 const spentToday = (account) => (mem.spend?.[account] ?? []).filter((x) => Date.now() - Date.parse(x.at) < 86_400_000).reduce((a, x) => a + x.petri, 0);
 const recent = [];
 const recentCouncil = [];
+// The pacts the house strains are party to on chain, refreshed every minute, for the site to draw.
+let pactsNow = [];
 let lastHealth = null;
 const once = process.argv.includes("--once");
 const dry = process.argv.includes("--dry");
@@ -137,7 +140,7 @@ function serve() {
     .createServer((req, res) => {
       const body = req.url?.startsWith("/health")
         ? lastHealth
-        : { contract: CONTRACT, model: modelName(), health: lastHealth, actions: recent.slice(-200), council: recentCouncil.slice(-150), memory: memoryView() };
+        : { contract: CONTRACT, model: modelName(), health: lastHealth, actions: recent.slice(-200), council: recentCouncil.slice(-150), memory: memoryView(), pacts: pactsNow };
       res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "public, max-age=15" });
       res.end(JSON.stringify(body));
     })
@@ -184,7 +187,7 @@ async function maybeFossilize(s, world, me, balance) {
   const deposit = await view("slide_deposit", { w: SLIDE_SIDE, h: SLIDE_SIDE, title_bytes: Buffer.byteLength(title) });
   try {
     const args = { x: win.x, y: win.y, w: SLIDE_SIDE, h: SLIDE_SIDE, title };
-    const r = await callDish(s.account, "mint_slide", args, 200, BigInt(deposit), attaches(s));
+    const r = await callDish(s.account, "mint_slide", args, 300, BigInt(deposit), attaches(s));
     log(s.name, `fossilized ${win.n} cells at ${win.x}, ${win.y}`, r.hash);
   } catch (e) {
     log(s.name, "slide refused:", e instanceof Error ? e.message : e);
@@ -199,7 +202,7 @@ async function ensureJoined(s, colonies) {
     return null;
   }
   log(s.name, "joining");
-  await callDish(s.account, "join", { name: s.name, color: s.color }, 200, JOIN_NEAR, attaches(s));
+  await callDish(s.account, "join", { name: s.name, color: s.color }, 300, JOIN_NEAR, attaches(s));
   return (await view("colony_of", { account_id: s.account })) ?? null;
 }
 
@@ -263,7 +266,7 @@ async function actOn(s, world) {
       return;
     } else {
       try {
-        const r = await callDish(s.account, "buy", {}, 150, TOP_UP_NEAR, attaches(s));
+        const r = await callDish(s.account, "buy", {}, 300, TOP_UP_NEAR, attaches(s));
         log(s.name, "bought PETRI from the agar", r.hash);
         balance = Number(await view("ft_balance_of", { account_id: s.account }));
       } catch (e) {
@@ -274,7 +277,7 @@ async function actOn(s, world) {
   // Every few hours a colony collects the NEAR it won at the tides (the bench every hour, so claims show up early).
   if (!dry && Number(waiting.near) > 0 && Date.now() - (lastClaim.get(s.account) ?? 0) > (s.bench ? 3600_000 : 3 * 3600_000)) {
     try {
-      await callDish(s.account, "claim", {}, 150);
+      await callDish(s.account, "claim", {}, 300);
       lastClaim.set(s.account, Date.now());
       log(s.name, "claimed", (Number(waiting.near) / 1e24).toFixed(5), "NEAR from the tides");
     } catch (e) {
@@ -287,8 +290,10 @@ async function actOn(s, world) {
   const counts = world.engine.live_counts();
   const myCells = counts[me.id] ?? 0;
   const nameOf = namer(world);
-  // Promises this strain made at the council, held here as candidate filters.
-  const pacts = s.bench ? { avoid: new Set(), banRegions: new Set(), strike: null, lines: [], ids: [] } : pactsFor(mem, s.account, world.due, nameOf);
+  // Pacts binding this colony on chain: the contract refuses any planting near the colonies they protect, so those
+  // candidates are dropped before anyone chooses (the bench too: it would only waste gas).
+  const bound = await view("pacts_of", { account_id: s.account }).catch(() => []);
+  const pacts = pactsFor(bound, me.id, world.rules, nameOf);
   const maxCost = DAILY_PETRI && !s.bench ? Math.max(SMALL_MOVE, DAILY_PETRI - spentToday(s.account)) : null;
   let cands = candidates({ ...world, totalLive }, { id: me.id, temperament: s.temperament, cap: s.cap, maxCost }, balance, rng, 6, pacts);
   let fc = null;
@@ -340,7 +345,7 @@ async function actOn(s, world) {
   }
   try {
     const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
-    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 200, BigInt(deposit), attaches(s));
+    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 300, BigInt(deposit), attaches(s));
     log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", note, r.hash);
     if (!s.bench) {
       let earnedAt = null;
@@ -424,7 +429,8 @@ async function council() {
   const world = await liveDish();
   try {
     await learn(world);
-    const events = await runCouncil({ world, strains: STRAINS, mem, dry, holdGens, log });
+    const events = await runCouncil({ world, strains: STRAINS, mem, dry, holdGens, log, attaches });
+    pactsNow = await chainPacts(STRAINS, world.colonies).catch(() => pactsNow);
     recordCouncil(events);
     saveMemory(mem, dry);
     for (const e of events) {
@@ -468,7 +474,7 @@ async function keep() {
   const due = MAINNET ? outsiders && behind >= Number(KEEPER_LAG) : behind >= 20;
   if (due) {
     try {
-      const r = await callDish(KEEPER, "advance", {}, 250);
+      const r = await callDish(KEEPER, "advance", {}, 300);
       log("keeper advanced", behind, "due generation(s)", r.hash);
     } catch (e) {
       log("keeper refused:", e instanceof Error ? e.message : e);
@@ -502,7 +508,7 @@ async function dryRun() {
 
 async function main() {
   const rules = await view("rules");
-  holdGens = pactGens(Number(rules.tide_every), Math.max(...STRAINS.map((s) => s.every[1])) * PACE);
+  holdGens = pactGens(Number(rules.tide_every), Math.max(...STRAINS.map((s) => s.every[1])) * PACE, Number(rules.pact_max_gens ?? 2880));
   if (dry) return dryRun();
   log(`petri agents on ${CONTRACT}; model ${modelName() ?? "none (rules choose)"}`);
   serve();
@@ -531,6 +537,10 @@ async function main() {
         }
       }
       if (++tick % 60 === 0) await health();
+      if (tick % 4 === 0) {
+        const colonies = await view("colonies", { from: 0, limit: 500 });
+        pactsNow = await chainPacts(STRAINS, colonies).catch(() => pactsNow);
+      }
     } catch (e) {
       log("loop error", e instanceof Error ? e.message : e);
     }

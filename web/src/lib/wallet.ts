@@ -277,20 +277,24 @@ export const JOIN_NEAR = 2n * 10n ** 22n;
 export const BUY_NEAR = 10n ** 22n;
 /** NEAR of credit the site's relayer sponsors on chain for each guest (kept in step with /api/guest). */
 export const GUEST_CREDIT = 5n * 10n ** 22n;
-export const joinDish = (name: string, color: number, deposit: bigint = JOIN_NEAR) => call("join", { name, color }, 200, deposit);
+/** Gas every call that may catch the dish up prepays: unused gas is refunded, and a call on a crowded dish (a catch-up
+ * through a tide that pays thousands of colonies) can need well over 200 TGas on the real network. */
+export const CALL_TGAS = 300;
+export const joinDish = (name: string, color: number, deposit: bigint = JOIN_NEAR) => call("join", { name, color }, CALL_TGAS, deposit);
 /** Plant `cells`; with `slide` (a token id) under that slide's licence: the cells must be exactly its pattern moved
- * anywhere, the planting costs slide_discount_bps less, and a planter that does not hold the slide pays its holder a
- * royalty. `deposit` is getPlantDeposit(cells, note bytes, slide). */
-export const plantCells = (cells: number[], note: string | undefined, deposit: bigint, slide: string | null = null) => call("plant", { cells, note: note?.trim() || null, ...(slide ? { slide } : {}) }, 200, deposit);
+ * anywhere (and the slide must hold at least rules.licence_min_cells cells), the planting costs slide_discount_bps less,
+ * and a planter that does not hold the slide pays a royalty: to its holder, or to the agar if the planter has never
+ * attached NEAR. `deposit` is getPlantDeposit(cells, note bytes, slide). */
+export const plantCells = (cells: number[], note: string | undefined, deposit: bigint, slide: string | null = null) => call("plant", { cells, note: note?.trim() || null, ...(slide ? { slide } : {}) }, CALL_TGAS, deposit);
 // Gas left unused is refunded, so these leave room for a crowded dish: a call's cost grows with the colonies playing.
-export const buyPetri = (deposit: bigint = BUY_NEAR) => call("buy", {}, 200, deposit);
-export const sellPetri = (units: bigint) => call("sell", { petri: units.toString() }, 200);
-export const claimAll = () => call("claim", {}, 250);
-export const advanceDish = () => call("advance", {}, 250);
+export const buyPetri = (deposit: bigint = BUY_NEAR) => call("buy", {}, CALL_TGAS, deposit);
+export const sellPetri = (units: bigint) => call("sell", { petri: units.toString() }, CALL_TGAS);
+export const claimAll = () => call("claim", {}, CALL_TGAS);
+export const advanceDish = () => call("advance", {}, CALL_TGAS);
 /** Fix a rectangle of the caller colony's own living cells onto a slide, minted as a NEP-171 token. It burns PETRI for
  * each captured cell; `deposit` pays the token's storage (a guest spends it from credit). */
 export const mintSlide = (args: { x: number; y: number; w: number; h: number; title?: string | null }, deposit: bigint) =>
-  call("mint_slide", { ...args, title: args.title?.trim() || null }, 250, deposit);
+  call("mint_slide", { ...args, title: args.title?.trim() || null }, CALL_TGAS, deposit);
 /** NEAR that arrived for this account through NEAR Intents but could not be used (say, a join under the minimum), paid
  * back to the account. */
 export const claimPending = () => call("claim_pending", {}, 30);
@@ -302,6 +306,17 @@ export const renameColony = (name: string, color: number) => call("rename", { na
 /** Where the colony's NEAR payouts (tide winnings and sales) go from now on; `null` sends them to its own account again.
  * Only a colony that has attached NEAR may set one: a guest is paid in credit, and the relayer does not relay this call. */
 export const setPayout = (account: string | null) => call("set_payout", { account_id: account }, 50);
+/** Offer `to`'s colony `petri` PETRI units for its promise not to plant within rules.pact_radius of the caller's living
+ * cells before generation `until`. The PETRI is held until it accepts; it must be PETRI the caller could sell (a guest,
+ * or a colony holding kept PETRI, offers pacts without PETRI). `deposit` is PACT_DEPOSIT (a guest spends it from
+ * credit); what is not used comes back. */
+export const offerPact = (to: string, petri: bigint, until: number, deposit: bigint) => call("pact_offer", { to, petri: petri.toString(), until: String(until) }, CALL_TGAS, deposit);
+/** Accept pact `id` made to the caller's colony: its PETRI is paid in, and the dish then refuses the colony's plantings
+ * near the offering colony until the pact's `until`. */
+export const acceptPact = (id: number) => call("pact_accept", { id }, 50);
+/** End pact `id`: an open offer (by either colony, or anyone once it expired; its PETRI goes back), or an accepted pact
+ * whose `until` has come. */
+export const cancelPact = (id: number) => call("pact_cancel", { id }, 50);
 
 export function usePlayer(): Player {
   return useSyncExternalStore(
