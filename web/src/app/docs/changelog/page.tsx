@@ -1,13 +1,20 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C } from "@/components/docs/Code";
-import { H2, Table } from "@/components/docs/ui";
-import { REPO } from "@/components/docs/facts";
+import { Doc, H2, Table } from "@/components/docs/ui";
+import { BUILD_COMMIT_SHORT, CODE_HASH, REPO } from "@/components/docs/facts";
 
 export const metadata = docMetadata("changelog");
 
 // `git log --oneline` on main, newest first, with each commit's date.
 const COMMITS: [string, string, string][] = [
-  ["1a5ab27", "Nov 4", "Point the verifier, agents and site at the v5 dishes (petri-v6.testnet, petri-dish.near) and the reproducible build Foo3au6a…; keeper unwraps waiting wNEAR; a log window per dish; guests can mint slides"],
+  ["9c44623", "Nov 4", "Launch v6: petri-dish.near relaunched in place and petri-v6.testnet, both code hash DabiJwsV… (reproducible at dd18fac); verifier, site and agents point at v6"],
+  ["dd18fac", "Nov 4", "v6: credit per sponsor, the house can neither sell nor pass PETRI to players and takes no bounty, per-colony books in cold pages and a hot table (30,000 colonies fit), intents never refunded and settleable later, neutral names for colonies paid by others, a ledger that rebuilds every solvency term, NEP-141/145 fixes, slides as pattern licences, relaunch; site self-hosted on the agents VM"],
+  ["28d7fdb", "Nov 4", "agents: every candidate forecast 240 generations ahead on a cloned engine, per-strain memory of moves and their measured outcomes, and a council each tide window where strains pay each other PETRI on chain for truces, keep-outs and strikes, with enforced promises and per-pair reputation; ambitious plays in every candidate set"],
+  ["9cac13c", "Nov 4", "agents: notes end on a whole sentence; the mainnet house plays at an eighth of the pace and the keeper only steps in before a clock skip once outsiders play"],
+  ["c5c2897", "Nov 4", "web: standalone server build"],
+  ["4df0e15", "Nov 4", "Docs site at docs.playpetri.xyz (15 pages, llms.txt); README, RULES.md and every page rewritten for the two v5 dishes, specimens and paying with any token; fresh cover and screenshots; guest slide mints fit the relay's gas cap"],
+  ["8e1816d", "Nov 4", "agents: house strains fossilize their densest patch as a specimen slide every few hours"],
+  ["1a5ab27", "Nov 4", "Point the verifier, agents and site at the v5 dishes (petri-v5.testnet, petri-dish.near) and the reproducible build Foo3au6a…; keeper unwraps waiting wNEAR; a log window per dish; guests can mint slides"],
   ["ec5970f", "Nov 4", "Pin near-sdk 5.29.1: 5.30 links host functions (gas keys, universal state init) that mainnet's protocol 86 does not have yet, so the same build runs on both networks"],
   ["9da6fbe", "Nov 4", "Specimen slides (NEP-171/177/178/181 NFTs drawn on chain, checked by both replays), pay with any token through NEAR Intents, rename, guest bounties as credit; one site for both dishes; mainnet launch rules"],
   ["57cdd4b", "Nov 4", "agents: one runner for both dishes; on mainnet the strains are <name>.petri-dish.near, attach their own NEAR, keep a gas reserve and play at half pace; no bench on mainnet"],
@@ -38,9 +45,26 @@ const commit = (h: string) => `${REPO}/commit/${h}`;
 
 export default function Page() {
   return (
-    <DocPage slug="changelog" lede="From the first contract to v5, in two days of November 2026, from the git history. Each version was a fresh contract on a fresh account: the rules are fixed at launch, so changing them means a new dish.">
-      <H2 id="v5">v5: petri-v6.testnet and petri-dish.near</H2>
-      <p>The version both dishes run, built reproducibly at <a href={commit("ec5970f")}>ec5970f</a> with code hash <C>DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7</C>.</p>
+    <DocPage slug="changelog" lede="From the first contract to v6, in two days of November 2026, from the git history. The rules are fixed when a dish starts, so changing them means a new dish. Up to v5 each version was a fresh contract on a fresh account; for v6 the mainnet dish was started again from generation 0 on the same account, petri-dish.near, and testnet moved to petri-v6.testnet.">
+      <H2 id="v6">v6: petri-v6.testnet and petri-dish.near</H2>
+      <p>
+        The version both dishes run, built reproducibly at <a href={commit(BUILD_COMMIT_SHORT)}>{BUILD_COMMIT_SHORT}</a> with code hash <C>{CODE_HASH}</C> (571,418 bytes, near-sdk 5.29.1). On mainnet the v6 code was deployed to <C>petri-dish.near</C> with <C>relaunch</C>, a private <C>#[init(ignore_state)]</C> method that deletes every key v5 wrote and starts a fresh dish from generation 0 with <C>launch-rules-mainnet.json</C>; it refuses an account that already ran v6. On testnet v6 runs on a new account, <C>petri-v6.testnet</C>, started with <C>new</C>; <C>petri-v5.testnet</C> is abandoned. Both dishes started from generation 0 on 4 November 2026. Every contract change answers a finding of the fourth review round (see the <Doc to="security">security model</Doc>).
+      </p>
+      <ul>
+        <li>Sponsored credit is kept per sponsor (at most 8 sponsors an account, at least 0.01 NEAR a sponsorship): a sponsor can take back only what it gave and the account has not spent, once a day has passed on the wall clock since it last gave or the account last drew on it. Won credit is spent first, then sponsors&rsquo; credit oldest first. <C>credit_grants</C> replaces <C>credit_record</C>.</li>
+        <li>The house (its strains and the new <C>keepers</C> rule) can never sell PETRI back, can pass PETRI only to other house accounts, never takes the keeper pot or a tide bounty (a tide it runs leaves the bounty in the vault), plants only slides it holds; a wNEAR payment for a house account cannot start its colony and waits as pending NEAR.</li>
+        <li>Each colony&rsquo;s numbers moved from v5&rsquo;s seven packed arrays to cold pages of 64 colonies and a hot table of the colonies that play, so no call costs more as more colonies join: 30,000 colonies join, plant, tide and claim well under the gas limit.</li>
+        <li>wNEAR from NEAR Intents is never refunded: whatever arrives becomes pending NEAR with its order (or, if too small for a record, goes to the vault as <C>Dust</C>). <C>settle_pending</C> lets anyone run a waiting order later; <C>intent_minimum</C> tells 1Click the least a payment needs, and the site refuses quotes below it.</li>
+        <li>A colony someone else paid to start gets a neutral name, &ldquo;Culture&rdquo; and hex digits of its account&rsquo;s hash, and may rename once; the payer&rsquo;s text never appears under another account. Players cannot choose such names.</li>
+        <li>The ledger gained <C>Sponsor</C>, <C>Unsponsor</C>, <C>Claim</C>, <C>Pending</C>, <C>Unpend</C>, <C>Dust</C> and <C>Burn</C> entries, and <C>Refund</C> names the payout it refunds, so both replays rebuild every solvency term from the ledger alone and compare it with the contract&rsquo;s counters.</li>
+        <li>A failed sale, claim, reclaim or pending claim becomes pending NEAR for its account; only a failed bounty goes back to the vault. <C>set_payout</C> refuses the dish itself.</li>
+        <li>NEP-141 and NEP-145: PETRI refunded to a sender that unregistered meanwhile is burned, and <C>storage_unregister(force: true)</C> burns the balance (colony accounts still cannot unregister). <C>nft_tokens</C> returns at most 10 tokens a call.</li>
+        <li>Specimen slides are pattern licences: planting a slide&rsquo;s exact pattern, moved but not turned, costs 25% less, and anyone but its holder pays the holder 10% of that cost in PETRI. Both replays check the shape, the price, the royalty and the holder.</li>
+        <li>The agents gained forecasts, memory and a council where the strains pay each other PETRI on chain for promises; the site is self-hosted on the agents&rsquo; VM.</li>
+      </ul>
+
+      <H2 id="v5">v5: petri-v5.testnet and petri-dish.near</H2>
+      <p>The version both dishes ran until v6, built reproducibly at <a href={commit("ec5970f")}>ec5970f</a> with code hash <C>Foo3au6aYVQMV2cLv5p3DreSYEWgfHwq2MpKU4zv7U6j</C>. Its mainnet dish was replaced in place by v6.</p>
       <ul>
         <li>The credit pool pays out as credit; credit won is spent first and no sponsor can take it back; sponsors may reclaim credit left unused for a day.</li>
         <li>Stake decays to 87.5% at every tide, so a colony&rsquo;s pay cap is rent it renews by planting.</li>

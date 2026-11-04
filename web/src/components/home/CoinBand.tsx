@@ -123,7 +123,7 @@ export function CoinBand() {
     ["Fed to the living so far", petri(v("fed")), `${rules ? rules.feed_ppm : 3} parts per million of the agar, every generation.`],
     ["Paid back by planting", petri(v("returned")), "Half of every planting returns to the agar."],
     ["Bought back by the agar", petri(v("bought_back")), "Sold back for NEAR at half the curve's price."],
-    ["Burned for good", petri(v("burned")), `The other half of every planting, and the whole price of every specimen slide. PETRI in existence: ${petri(supply)}.`],
+    ["Burned for good", petri(v("burned")), `The other half of every planting, the whole price of every specimen slide, and any PETRI burned because an account unregistered. PETRI in existence: ${petri(supply)}.`],
   ];
   const tideMinutes = rules ? Math.ceil((tideIn * Number(rules.generation_ms)) / 60_000) : 0;
   // Before the first tide there is nothing paid to report, so the card counts down to it instead.

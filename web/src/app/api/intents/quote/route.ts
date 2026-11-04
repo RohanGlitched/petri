@@ -38,15 +38,8 @@ export async function POST(req: Request) {
 
   const what = b.do as "join" | "buy";
   const msg: Record<string, unknown> = { for: forAccount, do: what };
-  if (b.do === "join") {
-    const typed = typeof b.name === "string" ? b.name.split(/\s+/).filter(Boolean).join(" ") : "";
-    const name = typed || (dry ? "Preview" : "");
-    if (!NAME.test(name)) return fail(400, "A colony name is 1 to 24 letters, digits, spaces and - ' . & ! ? _ , : ( ).");
-    if (dry && b.color === undefined) b.color = 0;
-    if (typeof b.color !== "number" || !Number.isInteger(b.color) || b.color < 0 || b.color > 0xffffff) return fail(400, "The stain must be a colour 0xRRGGBB.");
-    msg.name = name;
-    msg.color = b.color;
-  }
+  // A paid join never takes its name or stain from the payment: the dish names a colony that someone else paid for
+  // neutrally (it arrives from the Intents contract), so the order carries neither.
 
   const request = {
     dry,

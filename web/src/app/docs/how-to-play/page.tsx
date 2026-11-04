@@ -32,11 +32,11 @@ export default function Page() {
 
       <H2 id="join">Join</H2>
       <p>
-        <C>join(name, color, credit)</C> makes the calling account a colony, once per account. It needs at least 0.01 NEAR, attached or taken from credit. The colony&rsquo;s storage (its record, its slots in the per-colony arrays and the purchase entry) comes out of that, and the rest buys PETRI from the agar at the current price. The house strains joined mainnet with 0.05 NEAR each and 0.04251 NEAR of it reached the vault, so a join&rsquo;s storage is about 0.0075 NEAR; the site attaches 0.02 NEAR.
+        <C>join(name, color, credit)</C> makes the calling account a colony, once per account. It needs at least 0.01 NEAR, attached or taken from credit. The colony&rsquo;s storage (its record, its name, its balance, its slot in a cold page, the join entry and the purchase entry) comes out of that, and the rest buys PETRI from the agar at the current price. On testnet the house strains joined with 0.05 NEAR of credit each and 0.0426 to 0.0431 NEAR of it was left to buy with, so a join&rsquo;s storage is about 0.007 NEAR (it depends on the account&rsquo;s length); the site attaches 0.02 NEAR.
       </p>
       <ul>
         <li>
-          A name is 1 to 24 characters of ASCII letters, digits, spaces and <C>- &apos; . &amp; ! ? _ , : ( )</C>, with runs of spaces folded to one. Names are unique, ignoring case.
+          A name is 1 to 24 characters of ASCII letters, digits, spaces and <C>- &apos; . &amp; ! ? _ , : ( )</C>, with runs of spaces folded to one. Names are unique, ignoring case. Names of the form <C>Culture &lt;hex digits&gt;</C> are kept for colonies someone else paid to start (see <Doc to="intents">Pay with any token</Doc>), and nobody can choose one.
         </li>
         <li>
           A colour is <C>0xRRGGBB</C>, sent as a number (<C>15905882</C> is <C>0xF2B45A</C>).
@@ -46,7 +46,7 @@ export default function Page() {
 
       <H2 id="planting">Planting</H2>
       <p>
-        <C>plant(cells, note, credit)</C> brings 1 to 64 cells to life at once. It succeeds only when every cell is on the dish, empty and listed once, the stored board is at the current generation, and the colony has not already planted in this generation.
+        <C>plant(cells, note, credit, slide)</C> brings 1 to 64 cells to life at once. It succeeds only when every cell is on the dish, empty and listed once, the stored board is at the current generation, and the colony has not already planted in this generation. With <C>slide</C> (a token id) the planting is made under that specimen slide&rsquo;s licence; see <a href="#replant">Replanting a slide</a>.
       </p>
       <Table>
         <thead>
@@ -58,13 +58,13 @@ export default function Page() {
         <tbody>
           <tr>
             <td>
-              PETRI: the cell price times the number of cells, times 3 for a siege. At launch, with the agar full, one cell costs 1.41 PETRI.
+              PETRI: the cell price times the number of cells, times 3 for a siege, and 25% less under a slide&rsquo;s licence. At launch, with the agar full, one cell costs 1.41 PETRI.
             </td>
-            <td>Half is burned; half goes back to the agar. Unclaimed earnings are claimed first and count toward it.</td>
+            <td>Half is burned; half goes back to the agar. Unclaimed earnings are claimed first and count toward it. Under a licence, a planter that does not hold the slide also pays the holder a 10% royalty on top.</td>
           </tr>
           <tr>
             <td>
-              NEAR: the storage of the planting record plus 0.0001 NEAR per cell. For a 4-cell planting with no note that is 0.00276 NEAR (<C>plant_deposit</C>).
+              NEAR: the storage of the planting record (and, for a colony&rsquo;s first planting since it last played, its 77-byte row in the hot table) plus 0.0001 NEAR per cell. For a 4-cell planting with no note that is 0.00373 NEAR (<C>plant_deposit</C>).
             </td>
             <td>Storage pays for the record. Everything else, including anything attached beyond the deposit, goes to the vault (or, from credit, to the credit pool). Nothing is sent back.</td>
           </tr>
@@ -79,7 +79,7 @@ export default function Page() {
 
       <H2 id="patterns">Patterns</H2>
       <p>
-        The site&rsquo;s stamps come from <C>petri_core::patterns</C>, the same list the strains and the tests use. Any shape of up to 64 cells can be planted; these are the named ones. On the dish page, R rotates the stamp and F flips it.
+        The site&rsquo;s stamps come from <C>petri_core::patterns</C>, the same list the strains and the tests use. Any shape of up to 64 cells can be planted; these are the named ones. On the dish page, R rotates the stamp and F flips it; a turned or flipped specimen is a different pattern, so it plants without the slide&rsquo;s licence.
       </p>
       <Table>
         <thead>
@@ -110,7 +110,7 @@ export default function Page() {
         <li>Your own cells never make a siege, however close.</li>
         <li>House cells (the AI strains) never make a siege for anyone, so the house can never wall a newcomer out.</li>
         <li>
-          Ask the price either way with <C>quote(cells, siege)</C>; the site checks the spot with the same petri-core function the contract uses and shows the siege price before you sign.
+          Ask the price either way with <C>quote(cells, siege, licensed)</C>; the site checks the spot with the same petri-core function the contract uses and shows the siege price before you sign.
         </li>
       </ul>
 
@@ -185,7 +185,7 @@ export default function Page() {
         </tbody>
       </Table>
       <p>
-        The view <C>stakes</C> returns every colony&rsquo;s stake. Stake halves in a little over five tides (about five hours).
+        The view <C>stakes</C> returns every colony&rsquo;s stake, 2,000 colonies a call. Stake halves in a little over five tides (about five hours).
       </p>
 
       <H2 id="tides">Tides</H2>
@@ -195,7 +195,7 @@ export default function Page() {
       <ol>
         <li>It records the history chain at that generation in the ledger.</li>
         <li>
-          It takes 5% of the vault. 1% of that, at most 0.001 NEAR, is a bounty for the caller whose transaction ran the tide; the tide&rsquo;s own ledger entry is paid for; the rest is split by what each colony earned from the feed since the last tide.
+          It takes 5% of the vault. 1% of that, at most 0.001 NEAR, is a bounty for the caller whose transaction ran the tide, unless that caller is a house strain or keeper, when the bounty stays in the vault; the tide&rsquo;s own ledger entry is paid for; the rest is split by what each colony earned from the feed since the last tide.
         </li>
         <li>
           A colony that has ever attached NEAR itself receives its share as NEAR it can claim. A colony that never has (a guest) receives it as credit.
@@ -209,14 +209,15 @@ export default function Page() {
 
       <H2 id="claiming">Claiming</H2>
       <p>
-        <C>claim()</C> moves the colony&rsquo;s unclaimed PETRI into its balance and sends the NEAR it has won at tides to its account, or to the payout account set with <C>set_payout</C> (only a colony that has attached NEAR can set one). If the transfer fails, the NEAR is owed to the colony again. Credit won needs no claim: it is spendable as soon as the tide runs. Check what is waiting with <C>claimable(account_id)</C>.
+        <C>claim()</C> moves the colony&rsquo;s unclaimed PETRI into its balance and sends the NEAR it has won at tides to its account, or to the payout account set with <C>set_payout</C> (only a colony that has attached NEAR can set one, and never the dish itself). The claim&rsquo;s own <C>Claim</C> entry is paid from the NEAR, so winnings too small to cover it and a possible refund (about 0.0034 NEAR) stay owed until they grow. If the transfer fails, the NEAR becomes pending NEAR for the colony&rsquo;s account, which it takes with <C>claim_pending</C>. Credit won needs no claim: it is spendable as soon as the tide runs. Check what is waiting with <C>claimable(account_id)</C>.
       </p>
 
       <H2 id="selling">Selling back</H2>
       <p>
-        <C>sell(petri)</C> hands PETRI back to the agar for NEAR from the vault. The agar pays half of the curve&rsquo;s price at the midpoint of the move, and never more than those units&rsquo; share of the vault (vault × units ÷ all PETRI outside the agar). The sale&rsquo;s ledger record is paid for out of the proceeds.
+        <C>sell(petri)</C> hands PETRI back to the agar for NEAR from the vault. The agar pays half of the curve&rsquo;s price at the midpoint of the move, and never more than those units&rsquo; share of the vault (vault × units ÷ all PETRI outside the agar). The sale&rsquo;s ledger record is paid for out of the proceeds; a sale paid in NEAR must also be big enough to pay for a refund&rsquo;s records (0.00239 NEAR), and if its transfer fails the NEAR becomes pending for the seller.
       </p>
       <ul>
+        <li>House colonies cannot sell: the vault is the players&rsquo;.</li>
         <li>
           Between two tides the agar buys back at most 10% of the vault. The allowance is set at each tide, so <strong>no sales are possible before the first tide</strong>; <C>state().sell_left</C> says how much is left.
         </li>
@@ -236,7 +237,7 @@ export default function Page() {
         <li>The token&rsquo;s image is an SVG the contract draws from the captured cells every time a wallet asks.</li>
       </ul>
       <p>
-        Details are in <Doc to="specimens">Specimens</Doc>. Owning or moving a slide changes nothing on the dish.
+        Details are in <Doc to="specimens">Specimens</Doc>. A slide is also a pattern licence: its exact pattern plants for less, and its holder is paid a royalty when others plant it (next section).
       </p>
 
       <H2 id="replant">Replanting a slide</H2>
@@ -244,12 +245,20 @@ export default function Page() {
         Any slide can be loaded back into the dish page&rsquo;s stamp: open it in the <Ext href={`${SITE}/specimens`}>specimens gallery</Ext> and choose <strong>Replant this pattern</strong>, or go to <C>/dish?replant=&lt;token id&gt;</C>. The cells are read from the slide&rsquo;s bitmap and placed wherever you click; R and F turn and flip them.
       </p>
       <p>
-        Replanting is an ordinary planting at the normal price, by whoever plants it. Holding the slide gives no discount and no claim on the spot, and a slide that captured more than 64 cells cannot be replanted in one planting.
+        Planted as the slide fixed them (moved anywhere, wrapping at the edges, but not turned or flipped), the cells go in under the slide&rsquo;s licence: <C>plant</C> with the slide&rsquo;s token id, which the dish page passes for you. The contract checks the cells are exactly the slide&rsquo;s pattern, and then:
+      </p>
+      <ul>
+        <li>The planting costs 25% less (<C>slide_discount_bps</C>), whoever plants it. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.</li>
+        <li>A planter that does not hold the slide also pays the holder 10% of that discounted cost (<C>slide_royalty_bps</C>) in PETRI: a transfer, not a burn. A holder with no PETRI registration is registered at the planter&rsquo;s expense.</li>
+        <li>The holder plants its own slide at the discount and pays no royalty. The house plants only slides it holds.</li>
+      </ul>
+      <p>
+        A turned or flipped copy, or any other shape, is refused under the licence; plant it without <C>slide</C> as an ordinary planting. A slide that captured more than 64 cells cannot be replanted in one planting. Holding a slide gives no claim on any spot of the dish.
       </p>
 
       <H2 id="advance">Advancing the clock</H2>
       <p>
-        <C>advance(max)</C> steps the stored board up to <C>max</C> due generations (at most 120). Anyone may call it. If it ran at least one generation, the caller receives the keeper pot, provided the caller can hold PETRI (it is a colony or registered with <C>storage_deposit</C>). Tides it runs pay it their bounties.
+        <C>advance(max)</C> steps the stored board up to <C>max</C> due generations (at most 120). Anyone may call it. If it ran at least one generation, the caller receives the keeper pot, provided the caller can hold PETRI (it is a colony or registered with <C>storage_deposit</C>) and is not a house strain or keeper. Tides it runs pay it their bounties, again except to a house strain or keeper.
       </p>
       <p>
         If nobody touches the dish for more than 480 generations (two hours), the next call does not try to replay all of it: the clock skips ahead to 120 generations behind, records a <C>Skip</C> entry, and catches up from there. A planting refuses to run while the dish is behind; if a planting says <C>the dish is behind the clock; call advance first</C>, call <C>advance</C> once or twice and plant again.

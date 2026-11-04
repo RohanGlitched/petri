@@ -11,7 +11,8 @@ export default function Page() {
       slug="specimens"
       source={[
         { label: "contract/src/slides.rs", path: "contract/src/slides.rs" },
-        { label: "core/src/lib.rs (region_bitmap, slide_svg)", path: "core/src/lib.rs" },
+        { label: "core/src/lib.rs (region_bitmap, slide_svg, fits_slide)", path: "core/src/lib.rs" },
+        { label: "contract/src/lib.rs (plant)", path: "contract/src/lib.rs" },
       ]}
     >
       <H2 id="what">What a slide is</H2>
@@ -19,11 +20,11 @@ export default function Page() {
         A specimen slide fixes a rectangle of one colony&rsquo;s living cells at one generation, the way a lab fixes a sample on glass. It is a NEP-171 token owned by the minter&rsquo;s account. Its picture is an SVG the contract draws from the captured cells every time a wallet asks for the token, so the image cannot go missing or be swapped: it is a function of what the ledger recorded.
       </p>
       <p>
-        Owning or moving a slide changes nothing on the dish. The cells it shows may be long dead; the slide keeps them. Browse them in the <Ext href={`${SITE}/specimens`}>specimens gallery</Ext>.
+        A slide is also a <strong>pattern licence</strong>. Anyone may plant its exact pattern again, moved anywhere on the dish, under the slide&rsquo;s licence: the planting costs 25% less (<C>slide_discount_bps</C>), and a planter that does not hold the slide pays its holder 10% of that discounted cost in PETRI (<C>slide_royalty_bps</C>). A pattern that proved itself is cheaper to plant, and whoever holds the slide earns from every planting of it. See <a href="#replant">The licence</a>. The cells the slide shows may be long dead; the slide keeps them. Browse them in the <Ext href={`${SITE}/specimens`}>specimens gallery</Ext>.
       </p>
       <Callout kind="note">
         <p>
-          As of 4 November 2026 neither dish has minted a slide yet (<C>state().slides</C> is <C>&quot;0&quot;</C>). The house strains are set to fossilize their densest 16 × 16 patch every 6 hours on testnet and every 12 on mainnet, once they hold at least 12 cells there and can keep enough PETRI to go on planting.
+          Both v6 dishes started from generation 0 on 4 November 2026, and at the time of writing neither has minted a slide yet (<C>state().slides</C> is <C>&quot;0&quot;</C>). The house strains are set to fossilize their densest 16 × 16 patch every 6 hours on testnet and every 12 on mainnet, once they hold at least 12 cells there and can keep enough PETRI to go on planting.
         </p>
       </Callout>
 
@@ -59,7 +60,7 @@ export default function Page() {
           <tr>
             <th>NEAR</th>
             <td>
-              The slide&rsquo;s storage plus 184 bytes reserved for later owners; quoted by <C>slide_deposit(w, h, title_bytes)</C>, 0.00672 NEAR for 16 × 16 untitled
+              The slide&rsquo;s storage plus 184 bytes reserved for later owners; quoted by <C>slide_deposit(w, h, title_bytes)</C>, 0.00693 NEAR for 16 × 16 untitled
             </td>
             <td>Pays the storage. Credit is used first (up to what the storage needs), then attached NEAR; attached NEAR left over is sent back</td>
           </tr>
@@ -125,7 +126,7 @@ label  = "gen <generation>" in the corner`}</Formula>
             <td>
               <C>nft_total_supply</C>, <C>nft_tokens</C>, <C>nft_supply_for_owner</C>, <C>nft_tokens_for_owner</C>
             </td>
-            <td>At most 50 tokens a call, since each carries its image.</td>
+            <td>At most 10 tokens a call, since each carries its image (<C>nft_enumeration_draws_at_most_ten_images_a_call</C>).</td>
           </tr>
         </tbody>
       </Table>
@@ -141,7 +142,7 @@ label  = "gen <generation>" in the corner`}</Formula>
   "expires_at": null, "starts_at": null, "updated_at": null, "reference": null, "reference_hash": null
 }`}</Code>
       <p>
-        The colour is fixed at mint; the name is the colony&rsquo;s name when the token is read, so a <C>rename</C> shows up in the title. For the site, <C>slides</C>, <C>slide</C> and <C>slides_for</C> return the same data without the image.
+        The colour is fixed at mint; the name is the colony&rsquo;s name when the token is read, so a <C>rename</C> shows up in the title. For the site, <C>slides</C> (up to 500 a call), <C>slide</C> and <C>slides_for</C> return the same data without the image, plus the licence&rsquo;s two counters: <C>moves</C>, how many times the slide has changed hands (every transfer and every return of a <C>nft_transfer_call</C> counts), and <C>royalties</C>, the PETRI its holders have been paid. <C>slide_royalties(token_id)</C> returns the royalties alone.
       </p>
 
       <H2 id="proof">Replay proof</H2>
@@ -158,10 +159,39 @@ label  = "gen <generation>" in the corner`}</Formula>
       <p>
         The verifier prints this as <C>Specimens n of n match the dish</C>. A slide that was minted from anything but the real board, or priced wrong, makes it differ.
       </p>
-
-      <H2 id="replant">Replanting</H2>
       <p>
-        A slide&rsquo;s cells can be loaded back into the dish page&rsquo;s stamp with <strong>Replant this pattern</strong> in the gallery, or <C>/dish?replant=&lt;token id&gt;</C>. It is an ordinary planting: the planter pays the normal price wherever it fits, and holding the slide gives no discount or claim. A slide of more than 64 cells cannot be replanted in one planting.
+        Plantings under a licence are checked too, in the row <C>Licensed plantings: shape, holder, royalty</C>: each one&rsquo;s cells must be exactly its slide&rsquo;s pattern moved but not turned (petri-core&rsquo;s <C>fits_slide</C>, the same function the contract calls), its price the discounted one and its royalty exactly 10% of it (the engine&rsquo;s <C>licence</C>), and the holder it paid the minter until the slide&rsquo;s first move and one and the same account between two moves. At the end, each slide&rsquo;s owner, moves and royalties must match the <C>slides</C> view (row <C>Slide holders and royalties</C>).
+      </p>
+
+      <H2 id="replant">The licence: replanting a slide</H2>
+      <p>
+        <C>plant(cells, note, credit, slide)</C> with <C>slide</C> set to a token id plants under that slide&rsquo;s licence (<Doc to="contract-api" hash="m-plant">full reference</Doc>):
+      </p>
+      <ul>
+        <li>
+          <strong>Moved, not turned.</strong> The cells must be exactly the slide&rsquo;s pattern, every set bit once and nothing else, shifted to any place on the dish (wrapping at its edges). A turned, flipped or partial copy is refused with <C>those cells are not the slide&rsquo;s pattern: plant exactly its cells, moved anywhere but not turned</C> (<C>a_turned_slide_is_not_licensed</C>, <C>a_planting_of_another_shape_is_not_licensed</C>; core <C>a_slide_licence_is_the_same_shape_anywhere</C>). Every other planting rule still applies: empty cells, at most 64 cells, one planting a generation.
+        </li>
+        <li>
+          <strong>The discount.</strong> The planting costs <C>slide_discount_bps</C> (2500, 25%) less than the same cells would: <C>quote(cells, siege, licensed: true)</C> gives the price. Half is burned and half goes back to the agar, as with any planting. The discount is the same for everyone, the holder included (<C>the_holder_plants_its_slide_at_the_licence_discount</C>).
+        </li>
+        <li>
+          <strong>The royalty.</strong> A planter that does not hold the slide also pays its holder <C>slide_royalty_bps</C> (1000, 10%) of that discounted cost, in PETRI, from balance to balance: a transfer, not a burn (<C>a_stranger_plants_a_slide_and_pays_its_holder_a_royalty</C>). After a transfer the royalties go to the new holder (<C>after_a_transfer_royalties_go_to_the_new_holder</C>). A holder with no PETRI registration is registered by the planting, at the planter&rsquo;s expense (the 125 bytes of a balance record).
+        </li>
+        <li>
+          <strong>Sieges are not waived.</strong> A licensed planting inside a rival&rsquo;s buffer still costs 3 times as much, then 25% less: a licence never makes a rival&rsquo;s ground cheap to take.
+        </li>
+        <li>
+          <strong>The house</strong> plants only slides it holds, so its PETRI never goes to a player as a royalty (<C>the_house_pays_no_royalty_to_players</C>).
+        </li>
+      </ul>
+      <Formula>{`cost    = planting_cost(cells, siege) − planting_cost(cells, siege) × 2500 / 10000
+royalty = cost × 1000 / 10000     (0 when the planter holds the slide)
+burned  = cost × 5000 / 10000;  back to the agar = cost − burned;  royalty to the holder`}</Formula>
+      <p>
+        <C>plant_deposit(cells, note_bytes, slide)</C> quotes the NEAR to bring: the planting&rsquo;s storage and cell fee as always, plus the licence&rsquo;s bytes in the ledger entry and, if the holder has no PETRI registration yet, the holder&rsquo;s registration. The <C>Plant</C> entry carries a <C>licence</C> with the token, the slide&rsquo;s <C>moves</C> at that moment, the <C>holder</C> paid (none when the planter held it) and the <C>royalty</C>; the <C>plants</C> view shows the slide&rsquo;s id. Moves themselves are not logged, because a transfer carries exactly one yoctoNEAR and could not pay for a ledger entry; the move count in each licence is what lets both replays tell holders apart.
+      </p>
+      <p>
+        On the site, <strong>Plant this pattern</strong> on a specimen&rsquo;s page, or <C>/dish?replant=&lt;token id&gt;</C>, loads the slide&rsquo;s cells into the dish page&rsquo;s stamp. Planted as they are, moved but not turned or flipped, they are planted under the licence and the page shows the royalty it will pay; turned or flipped, they are an ordinary planting with no discount and no royalty. A slide of more than 64 cells cannot be replanted in one planting. The house strains fossilize slides but do not plant under licences.
       </p>
     </DocPage>
   );

@@ -85,12 +85,16 @@ export function BoardSection() {
               Each generation sets {r.keeper_bps / 100}% of its feed aside in a keeper pot. Whoever calls{" "}
               <code className={s.code}>advance</code> takes the whole pot, but only if that call ran at least one generation and
               the account can hold PETRI (a colony, or an account registered with{" "}
-              <code className={s.code}>storage_deposit</code>). Calling <code className={s.code}>advance</code> on a dish that is
-              already current pays nothing. Whoever&rsquo;s call runs an hourly tide also gets a small bounty, in NEAR, or as
-              credit to a colony that has never attached NEAR (see the tides). The project&rsquo;s keeper,{" "}
-              <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, advances once the stored board is 20 generations
-              behind or the pot holds more than 50 PETRI. It has no powers anyone else lacks: any account may call{" "}
-              <code className={s.code}>advance</code>.
+              <code className={s.code}>storage_deposit</code>) and is not one of the house&rsquo;s (a house strain or a keeper):
+              for those the pot keeps waiting. Calling <code className={s.code}>advance</code> on a dish that is already current
+              pays nothing. Whoever&rsquo;s call runs an hourly tide also gets a small bounty, in NEAR, or as credit to a colony
+              that has never attached NEAR (see the tides); a house colony or a keeper gets none, and it stays in the vault. The
+              project&rsquo;s keeper, <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, is listed in{" "}
+              <code className={s.code}>rules.keepers</code>, so it takes neither the pot nor a bounty. On testnet it advances once
+              the stored board is 20 generations behind, or when the pot holds more than 50 PETRI (which then waits for the next
+              caller outside the house); on mainnet, only once someone outside the house plays, and only when
+              the board is 400 generations behind, before the clock would skip. It also unwraps wNEAR that arrived with too little
+              gas to unwrap. It has no powers anyone else lacks: any account may call <code className={s.code}>advance</code>.
             </p>
             <h3 className="h3">Your browser runs ahead</h3>
             <p>

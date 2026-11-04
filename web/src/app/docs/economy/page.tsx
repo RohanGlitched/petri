@@ -16,7 +16,7 @@ export default function Page() {
     >
       <H2 id="flow">The flow</H2>
       <p>
-        Two currencies move through the dish. <strong>PETRI</strong> never leaves it except into a player&rsquo;s balance, and it can only come back by planting, selling or a slide. <strong>NEAR</strong> comes in with moves and goes out at tides and sales. A third thing, <strong>credit</strong>, is NEAR the contract holds that one account may spend only on moves.
+        Two currencies move through the dish. <strong>PETRI</strong> never leaves it except into a player&rsquo;s balance, and it can only come back to the agar by planting or selling, or leave the supply when a slide or an unregistration burns it. <strong>NEAR</strong> comes in with moves and goes out at tides and sales. A third thing, <strong>credit</strong>, is NEAR the contract holds that one account may spend only on moves.
       </p>
       <EconomyFlow />
 
@@ -59,7 +59,7 @@ export default function Page() {
           <tr>
             <td>Keeper pot, on <C>advance</C></td>
             <td>keeper pot</td>
-            <td>the caller, if registered</td>
+            <td>the caller, if its call ran a generation, it is registered for PETRI and it is not a house strain or keeper</td>
             <td>
               <C>keeper_paid</C>
             </td>
@@ -70,6 +70,14 @@ export default function Page() {
             <td>50% burned, 50% back to the agar</td>
             <td>
               <C>burned</C>, <C>returned</C>
+            </td>
+          </tr>
+          <tr>
+            <td>Slide royalty, on a licensed planting by anyone but the slide&rsquo;s holder</td>
+            <td>planter&rsquo;s balance</td>
+            <td>the slide&rsquo;s holder: 10% of the planting&rsquo;s discounted cost, a transfer, not a burn</td>
+            <td>
+              <C>royalties</C>
             </td>
           </tr>
           <tr>
@@ -91,8 +99,16 @@ export default function Page() {
           <tr>
             <td>Transfer (NEP-141)</td>
             <td>a balance</td>
-            <td>another registered balance; never to the contract</td>
+            <td>another registered balance; never to the contract, and from a house strain or keeper only to another house account</td>
             <td>none</td>
+          </tr>
+          <tr>
+            <td>Forced unregistration, or a transfer refund whose sender has unregistered meanwhile</td>
+            <td>that balance</td>
+            <td>100% burned, with a <C>Burn</C> entry</td>
+            <td>
+              <C>burned</C>
+            </td>
           </tr>
         </tbody>
       </Table>
@@ -101,7 +117,7 @@ export default function Page() {
 Σ balances + the dish's own  = total_supply            the dish's own = agar + unclaimed + keeper_pot
 agar                         = max_supply − sold − fed + returned + bought_back`}</Formula>
       <p>
-        <C>ft_balance_of(&quot;petri-dish.near&quot;)</C> returns the dish&rsquo;s own holding (agar + unclaimed + keeper pot), and <C>ft_total_supply()</C> returns <C>max_supply − burned</C>. Nobody can transfer PETRI to the contract: it comes back only by planting, selling or a slide.
+        <C>ft_balance_of(&quot;petri-dish.near&quot;)</C> returns the dish&rsquo;s own holding (agar + unclaimed + keeper pot), and <C>ft_total_supply()</C> returns <C>max_supply − burned</C>. Nobody can transfer PETRI to the contract: it comes back only by planting or selling.
       </p>
 
       <H2 id="near">Where every yoctoNEAR goes</H2>
@@ -119,7 +135,7 @@ agar                         = max_supply − sold − fed + returned + bought_b
             <td>
               <C>join</C> (at least 0.01 NEAR)
             </td>
-            <td>The colony record, its slots in the per-colony arrays, its name, its balance record, and 140 bytes for the purchase entry</td>
+            <td>The colony record, its one slot at the end of the last cold page, its name, its balance record, the join entry, and 140 bytes for the purchase entry</td>
             <td>Buys PETRI; attached NEAR to the vault, credit to the credit pool</td>
           </tr>
           <tr>
@@ -133,20 +149,20 @@ agar                         = max_supply − sold − fed + returned + bought_b
             <td>
               <C>plant</C>
             </td>
-            <td>The planting entry, its index and the note</td>
+            <td>The planting entry (with its licence under a slide), its index, the note, the colony&rsquo;s hot row if it has none yet, and the slide holder&rsquo;s PETRI registration if a royalty needs one</td>
             <td>Vault or credit pool, including the 0.0001 NEAR per cell fee and anything attached beyond the deposit</td>
           </tr>
           <tr>
             <td>
               <C>sell</C>
             </td>
-            <td>The sale entry, paid from the proceeds</td>
-            <td>The seller: NEAR, or credit for a colony that never attached NEAR</td>
+            <td>The sale entry, paid from the proceeds; a sale paid in NEAR must also be large enough to pay for a refund&rsquo;s records, should the transfer fail</td>
+            <td>The seller: NEAR, or credit for a colony that never attached NEAR. House colonies cannot sell</td>
           </tr>
           <tr>
             <td>A tide</td>
             <td>Its own ledger entry and index, from the vault</td>
-            <td>Bounty to the caller, then shares: claimable NEAR or won credit</td>
+            <td>Bounty to the caller (none to a house colony or keeper: it stays in the vault), then shares: claimable NEAR or won credit</td>
           </tr>
           <tr>
             <td>
@@ -159,36 +175,42 @@ agar                         = max_supply − sold − fed + returned + bought_b
             <td>
               <C>sponsor</C>
             </td>
-            <td>The credit record</td>
-            <td>Credit for the sponsored account</td>
+            <td>The account&rsquo;s grant list, the <C>Sponsor</C> entry and, for a new grant, 210 bytes set aside for the <C>Unsponsor</C> entry its sponsor may write later</td>
+            <td>Credit for the sponsored account, kept as this sponsor&rsquo;s grant</td>
           </tr>
           <tr>
             <td>wNEAR through NEAR Intents</td>
-            <td>A pending record, from the amount</td>
-            <td>A join or purchase as attached NEAR, or pending NEAR the account claims</td>
+            <td>A pending record and its <C>Pending</C> entry, from the amount; an amount too small for those goes to the vault with a <C>Dust</C> entry</td>
+            <td>Pending NEAR with its order, spent on a join or purchase as attached NEAR (at once, or later with <C>settle_pending</C>), or claimed by the account. Never refunded</td>
           </tr>
         </tbody>
       </Table>
       <p>And NEAR leaves the contract in exactly these ways:</p>
       <ul>
         <li>
-          <C>claim</C>: a colony&rsquo;s tide winnings, to its account or payout account. A failed transfer is owed again.
+          <C>claim</C>: a colony&rsquo;s tide winnings, to its account or payout account, less the storage of its <C>Claim</C> entry. Winnings too small to pay for that entry and a possible refund&rsquo;s records (about 0.0034 NEAR) stay owed until they grow.
         </li>
         <li>
-          <C>sell</C>: proceeds from the vault. A failed transfer goes back to the vault with a <C>Refund</C> entry.
+          <C>sell</C>: proceeds from the vault.
         </li>
-        <li>Tide bounties, to the caller who ran the tide (as credit if that caller is a guest colony). A failed transfer is refunded to the vault.</li>
+        <li>Tide bounties, to the caller who ran the tide (as credit if that caller is a guest colony; none to a house colony or keeper). A failed bounty goes back to the vault with a <C>Refund</C> entry.</li>
         <li>
-          <C>unsponsor</C>: a sponsor takes back sponsored credit an account left unused for a day.
+          <C>unsponsor</C>: a sponsor takes back what is left of its own grant once the account has left it untouched for a day.
         </li>
         <li>
-          <C>claim_pending</C>: NEAR from an intents payment that could not join or buy.
+          <C>claim_pending</C>: an account&rsquo;s pending NEAR (an intents payment it did not spend, or a payout that failed).
         </li>
+        <li>Every other failed payout (a claim, a sale, a reclaim, a pending claim) stays the account&rsquo;s: a <C>Refund</C> entry records it, its records are paid from the NEAR that came back, and the rest becomes pending NEAR for the account it was for.</li>
         <li>Refunds of excess deposits: a slide&rsquo;s unused deposit, a second <C>storage_deposit</C>, <C>storage_unregister</C>, approvals revoked.</li>
       </ul>
-      <Formula>{`vault + Σ tides (bounty + storage + paid + as_credit) + Σ sales (near)  = near_in + Σ refunds
+      <Formula>{`vault + Σ tides (bounty + storage + paid + as_credit) + Σ sales (near)  = near_in + Σ bounty refunds (near − storage)
 credit_pool + Σ tides (credit_paid)                                      = credit_in
-credit_won                                                               = Σ tides (credit_paid) + near_as_credit`}</Formula>
+credit_won                                                               = Σ tides (credit_paid) + near_as_credit
+tides_owed                                                               = Σ tides (paid) − Σ claims (near)
+pending                                                                  = Σ Pending (near) + Σ other refunds (near − storage) − Σ Unpend (near)`}</Formula>
+      <p>
+        <C>near_in</C> is what purchases, plantings and <C>Dust</C> entries put into the vault. Every term is a sum over ledger entries, so both replays rebuild each one from the ledger alone and compare it with the contract&rsquo;s own counter.
+      </p>
 
       <H2 id="pools">Two pools</H2>
       <Table>
@@ -237,13 +259,17 @@ credit_won                                                               = Σ ti
       <H3 id="credit-sponsored">Sponsored credit</H3>
       <ul>
         <li>
-          Given by anyone with <C>sponsor(account_id)</C> and an attached deposit. On testnet the site&rsquo;s relayer sponsors every guest with 0.05 NEAR.
+          Given by anyone with <C>sponsor(account_id)</C> and an attached deposit of at least 0.01 NEAR. On testnet the site&rsquo;s relayer sponsors every guest with 0.05 NEAR.
         </li>
         <li>
-          The sponsor may take back what is left with <C>unsponsor(account_id)</C> once the account has not used it for 5,760 generations (a day). Nobody else can, and the account itself never can.
+          Each sponsor&rsquo;s credit is a grant of its own. An account holds grants from at most 8 sponsors at once; a sponsor topping up its own grant always can.
+        </li>
+        <li>The account spends what it won first, then its grants, oldest first. Drawing on a grant restarts that grant&rsquo;s day only.</li>
+        <li>
+          A sponsor may take back what is left of its own grant with <C>unsponsor(account_id)</C> once 5,760 generations (a day) of wall-clock time have passed since it last gave or the account last drew on that grant. It can never reach another sponsor&rsquo;s grant or the account&rsquo;s won credit, and the account itself can never withdraw. If the transfer fails, the NEAR becomes pending for the sponsor.
         </li>
         <li>
-          <C>credit_record(account_id)</C> shows the amount, the sponsor and when it was last given or used.
+          <C>credit_grants(account_id)</C> lists the grants in spending order, each with its sponsor, amount and the generation it was last given or drawn on.
         </li>
       </ul>
       <H3 id="credit-won">Won credit</H3>
@@ -274,15 +300,20 @@ credit_won                                                               = Σ ti
 
       <H2 id="house">The house</H2>
       <p>
-        The rules name five house accounts, the AI strains. They join and plant like anyone, but the contract treats them three ways differently:
+        The rules name five house accounts, the AI strains, and the keepers (<C>keeper.petri-dish.near</C> on mainnet, <C>petri-keeper.testnet</C> on testnet). The strains join and plant like anyone, but the contract treats every house account differently:
       </p>
       <ul>
-        <li>They are never fed, so the house cannot eat the agar on a quiet dish.</li>
+        <li>House colonies are never fed, so the house cannot eat the agar on a quiet dish.</li>
         <li>They take no share of any tide.</li>
+        <li>They never sell PETRI back: the vault is the players&rsquo;.</li>
+        <li>A house account sends PETRI only to another house account, so nothing the house bought can reach a player who could sell it. The council&rsquo;s payments between strains are such transfers.</li>
+        <li>A tide run by a house colony or a keeper pays no bounty: it stays in the vault. No house account takes the keeper pot.</li>
+        <li>The house plants only slides it holds, so it never pays a player a royalty.</li>
         <li>Their cells never make a planting a siege, so they cannot wall a newcomer out of cheap ground.</li>
+        <li>A wNEAR payment cannot start a colony for a house account; it waits as pending NEAR for that account to claim.</li>
       </ul>
       <p>
-        Everything the house spends therefore goes to other players. On mainnet the strains attach their own NEAR, so it lands in the vault and is paid out at tides in real NEAR. On testnet they spend sponsored credit, which goes to the credit pool. On 4 November 2026 the mainnet dish held 0.22559 NEAR in its vault, all of it from the five strains, waiting for the first player outside the house to earn.
+        Everything the house spends therefore goes to other players. On mainnet the strains attach their own NEAR, so it lands in the vault and is paid out at tides in real NEAR. On testnet they spend sponsored credit, which goes to the credit pool. At the time of writing (4 November 2026, block 222,940,869, minutes after the relaunch) the mainnet dish held 0.22886 NEAR in its vault, all of it from the five strains, and no tide had run yet; <C>state().vault</C> gives today&rsquo;s figure.
       </p>
 
       <H2 id="solvency">Solvency</H2>
@@ -296,7 +327,11 @@ solvent  ⇔  free ≥ owed          surplus = free − owed`}</Formula>
       <p>
         <C>wrapped</C> is wNEAR the dish holds and has not unwrapped yet. The surplus is the contract&rsquo;s own NEAR: what the deployer left beyond storage, which pays for the few records no player is charged for (Skip entries, and the board&rsquo;s growth during a catch-up).
       </p>
-      <Code lang="sh" title="Check it">{`near contract call-function as-read-only petri-dish.near solvency json-args '{}' network-config mainnet now`}</Code>
+      <Code lang="sh" title="Check it (curl and jq)">{`curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' -d '{
+  "jsonrpc": "2.0", "id": 1, "method": "query",
+  "params": { "request_type": "call_function", "finality": "final",
+              "account_id": "petri-dish.near", "method_name": "solvency", "args_base64": "e30=" }
+}' | jq -r '.result.result | implode'`}</Code>
 
       <H2 id="storage">Storage</H2>
       <p>
@@ -313,13 +348,13 @@ solvent  ⇔  free ≥ owed          surplus = free − owed`}</Formula>
           <tr>
             <td>A planting</td>
             <td>
-              <C>plant_deposit(cells, note_bytes)</C> = (220 + 4 × cells + (note bytes + 64 if a note)) × 10<sup>19</sup> + 0.0001 NEAR × cells
+              <C>plant_deposit(cells, note_bytes, slide)</C> = (240 + 77 + 4 × cells + (note bytes + 64, with a note) + (82 while no colony plays) + (under a slide&rsquo;s licence: 33 + the holder&rsquo;s account length, and 125 more if the holder has no PETRI registration)) × 10<sup>19</sup> + 0.0001 NEAR × cells; 0.00373 NEAR for a block with no note. The 77 bytes are the colony&rsquo;s row in the hot table, which its first planting makes.
             </td>
           </tr>
           <tr>
             <td>A slide</td>
             <td>
-              <C>slide_deposit(w, h, title_bytes)</C> = (240 + 64 + 2 × ⌈w·h/8⌉ + (title bytes + 5, with a title) + 120 + 184) × 10<sup>19</sup>; 0.00672 NEAR for 16 × 16 untitled. Unused deposit is sent back.
+              <C>slide_deposit(w, h, title_bytes)</C> = (240 + 21 + 64 + 2 × ⌈w·h/8⌉ + (title bytes + 5, with a title) + 120 + 184) × 10<sup>19</sup>; 0.00693 NEAR for 16 × 16 untitled. Unused deposit is sent back.
             </td>
           </tr>
           <tr>
@@ -342,10 +377,10 @@ solvent  ⇔  free ≥ owed          surplus = free − owed`}</Formula>
       <p>A wallet colony on a dish with a full agar and at least 1,000 counted cells:</p>
       <ol>
         <li>
-          It joins with 0.02 NEAR. About 0.0075 NEAR pays its storage (the exact amount depends on the account&rsquo;s length); about 0.0125 NEAR reaches the vault and buys about 62.5 PETRI.
+          It joins with 0.02 NEAR. About 0.007 NEAR pays its storage (the exact amount depends on the account&rsquo;s length); about 0.013 NEAR reaches the vault and buys about 65 PETRI.
         </li>
         <li>
-          It plants a block: 4 cells × 1.4112 = 5.6448 PETRI. 2.8224 PETRI is burned and 2.8224 returns to the agar. It attaches <C>plant_deposit(4, null)</C> = 0.00276 NEAR; the storage actually used is paid and the rest goes to the vault. Its stake is now 4,000.
+          It plants a block: 4 cells × 1.4112 = 5.6448 PETRI. 2.8224 PETRI is burned and 2.8224 returns to the agar. It attaches <C>plant_deposit(4, null, null)</C> = 0.00373 NEAR; the storage actually used is paid and the rest goes to the vault. Its stake is now 4,000.
         </li>
         <li>
           The block earns 4 × 0.00294 = 0.01176 PETRI a generation. After 480 generations that is 5.6448 PETRI, exactly its price: that is what the payback rule means.

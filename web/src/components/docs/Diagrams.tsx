@@ -61,7 +61,7 @@ export function EconomyFlow() {
         <svg viewBox="0 0 960 660" role="img" aria-labelledby="eco-title eco-desc" fontFamily="var(--body)">
           <title id="eco-title">Where PETRI and NEAR go</title>
           <desc id="eco-desc">
-            PETRI: the agar sells PETRI for NEAR, feeds a share of itself to living colonies every generation (two percent of it to the keeper pot), and takes back half of every planting and every sale; the other half of a planting and all of a slide are burned. NEAR: attached NEAR goes to the vault after storage; sponsored credit, once spent, goes to the credit pool. Every tide pays five percent of each by what colonies earned since the last tide: vault shares become claimable NEAR for colonies that attached NEAR and credit for guests; the credit pool pays only credit. Sales back to the agar are paid from the vault.
+            PETRI: the agar sells PETRI for NEAR, feeds a share of itself to living colonies every generation (two percent of it to the keeper pot, paid to a caller of advance outside the house), and takes back half of every planting and every sale; the other half of a planting and all of a slide are burned. A planting under a slide&apos;s licence by anyone but its holder also pays the holder a royalty, balance to balance. NEAR: attached NEAR goes to the vault after storage; sponsored credit, once spent, goes to the credit pool. Every tide pays five percent of each by what colonies earned since the last tide: vault shares become claimable NEAR for colonies that attached NEAR and credit for guests; the credit pool pays only credit. Sales back to the agar are paid from the vault.
           </desc>
           <Markers />
           <text x="30" y="28" fill={AMBER} fontSize="15" fontWeight="600">PETRI moves inside the dish</text>
@@ -88,7 +88,7 @@ export function EconomyFlow() {
           <Box x={300} y={262} w={190} h={64} title="Keeper pot" lines={["2% of every feed"]} />
           <path d="M80 176 V294 H296" {...line(AMBER, "amber")} />
           <path d="M490 294 H700 V180" {...line(AMBER, "amber")} />
-          <Label x={595} y={285}>to whoever advances</Label>
+          <Label x={595} y={285}>to whoever advances, never the house</Label>
 
           <line x1="30" y1="350" x2="940" y2="350" stroke="rgba(243,233,218,0.1)" />
           <text x="30" y="378" fill={NEARC} fontSize="15" fontWeight="600">NEAR moves in and out; credit stays in the dish</text>
@@ -118,7 +118,7 @@ export function EconomyFlow() {
         </svg>
       </div>
       <figcaption>
-        Amber is PETRI, bone is NEAR, green dashes are credit. A tide also pays its caller a bounty (1% of the vault&rsquo;s share, at most 0.001 NEAR) and the storage of its own ledger entry before the split.
+        Amber is PETRI, bone is NEAR, green dashes are credit. A tide also pays its caller a bounty (1% of the vault&rsquo;s share, at most 0.001 NEAR; none when a house colony or a keeper runs it, so it stays in the vault) and the storage of its own ledger entry before the split. A licensed planting by anyone but the slide&rsquo;s holder pays the holder 10% of its discounted price in PETRI, from balance to balance.
       </figcaption>
     </figure>
   );
@@ -138,8 +138,8 @@ export function ArchitectureFlow() {
           <Box x={345} y={30} w={270} h={160} title="Site server, on the VM" lines={["/api/guest, /api/relay", "/api/intents/*", "/api/strains?net=…", "the testnet relayer key"]} />
           <Box x={670} y={30} w={270} h={160} title="NEAR Intents (1Click)" lines={["quotes, deposit addresses;", "solvers swap into wNEAR"]} />
 
-          <Box x={20} y={340} w={270} h={130} title="petri-v6.testnet" lines={["free play: guests, relayer,", "sponsored credit, the bench"]} note={{ text: "code hash Foo3au6a…", color: DIM }} accent="rgba(159,216,168,0.6)" />
-          <Box x={345} y={340} w={270} h={130} title="petri-dish.near" lines={["real NEAR: wallets, and", "wNEAR from wrap.near"]} note={{ text: "code hash Foo3au6a…", color: DIM }} accent="rgba(242,180,90,0.6)" />
+          <Box x={20} y={340} w={270} h={130} title="petri-v6.testnet" lines={["free play: guests, relayer,", "sponsored credit, the bench"]} note={{ text: "code hash DabiJwsV…", color: DIM }} accent="rgba(159,216,168,0.6)" />
+          <Box x={345} y={340} w={270} h={130} title="petri-dish.near" lines={["real NEAR: wallets, and", "wNEAR from wrap.near"]} note={{ text: "code hash DabiJwsV…", color: DIM }} accent="rgba(242,180,90,0.6)" />
           <Box x={670} y={310} w={270} h={170} title="Agents VM" lines={["agents/run.mjs, one per dish:", "keeper and five house strains;", "asks Claude Haiku, then", "NEAR AI Cloud (TEE-signed)"]} note={{ text: "log windows :8790 and :8791", color: AMBER }} />
 
           <Box x={20} y={520} w={595} h={58} title="scripts/verify.mjs" />

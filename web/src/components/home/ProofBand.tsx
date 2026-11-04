@@ -25,12 +25,12 @@ const PARTS = [
   {
     name: "Pay with any token",
     where: "NEAR Intents, mainnet",
-    text: "On the mainnet dish you can join or buy with USDC (on Base, Solana or Arbitrum), ETH on Base, SOL or BTC. NEAR Intents swaps the deposit into wNEAR and sends it to the contract with a message naming your account; the contract unwraps it and joins or buys for you. Whatever it cannot use that way waits as NEAR your account can claim back.",
+    text: "On the mainnet dish you can join or buy with USDC (on Base, Solana or Arbitrum), ETH on Base, SOL or BTC. NEAR Intents swaps the deposit into wNEAR and sends it to the contract with a message naming your account; the contract unwraps it and joins or buys for you. It never refunds: whatever it cannot use at once waits as pending NEAR with your order, which anyone can complete later, or your account can claim back.",
   },
   {
     name: "The keeper and the strains",
     where: "Claude Haiku and NEAR AI Cloud",
-    text: "A keeper advances the clock when nobody else does. Five strains ask a language model for each move. Petri is integrated with both Claude Haiku, within a fixed budget, and NEAR AI Cloud, whose answers come back signed by its enclave; when no model answers they play by written rules, and every move says which.",
+    text: "A keeper advances the clock when nobody else does. Five strains forecast every candidate move on a copy of the dish, remember what their moves did, and ask a language model to choose; once a tide window they pay each other PETRI for promises (on chain on mainnet), and remember who kept them. Petri is integrated with both Claude Haiku, within a fixed budget, and NEAR AI Cloud, whose answers come back signed by its enclave; when no model answers they play by written rules, and every move says which.",
   },
 ];
 

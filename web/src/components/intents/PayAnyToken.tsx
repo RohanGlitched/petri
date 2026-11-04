@@ -235,7 +235,8 @@ function PayForm({
   const color = picked !== null && !taken.has(picked) ? picked : firstFreeStain(new Set(taken.keys()));
   const cleanName = name.split(/\s+/).filter(Boolean).join(" ");
   const nameTaken = colonies.some((c) => c.name.toLowerCase() === cleanName.toLowerCase());
-  const nameOk = NAME.test(cleanName) && !nameTaken;
+  // Paid joins take no name from the payment (the contract names them neutrally), so there is nothing to check here.
+  const nameOk = true;
   const base = toBase(amount, origin.decimals);
   const refundValid = refundOk(origin, refund);
 
@@ -249,7 +250,7 @@ function PayForm({
     setDry((x) => ({ ...x, loading: true }));
     const t = setTimeout(() => {
       getIntentsQuote(
-        { dry: true, originAsset: origin.id, amount: base, refundTo: refundValid ? refund.trim() : undefined, for: ownerOk ? ownerId : "", do: action, ...(action === "join" ? { name: nameOk ? cleanName : "", color } : {}) },
+        { dry: true, originAsset: origin.id, amount: base, refundTo: refundValid ? refund.trim() : undefined, for: ownerOk ? ownerId : "", do: action },
         ctrl.signal,
       ).then(
         (q) => setDry({ q, error: null, loading: false }),
@@ -307,7 +308,7 @@ function PayForm({
     setBusy(true);
     setError(null);
     try {
-      const plan: Plan = { for: ownerId, do: action, ...(action === "join" ? { name: cleanName, color } : {}) };
+      const plan: Plan = { for: ownerId, do: action };
       const response = await getIntentsQuote({ dry: false, originAsset: origin.id, amount: base, refundTo: refund.trim(), ...plan });
       const order: SavedOrder = { savedAt: Date.now(), plan, origin: origin.id, response, last: "PENDING_DEPOSIT" };
       saveOrder(order);
@@ -417,25 +418,11 @@ function PayForm({
       </label>
 
       {action === "join" && (
-        <>
-          <label className={s.field}>
-            <span>Colony name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="e.g. Night Shift" />
-          </label>
-          <fieldset className={s.stains}>
-            <legend>Stain <em>{STAINS.find((x) => x.color === color)?.name}</em></legend>
-            {STAINS.map((st) => {
-              const owner = taken.get(st.color);
-              return (
-                <label key={st.color} className={`${color === st.color ? s.stainOn : ""} ${owner ? s.stainTaken : ""}`} title={owner ? `taken by ${owner}` : st.name}>
-                  <input type="radio" name="pay-stain" checked={color === st.color} disabled={!!owner} onChange={() => setPicked(st.color)} />
-                  <i style={{ background: hex(st.color) }} />
-                  <span className="sr">{owner ? `${st.name}, taken by ${owner}` : st.name}</span>
-                </label>
-              );
-            })}
-          </fieldset>
-        </>
+        <p className={s.note}>
+          A payment through NEAR Intents reaches the dish from the Intents contract, not from the account that will own the
+          colony, so the dish never takes a name from it: the new colony gets a neutral name such as &ldquo;Culture 3f2a&rdquo;
+          and a stain drawn from its account. The owner can rename it once, from their own wallet.
+        </p>
       )}
 
       <label className={s.field}>

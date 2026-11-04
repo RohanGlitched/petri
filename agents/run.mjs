@@ -464,7 +464,8 @@ async function keep() {
   // On mainnet every advance is real gas, and the house's own plantings step the dish; the keeper only steps in
   // before the clock would skip (max_lag), and only once someone outside the house is playing.
   const outsiders = Number(st.colonies) > (st.house?.length ?? 0);
-  const due = MAINNET ? outsiders && behind >= Number(KEEPER_LAG) : behind >= 20 || (keeperRegistered && Number(st.keeper_pot) > 50_000_000);
+  // Keepers take no keeper pot (rules.keepers), so the pot is no reason to advance.
+  const due = MAINNET ? outsiders && behind >= Number(KEEPER_LAG) : behind >= 20;
   if (due) {
     try {
       const r = await callDish(KEEPER, "advance", {}, 250);

@@ -150,13 +150,17 @@ export function StrainsView() {
             <span className={s.temper}>Clock</span>
           </header>
           <p className={s.voice}>
-            Not a player. When the stored board is twenty generations behind the clock, or the keeper pot holds more than 50
-            PETRI, it calls advance, which catches the board up and adds what every colony&rsquo;s cells earned to its
-            unclaimed earnings. Whoever advances at least one generation, and can hold PETRI, takes the keeper pot, the {d.rules ? d.rules.keeper_bps / 100 : 2}% of the feed set aside, so anyone can
-            do this job. It also unwraps any wNEAR left waiting from a token payment.
+            Not a player.{" "}
+            {net.freePlay
+              ? "When the stored board is twenty generations behind the clock, or the keeper pot holds more than 50 PETRI, it calls advance,"
+              : "Once someone outside the house plays, and only when the stored board is 400 generations behind, before the clock would skip, it calls advance,"}{" "}
+            which catches the board up and adds what every colony&rsquo;s cells earned to its unclaimed earnings. Whoever else
+            advances at least one generation, and can hold PETRI, takes the keeper pot, the {d.rules ? d.rules.keeper_bps / 100 : 2}% of the feed set aside, so
+            anyone can do this job. The keeper itself is listed in the rules as a keeper, so it takes neither the pot nor a tide
+            bounty: they stay in the dish for the players. It also unwraps any wNEAR left waiting from a token payment.
           </p>
           <p className={s.plays}>
-            Paid to keepers so far: <b className="num">{d.state ? petri(Number(d.state.keeper_paid), 2) : "—"} PETRI</b>
+            Paid from the keeper pot so far: <b className="num">{d.state ? petri(Number(d.state.keeper_paid), 2) : "—"} PETRI</b>
           </p>
           <a className={s.acct} href={accountUrl(KEEPER)}>{KEEPER}</a>
         </li>

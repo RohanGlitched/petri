@@ -2,7 +2,7 @@ import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { NetTabs } from "@/components/docs/NetTabs";
 import { Callout, Doc, Ext, H2, H3, Steps, Table } from "@/components/docs/ui";
-import { CODE_HASH, REPO, SITE } from "@/components/docs/facts";
+import { BUILD_COMMIT, BUILD_COMMIT_SHORT, CODE_HASH, REPO, SITE } from "@/components/docs/facts";
 
 export const metadata = docMetadata("quickstart");
 
@@ -22,9 +22,10 @@ ${view(net, "rules")}
 # The first ten colonies
 ${view(net, "colonies", '{"from":0,"limit":10}')}
 
-# What planting 4 cells costs right now, in PETRI units (6 decimals), and inside a rival's buffer
+# What planting 4 cells costs right now, in PETRI units (6 decimals), inside a rival's buffer, and under a slide's licence
 ${view(net, "quote", '{"cells":4}')}
 ${view(net, "quote", '{"cells":4,"siege":true}')}
+${view(net, "quote", '{"cells":4,"licensed":true}')}
 
 # The NEAR to attach to that planting (storage plus the cell fee), in yoctoNEAR
 ${view(net, "plant_deposit", '{"cells":4,"note_bytes":null}')}
@@ -35,10 +36,12 @@ ${view(net, "buy_quote", '{"near":"20000000000000000000000"}')}
 # The first 20 ledger entries
 ${view(net, "ledger", '{"from":0,"limit":20}')}
 
-# An account's PETRI, its unclaimed earnings and NEAR won, and its credit
+# An account's PETRI, its unclaimed earnings and NEAR won, its credit (and each sponsor's part), and its pending NEAR
 ${view(net, "ft_balance_of", `{"account_id":"YOU.${net === "mainnet" ? "near" : "testnet"}"}`)}
 ${view(net, "claimable", `{"account_id":"YOU.${net === "mainnet" ? "near" : "testnet"}"}`)}
 ${view(net, "credit_of", `{"account_id":"YOU.${net === "mainnet" ? "near" : "testnet"}"}`)}
+${view(net, "credit_grants", `{"account_id":"YOU.${net === "mainnet" ? "near" : "testnet"}"}`)}
+${view(net, "pending_record", `{"account_id":"YOU.${net === "mainnet" ? "near" : "testnet"}"}`)}
 
 # NEAR held against NEAR owed
 ${view(net, "solvency")}
@@ -82,8 +85,9 @@ function txs(net: "mainnet" | "testnet") {
   return `# Join with 0.02 NEAR: storage for the colony, the rest buys PETRI. color is 0xRRGGBB as a number (0xF2B45A here).
 near contract call-function as-transaction ${c} join json-args '{"name":"My Colony","color":15905882,"credit":null}' prepaid-gas '200.0 Tgas' attached-deposit '0.02 NEAR' ${tail}
 
-# Plant a block at (40, 40): cells are y * 128 + x. Attach what plant_deposit says (0.00276 NEAR for 4 cells and no note).
-near contract call-function as-transaction ${c} plant json-args '{"cells":[5160,5161,5288,5289],"note":null,"credit":null}' prepaid-gas '200.0 Tgas' attached-deposit '0.00276 NEAR' ${tail}
+# Plant a block at (40, 40): cells are y * 128 + x. Attach what plant_deposit says (0.00373 NEAR for 4 cells and no note
+# at the time of writing; what storage does not use goes to the vault). "slide" names a specimen to plant under its licence.
+near contract call-function as-transaction ${c} plant json-args '{"cells":[5160,5161,5288,5289],"note":null,"credit":null,"slide":null}' prepaid-gas '200.0 Tgas' attached-deposit '0.00373 NEAR' ${tail}
 
 # Buy more PETRI with 0.01 NEAR
 near contract call-function as-transaction ${c} buy json-args '{"credit":null}' prepaid-gas '150.0 Tgas' attached-deposit '0.01 NEAR' ${tail}
@@ -108,7 +112,7 @@ export default function Page() {
           Type a colony name (1 to 24 letters, digits, spaces and <C>- &apos; . &amp; ! ? _ , : ( )</C>), pick a stain and press <strong>Start my colony</strong>.
         </li>
         <li>
-          Your browser makes an ed25519 key, fetches a signed challenge from <C>/api/guest</C> and solves an 18-bit proof of work bound to it (about a second). The server creates <C>g-&lt;10 hex&gt;.&lt;relayer&gt;</C> holding 0.003 NEAR for its own storage, with a function-call key that may call only the dish and only <C>join</C>, <C>buy</C>, <C>plant</C>, <C>sell</C>, <C>claim</C>, <C>advance</C> and <C>mint_slide</C>. The relayer then calls <C>sponsor</C>, which gives the guest 0.05 NEAR of credit held by the contract.
+          Your browser makes an ed25519 key, fetches a signed challenge from <C>/api/guest</C> and solves an 18-bit proof of work bound to it (about a second). The server creates <C>g-&lt;10 hex&gt;.&lt;relayer&gt;</C> holding 0.003 NEAR for its own storage, with a function-call key that may call only the dish and only <C>join</C>, <C>buy</C>, <C>plant</C>, <C>sell</C>, <C>claim</C>, <C>advance</C>, <C>mint_slide</C> and <C>settle_pending</C>. The relayer then calls <C>sponsor</C>, which gives the guest 0.05 NEAR of credit held by the contract (less the records&rsquo; storage), kept as the relayer&rsquo;s own grant.
         </li>
         <li>
           The join itself is a NEP-366 delegate action: your browser signs it, <C>/api/relay</C> checks it and pays the gas. The 0.02 NEAR it costs comes out of your credit, passed as the <C>credit</C> argument, because a function-call key cannot attach NEAR.
@@ -134,7 +138,7 @@ export default function Page() {
         </li>
         <li>Name the colony and start it. Your wallet signs <C>join</C> with 0.02 NEAR attached and 200 TGas.</li>
         <li>
-          Each planting attaches what <C>plant_deposit</C> returns: the storage of the planting record plus 0.0001 NEAR per cell. What is left after storage goes to the vault, which pays the tides.
+          Each planting attaches what <C>plant_deposit</C> returns: the storage of the planting record (with room for the colony&rsquo;s first row in the table of playing colonies) plus 0.0001 NEAR per cell. What is left after storage goes to the vault, which pays the tides.
         </li>
         <li>
           Every tide adds NEAR to what your colony can claim. Press <strong>Claim</strong> on the dish page, or call <C>claim</C>; the NEAR goes to your account, or to a payout account you set with <C>set_payout</C>.
@@ -146,7 +150,7 @@ export default function Page() {
         On the mainnet dish, the join panel has <strong>Pay with any token instead</strong> and a connected wallet has <strong>Top up with any token</strong>. You choose USDC on Base, Solana or Arbitrum, ETH on Base, SOL, or BTC, and the account that will own the colony. The site asks NEAR Intents (1Click) for a quote that pays wNEAR to <C>petri-dish.near</C> with a message naming that account, and shows a deposit address. Send the tokens from any wallet on their own chain; solvers swap them, and the dish unwraps the wNEAR and joins or buys for the account named.
       </p>
       <p>
-        Anyone can pay for any account. If the payment cannot be used (a taken name, too little NEAR to join), it waits as pending NEAR that the named account claims with <C>claim_pending</C>. The full flow, the message format and every failure case are in <Doc to="intents">NEAR Intents</Doc>.
+        Anyone can pay for any account, so a colony started this way has a neutral name, <C>Culture</C> and a few hex digits of its account&rsquo;s hash, in a colour from the same hash; the name and stain typed in the form are not used, and the account may <C>rename</C> it once. Nothing that arrives is ever refunded: if the payment cannot be used yet (too little NEAR to join, too little gas), it waits as pending NEAR with its order, which anyone can complete with <C>settle_pending</C> and the named account can take back with <C>claim_pending</C>. The full flow, the message format and every failure case are in <Doc to="intents">NEAR Intents</Doc>.
       </p>
 
       <H2 id="cli">Read the dish from the command line</H2>
@@ -183,23 +187,57 @@ cd petri
 node scripts/verify.mjs --network mainnet
 node scripts/verify.mjs --network testnet
 echo $?   # 0 when every check matches, 1 on any mismatch, 2 if the dish could not be read`}</Code>
-      <p>It prints about thirty rows, each <C>match</C> or <C>DIFFERS</C>. A run against mainnet on 4 November 2026 printed, in part:</p>
-      <Code lang="text" title="node scripts/verify.mjs --network mainnet (excerpt)" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222923522: 53 generations, 19 ledger entries, 5 colonies, 0 tides.
-  match   History chain                f06a90b6a83481536799b96eca12f514669641beb4264361545e93d3941dc2df
-  match   Board hash                   6b07967a0c7ecebdeb6b1c50b138c8901516af82d12edca907f39598a13ba450
-  match   Living cells                 54
-  match   Legal plantings              9 of 9
-  match   Planting prices              9 of 9
-  ...
-  match   Solvent (NEAR held >= owed)  yes
-  match   Deployed code hash           ${CODE_HASH}
-  DIFFERS  Full-access keys             1  (expected: 0)
-Source: https://github.com/RohanGlitched/petri/tree/ec5970f5b8315de81e022866e17da62a47be7426; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
+      <p>
+        It prints 40 rows, each <C>match</C> or <C>DIFFERS</C>. A run against mainnet at the time of writing, minutes after v6 started the dish again from generation 0, printed (the dish will have moved on by the time you run it):
+      </p>
+      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222940869: 19 generations, 15 ledger entries, 5 colonies, 0 tides.
+  match   History chain                                328c0669f420809b4da8bd710a7c08937a149fa50badcdb80c52c555c25b884f
+  match   Board hash                                   63366f7300e2ceaa4b2295961a4a694336a706da008e2f5a31fb1474e9b119aa
+  match   Living cells                                 132
+  match   Legal plantings                              5 of 5
+  match   Planting prices                              5 of 5
+  match   Planting fees                                5 of 5
+  match   Licensed plantings: shape, holder, royalty   0 of 0
+  match   Purchases on the curve                       5 of 5
+  match   Sales on the curve and allowance             0 of 0
+  match   Tides                                        0 of 0
+  match   Claims of exactly what was owed              0 of 0
+  match   Refunds tied to their payouts                0 of 0
+  match   Specimens                                    0 of 0 match the dish
+  match   Slide holders and royalties                  0 of 0
+  match   Agar                                         999,003.521286
+  match   Sold                                         1,070.514634
+  match   Burned                                       74.035920
+  match   Burned by specimens                          0.000000
+  match   Royalties                                    0.000000
+  match   Returned to the agar                         74.035920
+  match   Bought back                                  0.000000
+  match   Keeper share                                 0.000000
+  match   Colony earnings                              5 of 5
+  match   Vault (NEAR)                                 0.22886
+  match   NEAR paid in                                 0.22886
+  match   NEAR paid at tides                           0
+  match   Vault shares, bounties as credit             0
+  match   Sales paid as credit                         0
+  match   Colony tide winnings                         5 of 5
+  match   Credit pool                                  0
+  match   Credit paid at tides                         0
+  match   Credit sponsored                             0
+  match   Credit spent                                 0
+  match   Credit taken back                            0
+  match   NEAR owed to colonies                        0
+  match   Pending NEAR                                 0
+  match   Colony credit winnings                       5 of 5
+  match   Solvent (NEAR held >= owed, from the ledger) yes
+  match   Deployed code hash                           ${CODE_HASH}
+  DIFFERS  Full-access keys                             1  (expected: 0)
+Source: https://github.com/RohanGlitched/petri/tree/${BUILD_COMMIT}; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
+Owed, from the ledger: 0.22886 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.521457378656788000000001 NEAR.
   The contract account still has a full-access key: whoever holds it could deploy different code.
 1 check(s) differ.`}</Code>
       <Callout kind="warn">
         <p>
-          Today the verifier exits with status 1 on both networks for one reason: each contract account still has one full-access key. Every replay row matches. The key is to be removed with the owner&rsquo;s approval before judging, and from then on the same command exits 0.
+          At the time of writing the verifier exits with status 1 on both networks for one reason: each contract account still has one full-access key. The other 39 rows match. The key is to be removed with the owner&rsquo;s approval before judging, and from then on the same command exits 0.
         </p>
       </Callout>
       <p>
@@ -224,20 +262,20 @@ Source: https://github.com/RohanGlitched/petri/tree/ec5970f5b8315de81e022866e17d
             <td>
               <C>petri-contract</C>
             </td>
-            <td className="n">74</td>
-            <td>Every method and its errors, the economy closing to the yoctoNEAR (most tests end by checking every PETRI and NEAR is accounted for), a full ledger replay, guests, slides, intents, gas at 1,500 tide winners.</td>
+            <td className="n">109</td>
+            <td>Every method and its errors, the economy closing to the yoctoNEAR (most tests end by checking every PETRI and NEAR is accounted for), a full ledger replay, guests, credit per sponsor, the house&rsquo;s limits, slides and their licences, intents and pending orders, failed payouts, the token standards&rsquo; edge cases, the relaunch, and gas at 1,500 tide winners and at 30,000 colonies.</td>
           </tr>
           <tr>
             <td>
               <C>petri-core</C>
             </td>
-            <td className="n">30</td>
-            <td>Life against a plain reference implementation (property tests), ownership and contested births, plant checks, the feed, the curves, tides, stake decay, slides and their SVG.</td>
+            <td className="n">32</td>
+            <td>Life against a plain reference implementation (property tests), ownership and contested births, plant checks, the feed, the curves, tides, stake decay, slides, their SVG and their licence shape.</td>
           </tr>
         </tbody>
       </Table>
       <p>
-        Both counts were run on 4 November 2026 at commit <C>ec5970f</C>: <C>74 passed</C> and <C>30 passed</C>. The contract and core sources have not changed since. To build the contract and compare its hash, see <Doc to="verification" hash="rebuild">Rebuild the wasm</Doc>.
+        Both counts were run on 4 November 2026 with the contract and core sources of commit <C>{BUILD_COMMIT_SHORT}</C>, the deployed build: <C>109 passed</C> and <C>32 passed</C>. The contract and core sources have not changed since. To build the contract and compare its hash, see <Doc to="verification" hash="rebuild">Rebuild the wasm</Doc>.
       </p>
       <H3 id="tests-sim">The simulator</H3>
       <Code lang="sh" title="Shell">{`cd sim   # the simulator reads ../contract/launch-rules.json by default

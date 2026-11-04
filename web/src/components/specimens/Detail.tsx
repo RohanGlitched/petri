@@ -7,6 +7,7 @@ import { useLive, hex, int, petri } from "@/lib/live";
 import { slideOffsets, slideRules } from "@/lib/slides";
 import { useNet } from "@/lib/use-net";
 import { usePlayer } from "@/lib/wallet";
+import { LAUNCH } from "@/components/rules/shared";
 import { Specimen } from "@/components/site/Specimen";
 import { readableReadError, SpecimenCard } from "./Gallery";
 import { useSlideLicence } from "./licence";
@@ -231,7 +232,9 @@ function PatternLicence({ offsets, color, live, bps, holder, perk, lifetime, pri
   price: number | null;
   owner: string | null;
 }) {
-  const royalty = live && bps !== null && price !== null ? (price * bps) / 10_000 : null;
+  // The licence price is the same for everyone (slide_discount_bps off); the royalty is a share of that price.
+  const discount = LAUNCH.slide_discount_bps ?? 0;
+  const royalty = live && bps !== null && price !== null ? (((price * (10_000 - discount)) / 10_000) * bps) / 10_000 : null;
   return (
     <section className={s.licence} aria-labelledby="licence-title">
       <div className={s.licenceHead}>
@@ -254,7 +257,7 @@ function PatternLicence({ offsets, color, live, bps, holder, perk, lifetime, pri
           <dt>Anyone else{!holder ? " (you)" : ""}</dt>
           <dd>
             {live && bps !== null
-              ? `Pays the normal price plus a ${bps / 100}% royalty to the holder${royalty !== null ? `, about ${petri(royalty, 2)} PETRI` : ""}`
+              ? `Pays the licence price (${discount / 100}% off) plus a ${bps / 100}% royalty on it to the holder${royalty !== null ? `, about ${petri(royalty, 2)} PETRI` : ""}`
               : "Pays the normal price; no royalty"}
           </dd>
         </div>

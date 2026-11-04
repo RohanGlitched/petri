@@ -31,7 +31,7 @@ export default function Page() {
           The player picks an asset (the site offers USDC on Base, Solana and Arbitrum, ETH on Base, SOL and BTC), an amount, the NEAR account that will own the colony, and whether the NEAR joins the dish or buys PETRI for an existing colony.
         </li>
         <li>
-          The page asks <C>/api/intents/quote</C> for a dry quote (no deposit address, commits to nothing) to show how much NEAR will arrive, at least, and how much PETRI that buys at the agar&rsquo;s price now. It warns when the minimum would be under 0.01 NEAR, or under the join minimum for a join.
+          The page asks <C>/api/intents/quote</C> for a dry quote (no deposit address, commits to nothing) to show how much NEAR will arrive, at least, and how much PETRI that buys at the agar&rsquo;s price now. The form asks for at least 0.01 NEAR after the swap, and for a join at least <C>min_join</C>. The server checks what matters: it refuses any quote, dry or real, whose guaranteed output is below the dish&rsquo;s own <C>intent_minimum</C> for the order (<a href="#fees">below</a>).
         </li>
         <li>
           With a refund address on the origin chain filled in, it asks for a real quote. The server fixes everything that matters: wNEAR out, <C>petri-dish.near</C> as recipient, exact-input swap, 1% slippage, refunds on the origin chain, the deadline, and the message. Before showing a deposit address it checks that 1Click echoed the dish as recipient (<C>paysTheDish</C>) and that the dish has code on mainnet.
@@ -77,47 +77,56 @@ export default function Page() {
             <td>
               <C>name</C>
             </td>
-            <td>The colony name for a join, under the same rules as <C>join</C>. A name that is invalid or taken leaves the NEAR pending.</td>
+            <td>
+              The colony name for a join, under the same rules as <C>join</C>. It is used only when the transfer&rsquo;s <C>sender_id</C> is <C>for</C> itself (an account paying from its own wNEAR) and the name is valid and free; otherwise the colony gets a neutral name (below). Through 1Click the sender is the intents contract, so a 1Click join always starts under a neutral name.
+            </td>
           </tr>
           <tr>
             <td>
               <C>color</C>
             </td>
             <td>
-              <C>0xRRGGBB</C> as a JSON number. If it is missing, the colour comes from the account&rsquo;s hash, lightened (<C>| 0x404040</C>) so it is never too dark to see.
+              <C>0xRRGGBB</C> as a JSON number, used only when <C>sender_id</C> is <C>for</C>. Otherwise, or if it is missing, the colour comes from the first three bytes of <C>sha256(account)</C>, lightened (<C>| 0x404040</C>) so it is never too dark to see.
             </td>
           </tr>
         </tbody>
       </Table>
       <p>
-        Anyone can pay for any account; it is the payer&rsquo;s money, given to <C>for</C>. A colony started this way is marked <C>proxy</C>, and its account may choose its name and colour once with <C>rename</C>. Its NEAR counts as attached, so it is paid tide shares and sales in NEAR like any wallet colony.
+        Anyone can pay for any account; it is the payer&rsquo;s money, given to <C>for</C>. Because anyone can, the payer&rsquo;s text never appears under someone else&rsquo;s account: a colony started by someone else&rsquo;s payment is called <C>Culture</C> and the first 4 hex digits of <C>sha256(account)</C> (6, 8, … up to 16 if a shorter one is taken), in a colour from the same hash. It is marked <C>proxy</C>, and its account may choose its own name and colour once with <C>rename</C>. Nobody can take such a name first: <C>join</C> and <C>rename</C> refuse names of the form <C>Culture &lt;hex digits&gt;</C>. The house&rsquo;s accounts start their own colonies, so a payment for one of them waits as pending NEAR. So every colony started through the site&rsquo;s <strong>Pay with any token</strong> gets a neutral name and a hash colour: the name and stain typed in that form travel in the message, but the dish does not use them, and the account renames the colony afterwards if it likes. Only an account sending its own wNEAR with <C>ft_transfer_call</C> (<C>sender_id</C> is <C>for</C>) keeps the name it chose. A colony started by a payment counts its NEAR as attached, so it is paid tide shares and sales in NEAR like any wallet colony.
       </p>
 
       <H2 id="contract">What the contract does</H2>
       <Code lang="rust" title="The path of one payment">{`wrap.near.ft_transfer_call(petri-dish.near, amount, msg)
-  └─ petri-dish.near.ft_on_transfer(sender_id, amount, msg)        // never panics
-       ├─ not rules.wnear, or amount < 0.01 NEAR   -> return amount (refunded)
-       ├─ less than 40 TGas left                    -> amount pending for msg.for (still wNEAR); return 0
-       └─ wrap.near.near_withdraw(amount)            // unwrap, 10 TGas, detached from the return value; return 0
-            └─ on_unwrapped(account, what, name, color, amount)
-                 ├─ add amount to account's pending NEAR (less a new record's storage)
-                 ├─ unwrap failed, no "do", or under about 50 TGas left -> stays pending
-                 └─ settle_intent(account, what, name, color, credited)   // its own receipt
-                      ├─ account has a colony             -> buy_with(account, NEAR)
-                      ├─ "join", valid free name, ≥ min_join -> join_with(account, name, color, NEAR, proxy = true)
-                      └─ otherwise                          -> stays pending`}</Code>
+  └─ petri-dish.near.ft_on_transfer(sender_id, amount, msg)   // never panics, never refunds wNEAR
+       ├─ not rules.wnear, or amount 0        -> return amount (refunded: other tokens only)
+       ├─ read msg: account = for (or sender_id), order = { join, name, color }
+       ├─ less than 35 TGas left              -> pending for account with its order (still wNEAR,
+       │                                         unwrap_wnear later); return 0
+       └─ wrap.near.near_withdraw(amount)      // unwrap, 5 TGas, detached from the return value; return 0
+            └─ on_unwrapped(account, order, amount)        // 15 TGas plus the unused gas
+                 ├─ pending NEAR for account with its order, less its record and Pending entry
+                 │    (too small for those -> the vault, with a Dust entry)
+                 ├─ unwrap failed, no order, or under 30 TGas left -> waits for settle_pending
+                 └─ settle_intent(account)                 // its own receipt, 30 TGas
+                      ├─ account has a colony   -> buy_with(account, the order's NEAR)
+                      ├─ "join", >= min_join     -> join_with(account, its own name if sender_id == for
+                      │                              and the name is free, else "Culture <hex>" as proxy)
+                      └─ otherwise              -> panics, changing nothing: the NEAR waits with its order`}</Code>
       <ul>
         <li>
-          <C>ft_on_transfer</C> keeps the whole amount whatever happens next, because a withdrawal from the intents contract with a message is not refunded when the receiver fails. Nothing after it can lose the NEAR: every failure path leaves it pending.
+          wNEAR is never refunded. <C>ft_on_transfer</C> keeps the whole amount, whatever it is, because a 1Click delivery that bounced would go back to the intents contract and be lost to its payer. There is no minimum transfer: any amount becomes pending NEAR for <C>for</C> (or for the sender if the message names nobody), less what its pending record and its <C>Pending</C> ledger entry cost. An amount too small even for those goes into the tide vault for the players with a <C>Dust</C> entry, and counts in <C>near_in</C>.
         </li>
         <li>
-          The join or purchase runs in a receipt of its own, so if it fails for any reason (storage, a race with another join of the same name), the pending NEAR is untouched.
+          The order is stored with the pending NEAR: <C>order_near</C> is the part it may spend. A newer order replaces an older one; the NEAR adds up. NEAR that waits for another reason (a failed payout) is never spent by an order. <C>pending_record(account_id)</C> shows both.
         </li>
         <li>
-          If the account claims its pending NEAR between <C>on_unwrapped</C> and <C>settle_intent</C>, the settle sees less pending than it was sent and does nothing (<C>&quot;claimed&quot;</C>), so nothing is spent twice.
+          The join or purchase runs in a receipt of its own. If it cannot run (too little gas, a failed unwrap, a purchase for an account with no colony, too little NEAR, a house account), it fails before changing anything and the NEAR waits with its order. Anyone (the keeper, the account, you) can complete it later with <C>settle_pending(account_id)</C>, which does only what the order asked, with only the order&rsquo;s NEAR. The account can instead take everything back with <C>claim_pending</C>, which also drops the order.
         </li>
         <li>
-          A pending record&rsquo;s storage comes out of the amount, and the storage is paid back when the record is emptied, so nobody can make the dish pay for records.
+          If the account claims its pending NEAR between <C>on_unwrapped</C> and <C>settle_intent</C>, the settle finds nothing pending and fails without changing anything, so nothing is spent twice.
+        </li>
+        <li>
+          Every change to pending NEAR is in the ledger (<C>Pending</C>, <C>Unpend</C>, <C>Dust</C>), so both replays recompute the pending total. A pending record&rsquo;s storage comes out of the amount and is paid back when the record empties, so nobody can make the dish pay for records.
         </li>
       </ul>
 
@@ -137,9 +146,14 @@ export default function Page() {
             <td>Nothing; start a new payment</td>
           </tr>
           <tr>
-            <td>Another token, or under 0.01 NEAR of wNEAR</td>
+            <td>Another token</td>
             <td>Returned by the dish to the sender (the NEP-141 refund)</td>
-            <td>The site never quotes below 0.01 NEAR</td>
+            <td>Nothing; the site only quotes wNEAR</td>
+          </tr>
+          <tr>
+            <td>wNEAR too small to pay for its own pending record and entry</td>
+            <td>The tide vault, with a <C>Dust</C> entry</td>
+            <td>The site refuses quotes below <C>intent_minimum</C>, so it never sends one</td>
           </tr>
           <tr>
             <td>The message names no valid account</td>
@@ -147,34 +161,40 @@ export default function Page() {
             <td>The site always sets <C>for</C></td>
           </tr>
           <tr>
-            <td>Name taken or invalid, under 0.01 NEAR after the swap for a join, unknown <C>do</C></td>
-            <td>Pending NEAR for <C>for</C></td>
+            <td>Less than <C>min_join</C> waits with a join, a purchase for an account with no colony, an unknown <C>do</C>, or a house account</td>
+            <td>Pending NEAR for <C>for</C>, with its order if it had one</td>
             <td>
-              <C>claim_pending</C> from that account, or join yourself and pay again
+              <C>claim_pending</C> from that account; or, once the order can run (the account has joined, say), anyone calls <C>settle_pending</C>
             </td>
           </tr>
           <tr>
             <td>Too little gas to unwrap, or the unwrap failed</td>
             <td>
-              wNEAR held by the dish (<C>state().wrapped</C>), pending for <C>for</C>
+              wNEAR held by the dish (<C>state().wrapped</C>), pending for <C>for</C> with its order
             </td>
             <td>
-              Anyone calls <C>unwrap_wnear</C> (the keeper does it automatically); then <C>claim_pending</C>
+              Anyone calls <C>unwrap_wnear</C> (the keeper does it automatically); then anyone calls <C>settle_pending</C>, or the account calls <C>claim_pending</C>
             </td>
           </tr>
           <tr>
-            <td>The join or purchase itself failed</td>
-            <td>Pending NEAR for <C>for</C></td>
+            <td>Too little gas was left for the join or purchase</td>
+            <td>Pending NEAR for <C>for</C>, with its order</td>
             <td>
-              <C>claim_pending</C>
+              Anyone calls <C>settle_pending</C>, or the account calls <C>claim_pending</C>
             </td>
           </tr>
         </tbody>
       </Table>
-      <Code lang="sh" title="See and claim pending NEAR">{`near contract call-function as-read-only petri-dish.near pending_of json-args '{"account_id":"YOU.near"}' network-config mainnet now
+      <Code lang="sh" title="See, settle or claim pending NEAR">{`# what waits for an account and the order still waiting on it (null when nothing waits)
+near contract call-function as-read-only petri-dish.near pending_record json-args '{"account_id":"YOU.near"}' network-config mainnet now
+
+# run the waiting order: anyone may; it fails, changing nothing, if the order cannot run yet
+near contract call-function as-transaction petri-dish.near settle_pending json-args '{"account_id":"YOU.near"}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' sign-as ANYONE.near network-config mainnet sign-with-keychain send
+
+# or take all of it back, which also drops the order
 near contract call-function as-transaction petri-dish.near claim_pending json-args '{}' prepaid-gas '30.0 Tgas' attached-deposit '0 NEAR' sign-as YOU.near network-config mainnet sign-with-keychain send`}</Code>
       <p>
-        The dish page shows pending NEAR to a connected wallet with a <strong>Claim</strong> button. The tests <C>an_unusable_order_waits_as_pending_near_and_is_claimed</C>, <C>a_failed_unwrap_keeps_the_wnear_for_its_account_until_it_is_unwrapped</C>, <C>wnear_with_too_little_gas_to_unwrap_is_kept_for_its_account</C>, <C>an_order_claimed_before_it_settles_is_not_spent_twice</C> and <C>other_tokens_and_dust_are_refunded_and_forged_calls_do_nothing</C> cover each row.
+        <C>pending_of</C> returns only the amount. The dish page shows pending NEAR to a connected wallet with a <strong>Claim</strong> button. The tests <C>an_intent_below_the_minimum_is_kept_for_its_account_not_refunded</C>, <C>dust_too_small_for_a_record_goes_to_the_vault</C>, <C>an_unusable_order_waits_as_pending_near_and_is_claimed</C>, <C>an_order_without_gas_waits_and_anyone_can_settle_it</C>, <C>a_settle_spends_only_the_orders_near</C>, <C>a_payment_for_the_house_waits_for_the_house</C>, <C>a_failed_unwrap_keeps_the_wnear_for_its_account_until_it_is_unwrapped</C>, <C>an_order_claimed_before_it_settles_is_not_spent_twice</C> and <C>other_tokens_are_refunded_and_forged_calls_do_nothing</C> cover these rows; <C>a_proxy_join_gets_a_neutral_name_and_never_the_payers_text</C>, <C>an_account_paying_for_itself_keeps_its_name</C>, <C>neutral_names_cannot_be_taken_first</C> and <C>a_colony_renames_once_and_only_if_someone_else_started_it</C> cover the names.
       </p>
 
       <H2 id="fees">Fees and minimums</H2>
@@ -188,17 +208,19 @@ near contract call-function as-transaction petri-dish.near claim_pending json-ar
         </thead>
         <tbody>
           <tr>
-            <td>Least wNEAR in one transfer</td>
-            <td>0.01 NEAR</td>
+            <td>Least wNEAR for the order to run</td>
             <td>
-              <C>MIN_INTENT</C> in the contract
+              <C>intent_minimum(what, account_id)</C>: <C>min_join</C> (0.01 NEAR) for a join or a purchase&rsquo;s 141-byte record for a buy, plus the <C>Pending</C> and <C>Unpend</C> entries the payment writes on its way. Those entries name the account, so the figure grows with its length: at the time of writing, for <C>alice.near</C>, 0.01184 NEAR to join and 0.00325 NEAR to buy. Less than that is never refunded; it waits as pending NEAR
+            </td>
+            <td>
+              The contract; <C>/api/intents/quote</C> refuses quotes below it
             </td>
           </tr>
           <tr>
-            <td>Least NEAR for a join</td>
-            <td>0.01 NEAR</td>
+            <td>Least the payment form asks for</td>
+            <td>0.01 NEAR after the swap (and <C>min_join</C> for a join): a floor for the form only</td>
             <td>
-              <C>rules.min_join</C>
+              <C>MIN_INTENT</C> in <C>PayAnyToken.tsx</C>
             </td>
           </tr>
           <tr>
@@ -290,6 +312,9 @@ near contract call-function as-transaction petri-dish.near claim_pending json-ar
             ["petri-dish.near has no contract on NEAR mainnet yet, so no deposit address is given out.", "409"],
             ["NEAR Intents returned a quote for a different recipient; it was not shown.", "502"],
             ["NEAR Intents returned no deposit address.", "502"],
+            ["NEAR Intents returned no amount out; the quote was not shown.", "502"],
+            ["This payment could deliver as little as … NEAR, and the dish needs at least … NEAR to start a colony (or buy PETRI) for …. Send a little more.", "400"],
+            ["NEAR Intents could not be reached: …", "502"],
           ].map(([e, s]) => (
             <tr key={e}>
               <td>{e}</td>
@@ -298,6 +323,9 @@ near contract call-function as-transaction petri-dish.near claim_pending json-ar
           ))}
         </tbody>
       </Table>
+      <p>
+        The minimum check runs on dry quotes too, so the form shows it before anyone pays. The least the swap can deliver is the quote&rsquo;s <C>minAmountOut</C> (or <C>amountOut</C> if it has none), compared with <C>intent_minimum</C> read from <C>petri-dish.near</C> over <C>https://rpc.mainnet.fastnear.com</C>. If the view cannot be read, the route uses 0.013 NEAR for a join and 0.004 NEAR for a purchase, a margin above what the launch rules need. A refusal from 1Click itself is passed on in 1Click&rsquo;s own words.
+      </p>
       <H3 id="route-status">GET /api/intents/status?depositAddress=…&amp;depositMemo=…</H3>
       <p>
         The swap&rsquo;s state from 1Click&rsquo;s <C>/v0/status</C>: <C>PENDING_DEPOSIT</C>, <C>KNOWN_DEPOSIT_TX</C>, <C>INCOMPLETE_DEPOSIT</C>, <C>PROCESSING</C>, then <C>SUCCESS</C>, <C>REFUNDED</C> or <C>FAILED</C>. Only swaps whose quote pays the dish are reported; others get 404.
@@ -311,13 +339,13 @@ near contract call-function as-transaction petri-dish.near claim_pending json-ar
 
       <H2 id="direct">Paying wNEAR directly</H2>
       <p>
-        Nothing in the contract depends on 1Click. Any account holding wNEAR on mainnet can start a colony for any account by sending it with a message. Give the call enough gas for the unwrap, the settle and the join: below about 100 TGas the join may not fit, and the NEAR waits as pending.
+        Nothing in the contract depends on 1Click. Any account holding wNEAR on mainnet can start a colony for any account by sending it with a message. <C>ft_on_transfer</C> unwraps only with at least 35 TGas left, and the join runs only if the unwrap&rsquo;s callback still has 30 TGas to give it; with less, nothing is lost: the NEAR waits with its order for <C>settle_pending</C>. Paying from your own wNEAR is the one case where the message&rsquo;s name and colour are used, because the sender is <C>for</C>.
       </p>
-      <Code lang="sh" title="Join for alice.near with 0.02 wNEAR (mainnet, real NEAR)">{`near contract call-function as-transaction wrap.near ft_transfer_call json-args '{
+      <Code lang="sh" title="alice.near joins with 0.02 of its own wNEAR (mainnet, real NEAR)">{`near contract call-function as-transaction wrap.near ft_transfer_call json-args '{
   "receiver_id": "petri-dish.near",
   "amount": "20000000000000000000000",
   "msg": "{\\"for\\":\\"alice.near\\",\\"do\\":\\"join\\",\\"name\\":\\"Alice\\",\\"color\\":15905882}"
-}' prepaid-gas '300.0 Tgas' attached-deposit '1 yoctoNEAR' sign-as YOU.near network-config mainnet sign-with-keychain send`}</Code>
+}' prepaid-gas '300.0 Tgas' attached-deposit '1 yoctoNEAR' sign-as alice.near network-config mainnet sign-with-keychain send`}</Code>
       <p>
         You need wNEAR first: register on <C>wrap.near</C> with its <C>storage_deposit</C>, then wrap NEAR with <C>near_deposit</C>. The dish itself is already registered there (<C>state().wnear_ready</C> is true). On testnet the same works with <C>wrap.testnet</C> and <C>petri-v6.testnet</C>, whose rules trust <C>wrap.testnet</C>. See also <Doc to="security" hash="t-intents">the security notes</Doc>.
       </p>

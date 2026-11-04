@@ -53,13 +53,17 @@ export function TidesSection() {
       "Planting",
       `The storage the planting used, plus ${near(Number(r.cell_fee), 4)} NEAR for every cell. The contract keeps the storage; everything above it goes to the vault if attached, to the credit pool if it was credit.`,
     ],
-    ["Selling back", "Comes out of the vault: the sale record's storage, and the rest to the seller, in NEAR, or as credit to a colony that has never attached NEAR."],
+    ["Selling back", "Comes out of the vault: the sale record's storage, and the rest to the seller, in NEAR, or as credit to a colony that has never attached NEAR. A NEAR sale must be large enough to pay for a refund's records too; if its transfer fails, the NEAR becomes pending for the seller. House colonies never sell."],
     ["A specimen slide", "Its storage, from the colony's credit first and then from attached NEAR; attached NEAR left over is sent back. Its PETRI price is burned, and none of its NEAR reaches the vault."],
     [
       "Paying with any token",
-      "On mainnet, wNEAR that NEAR Intents delivers is unwrapped and joins or buys for the account it names, exactly as attached NEAR. Whatever cannot be used that way waits as pending NEAR, which that account takes back with claim_pending.",
+      "On mainnet, wNEAR that NEAR Intents delivers is unwrapped and joins or buys for the account it names, exactly as attached NEAR. It is never refunded: the whole amount first becomes pending NEAR for that account with its order, less its records' storage, and the order runs in a receipt of its own. An order that cannot run yet waits, and anyone can complete it later with settle_pending; the account can instead take the NEAR back with claim_pending. An amount too small even for its records goes to the vault with a Dust entry.",
     ],
-    ["Registering to hold PETRI", "The storage of one balance record, refunded by storage_unregister once the account is empty."],
+    [
+      "Sponsoring",
+      "At least 0.01 NEAR. The contract keeps what the sponsorship's records cost (a new sponsor also sets aside 210 bytes for the Unsponsor entry it may write later) and the rest becomes credit for the account, in that sponsor's own grant.",
+    ],
+    ["Registering to hold PETRI", "The storage of one balance record, refunded by storage_unregister once the account is empty, or with force, which burns the PETRI left (its Burn entry is paid from the refund). A colony's account cannot unregister."],
     ["Gas", net.freePlay ? "Every transaction pays its own gas. Guests on the free-play dish have theirs paid by the site's relayer." : "Every transaction pays its own gas, from the wallet that signs it."],
   ];
 
@@ -82,7 +86,8 @@ export function TidesSection() {
             <pre className={s.formula}>
               {`at every ${r.tide_every}th generation, if a colony outside the house earned since the last tide:
 pay      = vault × ${tidePct}%
-bounty   = min(pay × ${r.tide_bounty_bps / 100}%, ${near(Number(r.max_bounty), 3)} NEAR)    to whoever's call ran the tide
+bounty   = min(pay × ${r.tide_bounty_bps / 100}%, ${near(Number(r.max_bounty), 3)} NEAR)    to whoever's call ran the tide,
+           none when that is a house colony or a keeper (it stays in the vault)
 storage  = the tide's own ledger entry
 a colony's share  = (pay − bounty − storage) × its window ÷ every window
 its credit share  = credit pool × ${tidePct}% × its window ÷ every window`}
@@ -93,8 +98,8 @@ its credit share  = credit pool × ${tidePct}% × its window ÷ every window`}
               remainders and the other {100 - tidePct}% stay in the vault and the pool. A tide with nobody to pay, because no
               colony outside the house earned since the last one, does not run at all: no entry, no bounty, no decay, and the
               buy-back allowance stays as it was. Every tide that runs writes a <code className={s.code}>Tide</code> entry to
-              the ledger with the history chain, every figure above and the colony whose call ran it; those entries are the
-              dish&rsquo;s checkpoints.
+              the ledger with the history chain, every figure above and the colony whose call ran it (0 for a caller with no
+              colony, 65535 for a keeper); those entries are the dish&rsquo;s checkpoints.
             </p>
             <p>
               A colony that has attached NEAR of its own wins NEAR. It waits under the colony&rsquo;s name until it calls{" "}
@@ -109,7 +114,11 @@ its credit share  = credit pool × ${tidePct}% × its window ÷ every window`}
             <p>
               The five AI strains are listed in <code className={s.code}>rules.house</code>
               {r.house.length > 0 ? ` (${r.house.length} accounts)` : ""}. They plant like anyone and buy every PETRI they plant
-              with, but they are never fed and take no share of any tide, and their cells never make a planting a siege.{" "}
+              with, but they are never fed, take no share of any tide, never sell PETRI back and can send PETRI only to other
+              house accounts, so none of it reaches a player who could sell it into the vault. Their cells never make a planting a
+              siege, and they plant only slides they hold, so they never pay a royalty. The keepers in{" "}
+              <code className={s.code}>rules.keepers</code> are house accounts too. A tide run by a house colony or a keeper
+              pays no bounty, and neither ever takes the keeper pot.{" "}
               {net.freePlay
                 ? "On this testnet dish they spend sponsored credit, which goes to the credit pool."
                 : "On mainnet they attach their own NEAR, so what they spend lands in the vault and is paid to the other players."}{" "}
@@ -120,9 +129,13 @@ its credit share  = credit pool × ${tidePct}% × its window ÷ every window`}
             <h3 className="h3">Sponsored credit</h3>
             <p>
               Anyone can call <code className={s.code}>sponsor(account_id)</code> with NEAR attached. The contract keeps the
-              NEAR (less its record&rsquo;s storage) as credit for that account, spendable only on joining, buying, planting
-              and a slide&rsquo;s storage, and never withdrawable by the account. Its sponsor may take back credit left unused
-              for a day with <code className={s.code}>unsponsor</code>; credit a colony wins is its own.{" "}
+              NEAR (at least 0.01, less its records&rsquo; storage) as credit for that account, spendable only on joining,
+              buying, planting and a slide&rsquo;s storage, and never withdrawable by the account. Each sponsor&rsquo;s credit is
+              kept apart, at most 8 sponsors an account, and the account spends what it won first, then its sponsors&rsquo;
+              credit oldest first. A sponsor may take back only what is left of its own credit, with{" "}
+              <code className={s.code}>unsponsor</code>, once a day (5,760 generations of wall-clock time) has passed since it
+              last gave or the account last drew on it; if that transfer fails, the NEAR becomes pending for the sponsor. Credit
+              a colony wins is its own.{" "}
               {net.freePlay
                 ? "On this free-play dish the site's relayer gives every guest 0.05 NEAR of credit this way, so it never has to attach NEAR to a call it relays."
                 : "The site sponsors nobody on mainnet; guests and their sponsored credit exist only on the free-play testnet dish."}
@@ -200,7 +213,7 @@ its credit share  = credit pool × ${tidePct}% × its window ÷ every window`}
                 {nearOk === null
                   ? "Reading the contract"
                   : nearOk
-                    ? `Holds on the live dish; the ${near(Number(gap), 5)} NEAR gap paid for tide and sale records`
+                    ? `Holds on the live dish; the ${near(Number(gap), 5)} NEAR gap paid for tide and sale records, or left as pending NEAR after a failed sale`
                     : "Does not hold"}
               </span>
             </div>

@@ -15,9 +15,10 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
     title: "The lock is a plan until the key is gone",
     body: (
       <>
-        No method changes a parameter, mints PETRI or edits the board, but{" "}
-        <ContractLink /> still has one full-access key that could deploy other
-        code. The team will delete it before judging; until then the full-access check fails on /verify and in the terminal.
+        No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over,{" "}
+        <code className={s.code}>relaunch</code>, is private (only the contract account itself can call it), clears a v5 dish
+        and refuses one that already ran v6. But <ContractLink /> still has one full-access key that could deploy other
+        code or relaunch. The team will delete it before judging; until then the full-access check fails on /verify and in the terminal.
       </>
     ),
   },
@@ -49,7 +50,7 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
   {
     key: "The house is a subsidy",
     title: "The house is a subsidy",
-    body: "The five strains are run by the team and buy every PETRI they plant with. They are never fed and win no tides, so what they pay in, about 1.1 NEAR a strain a week in the simulator, goes to the other players. On mainnet that is the team's real NEAR; on testnet it is sponsored credit.",
+    body: "The five strains are run by the team and buy every PETRI they plant with. They are never fed, win no tides, never sell PETRI back, can send PETRI only to other house accounts, and take no tide bounty or keeper pot, so what they pay in, about 1.1 NEAR a strain a week in the simulator, goes to the other players. On mainnet that is the team's real NEAR; on testnet it is sponsored credit.",
   },
   {
     key: "Somebody has to advance it",
@@ -59,17 +60,27 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
   {
     key: "Races for the pot and the bounty",
     title: "Races for the pot and the bounty",
-    body: "The keeper pot goes to whoever advances first, and a tide's bounty to whoever's call runs it. A simulated racer that only did that lost 0.05 to 0.06 NEAR a week after gas; the bounty is capped at 0.001 NEAR a tide.",
+    body: "The keeper pot goes to whoever advances first, and a tide's bounty to whoever's call runs it, unless that caller is a house account or a keeper: then the pot waits for the next caller and the bounty stays in the vault. A simulated racer that only did that lost 0.05 to 0.06 NEAR a week after gas; the bounty is capped at 0.001 NEAR a tide.",
   },
   {
     key: "The simulator is a model",
     title: "The simulator is a model",
-    body: "It estimates storage and gas instead of measuring them, and its players follow fixed habits. Its main runs predate three launched changes: they paid 10% tides (now 5%), paid guests' shares in NEAR their accounts could not move (now credit), and ran tides with nobody to pay (now skipped).",
+    body: "It estimates storage and gas instead of measuring them, and its players follow fixed habits. Its main runs predate three launched changes: they paid 10% tides (now 5%), paid guests' shares in NEAR their accounts could not move (now credit), and ran tides with nobody to pay (now skipped). They also predate v6, in which a keeper takes no pot and no bounty.",
+  },
+  {
+    key: "Gas at scale is measured in a unit test",
+    title: "Gas at scale is measured in a unit test",
+    body: "Each colony's numbers live in cold pages of 64 colonies and a hot table of the colonies that have stake, so a join costs the same however many colonies came before, and a catch-up costs what the playing colonies cost. The contract's unit tests count host calls only, not the wasm that runs between them: with 30,000 colonies, 1,501 of them playing, a planting measures 7.23 TGas and an advance through a tide 36.6; with all 30,000 playing, 118.83 and 148.2, under the 300 TGas one transaction can buy.",
+  },
+  {
+    key: "Views come in pages",
+    title: "Views come in pages",
+    body: "earnings and tide_winnings return at most 500 colonies a call, stakes 2,000, colonies and slides 500, the ledger 1,000 entries, and nft_tokens and nft_tokens_for_owner 10 slides, each drawn as an SVG. A reader pages through with from and limit.",
   },
   {
     key: "The strains need a model to answer",
     title: "The strains need a model to answer",
-    body: `Code proposes legal moves and a model picks one and writes the note. Petri is integrated with both Claude Haiku (${CLAUDE_MODEL}, within a fixed dollar budget) and NEAR AI Cloud (${NEARAI_MODEL}, used when Claude does not answer and NEAR AI has credits). When neither answers, the strains take their first proposal, and every move in the public log says which decided it.`,
+    body: `Code proposes legal moves and forecasts them 240 generations ahead on a copy of the dish (as many as a two-second budget allows); a model picks one and writes the note, and at the council each tide window it offers and answers the house's deals. Petri is integrated with both Claude Haiku (${CLAUDE_MODEL}, within a fixed dollar budget) and NEAR AI Cloud (${NEARAI_MODEL}, used when Claude does not answer and NEAR AI has credits). When neither answers, the strains take their first proposal, and every move in the public log says which decided it.`,
   },
   {
     key: "Small rounding",

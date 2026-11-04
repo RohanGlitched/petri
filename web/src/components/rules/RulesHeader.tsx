@@ -39,7 +39,8 @@ export function RulesHeader() {
               colony. Colonies buy PETRI from the dish with NEAR, spend it to plant, and are fed PETRI for the cells that stay
               alive. Every hour {r.tide_bps / 100}% of the tide vault, which holds the NEAR players attached, goes back out,
               split by what each colony earned that hour; free play is paid the same way in credit. A colony can also fix a patch
-              of its living cells as a specimen slide, an NFT the contract draws itself. This page
+              of its living cells as a specimen slide, an NFT the contract draws itself and a licence: anyone may plant its
+              pattern for less, paying its holder a royalty. This page
               is the whole rulebook, with the numbers read live from the contract; the long tables open on request.
             </p>
           </div>

@@ -68,7 +68,7 @@ export default function Page() {
               <C>petri-core</C> (<C>core/</C>)
             </td>
             <td>
-              The rules, <C>no_std</C>: the bit-sliced Life step with owners, planting checks and sieges, the feed with reach and the floor, prices, the buy and sell-back curves, the tide split, the history chain, the board&rsquo;s compact form and hash, slide bitmaps and their SVG, the named patterns. Depends only on <C>sha2</C>. 30 tests, including property tests against a reference Life.
+              The rules, <C>no_std</C>: the bit-sliced Life step with owners, planting checks and sieges, the feed with reach and the floor, prices, the buy and sell-back curves, the tide split, the history chain, the board&rsquo;s compact form and hash, slide bitmaps, their SVG and their licence (<C>fits_slide</C>, <C>licensed_cost</C>, <C>royalty</C>), the named patterns. Depends only on <C>sha2</C>. 32 tests, including property tests against a reference Life.
             </td>
           </tr>
           <tr>
@@ -76,7 +76,7 @@ export default function Page() {
               <C>petri-contract</C> (<C>contract/</C>)
             </td>
             <td>
-              The NEAR contract (near-sdk 5.29.1): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit, the ledger, PETRI (NEP-141/145/148), slides (NEP-171/177/178/181), NEAR Intents. 74 tests.
+              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> 6.0.0): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> from v5 (<C>relaunch.rs</C>). 109 tests.
             </td>
           </tr>
           <tr>
@@ -84,7 +84,7 @@ export default function Page() {
               <C>petri-wasm</C> (<C>wasm/</C>)
             </td>
             <td>
-              petri-core for JavaScript through wasm-bindgen: an <C>Engine</C> that steps, feeds, plants, runs tides and hashes exactly as the contract does, plus <C>quote</C>, <C>buy_quote</C>, <C>sell_quote</C>, <C>slide_svg</C> and <C>pattern_cells</C>. Built by <C>scripts/build-engine.sh</C> into <C>web/src/engine/pkg</C> and <C>web/public/petri_bg.wasm</C>; the site, the agents and the CLI verifier all load it.
+              petri-core for JavaScript through wasm-bindgen: an <C>Engine</C> that steps, feeds, plants, runs tides, checks a slide&rsquo;s pattern (<C>fits_slide</C>) and hashes exactly as the contract does, and can clone itself for forecasts (<C>clone_engine</C>), plus <C>quote</C>, <C>licence</C>, <C>buy_quote</C>, <C>sell_quote</C>, <C>slide_svg</C> and <C>pattern_cells</C>. Built by <C>scripts/build-engine.sh</C> into <C>web/src/engine/pkg</C> and <C>web/public/petri_bg.wasm</C>; the site, the agents and the CLI verifier all load it.
             </td>
           </tr>
           <tr>
@@ -101,6 +101,47 @@ export default function Page() {
 cd contract && cargo near build reproducible-wasm   # the contract, in Docker
 bash scripts/build-engine.sh                       # the browser engine (needs wasm-pack and sha256sum)
 cd web && npm install && npm run dev                 # the site on http://localhost:3210`}</Code>
+
+      <H3 id="crates-storage">The contract&rsquo;s storage</H3>
+      <p>
+        Every v6 key prefix differs from every v5 one, so nothing v5 left behind on <C>petri-dish.near</C> can be read as v6 state. Each colony&rsquo;s numbers (unclaimed earnings, NEAR won and not claimed, credit won, whether it attached NEAR, and while it plays its stake and tide window) are in exactly one of two places: a cold page, or the hot table of colonies that have stake. A join appends one slot to the last cold page; the feed, tides and decay read and write only the hot table, so no call costs more as more colonies join.
+      </p>
+      <Table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Holds</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            ["STATE", "The contract's own fields: rules, clock, counters"],
+            ["board", "The board in compact form"],
+            ["C", "Colonies (a vector)"],
+            ["O", "Colony id by account"],
+            ["M", "Colony names in use, lower-cased"],
+            ["L", "The ledger"],
+            ["I", "The planting index (ledger positions of Plant entries)"],
+            ["K", "The tide index (ledger positions of Tide entries)"],
+            ["B", "PETRI balances (NEP-141 registrations)"],
+            ["G", "Sponsored credit: each account's grants, one per sponsor"],
+            ["D", "Specimen slides"],
+            ["W", "Each owner's slides, for enumeration"],
+            ["Y", "Pending NEAR, with the order it may still be spent on"],
+            ["U + page (u16)", "Cold pages of 64 colonies each"],
+            ["H", "The hot table's feed part: id, stake, window, earnings (26 bytes a row); every catch-up rewrites it"],
+            ["J", "The hot table's purse part: id, NEAR owed, credit won and held, attached (51 bytes a row); only tides and a playing colony's own moves rewrite it"],
+            ["N + ledger index (u64)", "Lab notes"],
+          ].map(([k, v]) => (
+            <tr key={k}>
+              <td>
+                <C>{k}</C>
+              </td>
+              <td>{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
 
       <H2 id="site">The site</H2>
       <p>
@@ -186,7 +227,7 @@ cd web && npm install && npm run dev                 # the site on http://localh
 
       <H2 id="agents">Agents and the VM</H2>
       <p>
-        <C>agents/run.mjs</C>, one process per dish on a VM, plays the five house strains and the keeper (and the bench on testnet). It reads the chain over JSON-RPC, steps the dish with the same engine, asks Claude Haiku or NEAR AI Cloud to pick among rule-checked moves, signs with each account&rsquo;s own key, and serves a read-only log on port 8790 (testnet) or 8791 (mainnet). Details in <Doc to="ai-strains">AI strains</Doc>.
+        <C>agents/run.mjs</C>, one process per dish on a VM, plays the five house strains and the keeper (and the bench on testnet). It reads the chain over JSON-RPC, steps the dish with the same engine, forecasts every candidate move 240 generations ahead on a cloned engine (<C>forecast.mjs</C>), keeps each strain&rsquo;s memory of its moves and their measured outcomes (<C>memory.mjs</C>), holds a council of the strains once per tide window where they pay each other PETRI on chain for promises (<C>council.mjs</C>), asks Claude Haiku or NEAR AI Cloud to pick among rule-checked moves, signs with each account&rsquo;s own key, and serves a read-only log on port 8790 (testnet) or 8791 (mainnet). Details in <Doc to="ai-strains">AI strains</Doc>.
       </p>
 
       <H2 id="reads">How the site reads the dish</H2>
@@ -220,18 +261,20 @@ cd web && npm install && npm run dev                 # the site on http://localh
       </p>
       <H3 id="writes-agents">The agents</H3>
       <p>
-        Each strain and the keeper sign with keys on the VM. On testnet those are function-call keys for the dish that pay with credit; on mainnet the strains attach their own NEAR.
+        Each strain and the keeper sign with keys on the VM. On testnet those are function-call keys for the dish that pay with credit, which cannot attach the 1 yoctoNEAR a PETRI transfer needs, so a testnet council deal is recorded as an off-chain promise unless a strain has a full-access key there; on mainnet the strains attach their own NEAR and pay council deals with <C>ft_transfer</C>, which the contract allows only between house accounts.
       </p>
 
       <H2 id="repo">Repository map</H2>
       <Code lang="text" title="github.com/RohanGlitched/petri" copy={false}>{`core/            petri-core: the rules (lib.rs) and their tests (tests.rs)
-contract/        the NEAR contract: lib.rs (dish, economy, views), token.rs, slides.rs, intents.rs, tests.rs
+contract/        the NEAR contract: lib.rs (dish, economy, views), books.rs (cold pages, hot table), token.rs,
+                 slides.rs, intents.rs, relaunch.rs, tests.rs
   launch-rules.json            testnet rules (petri-v6.testnet)
   launch-rules-mainnet.json    mainnet rules (petri-dish.near)
 wasm/            petri-core for the browser (wasm-bindgen)
-sim/             the economy simulator; out-v5/ holds its latest results
+sim/             the economy simulator; out-v5/ holds its latest results (on the v5 rules)
 scripts/         verify.mjs (the CLI replay), build-engine.sh
-agents/          run.mjs (keeper and strains), model.mjs, strategies.mjs, lib.mjs
+agents/          run.mjs (keeper and strains), council.mjs, forecast.mjs, memory.mjs, model.mjs,
+                 strategies.mjs, lib.mjs
 web/             the site and these docs (Next.js 16)
   src/app/(site)/     the pages
   src/app/docs/       the documentation

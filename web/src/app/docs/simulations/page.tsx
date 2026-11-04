@@ -85,7 +85,7 @@ export default function Page() {
       </p>
       <Callout kind="note" title="Which rules these numbers describe">
         <p>
-          <C>summary.txt</C> was produced on the v5 rules just before their last round of changes: tides paid 10% of the vault (<C>tide_bps 1000</C>), a guest&rsquo;s vault shares were paid as NEAR into an account it could not move, and the credit pool&rsquo;s winners were written one record each. <C>fixes.txt</C> then tested one change at a time against those rules, and four changes shipped (see <a href="#changed">What changed because of it</a>). The deployed rules are therefore not exactly the ones in the big table; where a fix measured the difference, both numbers are shown.
+          <C>summary.txt</C> was produced on the v5 rules just before their last round of changes: tides paid 10% of the vault (<C>tide_bps 1000</C>), a guest&rsquo;s vault shares were paid as NEAR into an account it could not move, and the credit pool&rsquo;s winners were written one record each. <C>fixes.txt</C> then tested one change at a time against those rules, and four changes shipped in v5 (see <a href="#changed">What changed because of it</a>). The deployed rules are therefore not exactly the ones in the big table; where a fix measured the difference, both numbers are shown. v6, the contract both dishes run now, keeps v5&rsquo;s economic parameters and changes who can do what (the house can neither sell nor take bounties or the keeper pot, sponsored credit is kept per sponsor, wNEAR is never refunded, slides license their pattern) and how each colony&rsquo;s numbers are stored; the simulator has not been rerun on v6, and the v6 gas figures below come from the contract&rsquo;s own tests.
         </p>
       </Callout>
 
@@ -188,7 +188,8 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
       </p>
 
       <H2 id="gas">Gas at scale</H2>
-      <Table caption="1 day, 3 seeds: the biggest tide and the biggest call">
+      <p>The simulator measured v5&rsquo;s gas, and its finding drove v5&rsquo;s packed arrays:</p>
+      <Table caption="v5 simulator, 1 day, 3 seeds: the biggest tide and the biggest call">
         <thead>
           <tr>
             <th>Players</th>
@@ -235,7 +236,55 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
         </tbody>
       </Table>
       <p>
-        A transaction can burn at most 300 TGas. Before the fix, a dish of 15,000 players would have had 23 tides a day that no transaction could run, and it would have stopped. The contract test <C>a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit</C> now asserts under 10 TGas of host calls for a 1,500-winner tide.
+        A transaction can burn at most 300 TGas. Before that fix, a dish of 15,000 players would have had 23 tides a day that no transaction could run, and it would have stopped.
+      </p>
+      <H3 id="gas-v6">v6: cold pages and a hot table</H3>
+      <p>
+        The packed arrays had a limit of their own: each covered every colony that ever joined, so a join rewrote seven of them and every catch-up and tide rewrote several, and the gas grew with every colony until it would have run out at about 27,000. In v6 each colony&rsquo;s numbers live in exactly one of two places (<C>contract/src/books.rs</C>): a <strong>cold page</strong> of 64 colonies, where a join appends one slot, or the <strong>hot table</strong> of the colonies that play, which a colony enters when it plants and leaves (16 a call) once its stake has decayed to nothing. The feed, the tides and the decay touch only the hot table, so a call costs what the colonies playing now cost, however many ever joined. The contract&rsquo;s tests build a dish of 30,000 colonies and measure each call&rsquo;s host-call gas (<C>cargo test -p petri-contract thirty_thousand -- --nocapture</C>):
+      </p>
+      <Table caption="v6 contract tests: TGas of host calls with 30,000 colonies">
+        <thead>
+          <tr>
+            <th>Call</th>
+            <th className="n">1,501 playing</th>
+            <th className="n">All 30,000 playing</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>join</td>
+            <td className="n">1.53</td>
+            <td className="n">1.53</td>
+          </tr>
+          <tr>
+            <td>plant</td>
+            <td className="n">7.28</td>
+            <td className="n">118.88</td>
+          </tr>
+          <tr>
+            <td>advance through a tide, paying every winner</td>
+            <td className="n">36.60</td>
+            <td className="n">148.20</td>
+          </tr>
+          <tr>
+            <td>claim, a playing colony</td>
+            <td className="n">34.55</td>
+            <td className="n">28.47</td>
+          </tr>
+          <tr>
+            <td>claim, the newcomer, with NEAR</td>
+            <td className="n">36.28</td>
+            <td className="n">147.88</td>
+          </tr>
+          <tr>
+            <td>claim, an idle colony</td>
+            <td className="n">1.85</td>
+            <td className="n">—</td>
+          </tr>
+        </tbody>
+      </Table>
+      <p>
+        Every figure for a call that pays NEAR includes about 30 TGas for the transfer and its callback. The tests assert under 60 TGas a call at 1,501 playing and under 200 TGas with all 30,000 playing (<C>thirty_thousand_colonies_join_plant_tide_and_claim_well_under_the_gas_limit</C>, <C>thirty_thousand_colonies_all_playing_still_fit</C>). A 1,500-winner tide costs 6.65 TGas of host calls plus 29.74 TGas for the bounty payout (<C>a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit</C>); in v5 the same tide was about 11 TGas with the arrays and 104 TGas with a record per winner. These are host calls measured in the unit runtime, not the wasm execution on chain.
       </p>
 
       <H2 id="zero">A dish with no players</H2>
@@ -308,7 +357,7 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
           </tr>
           <tr>
             <td>A 15,000-player tide needed up to 595 TGas and would halt the dish</td>
-            <td>Credit winnings kept in packed per-colony arrays; a tide touches no colony or credit record</td>
+            <td>v5: credit winnings kept in packed per-colony arrays, so a tide touches no colony or credit record. v6 replaced the arrays, whose cost grew with every colony that ever joined, with cold pages and a hot table of the colonies that play (<C>dd18fac</C>)</td>
             <td>
               <C>3ad1c70</C>
             </td>
@@ -329,7 +378,7 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
           </tr>
           <tr>
             <td>An unregistered keeper called every time the pot passed 5 PETRI (0.53 NEAR of gas a day at 150 players; 0.04 registered)</td>
-            <td>The keepers are registered for PETRI, and the keeper advances only when 20 generations behind or when the pot holds over 50 PETRI</td>
+            <td>v5: the keepers were registered for PETRI and advanced only when 20 generations behind or when the pot held over 50 PETRI. Since v6 a keeper never takes the pot or a bounty (both stay with the players), and on mainnet it advances only before the clock would skip, once someone outside the house plays</td>
             <td>
               <C>3ad1c70</C>
             </td>
@@ -337,7 +386,7 @@ cargo run --release -- out-v5 all --set tide_bps=500   # override any rule`}</Co
         </tbody>
       </Table>
       <p>
-        Earlier simulator rounds (v2 and v3) led to the NEAR buy-in, payback pricing, the reach cap, the house never being fed, the sell-back cap by vault share and the tide bounty cap. See the <Doc to="changelog">Changelog</Doc>.
+        Earlier simulator rounds (v2 and v3) led to the NEAR buy-in, payback pricing, the reach cap, the house never being fed, the sell-back cap by vault share and the tide bounty cap. v6&rsquo;s changes came from a review of the contract rather than the simulator. See the <Doc to="changelog">Changelog</Doc>.
       </p>
 
       <H2 id="losses">What loses money</H2>

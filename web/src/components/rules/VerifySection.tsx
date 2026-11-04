@@ -13,7 +13,7 @@ const CHAIN_EVERY = 16;
 const BUILD_HASH = "DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7";
 /** The one full-access key each dish's account still holds, as `view_access_key_list` returns it. */
 const FULL_KEYS: Record<"testnet" | "mainnet", string> = {
-  testnet: "ed25519:Gx338TCzmupYDbRw7DPPXZVsF45yCPRnazrM173h2yCZ",
+  testnet: "ed25519:8kGYoPJ6jVEZRrjjYKGVLfXD7LCyTDDqu41Cxx9UjHUu",
   mainnet: "ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH",
 };
 const lockCommand = (net: "testnet" | "mainnet") =>
@@ -27,14 +27,19 @@ const CHECKS = [
   "Every planting legal, sieges marked",
   "Every planting at the formula's price",
   "Every planting paid its cell fee",
+  "Every licensed planting: its slide's exact pattern, the licence price, the royalty to the holder of the day",
   "Every purchase on the curve",
   "Every sale back on the curve and within the allowance",
-  "Every tide: ran exactly when due, chain, shares of the vault and the credit pool, bounty, storage",
+  "Every tide: ran exactly when due, chain, shares of the vault and the credit pool, bounty (none to the house), storage",
+  "Every claim took exactly what its colony was owed",
+  "Every refund is for exactly the payout it names, once",
   "Every specimen slide is its colony's own cells as the dish stood, at the rule's price",
+  "Every slide's holder, moves and royalties",
   "PETRI in the agar",
   "PETRI sold",
   "PETRI burned",
   "PETRI burned by specimen slides",
+  "PETRI paid to slide holders in royalties",
   "PETRI returned by planting",
   "PETRI bought back",
   "Keeper share",
@@ -47,8 +52,13 @@ const CHECKS = [
   "Every colony's NEAR winnings",
   "Credit in the credit pool",
   "Credit paid at tides",
+  "Credit sponsored, from the ledger",
+  "Credit spent, from the ledger",
+  "Credit taken back by sponsors, from the ledger",
+  "NEAR owed to colonies, from the ledger",
+  "Pending NEAR, from the ledger",
   "Every colony's credit winnings",
-  "The contract's NEAR covers everything it owes",
+  "The contract's NEAR covers everything it owes, every term rebuilt from the ledger",
   "Deployed code hash (terminal only)",
   "No full-access key",
 ];
@@ -82,9 +92,10 @@ export function VerifySection() {
           <h2 id="verify-title" className={s.h2}>Check every generation, and every yoctoNEAR, yourself</h2>
           <p className="lede">
             The contract keeps a running hash of the board&rsquo;s history and one ordered ledger of every join, purchase, sale,
-            planting, specimen slide, tide, clock skip and refund, with the PETRI, NEAR and credit each moved. Anyone can replay
-            that ledger from generation zero and arrive at the same board, agar, vault, credit pool and earnings for every
-            colony, or find the first place where they differ.
+            planting, specimen slide, tide, clock skip, refund, sponsorship, reclaim, claim, pending payment, dust and burn, with
+            the PETRI, NEAR and credit each moved. Anyone can replay that ledger from generation zero and arrive at the same
+            board, agar, vault, credit pool, credit, pending NEAR and earnings for every colony, or find the first place where
+            they differ.
           </p>
         </div>
 
@@ -108,18 +119,27 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
                 For each generation, apply its ledger entries in order. A join adds a colony. A purchase and a sale are checked
                 against the curve, and a sale against the allowance. A planting is checked for legality and its siege flag, must
                 cost the formula&rsquo;s price and bring its cell fee, and adds its NEAR to the vault and its credit to the pool.
-                A slide must hold exactly its colony&rsquo;s living cells in its rectangle and burn the rule&rsquo;s price. A
-                tide must run exactly when some colony outside the house had earned, carry the same chain, and pay the same
-                shares of the vault and the pool, as NEAR or as credit to the right colonies.
+                A planting under a slide&rsquo;s licence must be exactly the slide&rsquo;s pattern, moved but not turned, at the
+                licence price, and must have paid the royalty to whoever held the slide then. A slide must hold exactly its
+                colony&rsquo;s living cells in its rectangle and burn the rule&rsquo;s price. A tide must run exactly when some
+                colony outside the house had earned, carry the same chain, pay the same shares of the vault and the pool, as NEAR
+                or as credit to the right colonies, and pay no bounty when the house ran it. A claim must take exactly what its
+                colony was owed, and a refund must match the payout it names.
               </li>
               <li>Step with petri-core and feed the living, with the reach cap on each colony&rsquo;s decaying stake, the house and the keeper&rsquo;s share.</li>
-              <li>At the end, compare every counter and every colony&rsquo;s PETRI earnings, NEAR winnings and credit winnings with the contract, and check that its NEAR covers what it owes.</li>
+              <li>
+                At the end, compare every counter, every colony&rsquo;s PETRI earnings, NEAR winnings and credit winnings, and
+                every slide&rsquo;s holder, moves and royalties with the contract. Rebuild each term of the solvency check (the
+                vault, the credit pool, credit given, won, sold, spent and taken back, NEAR owed and pending NEAR) from the ledger
+                alone, compare it with the contract&rsquo;s counter, and check that the contract&rsquo;s NEAR covers them.
+              </li>
             </ol>
             <p>
               The terminal script <code className={s.code}>node scripts/verify.mjs</code> (add{" "}
               <code className={s.code}>--network mainnet</code> for the mainnet dish) pins every read to one final block and
               prints {CHECKS.length} checks. The <Link className={s.link} href="/verify">verify page</Link> runs the same replay in
-              your browser, also pinned to one block, and shows the same checks except the code hash. The contract test{" "}
+              your browser, also pinned to one block, and shows 33 checks covering the same ground, grouped a little
+              differently and without the code hash. The contract test{" "}
               <code className={s.code}>replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault</code> does it in Rust.
             </p>
             <details className={s.fold}>
@@ -169,14 +189,17 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
             <div className={s.card}>
               <h3 className="h3">The lock</h3>
               <p>
-                No method changes a parameter, mints PETRI or edits the board. What remains is the account itself: whoever holds a
+                No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is{" "}
+                <code className={s.code}>relaunch</code>, a private method only the contract account itself can call, which
+                clears a v5 dish and refuses one that already ran v6. What remains is the account itself: whoever holds a
                 full-access key to <a className={s.link} href={net.contractUrl}>{net.contract}</a> could deploy other code.
               </p>
               <p>
-                The code was built with <code className={s.code}>cargo near build reproducible-wasm</code>; its hash is{" "}
+                The code was built with <code className={s.code}>cargo near build reproducible-wasm</code> at commit{" "}
+                <a className={s.link} href={`${REPO}/tree/dd18fac61ca963b5fca011cf4a92407cbbd8fbe9`}>dd18fac</a>; its hash is{" "}
                 <code className={s.code}>{BUILD_HASH}</code>, and the contract&rsquo;s NEP-330{" "}
-                <code className={s.code}>contract_source_metadata</code> names the{" "}
-                <a className={s.link} href={REPO}>GitHub</a> commit it came from, so anyone can rebuild it and compare.
+                <code className={s.code}>contract_source_metadata</code> names that{" "}
+                <a className={s.link} href={REPO}>GitHub</a> commit, so anyone can rebuild it and compare.
               </p>
               <dl className={s.workings}>
                 <div>
@@ -191,7 +214,7 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
               <p>
                 {lock && lock.fullAccessKeys === 0
                   ? "The account has no full-access key, so its code can never change."
-                  : "The account still has one full-access key. The team will delete it before judging, so the code can never change; until then the full-access check is the one that fails on /verify and in the terminal. The command:"}
+                  : "The account still has one full-access key. The team will delete it before judging, so the code can never change; until then the full-access check is the one that fails on /verify and in the terminal, which then exits 1. The command:"}
               </p>
               {!(lock && lock.fullAccessKeys === 0) && <pre className={s.formula}>{lockCommand(net.network)}</pre>}
             </div>

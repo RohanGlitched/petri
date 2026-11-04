@@ -70,6 +70,11 @@ const REFUSALS: [string, string][] = [
   ["The account has not joined the dish yet.", "join the dish first"],
   ["The planting lists no cells, or more than the limit.", "plant 1 to 64 cells"],
   ["A cell index is outside the dish.", "a cell is off the dish"],
+  ["The planting names a slide that does not exist.", "there is no slide with that id"],
+  [
+    "The planting names a slide, but its cells are not exactly the slide's pattern moved to a new place (turned or flipped does not count).",
+    "those cells are not the slide's pattern: plant exactly its cells, moved anywhere but not turned",
+  ],
   ["The call asks to spend more credit than the account has won and been sponsored.", "this account has X NEAR of won and sponsored credit"],
   ["The NEAR brought (attached or from credit) is less than the fee for this many cells.", "planting N cells needs at least X NEAR"],
   [
@@ -79,9 +84,10 @@ const REFUSALS: [string, string][] = [
   ["The colony already planted in this generation.", "one planting per generation; wait for the next one"],
   ["The same cell is listed twice.", "cell (x, y) is listed twice"],
   ["A target cell is already alive, whoever owns it.", "cell (x, y) is already alive"],
+  ["A house colony names a slide it does not hold.", "the house plants only slides it holds: its PETRI never goes to players"],
   [
-    "The colony holds less PETRI than the price, siege surcharge included, counting the earnings the planting just claimed.",
-    "planting N cells inside a rival's buffer costs X PETRI; you hold Y",
+    "The colony holds less PETRI than the price (siege surcharge and any royalty included), counting the earnings the planting just claimed.",
+    "planting N cells inside a rival's buffer costs X PETRI and a Y PETRI royalty; you hold Z",
   ],
   ["The NEAR brought does not cover the storage the planting used plus its fee.", "this planting needs X NEAR for its storage and fee"],
 ];
@@ -172,6 +178,15 @@ export function PlantingSection() {
               </p>
             </li>
             <li className={s.limit}>
+              <h3 className="h3">A slide&rsquo;s pattern costs {r.slide_discount_bps / 100}% less</h3>
+              <p>
+                A specimen slide is a pattern licence. Plant exactly a slide&rsquo;s cells, moved anywhere on the dish but not
+                turned or flipped, and name the slide: the planting costs {r.slide_discount_bps / 100}% less, for anyone. A
+                planter that does not hold the slide also pays its holder {r.slide_royalty_bps / 100}% of that discounted cost in
+                PETRI. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.
+              </p>
+            </li>
+            <li className={s.limit}>
               <h3 className="h3">A lab note, if you like</h3>
               <p>
                 Up to 140 characters and 280 bytes, stored on chain with the planting and shown in the dish&rsquo;s log. Notes
@@ -198,7 +213,8 @@ export function PlantingSection() {
             <pre className={s.formula}>
               {`feed per cell = agar × ${r.feed_ppm} ÷ 1,000,000 × (1 − ${keeperPct}%) ÷ max(counted cells, ${int(r.live_floor)})
 price of a cell = max(feed per cell × ${int(r.payback)}, ${fmtPetri(r.min_cell_price)} PETRI)
-cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
+cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)
+under a slide's licence: cost × (1 − ${r.slide_discount_bps / 100}%), plus ${r.slide_royalty_bps / 100}% of that to the holder if you are not it`}
             </pre>
             <p>
               An average cell, left alone, earns back its price in {int(r.payback)} generations, about{" "}
@@ -208,8 +224,9 @@ cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
               never falls below {fmtPetri(r.min_cell_price)} PETRI a cell, and falls as the agar shrinks and as more than{" "}
               {int(r.live_floor)} cells are counted. The contract computes it
               after the planting&rsquo;s own catch-up, in millionths of a PETRI, rounding down at every step. Of every cost,{" "}
-              {burnPct}% is burned and {100 - burnPct}% goes back into the agar. Planting first claims the colony&rsquo;s waiting
-              earnings, so they count towards the price.
+              {burnPct}% is burned and {100 - burnPct}% goes back into the agar; a royalty is a transfer to the slide&rsquo;s
+              holder, neither burned nor returned. Planting first claims the colony&rsquo;s waiting earnings, so they count
+              towards the price.
             </p>
             <div className={s.example}>
               <h4 className={s.h4}>A beehive, right now</h4>
@@ -264,12 +281,18 @@ cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)`}
               {net.freePlay ? "a guest spends it from the credit the site sponsored for it." : "on the free-play testnet dish, a guest spends it from credit the site sponsored."}
             </p>
             <pre className={s.formula}>
-              {`bring = (220 + 4 × cells + (note bytes + 64, if there is a note)) bytes × 0.00001 NEAR
+              {`bring = (317 + 4 × cells + (note bytes + 64, if there is a note)
+         + (33 + the holder's account length, under a slide's licence)
+         + (125, if that holder has no PETRI registration)
+         + (82, if no colony is playing at all)) bytes × 0.00001 NEAR
       + ${near(Number(r.cell_fee), 4)} NEAR × cells`}
             </pre>
             <p>
-              The <code className={s.code}>plant_deposit(cells, note_bytes)</code> view returns that sum and the site sends it for
-              you. A refused planting changes nothing: attached NEAR comes back and credit is not spent.
+              The <code className={s.code}>plant_deposit(cells, note_bytes, slide)</code> view returns that sum and the site sends
+              it for you. It allows for the colony&rsquo;s row in the table of playing colonies, which a colony&rsquo;s first
+              planting since it last played creates; storage not used goes to the vault or the credit pool with the fee. A
+              royalty to a holder with no PETRI registration registers it at the planter&rsquo;s expense. A refused planting
+              changes nothing: attached NEAR comes back and credit is not spent.
             </p>
             <details className={s.fold}>
               <summary>

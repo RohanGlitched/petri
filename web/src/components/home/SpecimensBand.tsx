@@ -15,7 +15,9 @@ export function SpecimensBand() {
           <h2 id="specimens-title" className="h2">Fossils of a living coin</h2>
           <p className="lede">
             Cells die; a specimen stays. A colony can fix a patch of its own living cells onto a slide, minted by the contract as a
-            NEAR token with a picture it drew itself. The same replay that checks the dish proves those cells were alive.
+            NEAR token with a picture it drew itself. The same replay that checks the dish proves those cells were alive. A
+            slide is also a licence: anyone may plant its exact pattern elsewhere for 25% less, and pays its holder 10% of that
+            in PETRI.
           </p>
         </div>
         <ul className={s.slides}>

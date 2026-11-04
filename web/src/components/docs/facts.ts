@@ -9,8 +9,8 @@ export const blob = (path: string) => `${REPO}/blob/main/${path}`;
 export const tree = (path: string) => `${REPO}/tree/main/${path}`;
 
 /** The commit both dishes were built from, as their NEP-330 metadata names it. */
-export const BUILD_COMMIT = "ec5970f5b8315de81e022866e17da62a47be7426";
-export const BUILD_COMMIT_SHORT = "ec5970f";
+export const BUILD_COMMIT = "dd18fac61ca963b5fca011cf4a92407cbbd8fbe9";
+export const BUILD_COMMIT_SHORT = "dd18fac";
 /** `cargo near build reproducible-wasm` at BUILD_COMMIT; the code hash of both contract accounts. */
 export const CODE_HASH = "DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7";
 export const BUILD_IMAGE = "sourcescan/cargo-near:0.22.0-rust-1.99.1";
@@ -67,4 +67,4 @@ export const STRAINS = [
   { short: "congo", name: "Congo Red", color: "#c8431f", temperament: "chaos", every: "60 to 100" },
 ];
 
-export const TESTS = { contract: 74, core: 30 };
+export const TESTS = { contract: 109, core: 32 };

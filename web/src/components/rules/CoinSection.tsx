@@ -151,9 +151,9 @@ export function CoinSection() {
     ["Returned by planting", v("returned"), `${100 - burnPct}% of every planting goes back into the agar.`],
     ["Bought back", v("bought_back"), "PETRI the agar bought back for NEAR from the vault."],
     ["Still in the agar", v("agar"), "Minted, less sold and fed, plus returned and bought back."],
-    ["Waiting in the keeper pot", v("keeper_pot"), "Set aside from the feed until someone advances the dish."],
-    ["Paid to keepers", v("keeper_paid"), "Pots already collected."],
-    ["Burned", v("burned"), `The other ${burnPct}% of every planting, and the whole price of every specimen slide. Gone for good.`],
+    ["Waiting in the keeper pot", v("keeper_pot"), "Set aside from the feed until someone outside the house advances the dish."],
+    ["Paid from the keeper pot", v("keeper_paid"), "Pots already collected by whoever advanced (never a house account or keeper)."],
+    ["Burned", v("burned"), `The other ${burnPct}% of every planting, the whole price of every specimen slide, and PETRI burned by a forced unregistration or a refund to a sender that had unregistered. Gone for good.`],
     ["Total supply", v("total_supply"), "What ft_total_supply reports: minted less burned."],
     ["Held by accounts or waiting to be claimed", st ? fmtPetri(held.toString(), 2) : "—", "Total supply less the agar and the keeper pot."],
   ];
@@ -183,7 +183,7 @@ export function CoinSection() {
               rest buys PETRI from the agar. After that, <code className={s.codePaper}>buy</code> spends NEAR the same way. Every
               purchase is in the ledger with the NEAR and credit paid and the PETRI received; attached NEAR goes to the tide
               vault and credit to the credit pool.{" "}
-              {net.freePlay ? "" : "On mainnet a purchase can also arrive as wNEAR through NEAR Intents, which the contract unwraps and treats as attached NEAR."}
+              {net.freePlay ? "" : "On mainnet a purchase can also arrive as wNEAR through NEAR Intents, which the contract unwraps and treats as attached NEAR. It never refunds wNEAR: an amount that cannot join or buy at once waits as pending NEAR for its account, with its order."}
             </p>
             <pre className={s.formulaPaper}>
               {`price of one PETRI = ${nearPer(launchPrice)} NEAR × ${int(maxPetri)} ÷ PETRI in the agar
@@ -246,8 +246,9 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
               The agar&rsquo;s ration is {r.feed_ppm} parts per million of its balance. It releases the whole ration only when
               at least {int(r.live_floor)} cells are counted (living cells of fed colonies, capped by reach); with fewer, it
               releases that fraction and keeps the rest, so a lone block earns 4/{int(r.live_floor)} of the ration, what its
-              price assumes. {keeperPct}% of what is released goes to the keeper pot, paid to whoever next calls <code className={s.codePaper}>advance</code> and
-              runs at least one generation. The rest is split by each colony&rsquo;s paid cells (see the reach, below). House
+              price assumes. {keeperPct}% of what is released goes to the keeper pot, paid to whoever next calls <code className={s.codePaper}>advance</code>,
+              runs at least one generation and can hold PETRI, unless it is a house account or a keeper: then the pot keeps
+              waiting for the next caller. The rest is split by each colony&rsquo;s paid cells (see the reach, below). House
               colonies are never fed. Rounding remainders stay in the agar.
             </p>
             <dl className={s.sums}>
@@ -280,7 +281,8 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
               {r.sell_bps / 100}% of the curve&rsquo;s price, and never more than those units&rsquo; pro-rata share of the vault.
               Between two tides the agar buys back at most {r.sell_cap_bps / 100}% of the vault, first come first served, and
               nothing before the first tide. A round trip through the agar always loses. A colony that has never attached NEAR
-              (a free-play guest) is paid for its PETRI in credit it can spend in the dish, never in NEAR.
+              (a free-play guest) is paid for its PETRI in credit it can spend in the dish, never in NEAR. House colonies never
+              sell: the vault is the players&rsquo;.
             </p>
             <pre className={s.formulaPaper}>
               {`NEAR = min(curve price × ${r.sell_bps / 100}%, vault × PETRI sold ÷ PETRI outside the agar)`}
@@ -299,12 +301,15 @@ PETRI bought = agar × NEAR paid ÷ (${int(k)} NEAR + NEAR paid ÷ 2)`}
           <article className={s.paperCard}>
             <h3 className="h3">Claiming</h3>
             <p>
-              Earnings do not land in a balance on their own. Each colony&rsquo;s feed adds up in one shared record, so a
-              catch-up reads and writes one record and logs one summary line however many colonies are alive. A colony moves its
-              earnings into its balance with <code className={s.codePaper}>claim</code>, which also sends the NEAR it has won at
-              the tides. If a claim&rsquo;s transfer fails, a callback owes the NEAR to the colony again; a failed sale or bounty
-              payout goes back to the vault with a <code className={s.codePaper}>Refund</code> entry. Planting and minting a
-              slide claim waiting PETRI first. Credit won at the tides needs no claim. The{" "}
+              Earnings do not land in a balance on their own. Each playing colony&rsquo;s feed adds up in one row of a table of
+              the colonies that have stake, so a catch-up reads and writes that table once and logs one summary line however
+              many colonies are alive. A colony moves its earnings into its balance with{" "}
+              <code className={s.codePaper}>claim</code>, which also sends the NEAR it has won at the tides, less what the
+              claim&rsquo;s own <code className={s.codePaper}>Claim</code> entry costs; winnings too small to cover that and a
+              possible refund stay owed until they grow. If the transfer of a claim, a sale, a sponsor&rsquo;s reclaim or a
+              pending claim fails, a callback writes a <code className={s.codePaper}>Refund</code> entry and the NEAR becomes
+              pending NEAR for the account, which <code className={s.codePaper}>claim_pending</code> collects; only a failed
+              bounty goes back to the vault. Planting and minting a slide claim waiting PETRI first. Credit won at the tides needs no claim. The{" "}
               <code className={s.codePaper}>claimable</code> view shows what is waiting.
             </p>
           </article>
@@ -448,7 +453,9 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                   <b>NEP-141.</b> <code className={s.codePaper}>ft_transfer</code>,{" "}
                   <code className={s.codePaper}>ft_transfer_call</code> (with refunds through{" "}
                   <code className={s.codePaper}>ft_resolve_transfer</code>), <code className={s.codePaper}>ft_balance_of</code> and{" "}
-                  <code className={s.codePaper}>ft_total_supply</code>. Transfers attach exactly 1 yoctoNEAR.
+                  <code className={s.codePaper}>ft_total_supply</code>. Transfers attach exactly 1 yoctoNEAR. PETRI refunded to a
+                  sender that has unregistered meanwhile is burned. House accounts (the strains and the keepers) can send PETRI
+                  only to other house accounts.
                 </li>
                 <li>
                   <b>NEP-148.</b> Name Petri, symbol PETRI, 6 decimals and an inline icon.
@@ -456,7 +463,10 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                 <li>
                   <b>NEP-145.</b> A receiver must be registered before it can hold PETRI. Joining registers a colony; anyone else
                   calls <code className={s.codePaper}>storage_deposit</code>, which costs{" "}
-                  <b className="num">{reg ? `${near(Number(reg), 5)} NEAR` : "the storage of one balance record"}</b>.
+                  <b className="num">{reg ? `${near(Number(reg), 5)} NEAR` : "the storage of one balance record"}</b>. A
+                  slide&rsquo;s holder is registered by the planting that pays it its first royalty.{" "}
+                  <code className={s.codePaper}>storage_unregister</code> with <code className={s.codePaper}>force</code> burns
+                  the PETRI still held; a colony&rsquo;s account cannot unregister, forced or not.
                 </li>
                 <li>
                   <b>The dish does not play on itself.</b> The contract account cannot join, buy, sell, plant, claim, advance or
@@ -467,12 +477,14 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                 <li>
                   <b>Specimen slides.</b> Each slide is an NFT in the same contract: NEP-171 transfers (with{" "}
                   <code className={s.codePaper}>nft_transfer_call</code>), NEP-177 metadata whose image is an SVG the contract
-                  draws from the captured cells, NEP-178 approvals and NEP-181 enumeration.
+                  draws from the captured cells (at most 10 a call from the enumeration views), NEP-178 approvals and NEP-181
+                  enumeration. A slide is also a pattern licence: see planting.
                 </li>
                 <li>
                   <b>Events.</b> NEP-141 <code className={s.codePaper}>ft_mint</code> once at launch,{" "}
-                  <code className={s.codePaper}>ft_transfer</code> for purchases, sales, claims, keeper pots, planting returns and
-                  transfers, <code className={s.codePaper}>ft_burn</code> for planting and for slides; NEP-171{" "}
+                  <code className={s.codePaper}>ft_transfer</code> for purchases, sales, claims, keeper pots, planting returns,
+                  slide royalties, transfers and their refunds, <code className={s.codePaper}>ft_burn</code> for planting, slides,
+                  forced unregistrations and refunds to unregistered senders; NEP-171{" "}
                   <code className={s.codePaper}>nft_mint</code> and <code className={s.codePaper}>nft_transfer</code>; and the
                   dish&rsquo;s own <code className={s.codePaper}>sponsor</code>, <code className={s.codePaper}>unsponsor</code>,{" "}
                   <code className={s.codePaper}>join</code>, <code className={s.codePaper}>rename</code>,{" "}
@@ -480,8 +492,8 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                   <code className={s.codePaper}>claim</code>, <code className={s.codePaper}>payout</code>,{" "}
                   <code className={s.codePaper}>payout_failed</code>, <code className={s.codePaper}>slide</code>,{" "}
                   <code className={s.codePaper}>intents</code>, <code className={s.codePaper}>claim_pending</code>,{" "}
-                  <code className={s.codePaper}>skip</code> and one <code className={s.codePaper}>generation</code> summary per
-                  catch-up.
+                  <code className={s.codePaper}>skip</code>, <code className={s.codePaper}>relaunch</code> and one{" "}
+                  <code className={s.codePaper}>generation</code> summary per catch-up.
                 </li>
               </ul>
             </div>
