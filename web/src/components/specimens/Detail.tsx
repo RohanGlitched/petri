@@ -12,6 +12,7 @@ import { Specimen } from "@/components/site/Specimen";
 import { readableReadError, SpecimenCard } from "./Gallery";
 import { useSlideLicence } from "./licence";
 import { SlideGlass } from "./SlideGlass";
+import { SlideHistoryBand } from "./History";
 import { order, pictureOf, useAllSlides, useColonyOf, useSlide } from "./data";
 import s from "./specimens.module.css";
 
@@ -155,6 +156,8 @@ export function SpecimenDetail({ id }: { id: string }) {
           </div>
         </div>
       </section>
+
+      <SlideHistoryBand id={sl.id} cells={sl.count} />
 
       <section className="band band-paper" aria-labelledby="sp-proof">
         <div className="wrap">

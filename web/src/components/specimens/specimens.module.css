@@ -372,3 +372,55 @@
   .large .labelNo { font-size: 11.5px; }
   .large .labelMeta { font-size: 11.5px; gap: 1px 9px; }
 }
+
+/* A slide's history: four facts with their checks, who was paid, and a timeline of everything it did. */
+.histFacts { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+.histFacts > div { padding: 14px 0 16px; border-top: 1px solid var(--line); min-width: 0; }
+.histFacts dt { font-size: 13px; color: var(--dim); }
+.histFacts dd { margin: 2px 0 6px; }
+.histFacts .big { font-family: var(--display); font-size: 26px; line-height: 1.15; }
+.histFacts p { margin: 0; font-size: 14px; color: var(--text-2); }
+.agree { color: var(--ok); }
+.disagree { color: var(--bad); }
+.paidTo { margin-top: 28px; }
+.paidTo ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.paidTo li { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.paidTo a { color: var(--text-2); }
+.paidTo span { font-family: var(--display); font-size: 18px; }
+.timeline { list-style: none; margin: 14px 0 0; padding: 0; position: relative; }
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 10px;
+  bottom: 10px;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(242, 180, 90, 0.55), var(--line-2));
+}
+.timeline li { position: relative; padding: 0 0 22px 30px; }
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.6);
+}
+.timeline li.stepMint::before { background: var(--amber); box-shadow: none; }
+.timeline li:last-child { padding-bottom: 0; }
+.stepMeta { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12.5px; color: var(--dim); }
+.stepText { margin: 2px 0 0; font-size: 15px; color: var(--text-2); }
+.stepText b { font-weight: 600; color: var(--bone); }
+.stepText em { font-style: normal; color: var(--amber-2); }
+.stepText a, .stepLinks a, .timelineNote a { color: var(--text-2); text-underline-offset: 3px; }
+.stepLinks { margin: 4px 0 0; font-size: 13px; }
+.histWho { display: inline-flex; align-items: center; gap: 6px; color: var(--bone); }
+.showAll { margin-top: 18px; padding: 0; border: 0; background: none; color: var(--amber); font: 600 14px var(--body); cursor: pointer; }
+.showAll:hover { color: var(--amber-2); }
+.timelineNote { margin: 18px 0 0; font-size: 13.5px; color: var(--dim); }
+@media (max-width: 620px) {
+  .histFacts { grid-template-columns: 1fr; }
+}

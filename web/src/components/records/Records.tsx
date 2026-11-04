@@ -29,6 +29,11 @@ type Result = {
   tides: number;
   plants: number;
   sieges: number;
+  /** pacts offered, accepted, and the biggest accepted one by PETRI */
+  pacts: { offered: number; accepted: number; petri: number; biggest: { id: number; from: number; to: number; petri: number; until: number } | null };
+  /** the slide whose holders were paid the most in royalties, and royalties sent to the agar by guests */
+  licence: { token: string; royalties: number; plantings: number } | null;
+  toAgar: number;
 };
 
 type Phase = { kind: "reading" } | { kind: "replaying"; at: number; of: number } | { kind: "done"; r: Result; colonies: Colony[] } | { kind: "error"; msg: string };
@@ -39,7 +44,34 @@ function fromLedger(ledger: Entry[]) {
   let tides = 0;
   let plants = 0;
   let sieges = 0;
+  const pacts: Result["pacts"] = { offered: 0, accepted: 0, petri: 0, biggest: null };
+  const offers = new Map<number, { from: number; to: number; petri: number; until: number }>();
+  const bySlide = new Map<string, { royalties: number; plantings: number }>();
+  let toAgar = 0;
   for (const e of ledger) {
+    if ("PactOffer" in e) {
+      const o = e.PactOffer;
+      pacts.offered++;
+      offers.set(o.pact, { from: o.from, to: o.to, petri: Number(o.petri), until: Number(o.until) });
+      continue;
+    }
+    if ("PactAccept" in e) {
+      const o = offers.get(e.PactAccept.pact);
+      pacts.accepted++;
+      if (o) {
+        pacts.petri += o.petri;
+        if (!pacts.biggest || o.petri > pacts.biggest.petri) pacts.biggest = { id: e.PactAccept.pact, ...o };
+      }
+      continue;
+    }
+    if ("Plant" in e && e.Plant.licence) {
+      const l = e.Plant.licence;
+      const x = bySlide.get(l.token) ?? { royalties: 0, plantings: 0 };
+      x.plantings++;
+      if (l.to_agar) toAgar += Number(l.royalty);
+      else x.royalties += Number(l.royalty);
+      bySlide.set(l.token, x);
+    }
     if ("Plant" in e) {
       const p = e.Plant;
       const row = { id: p.colony, cells: p.cells.length, cost: Number(p.cost), at: Number(p.generation) };
@@ -53,7 +85,11 @@ function fromLedger(ledger: Entry[]) {
       tides++;
     }
   }
-  return { biggest, siege, tides, plants, sieges };
+  let licence: Result["licence"] = null;
+  bySlide.forEach((x, token) => {
+    if (!licence || x.royalties > licence.royalties || (x.royalties === licence.royalties && x.plantings > licence.plantings)) licence = { token, ...x };
+  });
+  return { biggest, siege, tides, plants, sieges, pacts, licence, toAgar };
 }
 
 async function compute(onProgress: (at: number, of: number) => void): Promise<{ r: Result; colonies: Colony[] }> {
@@ -162,6 +198,12 @@ export function Records() {
   );
 
   const r = phase.kind === "done" ? phase.r : null;
+  // PETRI free play keeps in the dish: earned before a colony's first NEAR or bought with credit, never sold or sent.
+  const kept = useMemo(() => {
+    // The house is left out: its PETRI never leaves the house whatever it holds.
+    const list = colonies.filter((c) => !c.house && Number(c.kept ?? "0") > 0).sort((a, b) => Number(b.kept) - Number(a.kept));
+    return { total: list.reduce((n, c) => n + Number(c.kept), 0), top: list[0], n: list.length };
+  }, [colonies]);
   const longest = r?.lives[0];
   const pending = <span className={s.wait}>{phase.kind === "error" ? "—" : "replaying…"}</span>;
 
@@ -256,6 +298,47 @@ export function Records() {
               : "A tide runs every 240 generations once some colony outside the house has earned. The first one is still to come."}
           </p>
         </li>
+
+        <li>
+          <h2>Pacts made</h2>
+          <p className={s.big}>{r ? <><span className="num">{int(r.pacts.accepted)}</span> <small>{r.pacts.accepted === 1 ? "pact" : "pacts"}, {petri(r.pacts.petri, r.pacts.petri % 1e6 ? 1 : 0)} PETRI</small></> : pending}</p>
+          {r?.pacts.biggest && (
+            <span className={s.pair}>
+              <Holder c={byId.get(r.pacts.biggest.from)} />
+              <span className={s.pairArrow} aria-label="paid">→</span>
+              <Holder c={byId.get(r.pacts.biggest.to)} />
+            </span>
+          )}
+          <p className={s.detail}>
+            {r?.pacts.biggest
+              ? `The biggest, pact ${r.pacts.biggest.id}: ${petri(r.pacts.biggest.petri, 1)} PETRI for a promise to plant nowhere within ${d.rules?.pact_radius ?? 8} cells of the payer until generation ${int(r.pacts.biggest.until)}. ${int(r.pacts.offered)} offered in all.`
+              : r
+                ? `${int(r.pacts.offered)} offered so far, none accepted. A pact pays a colony PETRI for staying ${d.rules?.pact_radius ?? 8} cells clear of the payer, and the contract enforces it.`
+                : "PETRI paid for promises the contract enforces."}{" "}
+            <Link href="/strains#council-title">See the council</Link>.
+          </p>
+        </li>
+
+        <li>
+          <h2>Richest licence</h2>
+          <p className={s.big}>{r?.licence ? <><span className="num">{petri(r.licence.royalties, 2)}</span> <small>PETRI in royalties</small></> : r ? <span className={s.none}>No licensed planting yet</span> : pending}</p>
+          {r?.licence && <Link className={s.slideLink} href={`/specimens/${encodeURIComponent(r.licence.token)}`}>Specimen {r.licence.token}</Link>}
+          <p className={s.detail}>
+            {r?.licence
+              ? `Paid to its holders by ${int(r.licence.plantings)} ${r.licence.plantings === 1 ? "planting" : "plantings"} of its pattern.${r.toAgar > 0 ? ` Across all slides, ${petri(r.toAgar, 2)} PETRI of royalties went to the agar from planters who had never attached NEAR.` : ""}`
+              : `A slide of at least ${d.rules?.licence_min_cells ?? 12} cells licenses its pattern: ${(d.rules?.slide_discount_bps ?? 2500) / 100}% off to plant it, and ${(d.rules?.slide_royalty_bps ?? 1000) / 100}% of that to its holder.`}
+          </p>
+        </li>
+
+        <li>
+          <h2>Kept in the dish</h2>
+          <p className={s.big}>{d.status === "ready" || phase.kind === "done" ? <><span className="num">{petri(kept.total, 2)}</span> <small>PETRI</small></> : pending}</p>
+          {kept.top && <Holder c={kept.top} />}
+          <p className={s.detail}>
+            PETRI earned before a colony&rsquo;s first NEAR, or bought with credit. It can be planted, never sold for NEAR or sent, so PETRI from free play never becomes the vault&rsquo;s NEAR.
+            {kept.n > 0 ? ` ${int(kept.n)} ${kept.n === 1 ? "colony" : "colonies"} outside the house ${kept.n === 1 ? "holds" : "hold"} some.` : " Counted outside the house, whose PETRI never leaves it anyway."}
+          </p>
+        </li>
       </ul>
 
       <section className={s.earners} aria-labelledby="earners-title">
@@ -287,8 +370,8 @@ export function Records() {
       <p className={s.method}>
         How this page knows: it reads every entry of the ledger from {net.contract} and replays the dish from an empty board
         with petri-core, the Rust code the contract runs, compiled to WebAssembly. Lifetimes and peaks are measured on that
-        rebuilt board every {SAMPLE} generations or sooner; plantings, sieges and tides come straight from their ledger entries;
-        PETRI burned and earned come from the contract&rsquo;s own counters. <Link href="/verify">Check the whole replay</Link>.
+        rebuilt board every {SAMPLE} generations or sooner; plantings, sieges, tides, pacts and licensed plantings come straight from their ledger entries;
+        PETRI burned and earned, and each colony&rsquo;s kept PETRI, come from the contract&rsquo;s own counters. <Link href="/verify">Check the whole replay</Link>.
       </p>
     </>
   );

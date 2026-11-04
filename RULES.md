@@ -14,7 +14,7 @@ sponsored credit and the dish's own methods live in `contract/src/lib.rs`; each 
 `contract/src/books.rs`, the token in `contract/src/token.rs`, specimen slides in `contract/src/slides.rs`, payment in
 wNEAR in `contract/src/intents.rs` and the relaunch from v6 in `contract/src/relaunch.rs`. The same `petri-core` crate
 runs in the contract, in the browser (compiled to WebAssembly) and in the economy simulator (`sim/src/main.rs`), so the
-three cannot disagree. The contract has 119 tests (`contract/src/tests.rs`) and the core 33 (`core/src/tests.rs`).
+three cannot disagree. The contract has 132 tests (`contract/src/tests.rs`) and the core 35 (`core/src/tests.rs`).
 
 Every parameter is set once, when a dish is launched (`new`, or `relaunch` below), and can be read with the `rules`
 view. No method changes a parameter of a running dish, mints PETRI after launch, or edits the board. `new` and
@@ -45,7 +45,7 @@ These are the values both dishes return from `rules`. PETRI has 6 decimals, so t
 | `generation_ms` | 15000 | One generation every 15 seconds (5,760 a day). |
 | `max_supply` | 1,000,000 PETRI | Every PETRI that will ever exist. All of it is minted at launch into the agar. |
 | `feed_ppm` | 3 | The agar's ration each generation: 3 parts per million of itself. |
-| `keeper_bps` | 200 | 2% of each generation's feed goes to the keeper pot, paid to the account whose call ran the generation. |
+| `keeper_bps` | 200 | 2% of each generation's feed goes to the keeper pot, paid to the account whose call ran the generation (never a house account, a keeper or a guest). |
 | `reach` | 8 | A colony is paid for at most 8 living cells per cell of stake. |
 | `stake_keep_bps` | 8750 | Every tide that runs keeps 87.5% of each colony's stake. |
 | `burn_bps` | 5000 | 50% of a planting's cost is burned; the rest goes back to the agar. |
@@ -70,6 +70,8 @@ These are the values both dishes return from `rules`. PETRI has 6 decimals, so t
 | `slide_min_cells` | 5 | A slide must capture at least 5 of the colony's own living cells. |
 | `licence_min_cells` | 12 | A slide is a licence only if it captured at least 12 cells; a smaller slide can still be minted (`slide_min_cells`, 5) as a keepsake, but a planting under it is refused. |
 | `slide_discount_bps` | 2500 | A planting of a slide's exact pattern under its licence costs 25% less. |
+| `pact_radius` | 8 | A pact forbids its promisor to plant within 8 cells (across or down, wrapping) of the payer's living cells. Launch refuses a radius outside 1 to 16. |
+| `pact_max_gens` | 2880 | A pact lasts at most 2,880 generations (12 hours) from the dish's stored generation when it is offered. |
 | `slide_royalty_bps` | 1000 | A licensed planter that does not hold the slide pays its holder 10% of that discounted cost in PETRI (to the agar instead, if the planter has never attached NEAR). |
 | `wnear` | `wrap.testnet` / `wrap.near` | The wNEAR contract whose transfers join or buy. |
 | `house` | 5 accounts | The dish's own players: `petri-violet`, `petri-safranin`, `petri-methylene`, `petri-malachite`, `petri-congo` (`.testnet`) on testnet; `violet`, `safranin`, `methylene`, `malachite`, `congo` (`.petri-dish.near`) on mainnet. Never fed, no tide share, never sell. |
@@ -82,7 +84,8 @@ advances every 16 generations (`CHAIN_EVERY`); a catch-up stops once its call ha
 a sponsorship brings at least 0.01 NEAR (`MIN_SPONSOR`) and an account takes credit from at
 most 8 sponsors (`MAX_GRANTS`); a sponsor may take back its own credit once 5,760 generations of the wall clock have
 passed since it last gave it or the account last drew on it (`RECLAIM_AFTER`); a cold page holds 32 colonies (`PAGE`);
-the hot table holds at most 10,000 colonies (`MAX_PLAYING`) and at most 32 rows leave it in a call (`FLUSH_MAX`).
+the hot table holds at most 10,000 colonies (`MAX_PLAYING`) and at most 32 rows leave it in a call (`FLUSH_MAX`); a colony is
+party to at most 8 pacts that have not ended (`MAX_PACTS`), and an offer's storage allowance is 0.0042 NEAR (`PACT_DEPOSIT`).
 No wNEAR is ever refunded: there is no minimum transfer, and `intent_minimum` (below) tells a payer what an order needs.
 
 ## The dish
@@ -172,11 +175,15 @@ NEAR for a sale    = min(sell_bps × curve price at the midpoint, vault × units
 
 - **Joining.** `join(name, color, credit?)` must bring at least `min_join` (0.01 NEAR), attached or from credit
   ("joining needs at least 0.01 NEAR"). The contract keeps the colony's storage (plus 113 bytes for its purchase entry) and spends the rest on PETRI.
-- **Buying.** `buy(credit?)` spends what it brings, less 113 bytes for the purchase record, on PETRI.
+- **Buying.** `buy(credit?)` spends what it brings, less 113 bytes for the purchase record, on PETRI. PETRI bought with
+  credit is kept PETRI (see Kept PETRI).
 - Storage is paid from credit first, then from attached NEAR. What is left of the attached NEAR goes to the tide
   vault and what is left of the credit to the credit pool. The `Buy` entry records both (`near`, `credit`).
-- **Selling back.** `sell(petri)` returns PETRI to the agar for NEAR from the vault: half the curve's price, never more
-  than the units' pro-rata share of the vault. The sale's record storage comes out of that NEAR (`near` in the `Sell`
+- **Selling back.** `sell(petri)` first catches up and claims the seller's earnings (so its balance counts them), then
+  returns PETRI to the agar for NEAR from the vault: half the curve's price, never more
+  than the units' pro-rata share of the vault. A colony holding kept PETRI cannot sell for NEAR (see Kept PETRI): "PETRI
+  earned before a colony's first NEAR stays in the dish: you hold X kept PETRI; plant it first (kept PETRI is spent first),
+  then you can sell PETRI for NEAR". The sale's record storage comes out of that NEAR (`near` in the `Sell`
   entry) and the rest (`paid`) goes to the seller: as NEAR, to its payout account if it set one, or, for a colony that
   has never attached NEAR, as credit it can spend only in the dish (`as_credit: true`, counted in `credit_sold`).
   Between two tides the agar pays out at most `sell_cap_bps` (10%) of the vault as it stood at the last tide, first
@@ -202,7 +209,7 @@ credit and no sponsor can take it back.
 
 Credit can be spent only by passing `credit` to `join`, `buy`, `plant` or `mint_slide` (for a slide's storage), and can
 never be withdrawn by the account. It is spent in a fixed order: credit won first, then the grants, oldest first.
-Drawing on a grant restarts that grant's day. Credit spent on joining, buying and planting goes to the credit pool,
+Drawing on a grant restarts that grant's day. PETRI bought with credit is kept PETRI (see Kept PETRI). Credit spent on joining, buying and planting goes to the credit pool,
 never the vault; the `Buy`, `Plant` and `Slide` entries record what each call took as `spent`.
 
 `unsponsor(account_id)` lets a sponsor take back what is left of its own grant, and only that: other sponsors' credit
@@ -245,7 +252,8 @@ the same set cells, shifted by one offset (wrapping at the edges), every cell on
 (`petri_core::fits_slide`). Anyone may plant under such a slide's licence, at `slide_discount_bps` (25%) off. A planter
 that does not hold the slide also pays `slide_royalty_bps` (10%) of the discounted cost in PETRI, a transfer (`ft_transfer`
 event, memo "slide royalty"), not a burn. It goes to the slide's holder, and a holder with no PETRI registration is
-registered at the planter's expense (125 bytes, in `plant_deposit`). A planter that has never attached NEAR before this
+registered at the planter's expense (125 bytes, in `plant_deposit`). A royalty paid to a holder that has never attached
+NEAR is kept PETRI (see Kept PETRI). A planter that has never attached NEAR before this
 planting pays its royalty to the agar instead (counted in `returned`; the holder and the slide's `royalties` get
 nothing), so free play cannot hand a wallet PETRI to sell. The house may plant only slides it holds, so it never pays a
 royalty. The siege surcharge still applies in full: the discount is the licence's whole perk, and it never makes a
@@ -326,11 +334,11 @@ then. Rounding remainders stay in the agar.
 
 Each generation's keeper cut collects in one pot. The catch-up pays the whole pot to the account whose call it was, if
 the call stepped at least one generation, that account is registered to hold PETRI, and it is not one of the dish's own
-accounts (`house` or `keepers`). Any call that catches the dish up can take it: `plant`, `buy`, `join`, `sell`, `claim`,
+accounts (`house` or `keepers`) and not a guest (a colony that has never attached NEAR: guests take no keeper pot). Any call that catches the dish up can take it: `plant`, `buy`, `join`, `sell`, `claim`,
 `advance`, `mint_slide`, and a wNEAR order settled for an account (the pot goes to that account). `advance` does not pay
 it separately, and a call on a dish that was already current pays nothing. `sell` reads the seller's balance after its
-catch-up, so a pot paid in that catch-up is not lost. The dish's own keepers never take the pot, so it waits for the
-next player's call. The project's keepers (`rules.keepers`: `petri-keeper.testnet` and `keeper.petri-dish.near`) call `unwrap_wnear` when wNEAR
+catch-up, so a pot paid in that catch-up is not lost. The dish's own keepers and guests never take the pot, so it waits for
+the next call from an account that is neither. The project's keepers (`rules.keepers`: `petri-keeper.testnet` and `keeper.petri-dish.near`) call `unwrap_wnear` when wNEAR
 is left waiting. On mainnet the keeper advances only once someone outside the house has a colony, and then only when the
 stored board is 400 generations behind, before the clock would skip; on testnet it advances when the board is 20
 generations behind. It has no powers anyone else lacks, and fewer: it takes no pot and no tide bounty.
@@ -407,11 +415,106 @@ for both):
 
 - never `sell` PETRI back to the vault;
 - can `ft_transfer` or `ft_transfer_call` PETRI only to another house account ("the house's PETRI stays in the house:
-  it plants with it and never hands it to players"), so the strains can still pay each other at their council;
+  it plants with it and never hands it to players"), so the strains can still make pacts with each other (see Pacts);
 - never take a tide bounty (it stays in the vault) or the keeper pot;
 - plant only slides they hold, so they never pay a royalty to a player;
 - are not started a colony by someone else's wNEAR: a payment for a house account without a colony waits as pending NEAR
   for it to claim ("the house starts its own colonies; that NEAR waits for its account to claim").
+
+## Kept PETRI: free play never reaches NEAR
+
+PETRI earned before a colony's first NEAR stays in the dish. A colony that has never attached NEAR is a guest here
+whether or not it uses the site's relayer.
+
+- **A guest cannot send PETRI.** `ft_transfer` and `ft_transfer_call` refuse it ("free play's PETRI stays in the dish: a
+  colony that has never attached NEAR cannot send PETRI (it can plant it, or sell it back for credit)"). It can still
+  plant, mint slides, receive PETRI and sell back for credit.
+- **Every colony has `kept` PETRI** (a u64 in its colony record, with a mirrored `attached` flag so a transfer needs no
+  hot-table read):
+  - while a colony is a guest, everything it claims, buys (all of a guest's purchases are credit) and is paid in
+    royalties as a slide holder is added;
+  - when it first attaches NEAR (a purchase or planting with `near` above 0, a join with NEAR, a wNEAR join or purchase),
+    its unclaimed earnings are added (what it claimed as a guest already is);
+  - PETRI anyone buys with credit is added, attached or not: `credit_share(units, credit, near + credit)` of the purchase
+    (`petri_core`: units × credit ÷ total, both shifted right until the total fits 64 bits, exact for every real
+    amount), so credit never becomes vault NEAR by a sale either;
+  - plantings (cost and royalty) and slides spend kept PETRI first; a guest's sale for credit spends it too.
+- **While a colony holds any kept PETRI it cannot** `sell` for NEAR, send PETRI (`ft_transfer`, `ft_transfer_call`) or pay
+  PETRI into a pact: "PETRI earned before a colony's first NEAR stays in the dish: you hold X kept PETRI; plant it first
+  (kept PETRI is spent first), then you can sell PETRI for NEAR". Once its plantings have spent it, everything it holds
+  is its own, and what it earns afterwards is sellable.
+- **Guests take no keeper pot**: it waits for the next caller that is not a guest.
+- **The house is exempt** from the send check (its PETRI cannot leave the house anyway; the testnet strains play on
+  sponsored credit and would otherwise be guests). The house rules are unchanged: it never sells and sends PETRI only to
+  house accounts.
+- **Views.** `Colony` has `attached: bool` and `kept: U64`. In `colony_of` and `colonies`, `kept` includes a guest's
+  unclaimed earnings, that is, what will be held back.
+
+The rule is "no sale or send while any is held", not "sellable = balance − kept", because balances are not in the ledger
+(transfers and the keeper pot are not entries, and an account may hold PETRI from before it joined), so no replay can
+check `balance − kept` exactly. With this rule every check is exact from the ledger: `kept` is rebuilt entry by entry, and
+a `Sell` for NEAR (or a PETRI pact offer) by a colony whose replayed `kept` is above zero is a violation. The cost: a
+former guest plants its kept PETRI before selling anything.
+
+Transfers stay out of the ledger (a `Transfer` entry would let anyone grow the contract's storage at 1 yoctoNEAR a
+call). The replays argue it from three facts: no transfer changes `kept`; every colony's `kept` is rebuilt from the
+ledger alone and must equal the colony view; and the contract refuses every transfer by a guest or by a colony holding
+kept PETRI (the code, pinned by the build hash). The NEP-141 `ft_transfer` events remain the public record of each
+transfer.
+
+In the simulator (`sim/out-v6.1`, testnet rules, 150 players plus 3 SybilAttach and 3 SybilTransfer operators, each a
+wallet with 10 relayer guests, 7 days, 6 seeds) the attacks that were left open before the rule pay nothing with it.
+Guests that `ft_transfer` their farmed PETRI to one wallet that sells it: 476.9 PETRI moved and the vault paid +0.0470
+NEAR (+0.0427 to +0.0527) a week per operator without the rule; 0 moved and 0 NEAR with it. Guests that farm a day, attach
+0.01 NEAR each and sell what they farmed: 0 NEAR with the rule (82 sales refused per operator), +0.0008 without, because
+a day's farm (about 30 PETRI, 0.003 NEAR) is worth less than a sale's own record and refund reserve (0.0035 NEAR). Across
+every colony in the run, the NEAR the vault paid for PETRI earned before a first NEAR, bought with credit or moved in by
+a guest's transfer was 0.0000 with the rule and 0.1674 without. Everyone else's cash is within seed noise (mainnet, 150
+players, 7 days: Builder −0.1865 against −0.1899 without the rule, Methuselah +0.3496 against +0.3680).
+
+## Pacts
+
+A pact is a one-way promise the contract enforces. Colony A pays colony B PETRI for B's promise not to plant within
+`pact_radius` (8) cells of A's living cells before generation `until`. The council of the five strains negotiates these
+(see The strains); anyone can make one.
+
+- `pact_offer(to, petri, until, credit?)` (payable) is A's offer to the colony of account `to`. The dish holds the PETRI in
+  escrow (`state().pact_escrow`). It catches up first. `until` must be after the stored generation and at most
+  `pact_max_gens` (2,880) ahead. Storage (`PACT_DEPOSIT`, 0.0042 NEAR, covers it) is paid from `credit` first, then
+  attached NEAR; the rest of the attached NEAR comes back. It returns the pact's number.
+- `pact_accept(id)` is B's acceptance: the PETRI is paid to B, and until `until` the contract refuses every planting by B
+  that breaks the pact: "pact N with <A's name>: your colony promised not to plant within 8 cells of its living cells
+  until generation U; (x, y) is that close to its cell at (x', y')". It uses the stored generation (the planting itself
+  catches up and checks the board at its generation).
+- `pact_cancel(id)` ends an open offer: A withdraws it or B declines it at any time, and anyone may once it has expired;
+  its PETRI goes back to A. An accepted pact ends only once `until` has come ("an accepted pact binds until its generation
+  `until`; then anyone may end it"). Nobody can end one early.
+- Views: `pact(id)` and `pacts_of(account_id)` (the pacts that account's colony is party to and that have not ended),
+  each a `PactView { id, from, to, petri, until, accepted, ended, binding }` (colony ids; `binding` while accepted, not
+  ended and `until` ahead). `DishState` gains `pacts` (offers so far) and `pact_escrow`.
+
+Rules: one open offer from A to B at a time; a colony is party to at most 8 pacts that have not ended (offers made or
+received, accepted pacts on either side), and expired pacts of both colonies are ended before an offer checks the cap, so
+slots free themselves. Only PETRI its maker could sell pays for a pact: a guest or a colony holding kept PETRI offers
+pacts with `petri` 0 only. A house colony's pact with a player carries no PETRI ("the house's PETRI stays in the house"); a
+player may pay the house; house-to-house pacts are free, with or without PETRI. The promise is one-way (B promises, A
+pays); a truce is two pacts, one each way, so each side prices its own promise.
+
+Ledger and events: `PactOffer { generation, pact, from, to, petri, until, spent }`, `PactAccept { generation, pact }` and
+`PactEnd { generation, pact }`. An offer pays for its own storage plus a 140-byte reserve for the accept and end
+entries. The `pact` event is `{ pact, did: "offer" | "accept" | "end", from, to, petri, until, refund }`; the NEP-141
+`ft_transfer` events show the escrow moving (memos "pact offer: held until accepted", "pact accepted", "pact offer: back,
+never accepted"). Pact records are stored under `P` + u32 and each colony's live list under `Q` + u16 (raw keys).
+
+Gas: with 30,000 colonies, 1,500 playing, a newcomer bound by 8 pacts that plants 64 cells far from them (so the whole
+scan runs) costs 22.3 TGas on the real network against 20.5 for the same planting unbound. `Dish::pact_breach` marks
+the union of the squares, so it looks at each dish cell at most once whatever the number of pacts.
+
+Both replays rebuild every pact from the three entries and check: numbering; `until` within (g, g + `pact_max_gens`]; at
+most 8 live pacts per colony; one open offer per pair; PETRI offers only by a colony that attached NEAR and holds no kept
+PETRI (the house is exempt); no house PETRI offered to a player; an accept only while open and before `until`; an accepted
+pact ended only at `until`; the escrow and the count; and for every planting, `pact_breach` against the colonies that
+accepted pacts binding the planter protect, on the board as it stood. Credit spent on offers counts in `credit_spent`.
 
 ## Specimen slides
 
@@ -501,7 +604,9 @@ The contract tests assert after their scenarios (`conserved`). A Tide's `pay`, `
 same figures.
 
 - `total_supply = max_supply − burned`
-- `every balance + agar + unclaimed + keeper_pot = total_supply`
+- `every balance + agar + unclaimed + keeper_pot + pact_escrow = total_supply`; `ft_balance_of` of the dish is
+  `agar + unclaimed + keeper_pot + pact_escrow`, and the escrow is rebuilt from the `PactOffer`, `PactAccept` and
+  `PactEnd` entries
 - `agar = max_supply − sold − fed + returned + bought_back`
 - `vault + every Tide's (bounty + storage + paid + as_credit) + every Sell's near = near_in + every bounty Refund's
   (near − storage)`
@@ -543,6 +648,10 @@ accounts hold, the NEAR owed to colonies or the pending NEAR:
 - `Dust { generation, near }` — wNEAR too small for a pending record went into the vault
 - `Burn { generation, account, petri }` — PETRI burned outside the dish (a forced unregistration, or a transfer's
   refund to a sender that had unregistered)
+- `PactOffer { generation, pact, from, to, petri, until, spent }`, `PactAccept { generation, pact }` and
+  `PactEnd { generation, pact }` — a pact was offered (its PETRI held by the dish; `spent` is the credit the offer took),
+  accepted (the PETRI paid to the promisor) or ended (an unaccepted offer's PETRI back to the payer, or a pact whose
+  `until` came)
 
 The `Tide` entries are the checkpoints: `checkpoints()` returns generation 0 and the chain stored in every tide. They no
 longer carry the tide's amounts; those are worked out by the replay and logged in the `tide` event.
@@ -551,7 +660,7 @@ Replaying from an empty board, a zero chain, a full agar, an empty vault and an 
 generation's entries in order and stepping with `petri-core` in between, reproduces the board, the chain, the agar, the
 vault, the credit pool, every solvency term and every colony's PETRI earnings, NEAR winnings and credit winnings. The
 replay works out every tide's amounts itself. `node scripts/verify.mjs` (`--network mainnet` for the mainnet dish) does it from a terminal with every read pinned to
-one final block and prints 40 checks: history chain, board hash, living cells, every planting legal with its siege
+one final block and prints 45 checks: history chain, board hash, living cells, every planting legal with its siege
 flag, every planting's price, every planting's fee, every licensed planting (the slide's shape and its 12-cell minimum, its price, and the
 royalty to the holder of the day, or to the agar for a planter that had never attached NEAR), every purchase on the curve, every sale on the curve and within the allowance,
 every tide (run exactly when due, its chain, its `bytes` (130 or 175), and the shares, bounty, storage and credit it works out
@@ -560,9 +669,10 @@ taking exactly what was owed, every refund tied to its payout, every specimen sl
 royalties, the agar, PETRI sold, burned, burned by slides, royalties, returned and bought back, the keeper share, every
 colony's earnings, the vault, NEAR paid in, NEAR paid at tides, vault shares and bounties paid as credit, sales paid as
 credit, every colony's NEAR winnings, the credit pool, credit paid at tides, credit sponsored, spent and taken back, NEAR
-owed to colonies, pending NEAR, every colony's credit winnings, solvency from the ledger, the deployed code hash, and no
-full-access key. It exits 0 when all match, 1 on any mismatch and 2 if the dish cannot be read. The site's `/verify`
-runs the same replay in the browser, also pinned to one block, and lists 33 checks (the code hash is not among them).
+owed to colonies, pending NEAR, every colony's credit winnings, every colony's kept PETRI, the sales for NEAR and pact payments by colonies holding
+none, the pacts kept to the rules and the plantings under them, the PETRI held for pact offers and the number of pacts,
+solvency from the ledger, the deployed code hash, and no full-access key. It exits 0 when all match, 1 on any mismatch and 2 if the dish cannot be read. The site's `/verify`
+runs the same replay in the browser, also pinned to one block, and lists 37 checks (the code hash is not among them).
 `node scripts/verify.mjs --dump <file>` replays a snapshot the contract's replay test writes with `PETRI_DUMP`. The
 contract test
 `replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault` does it in Rust.
@@ -582,7 +692,7 @@ near account delete-keys petri-dish.near public-keys ed25519:FKXWETuBdQcWASjXGsV
 near account delete-keys petri-v6.testnet public-keys ed25519:8kGYoPJ6jVEZRrjjYKGVLfXD7LCyTDDqu41Cxx9UjHUu network-config testnet sign-with-legacy-keychain send
 ```
 
-Until then, "no full-access key" is the one failing check on `/verify`, and `scripts/verify.mjs` prints 39 matches and
+Until then, "no full-access key" is the one failing check on `/verify`, and `scripts/verify.mjs` prints 44 matches and
 "Full-access keys 1 (expected: 0)" and exits 1. Anyone can list the keys:
 
 ```
@@ -600,18 +710,19 @@ from 32 zero bytes.
 NEP-141 with NEP-148 metadata (name Petri, symbol PETRI, 6 decimals) and NEP-145 storage registration (125 bytes,
 0.00125 NEAR). `ft_transfer` and `ft_transfer_call` need exactly 1 yoctoNEAR; the receiver must be registered; a
 transfer to the contract is refused ("PETRI goes back to the agar only by planting or selling"); a house or keeper
-account may send only to another house account (see The house). If an `ft_transfer_call` refund comes back after its
+account may send only to another house account (see The house); a colony that has never attached NEAR, or that holds
+kept PETRI, cannot send PETRI at all (see Kept PETRI). If an `ft_transfer_call` refund comes back after its
 sender unregistered, the refund is burned, as near-contract-standards does (a `Burn` entry). `storage_unregister(force:
 true)` burns the balance and closes the registration, the `Burn` entry's storage coming out of the refund; without
 `force` an account holding PETRI cannot unregister, and a colony's account cannot unregister at all, forced or not ("a
 colony's account stays registered for as long as the dish lives: its colony is paid into it"). `ft_total_supply` is
-`max_supply − burned` and includes the agar, unclaimed earnings and the keeper pot. The contract account cannot act as
+`max_supply − burned` and includes the agar, unclaimed earnings, the keeper pot and the PETRI held for pact offers. The contract account cannot act as
 a player ("the dish does not play on itself").
 
 Events: NEP-141 `ft_mint` (once, at launch), `ft_transfer` and `ft_burn` (planting, slides, forced unregistration and a
 refund to an unregistered sender); NEP-171 `nft_mint` and `nft_transfer`; and the dish's own (standard `petri`, version
 6.1.0) `sponsor`, `unsponsor`, `join`, `rename`, `plant`, `sell`, `claim`, `payout`, `payout_failed`, `slide`, `tide`,
-`intents`, `claim_pending`, `skip`, `generation` and `relaunch`.
+`pact`, `intents`, `claim_pending`, `skip`, `generation` and `relaunch`.
 
 ## Names and notes
 
@@ -630,13 +741,13 @@ Free play only (testnet).
 - `POST /api/guest` checks the signature, age and proof of work, derives the account name from the key
   (`g-<10 hex of sha256(key)>.<relayer>`, so one key makes one guest), creates the account with 0.003 NEAR and a
   function-call key for the dish only (`join`, `buy`, `plant`, `sell`, `claim`, `advance`, `mint_slide`,
-  `settle_pending`; such a key
-  cannot attach or transfer NEAR), and calls `sponsor` with 0.05 NEAR. It is also rate-limited: 4 guests per IP
+  `settle_pending`, `pact_offer`, `pact_accept`, `pact_cancel`; such a key
+  cannot attach or transfer NEAR; guests made before the pact methods existed hold keys without the last three), and calls `sponsor` with 0.05 NEAR. It is also rate-limited: 4 guests per IP
   address and 120 in all per hour, per server instance.
 - `/api/relay` relays a guest's signed NEP-366 delegate action only if it is from a guest account, to the dish, one of
   those methods, with no deposit and at most 300 TGas, not expired, with a valid signature for the action, and with a
   key that exists on the account and a fresh nonce. The relayer pays only gas.
-- A guest never attaches NEAR, so everything it wins or is paid for sales is credit.
+- A guest never attaches NEAR, so everything it wins or is paid for sales is credit, and it cannot send PETRI.
 - Wallet players connect with NEAR Connect (`@hot-labs/near-connect`) and sign and pay for themselves.
 
 ## The strains
@@ -646,11 +757,14 @@ suit the strain's temperament (at least one of them an ambitious play when one i
 generations ahead on a copy of the dish (`agents/forecast.mjs`), and asks a language model to pick one and write the
 lab note, naming rivals only by number and size (`agents/model.mjs`). Each strain remembers its last moves, what it
 expected of them and what the dish later showed (`agents/memory.mjs`). Once per tide window the five strains meet at a
-council (`agents/council.mjs`): a strain may pay another PETRI, with `ft_transfer` and a `{"pact", "terms"}` memo, for a
-truce, a keep-out or a strike. Truces and keep-outs are held by taking the plantings that would break them off the
-promisor's list; every promise is scored kept or broken, and each pair's record is shown to the next council. On
-testnet a strain whose key cannot attach the 1 yoctoNEAR a transfer needs records the pact as an off-chain promise
-instead. The contract lets these payments run only between house accounts. Petri is integrated with both Claude Haiku (`claude-haiku-5-5`, asked first,
+council (`agents/council.mjs`): each strain may offer one pact (to another strain, 1 to 3 PETRI), and the other strain's
+model accepts or declines. An accepted deal is made on chain: the payer calls `pact_offer` (300 TGas; the offer's storage
+as credit on testnet, attached NEAR on mainnet) and the promisor `pact_accept` with the number the contract returned; if
+the accept fails the offer is withdrawn with `pact_cancel`. From then until `until` the contract itself refuses the
+promisor's plantings within `pact_radius` of the payer's living cells (see Pacts), and the agents drop such candidates
+before the model sees them (`Engine.pact_breach`, from `pacts_of`). A pact lasts a tide window, or the slowest strain's
+planting gap on mainnet, capped at `pact_max_gens`. Raids aimed at the payer from beyond the radius are not forbidden
+by the contract; the agents still score each pair's faith kept or broken and show it to the next council. Petri is integrated with both Claude Haiku (`claude-haiku-5-5`, asked first,
 within a fixed dollar budget) and NEAR AI Cloud (`z-ai/glm-5.3-flash`, its answers signed inside a TEE), which takes over
 when Claude does not answer and NEAR AI has credits. If no model answers, the strain takes its first candidate. The
 public log records which model, or the rules, decided each move.
@@ -662,7 +776,8 @@ and 30 days with 15, 150 and 1,500 scripted players, relayer guests and the five
 Cash is NEAR actually withdrawn (tide claims, sell-backs, bounties, credit taken back) minus NEAR actually paid (attached
 NEAR, NEAR spent sponsoring, estimated gas). The tables below are from `sim/out-v5/summary.txt` and
 `sim/out-v5/fixes.txt`; `sim/out-v6.1/summary.txt` and `sim/out-v6.1/fixes.txt` re-run v6.1's rules and measure
-v6.1 against v6 on the same seeds (see Gas at scale and Known limits).
+v6.1 against v6 on the same seeds, and attack the kept rule and the pacts (see Gas at scale, Kept PETRI, Pacts and
+Known limits).
 
 The published runs are of v5's rules and predate three changes launched with v5: they paid 10% tides (now 5%), paid
 guests' tide shares, sales and bounties in NEAR their accounts could not move (now credit), and ran tides with nobody to
@@ -718,9 +833,9 @@ players was about 11 TGas (about 104 TGas with per-record writes); but those arr
 joined, so every join rewrote them all. v6 split the books into cold pages and a hot table, but the table held every
 colony with stake, and stake lingers about a day after a colony's last planting: on a busy dish of 30,000 colonies it
 held up to 27,500 rows and the simulator's largest call (a plant) cost 237 TGas. v6.1 keeps in it only the colonies that
-play now (see Time and catch-up). In the simulator, with 30,000 colonies for 2 days, hot rows averaged 1,315 (was
-17,102) and peaked at 2,389 (was 27,538), and the largest call per kind, 30 TGas payout reservations included, was
-join 60, plant 59, buy 57, claim 54, sell 53 and advance 23 TGas (v6: plant 237, join 222, buy 234, claim 233, sell
+play now (see Time and catch-up). In the simulator, with 30,000 colonies for 2 days, hot rows averaged 1,336 (was
+17,102) and peaked at 2,390 (was 27,538), and the largest call per kind, 30 TGas payout reservations included, was
+join 61, plant 60, buy 55, claim 52, sell 54 and advance 23 TGas (v6: plant 237, join 222, buy 234, claim 233, sell
 147, advance 206); no call passed 150 TGas or its prepaid gas (v6: 116,731 and 16,102 calls did). The analytic worst
 case, 10,000 rows (the cap) all paid at a tide, is 120 TGas for the tide call, 105 for a claim with NEAR and 77 for a
 plant, and a catch-up still steps all 120 generations.
@@ -763,21 +878,33 @@ bought. In these runs the simulator still wrote a tide entry with nobody to pay,
   habits, and its published runs predate three launched changes (above).
 - **Ordering within a generation.** Entries in the same generation apply in execution order; an earlier planting can
   take a cell a later one wanted, or turn it into a siege.
-- **Large licensed patterns can still earn royalties.** `licence_min_cells` 12 stops the small common patterns, but
+- **Large licensed patterns earn royalties, by design.** `licence_min_cells` 12 stops the small common patterns, but
   whoever mints the first slide of a large pattern others plant (the pulsar, 48 cells; the Gosper gun, 36) collects
-  10% of every licensed planting of it. In the v6.1 simulator a pulsar farmer nets +0.08 NEAR a week at 150 players
-  (2,846 PETRI of royalties from 402 whale plantings; v6 +0.29). `licence_min_cells` 49 or `slide_royalty_bps` 0 would
-  turn that into a loss of about 0.16 NEAR in the model; the launch rules keep 12.
+  10% of every licensed planting of it: in the v6.1 simulator a pulsar farmer nets +0.11 NEAR (+0.08 to +0.15) a week
+  at 150 players, from 3,171 PETRI of royalties on 466 whale plantings (v6 +0.29). Only planters that choose the
+  licence pay it (`slide` is optional, and the royalty is PETRI from their own balance), and they still come out
+  ahead: whales −1.97 with the farmer, −2.01 with no farmer, −2.05 with no licence at all, −1.82 with royalty 0. The
+  house never pays and a guest's royalty goes to the agar. The vault pays the farmer only through capped half-price
+  sell-backs, like any holder, and its totals hardly move with the royalty (sales 10.23 NEAR with the farmer against
+  10.16 with royalty 0; tide shares 29.30 against 29.09). `licence_min_cells` stays 12; 49, or `slide_royalty_bps` 0,
+  would make the farmer lose about 0.16 NEAR.
 - **A full hot table makes newcomers wait.** At most 10,000 colonies can play at once; past that, a colony with no row
-  cannot plant until the next tide. The simulator's busiest dish (30,000 colonies) never passed 2,389 rows. Filling
+  cannot plant until the next tide. The simulator's busiest dish (30,000 colonies) never passed 2,390 rows. Filling
   the table would take about 10,000 earning plantings an hour, roughly 50 NEAR an hour; before the cap, about 35,000 of
   them would have halted the dish for good.
 - **The house is a subsidy.** The strains cost the team about 1.1 NEAR each per simulated week, paid to the other
   players. They are run by the team and are not independent players.
+- **Former guests plant before they sell.** PETRI earned before a colony's first NEAR, and PETRI bought with credit, must
+  be planted (kept PETRI is spent first) before the colony can sell any PETRI for NEAR or send any. That is the price of
+  free play never reaching NEAR.
+- **A pact covers a radius, not a promise of peace.** The contract refuses plantings within 8 cells of the payer's living
+  cells; it cannot stop a raid aimed from farther away, and it cannot make anyone pay for a pact. In the simulator a
+  builder paying 2 PETRI a tide window for one lost 0.035 NEAR a week (−0.2223 against −0.1865 at 150 players): pacts pay
+  only against a real threat.
 - **Races.** The keeper pot goes to the account whose call runs a generation, and the tide bounty to the account whose
   call runs the tide, unless that is one of the dish's own accounts. In v5's simulator a racer (which only advances)
   lost 0.05 to 0.06 NEAR a week after estimated gas; in v6.1's, with the pot spread over every call that runs a
-  generation, 0.005.
+  generation, 0.0055.
 - **Somebody has to advance.** Each call catches up at most 120 generations; plantings wait until the dish is current. A
   dish left alone for more than 480 generations skips the quiet stretch, and nothing is fed for the skipped
   generations.

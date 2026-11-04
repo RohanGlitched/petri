@@ -12,7 +12,7 @@ const PARAMS: Row[] = [
   ["generation_ms", "\"15000\"", "15 s", "Wall-clock time per generation: 5,760 a day."],
   ["max_supply", "\"1000000000000\"", "1,000,000 PETRI", "Every PETRI that will ever exist, minted once into the agar at launch."],
   ["feed_ppm", "3", "3 ppm", "Share of the agar released to the living each generation."],
-  ["keeper_bps", "200", "2%", "Share of each generation's feed set aside in the keeper pot, paid to the account whose call ran the generation (never a house account)."],
+  ["keeper_bps", "200", "2%", "Share of each generation's feed set aside in the keeper pot, paid to the account whose call ran the generation (never a house account, a keeper or a guest)."],
   ["reach", "8", "8 cells", "A colony is paid for at most this many living cells per cell of stake."],
   ["stake_keep_bps", "8750", "87.5%", "Share of each colony's stake left after every tide."],
   ["burn_bps", "5000", "50%", "Share of a planting's cost that is burned; the rest returns to the agar."],
@@ -39,6 +39,8 @@ const PARAMS: Row[] = [
   ["slide_min_cells", "5", "5 cells", "A slide must capture at least this many of the colony's own cells."],
   ["licence_min_cells", "12", "12 cells", "A slide is a licence only if it captured at least this many cells. A smaller slide is a keepsake: a planting under it is refused."],
   ["slide_discount_bps", "2500", "25%", "A planting of a slide's exact pattern under its licence costs this share less."],
+  ["pact_radius", "8", "8 cells", "A pact forbids its promisor to plant within this many cells (across or down, wrapping) of the payer's living cells. Launch refuses a radius outside 1 to 16."],
+  ["pact_max_gens", "2880", "2,880 generations (12 h)", "The most a pact can run beyond the dish's stored generation when it is offered."],
   ["slide_royalty_bps", "1000", "10%", "Anyone but the slide's holder pays the holder this share of a licensed planting's cost, in PETRI; a planter that has never attached NEAR pays the agar instead."],
   ["wnear", "see below", "", "The wNEAR contract whose ft_transfer_call joins or buys for the account its message names."],
 ];
@@ -266,12 +268,36 @@ price   = k ÷ agar × 1,000,000    yoctoNEAR per whole PETRI                (st
 mid         = agar + units ÷ 2
 curve       = (k × units ÷ mid) × sell_bps ÷ 10,000                             (near_for_petri)
 near        = min(curve, vault × min(units, outstanding) ÷ outstanding)           (sell_back)
-requires    the seller is not a house colony,  0 < near ≤ sell_left,
+requires    the seller is not a house colony and holds no kept PETRI,  0 < near ≤ sell_left,
             near > the storage of the Sell entry (+ 239 bytes for a possible refund's records, when paid in NEAR)
 paid        = near − storage
 after each tide: sell_left = vault × sell_cap_bps ÷ 10,000`}</Formula>
       <p>
         <C>sell_left</C> is zero until the first tide runs. <C>sell_quote(petri)</C> returns <C>near</C> before the record&rsquo;s storage. The core test <C>selling_back_always_loses_against_buying</C> checks that a buy followed by a sale never comes out ahead, and <C>the_sell_back_never_promises_more_than_the_vault</C> checks the cap.
+      </p>
+
+      <H2 id="kept">Kept PETRI</H2>
+      <Formula>{`guest         = colony that has never attached NEAR
+while guest   kept += claimed + bought (all with credit) + slide royalties received
+first NEAR    kept += unclaimed earnings          (a join with NEAR, a purchase or planting with near > 0, a wNEAR join or purchase)
+any buy       kept += credit_share(units, credit, near + credit)           (units × credit ÷ total, exact to the unit)
+plant, slide  kept −= min(kept, cost + royalty)   and   kept −= min(kept, slide price)      (kept PETRI is spent first)
+sell          refused for NEAR while kept > 0;  a guest's sale for credit spends kept
+ft_transfer, ft_transfer_call   refused for a guest, and while kept > 0
+pact_offer    PETRI offered only when kept = 0 (else petri must be 0)`}</Formula>
+      <p>
+        PETRI earned before a colony&rsquo;s first NEAR therefore stays in the dish until it is planted, and PETRI bought with credit never turns into vault NEAR by a sale. The house is exempt from the send check. <C>Colony.kept</C> in the views includes a guest&rsquo;s unclaimed earnings. Both replays rebuild every colony&rsquo;s <C>kept</C> from the ledger alone. See <Doc to="economy" hash="kept">Economy</Doc>.
+      </p>
+
+      <H2 id="pacts">Pacts</H2>
+      <Formula>{`pact_offer(to, petri, until)   requires  g < until ≤ g + pact_max_gens,  one open offer per pair,  ≤ 8 live pacts per colony,
+                               kept PETRI = 0 if petri > 0,  no house PETRI to a player;   the dish holds petri (pact_escrow)
+pact_accept(id)                the dish pays petri to the promisor;  binding while  g < until
+a planting by the promisor     refused if any planted cell is within pact_radius (a square: |dx| ≤ 8 and |dy| ≤ 8, wrapping) of a
+                               living cell of a colony that accepted a binding pact with it     (Dish::pact_breach)
+pact_cancel(id)                open offer: its petri back to the payer;  accepted: only once until has come`}</Formula>
+      <p>
+        <C>pact_breach</C> marks the union of the squares around the protected colonies&rsquo; living cells, so it looks at each dish cell at most once whatever the number of pacts; the contract and both replays call the same function from petri-core. With 30,000 colonies, a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. See <Doc to="contract-api" hash="pact-methods">Pacts</Doc> in the contract API and <Doc to="ai-strains" hash="pacts">the strains&rsquo; use of them</Doc>.
       </p>
 
       <H2 id="tide">Tides: split, bounty and storage</H2>
@@ -379,6 +405,8 @@ each generation: Life step; history chain every 16th; feed; tide if due`}</Formu
             ["UNSPONSOR_BYTES", "210 bytes", "contract: what a new grant sets aside for its later Unsponsor entry"],
             ["REFUND_BYTES + PENDING_RECORD_BYTES", "97 + 142 bytes", "contract: what a NEAR payout must be able to pay for, should it fail and become pending"],
             ["HOUSE_RUNNER", "65535", "contract: the by of a tide a keeper with no colony ran"],
+            ["MAX_PACTS", "8", "pacts: pacts per colony that have not ended"],
+            ["PACT_DEPOSIT", "0.0042 NEAR", "pacts: the storage allowance an offer brings (a 75-byte record, a list slot, and a 140-byte reserve for the accept and end entries)"],
             ["PAGE", "32 colonies", "books: colonies per cold page (69 bytes a slot)"],
             ["MAX_PLAYING", "10,000", "books: most rows the hot table holds; a colony with no row cannot plant while it is full and no row can leave"],
             ["FLUSH_MAX", "32", "books: rows a call moves from the hot table back to their cold slots, once they have no window and no living cell or a stake that cannot earn"],

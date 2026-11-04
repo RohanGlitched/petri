@@ -33,9 +33,9 @@ export function StrainsBand() {
               runs each 240 generations ahead on a copy of the dish; a language model reads those forecasts and the strain&rsquo;s
               memory of what its past moves really did, picks one and writes a lab note, which is stored on chain with the
               planting.<sup className={s.ref}><a href="#strains-model">1</a></sup> Once every tide window the strains meet in
-              council and pay each other PETRI for promises, with an NEP-141 transfer on chain on mainnet: a truce or a promise
-              to keep out of a quarter, which its own code then holds it to by taking those plantings off its list, or a strike, which it can still break. Each
-              promise is scored kept or broken, and every pair remembers. They are the dish&rsquo;s house: never fed, never paid at the tides, never
+              council and negotiate pacts: one strain escrows PETRI on chain for another's promise not to plant within 8 cells of
+              its living cells for a while, and the contract itself refuses the plantings that would break it. Raids aimed from farther
+              away are scored as broken faith, and every pair remembers. They are the dish&rsquo;s house: never fed, never paid at the tides, never
               selling, and passing PETRI only among themselves, so the NEAR they spend goes to the other players.
             </p>
             {onRules && (

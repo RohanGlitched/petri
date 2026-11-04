@@ -30,7 +30,7 @@ const PARTS = [
   {
     name: "The keeper and the strains",
     where: "Claude Haiku and NEAR AI Cloud",
-    text: "A keeper advances the clock when nobody else does. Five strains forecast every candidate move on a copy of the dish, remember what their moves did, and ask a language model to choose; once a tide window they pay each other PETRI for promises (on chain on mainnet), and remember who kept them. Petri is integrated with both Claude Haiku, within a fixed budget, and NEAR AI Cloud, whose answers come back signed by its enclave; when no model answers they play by written rules, and every move says which.",
+    text: "A keeper advances the clock when nobody else does. Five strains forecast every candidate move on a copy of the dish, remember what their moves did, and ask a language model to choose; once a tide window they negotiate pacts, PETRI for a promise not to plant near, which the contract holds them to, and remember who kept faith. Petri is integrated with both Claude Haiku, within a fixed budget, and NEAR AI Cloud, whose answers come back signed by its enclave; when no model answers they play by written rules, and every move says which.",
   },
 ];
 
@@ -67,7 +67,7 @@ export function ProofBand() {
             <li>
               <h3 className="h3">All of it is open</h3>
               <span className={s.where}><a href={REPO}>{REPO.replace("https://", "")}</a></span>
-              <p className="muted">Contract, engine, simulator, agents and this site. 152 tests (119 for the contract, 33 for the engine), including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI and every yoctoNEAR.</p>
+              <p className="muted">Contract, engine, simulator, agents and this site. 167 tests (132 for the contract, 35 for the engine), including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI and every yoctoNEAR.</p>
             </li>
           </ul>
         </div>

@@ -75,7 +75,7 @@ export default function Page() {
       </Q>
       <Q id="q-credit" q="Why did I win credit instead of NEAR?">
         <p>
-          Your colony has never attached NEAR itself (a guest, or a colony that played only on sponsored credit). Such colonies are paid in credit, spendable on moves but never withdrawn, so free play cannot drain the NEAR other players put in. Attach NEAR once (a join, purchase or planting from a wallet) and later tides pay you NEAR.
+          Your colony has never attached NEAR itself (a guest, or a colony that played only on sponsored credit). Such colonies are paid in credit, spendable on moves but never withdrawn, so free play cannot drain the NEAR other players put in. Attach NEAR once (a join, purchase or planting from a wallet) and later tides pay you NEAR. PETRI you earned before that first NEAR (or bought with credit) stays in the dish as kept PETRI: plant it first (kept PETRI is spent first) and then you can sell PETRI for NEAR.
         </p>
       </Q>
       <Q id="q-house" q="What does the team earn?">
@@ -97,12 +97,12 @@ export default function Page() {
       </Q>
       <Q id="q-verify" q="How do I know the board is right?">
         <p>
-          Run <C>node scripts/verify.mjs --network mainnet</C> or open <C>/verify</C>. Either replays the whole ledger from an empty dish with the same engine the contract runs and checks every planting, purchase, sale, tide, claim and refund, the counters, and solvency rebuilt from the ledger alone: 40 rows on the command line, 33 on the page. See <Doc to="verification">Verification</Doc>.
+          Run <C>node scripts/verify.mjs --network mainnet</C> or open <C>/verify</C>. Either replays the whole ledger from an empty dish with the same engine the contract runs and checks every planting, purchase, sale, tide, claim and refund, the counters, and solvency rebuilt from the ledger alone: 45 rows on the command line, 37 on the page. See <Doc to="verification">Verification</Doc>.
         </p>
       </Q>
       <Q id="q-ai" q="Are the AI strains on chain?">
         <p>
-          Their moves are: every planting and its lab note is an ordinary transaction from the strain&rsquo;s account, and so are the PETRI payments the strains make each other at their council (<C>ft_transfer</C> with a <C>{"{"}&quot;pact&quot;, &quot;terms&quot;{"}"}</C> memo; on testnet, a strain without a full-access key records the promise off chain instead). How a move was chosen (the forecasts, the strain&rsquo;s memory, which model, its answer, the NEAR AI Cloud signature) and the promises kept or broken are in the agents&rsquo; log, served at <C>/api/strains</C>.
+          Their moves are: every planting and its lab note is an ordinary transaction from the strain&rsquo;s account, and so are the pacts the strains make each other at their council (<C>pact_offer</C> and <C>pact_accept</C>, with the PETRI in escrow in the contract, which then refuses the promisor&rsquo;s plantings that would break the pact). How a move was chosen (the forecasts, the strain&rsquo;s memory, which model, its answer, the NEAR AI Cloud signature) and the promises kept or broken are in the agents&rsquo; log, served at <C>/api/strains</C>.
         </p>
       </Q>
       <Q id="q-audit" q="Has it been audited?">

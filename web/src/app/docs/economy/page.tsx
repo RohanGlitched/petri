@@ -99,8 +99,16 @@ export default function Page() {
           <tr>
             <td>Transfer (NEP-141)</td>
             <td>a balance</td>
-            <td>another registered balance; never to the contract, and from a house strain or keeper only to another house account</td>
+            <td>another registered balance; never to the contract, from a house strain or keeper only to another house account, and not from a colony that has never attached NEAR or one holding kept PETRI</td>
             <td>none</td>
+          </tr>
+          <tr>
+            <td>Pact offer (<C>pact_offer</C>)</td>
+            <td>the payer&rsquo;s balance</td>
+            <td>held by the dish (<C>pact_escrow</C>); paid to the promisor on <C>pact_accept</C>, or back to the payer if the offer is withdrawn, declined or expires</td>
+            <td>
+              <C>pact_escrow</C> while held
+            </td>
           </tr>
           <tr>
             <td>Forced unregistration, or a transfer refund whose sender has unregistered meanwhile</td>
@@ -114,10 +122,10 @@ export default function Page() {
       </Table>
       <p>These identities hold after every call, and most contract tests end by asserting them (<C>conserved</C> in the tests):</p>
       <Formula>{`total_supply                 = max_supply − burned
-Σ balances + the dish's own  = total_supply            the dish's own = agar + unclaimed + keeper_pot
+Σ balances + the dish's own  = total_supply            the dish's own = agar + unclaimed + keeper_pot + pact_escrow
 agar                         = max_supply − sold − fed + returned + bought_back`}</Formula>
       <p>
-        <C>ft_balance_of(&quot;petri-dish.near&quot;)</C> returns the dish&rsquo;s own holding (agar + unclaimed + keeper pot), and <C>ft_total_supply()</C> returns <C>max_supply − burned</C>. Nobody can transfer PETRI to the contract: it comes back only by planting or selling.
+        <C>ft_balance_of(&quot;petri-dish.near&quot;)</C> returns the dish&rsquo;s own holding (agar + unclaimed + keeper pot + the PETRI held for pact offers), and <C>ft_total_supply()</C> returns <C>max_supply − burned</C>. Nobody can transfer PETRI to the contract: it comes back only by planting or selling.
       </p>
 
       <H2 id="near">Where every yoctoNEAR goes</H2>
@@ -252,7 +260,7 @@ pending                                                                  = Σ Pe
         </tbody>
       </Table>
       <p>
-        Keeping the pools apart is what lets free play exist without leaking NEAR: sponsored NEAR can circulate as credit forever but never becomes NEAR anyone withdraws, while the NEAR players attach is the only NEAR that is paid out as NEAR.
+        Keeping the pools apart is what lets free play exist without leaking NEAR: sponsored NEAR can circulate as credit forever but never becomes NEAR anyone withdraws, while the NEAR players attach is the only NEAR that is paid out as NEAR. PETRI bought with credit is kept PETRI (<a href="#kept">below</a>), so credit does not become vault NEAR by a sale either.
       </p>
 
       <H2 id="credit">Credit</H2>
@@ -285,12 +293,14 @@ pending                                                                  = Σ Pe
       </ul>
       <H3 id="credit-guest">The guest rules, together</H3>
       <ol>
-        <li>A guest&rsquo;s key is a function-call key for the dish only, so it cannot attach NEAR and cannot transfer NEAR or PETRI. The relayer refuses any relayed call that carries a deposit.</li>
+        <li>A guest&rsquo;s key is a function-call key for the dish only, so it cannot attach NEAR and cannot transfer NEAR or PETRI. The relayer refuses any relayed call that carries a deposit. And the contract refuses <C>ft_transfer</C> and <C>ft_transfer_call</C> from any colony that has never attached NEAR, whatever key signs.</li>
         <li>A guest never attaches NEAR, so the contract counts its attached total as zero.</li>
         <li>A colony whose attached total is zero is paid every tide share, sale and bounty as credit.</li>
         <li>
           Only a colony that has attached NEAR may <C>set_payout</C>, and the relayer does not relay it.
         </li>
+        <li>A guest takes no keeper pot, and a guest&rsquo;s slide royalty goes to the agar, not to the holder.</li>
+        <li>PETRI a colony earned before its first NEAR, or bought with credit, is kept: it cannot be sold for NEAR or sent until it has been planted (<a href="#kept">kept PETRI</a>).</li>
       </ol>
       <p>
         So the most a guest can do with its winnings is play more. The contract tests <C>a_guest_wins_credit_where_a_wallet_wins_near</C>, <C>a_guest_sale_pays_credit</C>, <C>a_guest_cannot_send_winnings_to_a_wallet</C> and <C>a_guest_that_runs_a_tide_is_paid_its_bounty_as_credit</C> cover each step.
@@ -298,6 +308,57 @@ pending                                                                  = Σ Pe
       <Callout kind="note">
         <p>
           Attaching NEAR is per colony and permanent: once a colony has put any NEAR into the vault itself (a join, purchase or planting with attached NEAR, or wNEAR through NEAR Intents), all of its later tide shares and sales are paid in NEAR.
+        </p>
+      </Callout>
+
+      <H2 id="kept">Kept PETRI: free play never reaches NEAR</H2>
+      <p>
+        Before v6.1 a guest could earn PETRI for free and turn it into vault NEAR in two ways: <C>ft_transfer</C> it to a wallet that sells it, or attach a little NEAR and sell what it had farmed. Now PETRI earned before a colony&rsquo;s first NEAR stays in the dish. Every colony has a <C>kept</C> amount (a u64 in its record, shown in the <C>Colony</C> views as <C>kept</C> next to <C>attached</C>):
+      </p>
+      <ul>
+        <li>While a colony is a guest, everything it claims, buys (all of a guest&rsquo;s purchases are credit) and is paid in royalties as a slide holder is added to <C>kept</C>.</li>
+        <li>When it first attaches NEAR (a purchase or planting with attached NEAR, a join with NEAR, a wNEAR join or purchase), its unclaimed earnings are added; what it claimed as a guest already is.</li>
+        <li>PETRI anyone buys with credit is added, attached or not: <C>credit_share(units, credit, near + credit)</C> of the purchase.</li>
+        <li>Plantings (cost and royalty) and slides spend kept PETRI first; a guest&rsquo;s sale for credit spends it too.</li>
+      </ul>
+      <p>
+        While a colony holds any kept PETRI it cannot sell PETRI for NEAR, send PETRI or pay PETRI into a pact. A guest cannot send PETRI at all, kept or not (it can plant, mint slides, receive PETRI and sell back for credit). Once its plantings have spent its kept PETRI, everything it holds is its own, and what it earns afterwards is sellable. The cost is that a former guest plants before it sells.
+      </p>
+      <p>
+        The rule is &ldquo;none while any is held&rdquo; rather than &ldquo;sellable = balance − kept&rdquo; because balances are not in the ledger (transfers and the keeper pot are not entries), so no replay could check the second exactly. With the first every check is exact: both replays rebuild every colony&rsquo;s <C>kept</C> from the ledger entry by entry and compare it with the view, and a sale for NEAR or a PETRI pact by a colony whose replayed <C>kept</C> is above zero is a violation. The house is exempt from the send check (its PETRI cannot leave the house anyway).
+      </p>
+      <Table caption="sim/out-v6.1, fixes.txt P1: testnet, 150 players plus 3 operators of each kind (a wallet and 10 relayer guests), 7 days, 6 seeds, per operator">
+        <thead>
+          <tr>
+            <th>Attack</th>
+            <th className="n">Without the rule</th>
+            <th className="n">With the rule</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Guests <C>ft_transfer</C> their PETRI to one wallet that sells it: vault NEAR paid a week (PETRI moved)</td>
+            <td className="n neg">+0.0470 NEAR (476.9 PETRI)</td>
+            <td className="n">0 (0 PETRI: every transfer refused)</td>
+          </tr>
+          <tr>
+            <td>Guests farm a day, attach 0.01 NEAR each and sell what they farmed: vault NEAR paid</td>
+            <td className="n">+0.0008 NEAR</td>
+            <td className="n">0 (82 sales refused)</td>
+          </tr>
+          <tr>
+            <td>Every colony of the run: vault NEAR paid for PETRI earned before a first NEAR, bought with credit or moved in by a guest&rsquo;s transfer</td>
+            <td className="n neg">0.167 NEAR</td>
+            <td className="n">0</td>
+          </tr>
+        </tbody>
+      </Table>
+      <p>
+        The day a guest farms (about 30 PETRI, 0.003 NEAR) is worth less than a sale&rsquo;s own record and refund reserve (0.0035 NEAR), which is why the second attack drew almost nothing even without the rule; with it, it draws nothing. Everyone else&rsquo;s cash is within seed noise (<Doc to="simulations" hash="v6-1-kept">the numbers</Doc>). The contract tests: <C>guest_cannot_transfer_free_petri</C>, <C>guest_that_attaches_cannot_sell_what_it_farmed</C>, <C>attached_player_sells_what_it_earned_after</C>, <C>kept_petri_can_still_be_planted</C>, <C>petri_bought_with_credit_is_kept</C> and <C>sybil_guests_that_attach_reach_no_vault_near</C> (ten guests farm, attach 0.01 NEAR each, try to sell and to send everything to one wallet: all refused, <C>near_sold</C> 0).
+      </p>
+      <Callout kind="check" title="Why free play can never extract NEAR">
+        <p>
+          NEAR leaves the vault to a colony only as tide winnings (paid as NEAR only to a colony that has attached NEAR), as the price of a sale back to the agar, or as a tide bounty. Sponsored credit is never vault NEAR. A guest is paid in credit; it cannot send PETRI to anyone who could sell it; PETRI it earned or bought with credit cannot be sold for NEAR even after it attaches, until it has been planted. Each step is a refusal in the contract, rebuilt and checked by both replays.
         </p>
       </Callout>
 
@@ -309,7 +370,7 @@ pending                                                                  = Σ Pe
         <li>House colonies are never fed, so the house cannot eat the agar on a quiet dish.</li>
         <li>They take no share of any tide.</li>
         <li>They never sell PETRI back: the vault is the players&rsquo;.</li>
-        <li>A house account sends PETRI only to another house account, so nothing the house bought can reach a player who could sell it. The council&rsquo;s payments between strains are such transfers.</li>
+        <li>A house account sends PETRI only to another house account, so nothing the house bought can reach a player who could sell it. The strains&rsquo; pacts with each other are the one way house PETRI moves: a pact with a player carries no house PETRI.</li>
         <li>A tide run by a house colony or a keeper pays no bounty: it stays in the vault. No house account takes the keeper pot.</li>
         <li>The house plants only slides it holds, so it never pays a player a royalty.</li>
         <li>Their cells never make a planting a siege, so they cannot wall a newcomer out of cheap ground.</li>

@@ -67,4 +67,4 @@ export const STRAINS = [
   { short: "congo", name: "Congo Red", color: "#c8431f", temperament: "chaos", every: "60 to 100" },
 ];
 
-export const TESTS = { contract: 119, core: 33 };
+export const TESTS = { contract: 132, core: 35 };

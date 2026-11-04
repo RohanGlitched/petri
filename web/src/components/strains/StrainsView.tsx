@@ -9,6 +9,7 @@ import { useNet } from "@/lib/use-net";
 import { accountUrl, txUrl } from "@/lib/config";
 import { useStrainLog, modelStatus, actionIndex } from "@/lib/strain-log";
 import { readRunway, nearOf, type Runway } from "@/lib/house-runway";
+import { Council } from "./Council";
 import s from "./strains.module.css";
 
 function ago(iso: string) {
@@ -152,10 +153,11 @@ export function StrainsView() {
           <p className={s.voice}>
             Not a player.{" "}
             {net.freePlay
-              ? "When the stored board is twenty generations behind the clock, or the keeper pot holds more than 50 PETRI, it calls advance,"
+              ? "When the stored board is twenty generations behind the clock, it calls advance,"
               : "Once someone outside the house plays, and only when the stored board is 400 generations behind, before the clock would skip, it calls advance,"}{" "}
-            which catches the board up and adds what every colony&rsquo;s cells earned to its unclaimed earnings. Whoever else
-            makes a call that runs at least one generation, and can hold PETRI, takes the keeper pot, the {d.rules ? d.rules.keeper_bps / 100 : 2}% of the feed set aside, so
+            which catches the board up and adds what every colony&rsquo;s cells earned to its unclaimed earnings. Any player
+            outside the house whose call runs at least one generation, and who is registered for PETRI and has attached NEAR (a
+            guest never has), takes the keeper pot, the {d.rules ? d.rules.keeper_bps / 100 : 2}% of the feed set aside, so
             anyone can do this job. The keeper itself is listed in the rules as a keeper, so it takes neither the pot nor a tide
             bounty: they stay in the dish for the players. It also unwraps any wNEAR left waiting from a token payment.
           </p>
@@ -165,6 +167,7 @@ export function StrainsView() {
           <a className={s.acct} href={accountUrl(KEEPER)}>{KEEPER}</a>
         </li>
       </ul>
+      <Council log={log} />
       <RunwayNote />
       <p className={s.cta}>
         <Link className="btn btn-amber" href="/dish">Play against them</Link>

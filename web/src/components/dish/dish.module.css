@@ -653,3 +653,48 @@
   font: 15px var(--body);
 }
 .renameRow input:focus { outline: 2px solid var(--amber); outline-offset: 0; }
+
+/* Pacts: the colony's own (in its card), the picked colony's, and the line the inspector adds over a bound colony. */
+.pactBox { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.pactBox h3, .offerBox h3 { margin: 0 0 6px; font: 600 13px/1.3 var(--body); color: var(--bone); }
+.pactBox ul, .pactLines { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pactBox li p { margin: 0; font-size: 13.5px; color: var(--text-2); line-height: 1.45; }
+.pactBox .row { margin-top: 8px; }
+.pactNo { margin-right: 6px; font-family: var(--display); color: var(--amber); }
+.pactLines { margin-top: 12px; gap: 6px; }
+.pactLines li {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+  background: rgba(242, 180, 90, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.28);
+}
+.pickCard .plantHead span { font-size: 13px; color: var(--dim); }
+.pickCard .plantHead a { color: var(--dim); }
+.offerBox { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.offerBox .hint { margin-top: 0; }
+.offerFields { margin-top: 12px; display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: end; }
+.offerFields .noteField { margin: 0; }
+.offerFields .noteField input { padding-right: 14px; }
+.offerFields .noteField input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--bad); }
+.lengths { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.lengths legend { padding: 0; margin-bottom: 6px; font-size: 12.5px; color: var(--dim); }
+.lengths label {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  cursor: pointer;
+}
+.lengths label.on { color: var(--bone); background: rgba(242, 180, 90, 0.12); box-shadow: inset 0 0 0 1.5px var(--amber); }
+.lengths input { position: absolute; opacity: 0; pointer-events: none; }
+.lengths label:focus-within { outline: 2px solid var(--amber); outline-offset: 2px; }
+.offerBox .stickyCta { margin-top: 4px; }
+.inspectTall { flex-wrap: wrap; white-space: normal; border-radius: 16px; row-gap: 2px; }
+.inspectPact { flex-basis: 100%; font-size: 12.5px; color: var(--amber-2); }

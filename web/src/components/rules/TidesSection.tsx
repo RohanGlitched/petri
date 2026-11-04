@@ -53,7 +53,7 @@ export function TidesSection() {
       "Planting",
       `The storage the planting used, plus ${near(Number(r.cell_fee), 4)} NEAR for every cell. The contract keeps the storage; everything above it goes to the vault if attached, to the credit pool if it was credit.`,
     ],
-    ["Selling back", "Comes out of the vault: the sale record's storage, and the rest to the seller, in NEAR, or as credit to a colony that has never attached NEAR. A NEAR sale must be large enough to pay for a refund's records too; if its transfer fails, the NEAR becomes pending for the seller. House colonies never sell."],
+    ["Selling back", "Comes out of the vault: the sale record's storage, and the rest to the seller, in NEAR, or as credit to a colony that has never attached NEAR. A NEAR sale must be large enough to pay for a refund's records too; if its transfer fails, the NEAR becomes pending for the seller. House colonies never sell, and neither does a colony holding kept PETRI (what it earned before its first NEAR, or bought with credit) until it has planted it."],
     ["A specimen slide", "Its storage, from the colony's credit first and then from attached NEAR; attached NEAR left over is sent back. Its PETRI price is burned, and none of its NEAR reaches the vault."],
     [
       "Paying with any token",

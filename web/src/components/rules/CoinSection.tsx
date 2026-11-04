@@ -455,7 +455,8 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                   <code className={s.codePaper}>ft_resolve_transfer</code>), <code className={s.codePaper}>ft_balance_of</code> and{" "}
                   <code className={s.codePaper}>ft_total_supply</code>. Transfers attach exactly 1 yoctoNEAR. PETRI refunded to a
                   sender that has unregistered meanwhile is burned. House accounts (the strains and the keepers) can send PETRI
-                  only to other house accounts.
+                  only to other house accounts. A colony that has never attached NEAR cannot send PETRI at all, and neither can
+                  one holding kept PETRI (PETRI earned before its first NEAR, or bought with credit, until it has been planted).
                 </li>
                 <li>
                   <b>NEP-148.</b> Name Petri, symbol PETRI, 6 decimals and an inline icon.
@@ -471,8 +472,8 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                 <li>
                   <b>The dish does not play on itself.</b> The contract account cannot join, buy, sell, plant, claim, advance or
                   send PETRI, and a transfer to it is refused with &ldquo;PETRI goes back to the agar only by planting or
-                  selling&rdquo;. Its <code className={s.codePaper}>ft_balance_of</code> is the agar plus unclaimed earnings and
-                  the keeper pot.
+                  selling&rdquo;. Its <code className={s.codePaper}>ft_balance_of</code> is the agar plus unclaimed earnings,
+                  the keeper pot and the PETRI held in escrow for pact offers.
                 </li>
                 <li>
                   <b>Specimen slides.</b> Each slide is an NFT in the same contract: NEP-171 transfers (with{" "}
@@ -491,7 +492,8 @@ share = released × (1 − ${keeperPct}%) × paid cells ÷ all paid cells`}
                   <code className={s.codePaper}>plant</code>, <code className={s.codePaper}>sell</code>,{" "}
                   <code className={s.codePaper}>claim</code>, <code className={s.codePaper}>payout</code>,{" "}
                   <code className={s.codePaper}>payout_failed</code>, <code className={s.codePaper}>slide</code>,{" "}
-                  <code className={s.codePaper}>intents</code>, <code className={s.codePaper}>claim_pending</code>,{" "}
+                  <code className={s.codePaper}>pact</code>, <code className={s.codePaper}>intents</code>,{" "}
+                  <code className={s.codePaper}>claim_pending</code>,{" "}
                   <code className={s.codePaper}>skip</code>, <code className={s.codePaper}>relaunch</code> and one{" "}
                   <code className={s.codePaper}>generation</code> summary per catch-up.
                 </li>

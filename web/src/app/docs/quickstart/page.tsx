@@ -188,12 +188,12 @@ node scripts/verify.mjs --network mainnet
 node scripts/verify.mjs --network testnet
 echo $?   # 0 when every check matches, 1 on any mismatch, 2 if the dish could not be read`}</Code>
       <p>
-        It prints 40 rows, each <C>match</C> or <C>DIFFERS</C>. A run against mainnet at the time of writing, minutes after v6 started the dish again from generation 0, printed (the dish will have moved on by the time you run it):
+        It prints 45 rows, each <C>match</C> or <C>DIFFERS</C>. A run against mainnet at the time of writing, minutes after v6.1 started the dish again from generation 0, printed (the dish will have moved on by the time you run it):
       </p>
-      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222940869: 19 generations, 15 ledger entries, 5 colonies, 0 tides.
-  match   History chain                                328c0669f420809b4da8bd710a7c08937a149fa50badcdb80c52c555c25b884f
-  match   Board hash                                   63366f7300e2ceaa4b2295961a4a694336a706da008e2f5a31fb1474e9b119aa
-  match   Living cells                                 132
+      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222964645: 14 generations, 15 ledger entries, 5 colonies, 0 tides.
+  match   History chain                                0000000000000000000000000000000000000000000000000000000000000000
+  match   Board hash                                   a3d8b3fb1a79f1fdcd1ac1e469e7d092a8fb773070217e620ce8d0fae7f73608
+  match   Living cells                                 179
   match   Legal plantings                              5 of 5
   match   Planting prices                              5 of 5
   match   Planting fees                                5 of 5
@@ -203,19 +203,23 @@ echo $?   # 0 when every check matches, 1 on any mismatch, 2 if the dish could n
   match   Tides                                        0 of 0
   match   Claims of exactly what was owed              0 of 0
   match   Refunds tied to their payouts                0 of 0
+  match   Sales for NEAR and pact payments by colonies holding no kept PETRI 0 of 0
+  match   Pacts kept to the rules and plantings under pacts 0 of 0
+  match   PETRI held for pact offers                   0.000000
+  match   Pacts                                        0
   match   Specimens                                    0 of 0 match the dish
   match   Slide holders and royalties                  0 of 0
-  match   Agar                                         999,003.521286
-  match   Sold                                         1,070.514634
-  match   Burned                                       74.035920
+  match   Agar                                         999,021.052007
+  match   Sold                                         1,072.032473
+  match   Burned                                       93.084480
   match   Burned by specimens                          0.000000
   match   Royalties                                    0.000000
-  match   Returned to the agar                         74.035920
+  match   Returned to the agar                         93.084480
   match   Bought back                                  0.000000
   match   Keeper share                                 0.000000
   match   Colony earnings                              5 of 5
-  match   Vault (NEAR)                                 0.22886
-  match   NEAR paid in                                 0.22886
+  match   Vault (NEAR)                                 0.23761
+  match   NEAR paid in                                 0.23761
   match   NEAR paid at tides                           0
   match   Vault shares, bounties as credit             0
   match   Sales paid as credit                         0
@@ -228,16 +232,17 @@ echo $?   # 0 when every check matches, 1 on any mismatch, 2 if the dish could n
   match   NEAR owed to colonies                        0
   match   Pending NEAR                                 0
   match   Colony credit winnings                       5 of 5
+  match   Colony kept PETRI                            5 of 5
   match   Solvent (NEAR held >= owed, from the ledger) yes
   match   Deployed code hash                           ${CODE_HASH}
   DIFFERS  Full-access keys                             1  (expected: 0)
 Source: https://github.com/RohanGlitched/petri/tree/${BUILD_COMMIT}; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
-Owed, from the ledger: 0.22886 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.521457378656788000000001 NEAR.
+Owed, from the ledger: 0.23761 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.304743164372527200000003 NEAR.
   The contract account still has a full-access key: whoever holds it could deploy different code.
 1 check(s) differ.`}</Code>
       <Callout kind="warn">
         <p>
-          At the time of writing the verifier exits with status 1 on both networks for one reason: each contract account still has one full-access key. The other 39 rows match. The key is to be removed with the owner&rsquo;s approval before judging, and from then on the same command exits 0.
+          At the time of writing the verifier exits with status 1 on both networks for one reason: each contract account still has one full-access key. The other 44 rows match. The key is to be removed with the owner&rsquo;s approval before judging, and from then on the same command exits 0.
         </p>
       </Callout>
       <p>
@@ -262,20 +267,20 @@ Owed, from the ledger: 0.22886 NEAR (vault, credit pool, unspent credit, unclaim
             <td>
               <C>petri-contract</C>
             </td>
-            <td className="n">119</td>
+            <td className="n">132</td>
             <td>Every method and its errors, the economy closing to the yoctoNEAR (most tests end by checking every PETRI and NEAR is accounted for), a full ledger replay, guests, credit per sponsor, the house&rsquo;s limits, slides and their licences, intents and pending orders, failed payouts, the token standards&rsquo; edge cases, the relaunch, and gas at 1,500 tide winners, at 30,000 colonies and with a full hot table.</td>
           </tr>
           <tr>
             <td>
               <C>petri-core</C>
             </td>
-            <td className="n">33</td>
+            <td className="n">35</td>
             <td>Life against a plain reference implementation (property tests), ownership and contested births, plant checks, the feed, the curves, tides, stake decay, slides, their SVG and their licence shape.</td>
           </tr>
         </tbody>
       </Table>
       <p>
-        Both counts are of the v6.1 sources, the build both dishes run: <C>119 passed</C> and <C>33 passed</C>. To build the contract and compare its hash, see <Doc to="verification" hash="rebuild">Rebuild the wasm</Doc>.
+        Both counts are of the v6.1 sources, the build both dishes run: <C>132 passed</C> and <C>35 passed</C>. To build the contract and compare its hash, see <Doc to="verification" hash="rebuild">Rebuild the wasm</Doc>.
       </p>
       <H3 id="tests-sim">The simulator</H3>
       <Code lang="sh" title="Shell">{`cd sim   # the simulator reads ../contract/launch-rules.json by default

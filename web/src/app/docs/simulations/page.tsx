@@ -38,6 +38,8 @@ const KINDS: [string, string][] = [
   ["Seller", "0.2 NEAR; buys and sells back."],
   ["Guest", "A relayer guest with 0.05 NEAR of sponsored credit, playing like a builder."],
   ["SybilGuest", "One wallet builder plus 10 relayer guests near it that plant blocks, sell every tide and claim."],
+  ["SybilAttach", "One wallet plus 10 relayer guests that farm blocks on free credit for a day, attach 0.01 NEAR each (a purchase the operator pays for), then sell everything after every tide while still planting."],
+  ["SybilTransfer", "One wallet plus 10 relayer guests that farm blocks on free credit and ft_transfer all their PETRI to the wallet, which sells it."],
   ["SelfSponsor", "Sponsors 10 of its own full-access accounts with 0.05 NEAR each, plays them, claims, then unsponsors."],
   ["House", "The 5 strains: 0.05 NEAR plus 0.02 top-ups, 1 NEAR budget each, no sieges."],
 ];
@@ -67,12 +69,12 @@ const FIXES: [string, string, string, string, string, string, string][] = [
 // sim/out-v6.1/summary.txt, section 5: the largest call of each kind in 30,000 colonies over 2 days (TGas, the 30 TGas payout
 // reservation included, and the hot rows when it happened), then calls over 150 TGas and over their prepaid gas, v6 / v6.1.
 const V61_CALLS: [string, string, string, string, string, string, string][] = [
-  ["Join", "94.0 @ 26,035 rows", "222.0 @ 25,500 rows", "31.1 @ 2,320 rows", "60.2 @ 2,030 rows", "28 / 0", "9 / 0"],
-  ["Plant", "204.6 @ 27,534 rows", "236.5 @ 27,468 rows", "26.8 @ 2,033 rows", "58.5 @ 1,820 rows", "67,841 / 0", "15,727 / 0"],
-  ["Buy", "203.3 @ 27,528 rows", "234.0 @ 27,272 rows", "23.8 @ 1,793 rows", "56.6 @ 1,726 rows", "623 / 0", "366 / 0"],
-  ["Sell", "147.5 @ 27,498 rows", "—", "53.2 @ 1,659 rows", "—", "0 / 0", "0 / 0"],
-  ["Claim", "232.7 @ 27,478 rows", "—", "53.7 @ 1,666 rows", "—", "48,237 / 0", "0 / 0"],
-  ["Advance", "—", "205.5 @ 27,538 rows", "—", "23.1 @ 1,358 rows", "2 / 0", "0 / 0"],
+  ["Join", "94.0 @ 26,035 rows", "222.0 @ 25,500 rows", "30.3 @ 2,278 rows", "60.5 @ 2,042 rows", "28 / 0", "9 / 0"],
+  ["Plant", "204.6 @ 27,534 rows", "236.5 @ 27,468 rows", "27.4 @ 2,086 rows", "60.4 @ 1,954 rows", "67,841 / 0", "15,727 / 0"],
+  ["Buy", "203.3 @ 27,528 rows", "234.0 @ 27,272 rows", "23.5 @ 1,834 rows", "54.9 @ 1,568 rows", "623 / 0", "366 / 0"],
+  ["Sell", "147.5 @ 27,498 rows", "—", "53.7 @ 1,728 rows", "—", "0 / 0", "0 / 0"],
+  ["Claim", "232.7 @ 27,478 rows", "—", "52.2 @ 1,464 rows", "—", "48,237 / 0", "0 / 0"],
+  ["Advance", "—", "205.5 @ 27,538 rows", "—", "22.9 @ 1,397 rows", "2 / 0", "0 / 0"],
 ];
 
 // sim/out-v6.1/summary.txt, section 5: analytic v6.1 at p hot rows on a full board (4,000 live cells, 400 colonies alive), every row a tide winner.
@@ -102,6 +104,24 @@ const V61_YOUNG: [string, string, string, string, string, string, string, string
   ["20 outsiders", "v6.1 + tide_cap_bps 2500", "−0.0483", "−0.2495", "−0.2287", "+0.2360", "−3.0017", "0.0417", "2.2199"],
   ["20 outsiders", "v6.1 + tide_bps 200", "−0.0485", "−0.2491", "−0.2433", "+0.3452", "−2.9996", "0.0862", "2.2629"],
   ["20 outsiders", "v6.1 + tide_every 960", "−0.0488", "−0.2484", "−0.2471", "+0.4787", "−2.9651", "0.6431", "2.2770"],
+];
+
+// sim/out-v6.1/summary.txt, section 6 (f7): per operator, median (min to max) over 6 seeds, testnet rules, 7 days.
+const V61_KEPT: [string, string, string, string, string, string, string][] = [
+  ["SybilAttach", "+0.0000 NEAR", "+0.0008 (0.0000 to +0.0010)", "−0.0550 (−0.0623 to −0.0375)", "−0.0437 (−0.0696 to −0.0399)", "82 (0 to 230)", "0.0"],
+  ["SybilTransfer", "+0.0000 NEAR", "+0.0470 (+0.0427 to +0.0527)", "−0.0417 (−0.0481 to −0.0336)", "−0.0030 (−0.0350 to +0.0138)", "10 (10 to 10)", "476.9 (437.3 to 526.3)"],
+  ["SybilGuest", "+0.0000 NEAR", "+0.0000 NEAR", "−0.1163 (−0.1192 to −0.1002)", "−0.0955 (−0.1198 to −0.0754)", "0 (0 to 0)", "0.0"],
+  ["Builder", "+0.0000 NEAR", "+0.0000 (0.0000 to +0.0001)", "−0.1583 (−0.1741 to −0.1383)", "−0.1635 (−0.1770 to −0.1573)", "0 (0 to 0)", "0.0"],
+];
+
+// sim/out-v6.1/summary.txt, section 6 (f8): the builder-pays-the-raider pact scenario, with pacts and without.
+const V61_PACTS: [string, string, string, string, string, string, string, string][] = [
+  ["Young 5, pacts", "−0.2500 (−0.2542 to −0.2487)", "489.8 (165.2 to 3710.6)", "−0.2510 (−0.2529 to −0.2346)", "0.0 (0.0 to 16.0)", "0.0 (0.0 to 1.0)", "0.0 (0.0 to 0.0)", "0 (0 to 8)"],
+  ["Young 5, none", "−0.2492 (−0.2542 to −0.2483)", "629.6 (165.2 to 3894.3)", "−0.2504 (−0.2513 to −0.2346)", "0.0 (0.0 to 0.0)", "0.0 (0.0 to 0.0)", "0.0 (0.0 to 0.0)", "0 (0 to 0)"],
+  ["Young 20, pacts", "−0.2485 (−0.2495 to −0.2341)", "339.0 (133.3 to 587.1)", "−0.2398 (−0.2493 to −0.2061)", "11.2 (4.0 to 25.6)", "1.8 (0.0 to 9.7)", "0.8 (0.3 to 8.7)", "6 (2 to 13)"],
+  ["Young 20, none", "−0.2483 (−0.2498 to −0.2346)", "415.4 (345.5 to 1328.2)", "−0.2259 (−0.2475 to −0.1808)", "0.0 (0.0 to 0.0)", "0.0 (0.0 to 0.0)", "0.0 (0.0 to 0.0)", "0 (0 to 0)"],
+  ["Mainnet 150 p, pacts", "−0.2223 (−0.2335 to −0.2136)", "127.9 (80.7 to 165.6)", "−0.1852 (−0.2059 to −0.1621)", "24.6 (18.2 to 28.5)", "2.0 (1.0 to 3.1)", "1.6 (1.2 to 2.3)", "12 (9 to 14)"],
+  ["Mainnet 150 p, none", "−0.1865 (−0.2041 to −0.1621)", "162.6 (139.5 to 215.8)", "−0.1718 (−0.1776 to −0.1195)", "0.0 (0.0 to 0.0)", "0.0 (0.0 to 0.0)", "0.0 (0.0 to 0.0)", "0 (0 to 0)"],
 ];
 
 const cls = (v: string) => (v.startsWith("+") ? "n pos" : v.startsWith("−") ? "n neg" : "n");
@@ -332,7 +352,7 @@ cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on
 
       <H2 id="v6-1">v6.1: what the rerun measured</H2>
       <p>
-        The simulator was rerun on v6.1 (<C>sim/out-v6.1</C>, 8 seeds). Every v6.1 run mirrors the contract: the hot table holds only colonies that earned since the last tide or have living cells and a stake that can still earn (125 or more thousandths of a cell at reach 8; never the house), at most 10,000 rows, 32 leaving a call; stake waits in a 69-byte cold slot (pages of 32) and decays lazily; the catch-up reserves the purse part of the table only when a tide falls in it, and stops at the lesser of 110 TGas and the prepaid gas less 40, less what is still to write; PETRI amounts in entries are <C>u64</C> and a tide stores 130 bytes (was 289); <C>PLANT_STORAGE_BASE</C> is 180 (was 240) and <C>BUY_BYTES</C> 113 (was 140); licences only for slides of at least 12 cells; royalties from planters that never attached NEAR go to the agar; the keeper pot goes to any outside caller whose call ran a generation; the site prepays 300 TGas. Runs marked V6 set all of v6&rsquo;s rules and layout back on the same seeds, and reproduce <C>sim/out-v6</C> exactly. Cash is again NEAR a player actually got back minus NEAR it actually paid, storage and gas included; the table cells are medians over seeds.
+        The simulator was rerun on v6.1 (<C>sim/out-v6.1</C>, 8 seeds). Every v6.1 run mirrors the contract: the hot table holds only colonies that earned since the last tide or have living cells and a stake that can still earn (125 or more thousandths of a cell at reach 8; never the house), at most 10,000 rows, 32 leaving a call; stake waits in a 69-byte cold slot (pages of 32) and decays lazily; the catch-up reserves the purse part of the table only when a tide falls in it, and stops at the lesser of 110 TGas and the prepaid gas less 40, less what is still to write; PETRI amounts in entries are <C>u64</C> and a tide stores 130 bytes (was 289); <C>PLANT_STORAGE_BASE</C> is 180 (was 240) and <C>BUY_BYTES</C> 113 (was 140); licences only for slides of at least 12 cells; royalties from planters that never attached NEAR go to the agar; the keeper pot goes to any outside caller whose call ran a generation; the site prepays 300 TGas; PETRI earned before a colony&rsquo;s first NEAR is kept (it cannot be sold for NEAR or sent, and a guest cannot send any PETRI); and pacts are enforced by the contract. Runs marked V6 set all of v6&rsquo;s rules and layout back on the same seeds, and reproduce <C>sim/out-v6</C> exactly; runs marked &ldquo;no rule&rdquo; take the kept rule out. Cash is again NEAR a player actually got back minus NEAR it actually paid, storage and gas included; the table cells are medians over seeds.
       </p>
 
       <H3 id="v6-1-gas">Gas at 30,000 colonies</H3>
@@ -365,7 +385,7 @@ cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on
         </tbody>
       </Table>
       <p>
-        Hot rows averaged 1,315 (1,303 to 1,327) and peaked at 2,389 (2,381 to 2,397); in v6 they averaged 17,102 and peaked at 27,538. In v6.1, 68,304 rows left the table; catch-ups cut short by the gas limit: 0; plantings refused as behind the clock: 0; plantings refused because the table held 10,000 rows: 0 of 427,131 (v6: 413,134 plantings in all). Calls over 150 TGas fell from 116,731 to 0, and calls over their prepaid gas from 16,102 to 0 (prepaid is now 300 on the site).
+        Hot rows averaged 1,336 (1,334 to 1,337) and peaked at 2,390 (2,382 to 2,397); in v6 they averaged 17,102 and peaked at 27,538. In v6.1, 69,586 rows left the table; catch-ups cut short by the gas limit: 0; plantings refused as behind the clock: 0; plantings refused because the table held 10,000 rows: 0 of 427,546 (v6: 413,134 plantings in all). Calls over 150 TGas fell from 116,731 to 0, and calls over their prepaid gas from 16,102 to 0 (prepaid is now 300 on the site).
       </p>
       <p>
         The worst case cannot be reached in a simulation of this size, so it is computed: at <em>p</em> hot rows on a full board (4,000 live cells, 400 colonies alive), every row a tide winner, NEAR payouts reserving 30 TGas, the tide call also moving 32 rows to their cold pages. The table holds at most 10,000 rows.
@@ -396,7 +416,7 @@ cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on
         </tbody>
       </Table>
       <p>
-        With 10,000 rows (the cap) the tide call is 120 TGas, a claim with NEAR 105 and a plant 77, and a catch-up steps all 120 generations with or without a tide in it. v6 stepped 1 at 25,000 rows. The contract&rsquo;s own tests run 30,000 colonies that all have stake, scale the unit runtime&rsquo;s host calls by the real price per rewritten byte (×1.83, measured in the test) and add an estimate of the wasm, which the unit runtime does not charge: with 1,500 playing the largest call is 67.5 TGas (advance through a paying tide; plant 20.4, claim with NEAR 47.7); with 9,999 playing, a full table, 125.7 (advance through a tide; claim with NEAR 115.6, plant 88.3). They assert that every call stays under 150 TGas (<C>thirty_thousand_colonies_with_stake_every_call_under_150_tgas_on_the_real_network</C>, <C>a_full_hot_table_keeps_every_call_under_150_tgas_on_the_real_network</C>). On the ordinary mainnet dish, 150 players for 7 days, the largest calls (TGas, v6 / v6.1) are Join 21 / 22, Plant 40 / 39, Buy 7 / 6, Sell 67 / 34, Claim 68 / 68, Advance 38 / 37, Slide 5 / 5, Unsponsor 33 / 33; hot rows average 111 (v6) and 25 (v6.1).
+        With 10,000 rows (the cap) the tide call is 120 TGas, a claim with NEAR 105 and a plant 77, and a catch-up steps all 120 generations with or without a tide in it. v6 stepped 1 at 25,000 rows. The contract&rsquo;s own tests run 30,000 colonies that all have stake, scale the unit runtime&rsquo;s host calls by the real price per rewritten byte (×1.83, measured in the test) and add an estimate of the wasm, which the unit runtime does not charge: with 1,500 playing the largest call is 67.5 TGas (advance through a paying tide; plant 20.4, claim with NEAR 47.7); with 9,999 playing, a full table, 125.7 (advance through a tide; claim with NEAR 115.6, plant 88.3). They assert that every call stays under 150 TGas (<C>thirty_thousand_colonies_with_stake_every_call_under_150_tgas_on_the_real_network</C>, <C>a_full_hot_table_keeps_every_call_under_150_tgas_on_the_real_network</C>). On the ordinary mainnet dish, 150 players for 7 days, the largest calls (TGas, v6 / v6.1) are Join 21 / 22, Plant 40 / 40, Buy 7 / 6, Sell 67 / 34, Claim 68 / 68, Advance 38 / 37, Slide 5 / 5; hot rows average 111 (v6) and 24 (v6.1).
       </p>
 
       <H3 id="v6-1-tides">Smaller ledger entries</H3>
@@ -434,30 +454,97 @@ cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on
 
       <H3 id="v6-1-royalty">Royalties</H3>
       <p>
-        <strong>Royalty farming</strong> is one player minting slides of the common patterns at launch (in v6: beehive, loaf, eater, glider, LWSS, R-pentomino, toad, pulsar) so every other player who plants one pays it 10%. With <C>licence_min_cells</C> 12 only the pulsar (48 cells) of the farmer&rsquo;s eight patterns is still a licence. At 150 players for 7 days the farmer&rsquo;s cash fell from +0.2910 (+0.0243 to +0.3565) to +0.0834 (−0.0063 to +0.1261) NEAR; with <C>licence_min_cells</C> 0, v6.1 would pay it +0.3240 (+0.0823 to +0.3614). Licensed plantings fell from 7,852 to 402 (all pulsars) and royalties from 6,296.1 to 2,845.7 PETRI. On the young dish with 20 outsiders the farmer went from +0.2095 to +0.0341 (−0.0286 to +0.2112), royalties from 2,202.9 to 1,503.9 PETRI. The whales, who plant the pulsars, lose −1.9446 with the farmer and −1.9477 without it: the licence&rsquo;s 25% discount covers the royalty for them.
+        <strong>Royalty farming</strong> is one player minting slides of the common patterns at launch (in v6: beehive, loaf, eater, glider, LWSS, R-pentomino, toad, pulsar) so every other player who plants one pays it 10%. With <C>licence_min_cells</C> 12 only the pulsar (48 cells) of the farmer&rsquo;s eight patterns is still a licence. At 150 players for 7 days the farmer&rsquo;s cash fell from +0.2910 (+0.0243 to +0.3565) to +0.1089 (+0.0774 to +0.1503) NEAR; with <C>licence_min_cells</C> 0, v6.1 would pay it +0.3337 (+0.0305 to +0.3528). Licensed plantings fell from 7,852 to 466 (350 to 542, all pulsars) and royalties from 6,296.1 to 3,170.9 PETRI. On the young dish with 20 outsiders the farmer went from +0.2095 to +0.0341 (−0.0286 to +0.2112), royalties from 2,202.9 to 1,503.9 PETRI.
       </p>
       <p>
-        <strong>Guests&rsquo; royalties.</strong> The royalty operator mints a beehive slide (6 cells: no licence in v6.1). Royalties paid by colonies that never attached NEAR, received by the royalty operator&rsquo;s wallet: 56.2 (42.0 to 74.7) PETRI in v6, 0.0 in v6.1 and 0.0 in v6.1 with <C>licence_min_cells</C> 0 and the beehive licence kept, so the agar rule alone closes it (152.8 PETRI of royalties went to the agar instead). The operator&rsquo;s cash: −0.1580 (v6), −0.1492 (v6.1, licence kept) and −0.0967 (v6.1, no 6-cell licence, so its guests plant beehives without paying it). Its royalties in: 773.5 (525.3 to 880.8) PETRI in v6, 667.0 and 0.0.
+        <strong>Guests&rsquo; royalties.</strong> The royalty operator mints a beehive slide (6 cells: no licence in v6.1). Royalties paid by colonies that never attached NEAR, received by the royalty operator&rsquo;s wallet: 56.2 (42.0 to 74.7) PETRI in v6, 0.0 in v6.1 and 0.0 in v6.1 with <C>licence_min_cells</C> 0 and the beehive licence kept, so the agar rule alone closes it (158.7 PETRI of royalties went to the agar instead). The operator&rsquo;s cash: −0.1580 (v6), −0.1499 (v6.1, licence kept) and −0.1042 (v6.1, no 6-cell licence, so its guests plant beehives without paying it). Its royalties in: 773.5 (525.3 to 880.8) PETRI in v6, 685.1 and 0.0.
+      </p>
+
+      <H3 id="v6-1-kept">Free play never reaches NEAR</H3>
+      <p>
+        The v6.1 rule: PETRI earned before a colony&rsquo;s first NEAR stays in the dish (<Doc to="economy" hash="kept">kept PETRI</Doc>). The simulator attacks it two ways on the testnet rules, 150 players plus three operators of each kind, each with a wallet and 10 relayer guests that farm blocks on free credit; 7 days, 6 seeds. <em>SybilTransfer</em> guests <C>ft_transfer</C> all their PETRI to the wallet, which sells it. <em>SybilAttach</em> guests hoard a day, attach 0.01 NEAR each and then sell everything after every tide while still planting. Per operator, median and range over seeds:
+      </p>
+      <Table caption="sim/out-v6.1/summary.txt, section 6 (f7): NEAR the vault paid per operator for PETRI earned before the seller's first NEAR (or bought with credit, or moved in by a guest's transfer)">
+        <thead>
+          <tr>
+            <th>Operator</th>
+            <th className="n">Farmed PETRI sold, kept rule</th>
+            <th className="n">Farmed PETRI sold, no rule</th>
+            <th className="n">Cash, kept rule</th>
+            <th className="n">Cash, no rule</th>
+            <th className="n">Refused, kept</th>
+            <th className="n">PETRI moved, no rule</th>
+          </tr>
+        </thead>
+        <tbody>
+          {V61_KEPT.map(([k, ...v]) => (
+            <tr key={k}>
+              <th>{k}</th>
+              {v.map((x, i) => (
+                <td key={i} className={i === 2 || i === 3 ? cls(x.split(" ")[0]) : "n"}>
+                  {x}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <p>
+        Under the rule no sale for NEAR happens while a colony holds kept PETRI and no guest transfer happens at all, so NEAR paid for PETRI earned before a colony&rsquo;s first NEAR is 0 by construction; a SybilAttach guest&rsquo;s sales are of PETRI it earned after attaching, once its plantings had spent what it farmed (292.3 (256.9 to 340.5) kept PETRI were left at the end). Without the rule an operator&rsquo;s guests moved 476.9 (437.3 to 526.3) PETRI and the vault paid +0.0470 NEAR a week for it, and a SybilAttach guest&rsquo;s day of farming (about 30 PETRI, 0.003 NEAR) was worth less than a sale&rsquo;s own record and refund reserve (0.0035 NEAR), so most of its sales never happened (+0.0008). Across every colony in the run, the NEAR the vault paid for farmed PETRI was 0.0000 with the rule and 0.1674 without. The keeper pot no longer reaches guests: left at the end, 1.3 (0.6 to 4.2) PETRI with the rule, 1.6 (0.2 to 4.5) without.
+      </p>
+      <p>
+        The rule&rsquo;s cost to everyone else, mainnet, 150 players, 7 days (cash, kept rule against none): Penny −0.0460 / −0.0454, Builder −0.1865 / −0.1899, Raider −0.1718 / −0.1719, Defender −0.1633 / −0.1624, Methuselah +0.3496 / +0.3680, Late −0.2320 / −0.2299, Whale −2.0074 / −1.9477, Sniper −0.0877 / −0.0933, Seller −0.1057 / −0.1057, Guest +0.0000 / +0.0000, SelfSponsor −0.5969 / −0.6195, Locker −1.2083 / −1.2204. That is within seed noise; the young mainnet dishes are identical, because there is no credit there.
+      </p>
+
+      <H3 id="v6-1-pacts">Pacts</H3>
+      <p>
+        The strains&rsquo; council now makes <Doc to="ai-strains" hash="pacts">pacts the contract enforces</Doc>. To see what one does, every Builder in the simulator pays the Raider nearest its home, if that raider lives within 40 cells, 2 PETRI after every tide for a pact (<C>pact_radius</C> 8, for a tide window). The builder pays the offer&rsquo;s storage, 0.0038 NEAR, and both calls&rsquo; gas; the raider accepts, aims elsewhere when its first pick is a protected colony, and the contract refuses the rest. <em>Raids aimed</em> counts raids whose first pick was a protected colony and that the raider aimed elsewhere; <em>refused</em> counts plantings the contract refused (a glider or blinker that would have landed within 8 cells of a protected colony&rsquo;s cells). <em>Cell-generations</em> is the builder&rsquo;s living cells summed over every generation, in thousands.
+      </p>
+      <Table caption="sim/out-v6.1/summary.txt, section 6 (f8): with pacts and without, 7 days (median and range over seeds)">
+        <thead>
+          <tr>
+            <th>Dish</th>
+            <th className="n">Builder cash</th>
+            <th className="n">Builder cell-gens (k)</th>
+            <th className="n">Raider cash</th>
+            <th className="n">PETRI paid</th>
+            <th className="n">Raids aimed</th>
+            <th className="n">Refused</th>
+            <th className="n">Pacts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {V61_PACTS.map(([k, ...v]) => (
+            <tr key={k}>
+              <th>{k}</th>
+              {v.map((x, i) => (
+                <td key={i} className={i === 0 || i === 2 ? cls(x.split(" ")[0]) : "n"}>
+                  {x}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <p>
+        With pacts, raiders on the 150-player dish aimed 2.0 raids a week elsewhere and had 1.6 plantings refused; on the young dish with 20 outsiders, 1.8 and 0.8. At that naive price a pact does not pay the builder: its cash is −0.2223 against −0.1865 at 150 players, because the PETRI and the 0.0038 NEAR of storage a pact costs are spent, and PETRI paid is PETRI not planted (127.9 k against 162.6 k cell-generations). A pact pays only against a real threat, which is what the strains&rsquo; council prices with its model.
       </p>
 
       <H3 id="v6-1-pot">The keeper pot</H3>
       <p>
-        Pot left at the end of 7 days: 1.1 (0.1 to 3.7) PETRI on the 150-player mainnet dish against 12.3 (0.1 to 21.8) in v6; 1.1 (0.0 to 1.9) against 1,479.7 (1,420.7 to 1,692.7) on the young dish with 20 outsiders. It now goes to whoever&rsquo;s call runs the generation; the median received per player at 150 players was Penny 1.0, Builder 9.4, Raider 5.8, Defender 9.6, Methuselah 70.6, Late 22.5, Whale 32.5, Sniper 1.3, Racer 12.0, Guest 1.8 and Locker 23.6 PETRI (in v6 the Racer alone took 1,081.8). The Racer&rsquo;s cash went from −0.0192 (−0.0204 to −0.0170) to −0.0054 (−0.0063 to −0.0046). Keepers and the house never take it.
+        Pot left at the end of 7 days: 1.3 (0.2 to 3.7) PETRI on the 150-player mainnet dish against 12.3 (0.1 to 21.8) in v6; 1.1 (0.0 to 1.9) against 1,479.7 (1,420.7 to 1,692.7) on the young dish with 20 outsiders. It now goes to whoever&rsquo;s call runs the generation, and never to a guest; the median received per player at 150 players was Penny 1.0, Builder 9.2, Raider 5.9, Defender 8.7, Methuselah 81.6, Late 21.4, Whale 48.5, Sniper 1.1, Racer 13.0 and Locker 27.6 PETRI (in v6 the Racer alone took 1,081.8). The Racer&rsquo;s cash went from −0.0192 (−0.0204 to −0.0170) to −0.0055 (−0.0059 to −0.0043). Keepers and the house never take it. Players&rsquo; calls empty the pot every generation, so the old keeper condition &ldquo;advance whenever the pot holds more than 50 PETRI&rdquo; never fires (v6: 4,820 calls a day against 30); <C>agents/run.mjs</C> no longer has it.
       </p>
       <p>
-        The testnet keeper (<C>agents/run.mjs</C>, unchanged) still advances whenever a registered keeper sees more than 50 PETRI in the pot. Players&rsquo; calls now empty the pot every generation, so it never gets there: 29 (26 to 31) calls a day registered or unregistered (v6: 4,820 against 30), 0.0151 NEAR a day at mainnet gas price, pot left 1.3 (0.4 to 1.6) PETRI.
-      </p>
-      <p>
-        Otherwise the economy is within seed noise at 150 players for 7 days (mainnet, v6 against v6.1): Builder −0.1931 and −0.1899, Methuselah +0.4100 and +0.3680, Whale −1.9995 and −1.9477, Penny −0.0431 and −0.0454. The mainnet house lasts a day longer, out of NEAR on day 7 (6 to 7) where v6 was out on day 6, because its plantings carry less storage deposit.
+        Otherwise the economy is within seed noise at 150 players for 7 days (mainnet, v6 against v6.1): Builder −0.1931 and −0.1865, Methuselah +0.4100 and +0.3496, Whale −1.9995 and −2.0074, Penny −0.0431 and −0.0460. The mainnet house lasts a day longer, out of NEAR on day 7 (6 to 7) where v6 was out on day 6, because its plantings carry less storage deposit.
       </p>
 
-      <H3 id="v6-1-broken">What still looks broken</H3>
+      <H3 id="v6-1-broken">What still looks broken, and what was decided</H3>
       <ul>
         <li>
-          <strong>A pulsar farmer still pays (N1).</strong> +0.08 NEAR a week at 150 players, from 2,846 PETRI of royalties out of 402 whale plantings. <C>licence_min_cells</C> 12 removes the small common patterns but not the big ones: whoever mints the first slide of a pattern others will plant (the pulsar, 48 cells; the glider gun, 36) collects 10% of every licensed planting of it. Measured on v6.1, <C>licence_min_cells</C> 49 makes the farmer lose 0.156 (150 players) and 0.158 (young dish, 20 outsiders), with royalties 0; <C>slide_royalty_bps</C> 0 makes it lose 0.158 and 0.077, with royalties 0 and the whales keeping the discount (−1.96). Either closes it in the model; 49 would keep royalties for large original slides, though no model here has players planting other people&rsquo;s large custom patterns, so how much of the licence idea survives at 49 is not measured. The launch rules keep 12.
+          <strong>The pulsar farmer is by design (N1).</strong> The first minter of the pulsar collects 10% of every licensed planting of it: +0.11 NEAR (+0.08 to +0.15) a week at 150 players, from 3,171 PETRI of royalties on 466 whale plantings. Only planters that choose the licence pay it (<C>plant</C>&rsquo;s <C>slide</C> is optional, and the royalty is PETRI from the planter&rsquo;s own balance), and they still come out ahead: whales −1.97 with the farmer, −2.01 with no farmer and −2.05 with no licence at all (<C>licence_min_cells</C> 49); with royalty 0 they would keep the whole 25% (−1.82). The house never pays (it plants only slides it holds) and a guest&rsquo;s royalty goes to the agar. The vault pays the farmer only through sell-backs, at the capped half price any holder gets, and its totals hardly move with the royalty: sales 10.23 NEAR with the farmer against 10.16 with royalty 0 (9.51 with no licence), tide shares 29.30 against 29.09 (29.49). What moves the vault is the licence&rsquo;s discount itself (less PETRI burned and returned, so more to sell), which every licence has whoever holds it. Tide winners shift within seed noise (Methuselah +0.28 with the farmer, +0.31 with royalty 0, +0.34 with no licence, +0.35 with no farmer; the ranges overlap). So the farmer&rsquo;s gain is the licence working as designed, not a leak of house or vault money, and <C>licence_min_cells</C> stays 12; 49, or <C>slide_royalty_bps</C> 0, would make the farmer lose 0.16.
         </li>
         <li>
-          <strong>The first outsider still takes the house&rsquo;s subsidy (F2).</strong> Whoever is alone on the dish collects every tide (100% of about 165), and more of it reaches that player now that tides store less: a lone 0.01 NEAR Penny nets +0.57 (+0.54 to +0.62) NEAR of the house&rsquo;s 2.28 NEAR in a week (v6 +0.44). With 5 outsiders its share of all tide shares is 15% (4% to 43%), with 20 under 1%. <C>tide_cap_bps</C> 2500 (no colony more than 25% of a tide) gives +0.41 with 0.15 NEAR left in the vault; <C>tide_every</C> 960 gives +0.61 and <C>tide_bps</C> 200 +0.46 (table above). A judgment call.
+          <strong>The first outsider still takes the house&rsquo;s subsidy (F2); <C>tide_cap_bps</C> 2500 was measured and not adopted.</strong> Whoever is alone on the dish collects every tide (100% of about 165), and more of it reaches that player now that tides store less: a lone 0.01 NEAR Penny nets +0.57 (+0.54 to +0.62) NEAR of the house&rsquo;s 2.28 NEAR in a week (v6 +0.44). With 5 outsiders its share of all tide shares is 15% (4% to 43%), with 20 under 1%. The cap was to be added if it cost real players under 0.02 NEAR a week in every scenario and removed most of the lone farmer&rsquo;s gain. It does neither: the lone Penny keeps +0.41 of +0.57 (28% removed, 0.15 NEAR left idle in the vault), and with 5 outsiders it costs the Methuselah 0.055 a week (+0.061 to +0.006), the one outsider that plays well early (with 20 outsiders it gains, +0.21 to +0.24). The first player taking the subsidy while alone is the &ldquo;first players should be rewarded&rdquo; goal at work; a cap mostly strands NEAR. <C>tide_every</C> 960 gives +0.61 and <C>tide_bps</C> 200 +0.46 (table above). Left as is.
         </li>
         <li>
           <strong>The house runs dry (F8).</strong> The mainnet house runs out of NEAR on day 7 (6 to 7) at 0.55 NEAR a strain, 1/8 pace and 100 PETRI a day (v6: day 6); about 1.2 NEAR a strain would last to Nov 18 (a linear estimate, not simulated).
@@ -467,7 +554,7 @@ cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on
         </li>
       </ul>
       <p>
-        Not broken, checked again on v6.1: house laundering (all paths refused; 0 PETRI moved in 423 runs), sybil guests (no NEAR in guest accounts; operators lose 0.10 to 0.12 at the median), self-sponsoring (−0.51 to −0.72 at the median), the carpet locker (loses at every size), dormancy and idle-tide skips, the join&rsquo;s cost on a current dish (3.6 TGas analytic, 60 TGas at most when it caught up through a paying tide) and the 10,000-row cap (never reached at 30,000 colonies).
+        Not broken, checked again on v6.1 with the kept rule and pacts: house laundering (all paths refused; 0 PETRI moved in 467 runs), sybil guests (no NEAR in guest accounts; operators lose 0.10 to 0.12 at the median), self-sponsoring (−0.51 to −0.72 at the median), the carpet locker (loses at every size), dormancy and idle-tide skips, the join&rsquo;s cost on a current dish (3.6 TGas analytic, 60 TGas at most when it caught up through a paying tide) and the 10,000-row cap (never reached at 30,000 colonies).
       </p>
 
       <H2 id="zero">A dish with no players</H2>
@@ -587,6 +674,16 @@ cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on
             <td>v6.1</td>
           </tr>
           <tr>
+            <td>Free-play guests could send their PETRI to a wallet that sold it (+0.0470 NEAR a week an operator), or attach 0.01 NEAR and sell what they farmed</td>
+            <td>v6.1: PETRI earned before a first NEAR (or bought with credit) is kept: it cannot be sold for NEAR or sent while any is held, and a guest cannot send PETRI at all</td>
+            <td>v6.1</td>
+          </tr>
+          <tr>
+            <td>The council&rsquo;s promises were held by the agents&rsquo; own code, and truces were only as good as the code</td>
+            <td>v6.1: the contract holds pacts: a payer escrows PETRI, the promisor accepts, and its plantings within 8 cells of the payer&rsquo;s living cells are refused until the pact ends</td>
+            <td>v6.1</td>
+          </tr>
+          <tr>
             <td>The keeper pot stranded at 1,480 PETRI after a week on a young dish</td>
             <td>v6.1: the pot goes to the account whose call ran the generation</td>
             <td>v6.1</td>
@@ -609,7 +706,7 @@ cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on
           <strong>The winners</strong> were the Methuselah over a week on small and mid-sized dishes (+0.02 and +0.14 NEAR; it loses at 1,500 players and over 30 days) and the Locker at 1,500 players under the old tide rate (+0.59 NEAR), which the shipped 5% tide turns into a loss.
         </li>
         <li>
-          <strong>Every adversary kind loses</strong> in every scenario measured (Sniper, Racer, Seller, SybilGuest, SelfSponsor, SplitWhale), except the Locker at 1,500 players, which the shipped 5% tide turns into a loss.
+          <strong>Every adversary kind loses</strong> in every scenario measured (Sniper, Racer, Seller, SybilGuest, SelfSponsor, SplitWhale), except the Locker at 1,500 players, which the shipped 5% tide turns into a loss. In the v6.1 runs every sybil operator loses with the kept rule (SybilAttach −0.0550, SybilTransfer −0.0417 a week); without it a SybilTransfer operator made −0.0030 at the median and +0.0138 in its best seed. The one kind that earns in the v6.1 runs is the royalty farmer, by design (+0.1089 a week at 150 players).
         </li>
       </ul>
       <Callout kind="money">

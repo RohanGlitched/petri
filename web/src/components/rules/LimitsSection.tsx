@@ -48,14 +48,14 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
     body: "Entries in the same generation apply in the order the chain executes them. An earlier planting can fill a cell a later one wanted, or turn it into a siege.",
   },
   {
-    key: "Large licensed patterns can still earn royalties",
-    title: "Large licensed patterns can still earn royalties",
-    body: "A slide is a licence only from 12 captured cells, which stops the small common patterns, but whoever mints the first slide of a large pattern others plant (the pulsar, 48 cells; the Gosper gun, 36) collects 10% of every licensed planting of it. In the v6.1 simulator that farmer nets +0.08 NEAR a week at 150 players, down from +0.29; a licence minimum of 49 or no royalty would turn it into a loss of about 0.16 in the model. The launch rules keep 12.",
+    key: "Large licensed patterns earn royalties, by design",
+    title: "Large licensed patterns earn royalties, by design",
+    body: "A slide is a licence only from 12 captured cells, which stops the small common patterns, but whoever mints the first slide of a large pattern others plant (the pulsar, 48 cells; the Gosper gun, 36) collects 10% of every licensed planting of it: in the v6.1 simulator +0.11 NEAR a week at 150 players, down from +0.29. Only planters that choose the licence pay it, and they still come out ahead of planting without it (whales −1.97 with the farmer, −2.01 with none, −2.05 with no licence at all); the vault's totals hardly move with the royalty. The launch rules keep 12; 49 or no royalty would make the farmer lose about 0.16.",
   },
   {
     key: "A full hot table makes newcomers wait",
     title: "A full hot table makes newcomers wait",
-    body: "At most 10,000 colonies can play at once. Past that, a colony with no row in the hot table cannot plant until the next tide pays rows out; the simulator's busiest 30,000-colony dish never passed 2,389. Filling the table would take about 10,000 earning plantings an hour, roughly 50 NEAR an hour.",
+    body: "At most 10,000 colonies can play at once. Past that, a colony with no row in the hot table cannot plant until the next tide pays rows out; the simulator's busiest 30,000-colony dish never passed 2,390. Filling the table would take about 10,000 earning plantings an hour, roughly 50 NEAR an hour.",
   },
   {
     key: "The house is a subsidy",
@@ -70,7 +70,7 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
   {
     key: "Races for the pot and the bounty",
     title: "Races for the pot and the bounty",
-    body: "The keeper pot goes to whoever's call first runs a generation, and a tide's bounty to whoever's call runs it, unless that caller is a house account or a keeper: then the pot waits for the next caller and the bounty stays in the vault. A simulated racer that only advanced lost 0.05 to 0.06 NEAR a week after gas in the v5 runs and 0.005 in the v6.1 runs, where every call that runs a generation shares the pot; the bounty is capped at 0.001 NEAR a tide.",
+    body: "The keeper pot goes to whoever's call first runs a generation, and a tide's bounty to whoever's call runs it, unless that caller is a house account or a keeper: then the pot waits for the next caller and the bounty stays in the vault. A simulated racer that only advanced lost 0.05 to 0.06 NEAR a week after gas in the v5 runs and 0.0055 in the v6.1 runs, where every call that runs a generation shares the pot; the bounty is capped at 0.001 NEAR a tide.",
   },
   {
     key: "The simulator is a model",
@@ -90,7 +90,7 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
   {
     key: "The strains need a model to answer",
     title: "The strains need a model to answer",
-    body: `Code proposes legal moves and forecasts them 240 generations ahead on a copy of the dish (as many as a two-second budget allows); a model picks one and writes the note, and at the council each tide window it offers and answers the house's deals. Petri is integrated with both Claude Haiku (${CLAUDE_MODEL}, within a fixed dollar budget) and NEAR AI Cloud (${NEARAI_MODEL}, used when Claude does not answer and NEAR AI has credits). When neither answers, the strains take their first proposal, and every move in the public log says which decided it.`,
+    body: `Code proposes legal moves and forecasts them 240 generations ahead on a copy of the dish (as many as a two-second budget allows); a model picks one and writes the note, and at the council each tide window it offers and answers the house's pacts, which the contract enforces. Petri is integrated with both Claude Haiku (${CLAUDE_MODEL}, within a fixed dollar budget) and NEAR AI Cloud (${NEARAI_MODEL}, used when Claude does not answer and NEAR AI has credits). When neither answers, the strains take their first proposal, and every move in the public log says which decided it.`,
   },
   {
     key: "Small rounding",

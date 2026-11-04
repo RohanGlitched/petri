@@ -10,9 +10,9 @@ import { PayAnyToken } from "@/components/intents/PayAnyToken";
 import { SlideGlass } from "@/components/specimens/SlideGlass";
 import { currentEngine, refreshDish } from "@/lib/dish-store";
 import { useLive, usePatternOffsets, petri, int, hex, near } from "@/lib/live";
-import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, claimPending, connectWallet, renameColony, createGuest, disconnectWallet, joinDish, mintSlide, plantCells, usePlayer, forgetGuest, type Player } from "@/lib/wallet";
+import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, claimPending, connectWallet, renameColony, createGuest, disconnectWallet, joinDish, mintSlide, plantCells, usePlayer, forgetGuest, offerPact, acceptPact, cancelPact, type Player } from "@/lib/wallet";
 import { buy_quote, pattern_cells, quote, sell_quote, PATTERNS, type PatternInfo, type PatternName } from "@/engine";
-import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPending, getPlantDeposit, getSlide, getSlideDeposit, type Colony } from "@/lib/chain";
+import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPending, getPlantDeposit, getSlide, getSlideDeposit, PACT_DEPOSIT, type Colony } from "@/lib/chain";
 import { accountUrl, shortAccount, switchNetwork, txUrl } from "@/lib/config";
 import { SLIDE_TITLE_MAX, capture, cellsBitmap, clampRect, densest, normalizeSlide, rectFromDrag, slideOffsets, slideRules, slideSvg, svgUrl, type Rect } from "@/lib/slides";
 import { useNet } from "@/lib/use-net";
@@ -22,6 +22,8 @@ import { actionIndex, useStrainLog } from "@/lib/strain-log";
 import { forecast, type Forecast } from "./forecast";
 import { readDishCache, writeDishCache, type DishCache } from "./cache";
 import { useSlideLicence } from "@/components/specimens/licence";
+import { pactZone, usePacts, type Pact } from "@/lib/pacts";
+import { MyPacts, PickedColony, pactLines, pactsOn, zoneColonies, type PactActions } from "./Pacts";
 import s from "./dish.module.css";
 
 type Cell = { x: number; y: number };
@@ -261,11 +263,16 @@ export function DishStage() {
   const [slideTitle, setSlideTitle] = useState("");
   const [payOpen, setPayOpen] = useState(false);
   const [pendingNear, setPendingNear] = useState(0n);
+  /** A colony clicked on the dish: its card shows its pacts and lets a player offer it one. */
+  const [picked, setPicked] = useState<number | null>(null);
 
   const names = useMemo(() => new Map(d.colonies.map((c) => [c.id, c.name])), [d.colonies]);
   // The strains' log says, move by move, whether the model or the written rules chose it.
   const strainLog = useStrainLog();
   const moves = useMemo(() => actionIndex(strainLog?.actions ?? []), [strainLog]);
+  // Pacts, from the ledger: they bind colonies the contract will refuse to let plant near the colonies they protect.
+  const book = usePacts(strainLog?.pacts);
+  const radius = rules?.pact_radius ?? 8;
 
   const loadMe = useCallback(async () => {
     if (!player) {
@@ -378,9 +385,31 @@ export function DishStage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stamp, rules, d.generation, me]);
 
-  // A planting inside a rival's buffer is legal but costs the siege price.
+  // The pacts binding the player's colony now: the contract refuses any planting within the radius of the colonies
+  // they protect, so the stamp is checked against them with the contract's own test.
+  const myBound = useMemo(() => (me ? pactsOn(book.pacts, me.id, d.generation).bound : []), [book.pacts, me, d.generation]);
+  const breach = useMemo(() => {
+    if (!stamp || !myBound.length) return null;
+    const e = currentEngine();
+    if (!e) return null;
+    const r = e.pact_breach(new Uint32Array(stamp), new Uint16Array(myBound.map((p) => p.from)), radius);
+    if (!r) return null;
+    const [, prot, colony] = r.split(",").map(Number);
+    const p = myBound.find((q) => q.from === colony);
+    return p ? { pact: p, at: { x: prot % w, y: Math.floor(prot / w) } } : null;
+    // d.generation keeps the check fresh as the dish moves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stamp, myBound, radius, d.generation, w]);
+  // A planting inside a rival's buffer is legal but costs the siege price; one that breaks a pact is refused.
   const siege = !!verdict && verdict.startsWith("siege:");
-  const legal = verdict === "" || siege;
+  const legal = (verdict === "" || siege) && !breach;
+  // The colony under the cursor, or the one picked: its pacts' protected ground is outlined on the dish.
+  const hoverOwner = hover && d.cells ? d.cells[hover.y * w + hover.x] : 0;
+  const focus = hoverOwner || picked || 0;
+  const zoneIds = useMemo(
+    () => (pattern || custom ? myBound.map((p) => p.from) : focus ? zoneColonies(book.pacts, focus, d.generation) : []),
+    [pattern, custom, myBound, focus, book.pacts, d.generation],
+  );
 
   // The cells a slide made now would keep: the player's own living cells inside the frame.
   const kept = useMemo(() => (fossilOn && fossil && me ? capture(d.cells, fossil, w, h, me.id) : []), [fossilOn, fossil, me, d.cells, w, h]);
@@ -396,6 +425,11 @@ export function DishStage() {
           o[i] = d.cells && me && d.cells[i] === me.id ? 7 : 6;
         }
       return o;
+    }
+    // A pact's protected ground: every cell within the radius of the protected colony's living cells, outlined.
+    if (zoneIds.length && d.cells) {
+      const z = pactZone(d.cells, zoneIds, radius, w, h);
+      for (let i = 0; i < z.length; i++) if (z[i]) o[i] = 6;
     }
     if ((pattern || custom) && d.cells && rules) {
       const b = rules.buffer;
@@ -414,7 +448,7 @@ export function DishStage() {
     if (stamp) for (const i of stamp) o[i] = legal ? 1 : 2;
     if (pending) for (const i of pending.cells) o[i] = 4;
     return o;
-  }, [pattern, custom, fossilOn, fossil, d.cells, rules, me, stamp, legal, pending, w, h]);
+  }, [pattern, custom, fossilOn, fossil, d.cells, rules, me, stamp, legal, pending, w, h, zoneIds, radius]);
 
   useEffect(() => {
     if (!pending) return;
@@ -471,7 +505,13 @@ export function DishStage() {
   // Selling back: the agar pays half the curve's price, up to what is left of this tide's allowance.
   const SELL_UNITS = 20_000_000;
   const sellNear = rules && ready && d.state ? Number(sell_quote(String(SELL_UNITS), String(d.agar), rules.petri_price, rules.max_supply, rules.sell_bps, d.state.vault, String(BigInt(d.state.total_supply) - BigInt(d.state.agar)))) : 0;
-  const canSell = !!d.state && (balance ?? 0) >= SELL_UNITS && sellNear > 0 && sellNear <= Number(d.state.sell_left);
+  // PETRI earned before a colony's first NEAR (or bought with credit) stays in the dish: while a colony that has
+  // attached NEAR holds any, it cannot sell for NEAR; planting spends it first. A guest sells for credit, which is allowed.
+  const keptUnits = me ? Number(me.kept ?? "0") : 0;
+  const keptBlocksSale = !!me?.attached && keptUnits > 0;
+  const canSell = !!d.state && (balance ?? 0) >= SELL_UNITS && sellNear > 0 && sellNear <= Number(d.state.sell_left) && !keptBlocksSale;
+  /** Why this colony offers pacts without PETRI, or null when it may pay for one. */
+  const pactPayBlock = !me ? null : !me.attached ? "A colony that has never attached NEAR offers pacts without PETRI." : keptUnits > 0 ? `${petri(keptUnits, 2)} of your PETRI is kept in the dish, so a pact you offer carries none until you have planted it.` : null;
   // Planting claims a colony's waiting earnings first, so they count towards the price.
   const spendable = (balance ?? 0) + claimable.petri + Math.max(0, myPending);
   const canAfford = balance !== null && spendable >= licensedCost + (licensed && !licence.holder && licence.royaltyBps ? Math.ceil((licensedCost * licence.royaltyBps) / 10_000) : 0);
@@ -607,6 +647,45 @@ export function DishStage() {
       setBusy(null);
     }
   }
+
+  /** A refusal in words: a guest made before pacts existed holds a key that cannot call the pact methods. */
+  const pactFailure = (e: unknown) => {
+    const m = e instanceof Error ? e.message : String(e);
+    return /MethodNameMismatch|method name/i.test(m)
+      ? "This guest's key was made before pacts existed and cannot call the pact methods. Forget this guest and start a new one to make pacts."
+      : m;
+  };
+  async function runPact(label: string, go: () => Promise<{ hash: string }>, text: string) {
+    setError(null);
+    setDone(null);
+    setBusy(label);
+    try {
+      const r = await go();
+      setDone({ text, hash: r.hash });
+      await refreshDish();
+      await loadMe();
+    } catch (e) {
+      setError(pactFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+  const pactAct: PactActions = {
+    offer: (to, units, until) =>
+      runPact(
+        `Offering ${to.name} a pact…`,
+        () => offerPact(to.account, units, until, PACT_DEPOSIT),
+        `Offered ${to.name} a pact${units > 0n ? ` for ${petri(Number(units), 2)} PETRI, held by the dish until it accepts` : ""}: it would plant nowhere within ${radius} cells of your living cells until generation ${int(until)}. It binds once ${to.name} accepts.`,
+      ),
+    accept: (p: Pact) =>
+      runPact(
+        `Accepting pact ${p.id}…`,
+        () => acceptPact(p.id),
+        `Pact ${p.id} accepted${p.petri > 0n ? `: ${petri(Number(p.petri), 2)} PETRI is yours` : ""}. Until generation ${int(p.until)} the dish refuses your plantings within ${radius} cells of ${names.get(p.from) ?? `colony ${p.from}`}.`,
+      ),
+    cancel: (p: Pact, why: string) =>
+      runPact(`Ending pact ${p.id}…`, () => cancelPact(p.id), `Pact ${p.id} ${why}${p.accepted === null && p.petri > 0n ? "; its PETRI went back to the colony that offered it" : ""}.`),
+  };
 
   /** Open the Fossilize frame, first over the colony's densest patch. */
   function openFossil() {
@@ -919,6 +998,8 @@ export function DishStage() {
 
   const hovered = hover && d.cells ? d.cells[hover.y * w + hover.x] : 0;
   const hoveredColony = hovered ? colonies.find((c) => c.id === hovered) : null;
+  const pickedColony = picked ? d.colonies.find((c) => c.id === picked) ?? null : null;
+  const hoverPacts = hoveredColony ? pactLines(book.pacts, hoveredColony.id, d.generation, radius, names) : [];
   /** The rival whose buffer the hovered bare cell sits in, if any (the nearest one). */
   const bufferOwner = useMemo(() => {
     if (!hover || !d.cells || !rules || hovered) return null;
@@ -981,6 +1062,7 @@ export function DishStage() {
               return;
             }
             setHover(c);
+            setPicked(d.cells ? d.cells[c.y * w + c.x] || null : null);
           }}
           label={fossilOn ? `The live dish, generation ${d.generation}. Drag across your colony to frame a slide; the arrow keys move the frame.` : `The live dish, generation ${d.generation}. Drag to move, scroll or pinch to zoom.`}
         />
@@ -1015,6 +1097,24 @@ export function DishStage() {
       )}
 
       <aside ref={leftBox} className={s.left}>
+        {pickedColony && !info && !fossilOn && (
+          <PickedColony
+            c={pickedColony}
+            live={d.liveCounts[pickedColony.id] ?? 0}
+            pacts={book.pacts}
+            me={me}
+            g={d.generation}
+            radius={radius}
+            maxGens={rules?.pact_max_gens ?? 2880}
+            names={names}
+            canPay={pactPayBlock}
+            holding={balance}
+            busy={!!busy}
+            signedIn={!!player}
+            act={pactAct}
+            onClose={() => setPicked(null)}
+          />
+        )}
         {!me && fossilAsk && <FossilNeedsColony onClose={() => setFossilAsk(false)} />}
         {!me && startFolded && (
           <button className={s.startPill} onClick={() => setStartFolded(false)} aria-expanded="false" aria-controls="start-panel">
@@ -1071,8 +1171,8 @@ export function DishStage() {
               <button className="btn btn-ghost btn-small" onClick={() => setRotate((r) => (r + 1) % 4)}>Rotate <kbd>R</kbd></button>
               <button className="btn btn-ghost btn-small" onClick={() => setFlip((f) => !f)}>Flip <kbd>F</kbd></button>
             </div>
-            <p className={`${s.verdict} ${verdict === "" ? s.ok : siege ? s.warn : verdict ? s.bad : ""}`}>
-              {!anchor ? "Point at the dish, then click where it should grow." : verdict === "" ? `${snapped && target ? "That spot was taken, so the stamp moved to the nearest one that fits: " : "Fits at "}${anchor.x}, ${anchor.y}.${target ? "" : " Click to place it."}` : explain(verdict, w, names, rules?.siege_x)}
+            <p className={`${s.verdict} ${breach ? s.bad : verdict === "" ? s.ok : siege ? s.warn : verdict ? s.bad : ""}`}>
+              {!anchor ? "Point at the dish, then click where it should grow." : breach ? `Pact ${breach.pact.id} with ${names.get(breach.pact.from) ?? `colony ${breach.pact.from}`}: your colony promised not to plant within ${radius} cells of its living cells until generation ${int(breach.pact.until)}, and this comes that close to its cell at ${breach.at.x}, ${breach.at.y}. The outlined zone is off limits; the dish would refuse it.` : verdict === "" ? `${snapped && target ? "That spot was taken, so the stamp moved to the nearest one that fits: " : "Fits at "}${anchor.x}, ${anchor.y}.${target ? "" : " Click to place it."}` : explain(verdict, w, names, rules?.siege_x)}
             </p>
             {fc && <ForecastView f={fc} cost={cost} genMs={genMs} at={anchor} />}
             {custom && licence.live && <LicenceLine licence={licence} cost={licensedCost} licensed={licensed} />}
@@ -1146,10 +1246,18 @@ export function DishStage() {
               <button className="btn btn-ghost btn-small" onClick={buy} disabled={!!busy || !canBuy}>
                 Buy PETRI with 0.01 NEAR
               </button>
-              <button className="btn btn-ghost btn-small" onClick={sell} disabled={!!busy || !canSell} title={d.state && sellNear > Number(d.state.sell_left) ? "The agar has bought back all it will until the next tide." : undefined}>
+              <button className="btn btn-ghost btn-small" onClick={sell} disabled={!!busy || !canSell} title={keptBlocksSale ? "Kept PETRI must be planted before you can sell for NEAR." : d.state && sellNear > Number(d.state.sell_left) ? "The agar has bought back all it will until the next tide." : undefined}>
                 Sell {petri(SELL_UNITS)} back for {near(sellNear, 4)} {isWallet ? "NEAR" : "credit"}
               </button>
             </div>
+            {keptUnits > 0 && (
+              <p className={s.hint}>
+                {me.attached
+                  ? `${petri(keptUnits, 2)} PETRI is kept in the dish: earned before this colony's first NEAR, or bought with credit. It can be planted (plantings spend it first), not sold or sent; once it is planted, everything you hold can be sold for NEAR.`
+                  : `${petri(keptUnits, 2)} PETRI is kept in the dish: free play's PETRI can be planted or sold back for credit, never sent or sold for NEAR.`}
+              </p>
+            )}
+            <MyPacts pacts={book.pacts} me={me} g={d.generation} radius={radius} names={names} busy={!!busy} act={pactAct} />
             {isWallet ? (
               <p className={s.hint}>Your wallet signs each move and pays its own gas and deposits{nearLeft !== null ? `; it holds ${near(Number(nearLeft), 3)} NEAR` : ""}.</p>
             ) : (
@@ -1306,7 +1414,7 @@ export function DishStage() {
         </section>
       </aside>
 
-      <div className={s.inspect} aria-live="polite">
+      <div className={`${s.inspect} ${hoverPacts.length ? s.inspectTall : ""}`} aria-live="polite">
         {hover ? (
           <>
             <span className="num">{hover.x}, {hover.y}</span>
@@ -1318,6 +1426,12 @@ export function DishStage() {
               </span>
             ) : (
               <span className={s.hintInline}>{bufferOwner ? `bare agar, inside ${bufferOwner}’s buffer` : "bare agar"}</span>
+            )}
+            {hoverPacts.length > 0 && (
+              <span className={s.inspectPact}>
+                {hoverPacts[0]}
+                {hoverPacts.length > 1 ? `; and ${hoverPacts.length - 1} more ${hoverPacts.length === 2 ? "pact" : "pacts"}` : ""}
+              </span>
             )}
           </>
         ) : (

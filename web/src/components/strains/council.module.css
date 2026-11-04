@@ -1,0 +1,149 @@
+/* The council: the pacts on chain, a small map of who is bound, and each round in the strains' own words. */
+.council { margin: 72px 0 0; padding-top: 56px; border-top: 1px solid var(--line); }
+.head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 24px 56px;
+  align-items: end;
+  margin-bottom: 40px;
+}
+.head .lede { margin: 0; }
+.counts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+}
+.counts div { display: grid; padding-top: 12px; border-top: 1px solid var(--line); }
+.counts dt { font-size: 13px; color: var(--dim); }
+.counts dd { margin: 0; font-family: var(--display); font-size: 30px; line-height: 1.15; }
+.counts em { font-style: normal; font-size: 13px; color: var(--dim); }
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 22px;
+  align-items: start;
+}
+.graphBox {
+  margin: 0;
+  padding: 24px 26px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.graphBox figcaption p { margin: 0; font-size: 14px; color: var(--dim); max-width: 46ch; }
+.graph { position: relative; margin-top: 8px; }
+.graph svg { display: block; width: 100%; height: auto; }
+.nodeLabel { font: 500 13px var(--body); fill: var(--text-2); }
+.edgeLabel {
+  font: 600 12px var(--body);
+  fill: var(--amber-2);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.graphEmpty {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  translate: 0 -60%;
+  margin: 0;
+  text-align: center;
+  font-family: var(--display);
+  font-size: 18px;
+  color: var(--dim);
+}
+
+.book { padding: 24px 26px; border-radius: 24px; box-shadow: inset 0 0 0 1px var(--line-2); min-width: 0; }
+.source { margin: 0 0 6px; font-size: 13.5px; color: var(--dim); max-width: 62ch; }
+.empty { margin: 14px 0 0; font-size: 15px; color: var(--text-2); }
+.pacts { list-style: none; margin: 10px 0 0; padding: 0; display: grid; }
+.pact {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto auto;
+  gap: 2px 14px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.pactNo { font-family: var(--display); font-size: 17px; color: var(--dim); }
+.pactWho { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 15px; color: var(--bone); min-width: 0; }
+.who { display: inline-flex; align-items: center; gap: 6px; }
+.arrow { color: var(--amber); }
+.pactPetri { margin: 0; font-family: var(--display); font-size: 17px; white-space: nowrap; }
+.pactWhen, .pactLinks { grid-column: 2 / -1; margin: 0; font-size: 13.5px; color: var(--dim); }
+.pactLinks { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.pactLinks a, .outcome a { color: var(--dim); }
+.pactLinks a:hover, .outcome a:hover { color: var(--bone); }
+.chip {
+  justify-self: end;
+  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--dim);
+  box-shadow: inset 0 0 0 1px var(--line);
+  white-space: nowrap;
+}
+.chipOn { color: var(--amber); box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.5); background: rgba(242, 180, 90, 0.08); }
+.chipOpen { color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+.agree { color: var(--ok); }
+.disagree { color: var(--bad); }
+
+.rounds { margin-top: 48px; max-width: 900px; }
+.roundList { list-style: none; margin: 14px 0 0; padding: 0; display: grid; }
+.round { padding: 18px 0; border-top: 1px solid var(--line); }
+.roundHead { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: baseline; font-size: 13.5px; color: var(--dim); }
+.roundHead b { font-family: var(--display); font-weight: 400; font-size: 19px; color: var(--bone); }
+.roundSummary { margin: 4px 0 0; font-size: 14.5px; color: var(--text-2); }
+.offers { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 12px; }
+.offer {
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: rgba(243, 233, 218, 0.035);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.offerHead { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 15px; color: var(--text-2); }
+.offerHead b { font-weight: 600; color: var(--bone); }
+.say { margin: 10px 0 0; display: grid; gap: 2px; justify-items: start; }
+.say q { font-family: var(--display); font-size: 17px; line-height: 1.35; color: var(--bone); }
+.say cite { font-style: normal; font-size: 12.5px; color: var(--dim); }
+.reply { padding-left: 14px; border-left: 2px solid var(--line-2); }
+.verdict { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+.yes { color: var(--ok); }
+.no { color: var(--dim); }
+.dimInline { color: var(--dim); font-size: 13.5px; }
+.dimLine { margin: 8px 0 0; font-size: 13.5px; color: var(--dim); }
+.outcome { margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 13.5px; }
+.outcome .chip { justify-self: auto; }
+.more {
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--amber);
+  font: 600 14px var(--body);
+  cursor: pointer;
+}
+.more:hover { color: var(--amber-2); }
+
+@media (max-width: 1060px) {
+  .split { grid-template-columns: 1fr; }
+  .graphBox { max-width: 640px; }
+}
+@media (max-width: 860px) {
+  .head { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .council { margin-top: 56px; padding-top: 40px; }
+  .graphBox, .book { padding: 20px; }
+  .pact { grid-template-columns: minmax(0, 1fr) auto; }
+  .pactNo { grid-column: 1 / -1; font-size: 15px; }
+  .pactWho { grid-column: 1; }
+  .pactPetri { grid-column: 2; grid-row: 2; }
+  .chip { grid-column: 1 / -1; justify-self: start; }
+  .pactWhen, .pactLinks { grid-column: 1 / -1; }
+  .offer { padding: 12px 14px; }
+}

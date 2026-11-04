@@ -222,6 +222,10 @@ export default function Page() {
           Between two tides the agar buys back at most 10% of the vault. The allowance is set at each tide, so <strong>no sales are possible before the first tide</strong>; <C>state().sell_left</C> says how much is left.
         </li>
         <li>A colony that has never attached NEAR is paid in credit, not NEAR.</li>
+        <li>
+          <strong>Kept PETRI cannot be sold for NEAR.</strong> PETRI you earned before your colony&rsquo;s first NEAR, and PETRI you bought with credit, is kept: while you hold any, <C>sell</C> for NEAR is refused (and so is sending PETRI, and a guest can never send PETRI). Plant it: plantings and slides spend kept PETRI first, and once it is gone what you hold and what you earn afterwards is sellable. A guest can still sell back for credit. See <Doc to="economy" hash="kept">Kept PETRI</Doc>.
+        </li>
+        <li><C>sell</C> claims your waiting earnings first, so they count toward what you hold.</li>
         <li>Buying and selling straight back always loses: the sell price is half the curve and the curve moves against you both ways.</li>
         <li>The dish page sells 20 PETRI at a time; the contract takes any amount.</li>
       </ul>

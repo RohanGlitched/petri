@@ -11,7 +11,7 @@ export function GET() {
   const lines = [
     "# Petri",
     "",
-    "> A coin that is alive: Conway's Life on a 128 x 128 wrapped dish run by one NEAR contract. Colonies are NEAR accounts; PETRI (NEP-141, 1,000,000 supply, all in the agar at launch) feeds living cells every 15 s generation; NEAR collects in a vault paid out at hourly tides; specimen slides are NEP-171 NFTs drawn on chain that license their pattern from 12 captured cells up (25% off to plant it, 10% royalty to the holder, or to the agar from a planter that never attached NEAR); five house AI strains forecast, remember and trade PETRI for promises on chain; everything replays from the ledger.",
+    "> A coin that is alive: Conway's Life on a 128 x 128 wrapped dish run by one NEAR contract. Colonies are NEAR accounts; PETRI (NEP-141, 1,000,000 supply, all in the agar at launch) feeds living cells every 15 s generation; NEAR collects in a vault paid out at hourly tides; specimen slides are NEP-171 NFTs drawn on chain that license their pattern from 12 captured cells up (25% off to plant it, 10% royalty to the holder, or to the agar from a planter that never attached NEAR); five house AI strains forecast, remember and make pacts with each other on chain (PETRI in escrow for a promise not to plant near, enforced by the contract); free play never reaches NEAR (PETRI earned before a first NEAR is kept until planted); everything replays from the ledger.",
     "",
     "Hosting note: the site is changing hosts. Until the playpetri.xyz DNS records point at its new server, the live site is at https://136-64-100-170.sslip.io and these docs at https://136-64-100-170.sslip.io/docs/introduction (a docs.playpetri.xyz/<page> link is /docs/<page> there).",
     "",
@@ -22,7 +22,7 @@ export function GET() {
     "- Both contract accounts still hold one full-access key at the time of writing; it is to be deleted before judging. Until then verify.mjs reports the Full-access keys row as DIFFERS and exits 1.",
     `- Mainnet RPC: ${DISH.mainnet.rpc} (rpc.mainnet.near.org rate-limits)`,
     `- Source: ${REPO} (MIT)`,
-    "- Verify: node scripts/verify.mjs --network mainnet   (40 rows; exit 0 = every check matches, 1 = a row differs)",
+    "- Verify: node scripts/verify.mjs --network mainnet   (45 rows; exit 0 = every check matches, 1 = a row differs)",
     `- Tests: cargo test -p petri-core -p petri-contract   (${TESTS.core} + ${TESTS.contract})`,
     "",
   ];

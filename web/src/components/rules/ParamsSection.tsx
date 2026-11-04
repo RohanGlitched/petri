@@ -94,7 +94,7 @@ const EMPTY: [string, string, string, string][] = [
 const CHANGES_V61: [string, string][] = [
   [
     "Gas at 30,000 colonies",
-    "The hot table holds only the colonies that play now: those that earned since the last tide and those with living cells and a stake that can still earn, never the house, at most 10,000 rows and 32 leaving a call. The rest wait in 69-byte cold slots (pages of 32) whose stake decays lazily when read, and the catch-up stops at 110 TGas less what is still to write. In the simulator the hot rows fell from 17,102 to 1,315 on average, the largest call from 237 to 60 TGas, and calls over 150 TGas from 116,731 to 0.",
+    "The hot table holds only the colonies that play now: those that earned since the last tide and those with living cells and a stake that can still earn, never the house, at most 10,000 rows and 32 leaving a call. The rest wait in 69-byte cold slots (pages of 32) whose stake decays lazily when read, and the catch-up stops at 110 TGas less what is still to write. In the simulator the hot rows fell from 17,102 to 1,336 on average, the largest call from 237 to 61 TGas, and calls over 150 TGas from 116,731 to 0.",
   ],
   [
     "Smaller ledger entries",
@@ -102,7 +102,7 @@ const CHANGES_V61: [string, string][] = [
   ],
   [
     "Licences need 12 cells",
-    "A planting under a slide's licence needs a slide that captured at least licence_min_cells (12). Smaller slides are keepsakes. In the simulator the royalty farmer's licensed plantings fell from 7,852 to 402 and its cash from +0.29 to +0.08 NEAR a week.",
+    "A planting under a slide's licence needs a slide that captured at least licence_min_cells (12). Smaller slides are keepsakes. In the simulator the royalty farmer's licensed plantings fell from 7,852 to 466 and its cash from +0.29 to +0.11 NEAR a week.",
   ],
   [
     "A guest's royalty goes to the agar",
@@ -115,6 +115,14 @@ const CHANGES_V61: [string, string][] = [
   [
     "Site gas",
     "The site prepays 300 TGas for join, plant, buy, sell, claim, advance and mint_slide (unused gas is refunded), and the relay accepts up to 300.",
+  ],
+  [
+    "Free play never reaches NEAR",
+    "PETRI earned before a colony's first NEAR stays in the dish: a guest cannot send PETRI, and while a colony holds kept PETRI (what it earned or was paid in royalties before its first NEAR, and PETRI bought with credit) it cannot sell for NEAR, send PETRI or pay into a pact. Plantings and slides spend it first. In the simulator the vault's NEAR paid for farmed PETRI fell from 0.1674 to 0, and a transfer attack that drew +0.0470 NEAR a week per operator drew nothing. Guests also take no keeper pot.",
+  ],
+  [
+    "Pacts the contract enforces",
+    "The council's deals are pacts: pact_offer escrows the payer's PETRI, pact_accept pays it to the promisor, and until the pact ends the contract refuses every planting of the promisor within pact_radius (8) cells of the payer's living cells. A colony is party to at most 8 pacts; both replays rebuild and check every pact.",
   ],
   [
     "Started again",
@@ -265,7 +273,7 @@ export function ParamsSection() {
     ["generation_ms", int(Number(r.generation_ms)), "Milliseconds between generations."],
     ["max_supply", `${fmtPetri(r.max_supply, 0)} PETRI`, "Minted once, into the agar."],
     ["feed_ppm", String(r.feed_ppm), "Parts per million of the agar fed to the living each generation."],
-    ["keeper_bps", `${r.keeper_bps} (${r.keeper_bps / 100}%)`, "Share of the feed set aside in the keeper pot, paid to the account whose call ran the generation (never a house account or keeper)."],
+    ["keeper_bps", `${r.keeper_bps} (${r.keeper_bps / 100}%)`, "Share of the feed set aside in the keeper pot, paid to the account whose call ran the generation (never a house account, a keeper or a guest)."],
     ["reach", String(r.reach), "Most living cells a colony is paid for, per cell of stake."],
     ["stake_keep_bps", `${r.stake_keep_bps} (${r.stake_keep_bps / 100}%)`, "Share of every colony's stake left after each tide that runs."],
     ["burn_bps", `${r.burn_bps} (${r.burn_bps / 100}%)`, "Share of a planting burned; the rest returns to the agar."],
@@ -290,6 +298,8 @@ export function ParamsSection() {
     ["slide_min_cells", String(r.slide_min_cells), "Fewest of its own living cells a slide must capture."],
     ["licence_min_cells", String(r.licence_min_cells ?? "none"), "Fewest cells a slide must have captured to be a licence. A smaller slide is a keepsake: a planting under it is refused."],
     ["slide_discount_bps", `${r.slide_discount_bps} (${r.slide_discount_bps / 100}%)`, "How much less a planting of a slide's exact pattern costs under its licence."],
+    ["pact_radius", String(r.pact_radius ?? "none"), "Cells around the payer's living cells where a bound colony may not plant, for as long as a pact binds it."],
+    ["pact_max_gens", String(r.pact_max_gens ?? "none"), "Most generations a pact can last beyond the dish's stored generation when it is offered."],
     ["slide_royalty_bps", `${r.slide_royalty_bps} (${r.slide_royalty_bps / 100}%)`, "Share of a licensed planting's cost that anyone but the slide's holder pays the holder, in PETRI (to the agar, from a planter that has never attached NEAR)."],
     ["wnear", r.wnear ?? "none", "The wNEAR contract whose transfers join or buy (pay with any token)."],
     ["house", r.house.join(", "), "The dish's own strains: never fed, no tide share, never sell, send PETRI only to other house accounts, take no tide bounty or keeper pot, and their cells never make a siege."],

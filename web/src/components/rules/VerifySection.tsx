@@ -33,6 +33,10 @@ const CHECKS = [
   "Every tide: ran exactly when due, chain, stored bytes; shares of the vault and the credit pool, bounty (none to the house) and storage worked out from the ledger",
   "Every claim took exactly what its colony was owed",
   "Every refund is for exactly the payout it names, once",
+  "No colony holding kept PETRI sold PETRI for NEAR or paid for a pact",
+  "Every pact kept to the rules, and no planting broke a pact binding its colony",
+  "PETRI the dish holds for pact offers not yet accepted",
+  "Pacts offered",
   "Every specimen slide is its colony's own cells as the dish stood, at the rule's price",
   "Every slide's holder, moves and royalties",
   "PETRI in the agar",
@@ -58,6 +62,7 @@ const CHECKS = [
   "NEAR owed to colonies, from the ledger",
   "Pending NEAR, from the ledger",
   "Every colony's credit winnings",
+  "Every colony's kept PETRI",
   "The contract's NEAR covers everything it owes, every term rebuilt from the ledger",
   "Deployed code hash (terminal only)",
   "No full-access key",
@@ -124,7 +129,7 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
                 colony&rsquo;s living cells in its rectangle and burn the rule&rsquo;s price. A tide must run exactly when some
                 colony outside the house had earned, carry the same chain and stored bytes, pay the same shares of the vault and the pool, as NEAR
                 or as credit to the right colonies, and pay no bounty when the house ran it. A claim must take exactly what its
-                colony was owed, and a refund must match the payout it names.
+                colony was owed, and a refund must match the payout it names. Every colony&rsquo;s kept PETRI is rebuilt, and no colony holding any may sell for NEAR or pay PETRI into a pact. Every pact entry is checked against the pact rules and the escrow, and every planting against the pacts binding its planter.
               </li>
               <li>Step with petri-core and feed the living, with the reach cap on each colony&rsquo;s decaying stake, the house and the keeper&rsquo;s share.</li>
               <li>
@@ -138,7 +143,7 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
               The terminal script <code className={s.code}>node scripts/verify.mjs</code> (add{" "}
               <code className={s.code}>--network mainnet</code> for the mainnet dish) pins every read to one final block and
               prints {CHECKS.length} checks. The <Link className={s.link} href="/verify">verify page</Link> runs the same replay in
-              your browser, also pinned to one block, and shows 33 checks covering the same ground, grouped a little
+              your browser, also pinned to one block, and shows 37 checks covering the same ground, grouped a little
               differently and without the code hash. The contract test{" "}
               <code className={s.code}>replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault</code> does it in Rust.
             </p>

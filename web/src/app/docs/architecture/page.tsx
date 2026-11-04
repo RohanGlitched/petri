@@ -68,7 +68,7 @@ export default function Page() {
               <C>petri-core</C> (<C>core/</C>)
             </td>
             <td>
-              The rules, <C>no_std</C>: the bit-sliced Life step with owners, planting checks and sieges, the feed with reach and the floor, prices, the buy and sell-back curves, the tide split, the history chain, the board&rsquo;s compact form and hash, slide bitmaps, their SVG and their licence (<C>fits_slide</C>, <C>licensed_cost</C>, <C>royalty</C>), the named patterns. Depends only on <C>sha2</C>. 33 tests, including property tests against a reference Life.
+              The rules, <C>no_std</C>: the bit-sliced Life step with owners, planting checks and sieges, the feed with reach and the floor, prices, the buy and sell-back curves, the tide split, the history chain, the board&rsquo;s compact form and hash, slide bitmaps, their SVG and their licence (<C>fits_slide</C>, <C>licensed_cost</C>, <C>royalty</C>), the named patterns. Depends only on <C>sha2</C>. 35 tests, including property tests against a reference Life.
             </td>
           </tr>
           <tr>
@@ -76,7 +76,7 @@ export default function Page() {
               <C>petri-contract</C> (<C>contract/</C>)
             </td>
             <td>
-              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> 6.1.0): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table of the colonies that play now (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> from v6 (<C>relaunch.rs</C>). 119 tests.
+              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> 6.1.0): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table of the colonies that play now (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> from v6 (<C>relaunch.rs</C>). 132 tests.
             </td>
           </tr>
           <tr>
@@ -128,6 +128,8 @@ cd web && npm install && npm run dev                 # the site on http://localh
             ["D", "Specimen slides"],
             ["T", "Each owner's slides, for enumeration"],
             ["Z", "Pending NEAR, with the order it may still be spent on"],
+            ["P + id (u32)", "A pact: from, to, PETRI, offered, until, accepted, ended (75 bytes with key and record)"],
+            ["Q + colony id (u16)", "A colony's live pacts (4 bytes a pact; 47 for a new list)"],
             ["X + page (u16)", "Cold pages of 32 colonies each, 69 bytes a colony (its numbers, its stake and the tide count the stake was last decayed at)"],
             ["h", "The hot table's feed part: id, stake, window, earnings (26 bytes a row); every catch-up rewrites it"],
             ["j", "The hot table's purse part: id, NEAR owed, credit won and held, attached (51 bytes a row); only tides and a playing colony's own moves rewrite it"],
@@ -227,7 +229,7 @@ cd web && npm install && npm run dev                 # the site on http://localh
 
       <H2 id="agents">Agents and the VM</H2>
       <p>
-        <C>agents/run.mjs</C>, one process per dish on a VM, plays the five house strains and the keeper (and the bench on testnet). It reads the chain over JSON-RPC, steps the dish with the same engine, forecasts every candidate move 240 generations ahead on a cloned engine (<C>forecast.mjs</C>), keeps each strain&rsquo;s memory of its moves and their measured outcomes (<C>memory.mjs</C>), holds a council of the strains once per tide window where they pay each other PETRI on chain for promises (<C>council.mjs</C>), asks Claude Haiku or NEAR AI Cloud to pick among rule-checked moves, signs with each account&rsquo;s own key, and serves a read-only log on port 8790 (testnet) or 8791 (mainnet). Details in <Doc to="ai-strains">AI strains</Doc>.
+        <C>agents/run.mjs</C>, one process per dish on a VM, plays the five house strains and the keeper (and the bench on testnet). It reads the chain over JSON-RPC, steps the dish with the same engine, forecasts every candidate move 240 generations ahead on a cloned engine (<C>forecast.mjs</C>), keeps each strain&rsquo;s memory of its moves and their measured outcomes (<C>memory.mjs</C>), holds a council of the strains once per tide window where they negotiate pacts and make them on chain with <C>pact_offer</C> and <C>pact_accept</C> (<C>council.mjs</C>), asks Claude Haiku or NEAR AI Cloud to pick among rule-checked moves, signs with each account&rsquo;s own key, and serves a read-only log on port 8790 (testnet) or 8791 (mainnet). Details in <Doc to="ai-strains">AI strains</Doc>.
       </p>
 
       <H2 id="reads">How the site reads the dish</H2>
@@ -261,7 +263,7 @@ cd web && npm install && npm run dev                 # the site on http://localh
       </p>
       <H3 id="writes-agents">The agents</H3>
       <p>
-        Each strain and the keeper sign with keys on the VM. On testnet those are function-call keys for the dish that pay with credit, which cannot attach the 1 yoctoNEAR a PETRI transfer needs, so a testnet council deal is recorded as an off-chain promise unless a strain has a full-access key there; on mainnet the strains attach their own NEAR and pay council deals with <C>ft_transfer</C>, which the contract allows only between house accounts.
+        Each strain and the keeper sign with keys on the VM. On testnet those are function-call keys for the dish that pay with credit; their method lists must include <C>pact_offer</C>, <C>pact_accept</C> and <C>pact_cancel</C> (or be empty) for the council&rsquo;s pacts. On mainnet the strains attach their own NEAR for the offer&rsquo;s storage. A pact needs no 1 yoctoNEAR transfer: the PETRI moves inside the contract.
       </p>
 
       <H2 id="repo">Repository map</H2>

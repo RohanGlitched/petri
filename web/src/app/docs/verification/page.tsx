@@ -19,6 +19,10 @@ const CHECKS: [string, string][] = [
   ["Tides", "A tide ran at exactly the tide generations where some non-house colony had earned; each has the right chain and stored bytes (130, or 175 on the tide that starts a new index page), and the replay works out its vault share, NEAR shares, credit shares, capped bounty (none when a house colony or keeper ran it) and storage from the ledger before it."],
   ["Claims of exactly what was owed", "Every Claim took exactly the NEAR its colony was owed in the replay (all it won at the tides, less what it claimed before), and sent it less at most a record's storage."],
   ["Refunds tied to their payouts", "Every Refund names a payout entry (of) of its kind, refunds exactly the NEAR that entry sent, no payout is refunded twice, and its storage is at most a record's; the rest goes to the vault (a bounty) or to pending NEAR (everything else)."],
+  ["Sales for NEAR and pact payments by colonies holding no kept PETRI", "No Sell for NEAR and no PETRI pact offer was made by a colony whose replayed kept PETRI was above zero (the house is exempt from the pact check)."],
+  ["Pacts kept to the rules and plantings under pacts", "Every pact follows the rules: numbered in order, until within (g, g + pact_max_gens], at most 8 live pacts per colony, one open offer per pair, PETRI offered only by a colony that attached NEAR and holds no kept PETRI, no house PETRI offered to a player, an accept only while open and before until, an accepted pact ended only at until; and every Plant is checked with the engine's pact_breach against the colonies that accepted pacts binding its planter protect, on the board as it stood."],
+  ["PETRI held for pact offers", "state().pact_escrow equals the PETRI of the offers made and not yet accepted or ended, rebuilt from the PactOffer, PactAccept and PactEnd entries."],
+  ["Pacts", "state().pacts equals the number of PactOffer entries."],
   ["Specimens", "Every Slide is the colony's own cells in its rectangle as the replayed board stood, numbered in order, at least slide_min_cells, priced at slide_cells_price per cell."],
   ["Slide holders and royalties", "Each slide's owner, move count and royalties (the slides view) agree with the holder and royalties the replay last saw."],
   ["Agar", "The replayed agar equals state().agar, to the unit."],
@@ -44,6 +48,7 @@ const CHECKS: [string, string][] = [
   ["NEAR owed to colonies", "state().tides_owed equals the NEAR the replayed tides made claimable, less the Claim entries."],
   ["Pending NEAR", "state().pending equals the Pending entries and pending refunds, less the Unpend entries."],
   ["Colony credit winnings", "Every colony's credit_won equals the replay's."],
+  ["Colony kept PETRI", "Every colony's kept PETRI (the colonies view) equals the replay's: a guest's claims, purchases and royalties, a first NEAR's unclaimed earnings, credit-bought PETRI, less what plantings and slides spent first."],
   ["Solvent (NEAR held >= owed, from the ledger)", "The account's balance minus its storage, plus wNEAR held, covers the vault, the credit pool, unspent credit, unclaimed winnings and pending NEAR, every term recomputed from the ledger rather than read from the contract."],
   ["Deployed code hash", "The account's code hash equals the reproducible build's (or --code-hash)."],
   ["Full-access keys", "The contract account has no full-access key, so nobody can deploy other code."],
@@ -99,12 +104,12 @@ node scripts/verify.mjs --dump <file>               # a snapshot the contract's 
       </p>
       <Callout kind="warn">
         <p>
-          At the time of writing both dishes exit 1, for one reason: <C>Full-access keys 1 (expected: 0)</C>. The other 39 rows match. The keys are to be deleted with the owner&rsquo;s approval before judging.
+          At the time of writing both dishes exit 1, for one reason: <C>Full-access keys 1 (expected: 0)</C>. The other 44 rows match. The keys are to be deleted with the owner&rsquo;s approval before judging.
         </p>
       </Callout>
 
       <H2 id="checks">Every check</H2>
-      <p>The 40 rows <C>scripts/verify.mjs</C> prints, in order. The browser&rsquo;s <C>/verify</C> runs the same replay and shows 33 rows in its own wording (<a href="#browser">below</a>).</p>
+      <p>The 45 rows <C>scripts/verify.mjs</C> prints, in order. The browser&rsquo;s <C>/verify</C> runs the same replay and shows 37 rows in its own wording (<a href="#browser">below</a>).</p>
       <Table>
         <thead>
           <tr>
@@ -124,21 +129,26 @@ node scripts/verify.mjs --dump <file>               # a snapshot the contract's 
       <p>
         After the rows it prints the NEP-330 source link and build command, how many idle tide generations were skipped, the NEAR owed against the NEAR held, and a warning while a full-access key exists. For the first colonies whose earnings or winnings differ, and the first slides whose holder or royalties differ, it prints the contract&rsquo;s and the replay&rsquo;s numbers.
       </p>
-      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing (block 222940869, minutes after launch)" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222940869: 19 generations, 15 ledger entries, 5 colonies, 0 tides.
-  match   History chain                                328c0669f420809b4da8bd710a7c08937a149fa50badcdb80c52c555c25b884f
-  match   Board hash                                   63366f7300e2ceaa4b2295961a4a694336a706da008e2f5a31fb1474e9b119aa
-  match   Living cells                                 132
+      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing (block 222964645, minutes after the relaunch)" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222964645: 14 generations, 15 ledger entries, 5 colonies, 0 tides.
+  match   History chain                                0000000000000000000000000000000000000000000000000000000000000000
+  match   Board hash                                   a3d8b3fb1a79f1fdcd1ac1e469e7d092a8fb773070217e620ce8d0fae7f73608
+  match   Living cells                                 179
   match   Legal plantings                              5 of 5
   …
   match   Licensed plantings: shape, holder, royalty   0 of 0
   …
-  match   Pending NEAR                                 0
+  match   Sales for NEAR and pact payments by colonies holding no kept PETRI 0 of 0
+  match   Pacts kept to the rules and plantings under pacts 0 of 0
+  match   PETRI held for pact offers                   0.000000
+  match   Pacts                                        0
+  …
   match   Colony credit winnings                       5 of 5
+  match   Colony kept PETRI                            5 of 5
   match   Solvent (NEAR held >= owed, from the ledger) yes
   match   Deployed code hash                           ${CODE_HASH}
   DIFFERS  Full-access keys                             1  (expected: 0)
 Source: https://github.com/RohanGlitched/petri/tree/${BUILD_COMMIT}; built with cargo near build non-reproducible-wasm --locked in ${BUILD_IMAGE}@${BUILD_DIGEST}
-Owed, from the ledger: 0.22886 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.521457378656788000000001 NEAR.
+Owed, from the ledger: 0.23761 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.304743164372527200000003 NEAR.
   The contract account still has a full-access key: whoever holds it could deploy different code.
 1 check(s) differ.`}</Code>
 
@@ -311,7 +321,7 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
       </p>
       <ul>
         <li>
-          It shows 33 rows in its own wording (listed in <C>web/src/components/verify/VerifyRun.tsx</C>). Next to the CLI it has one row for every PETRI burned, and no rows of their own for the code hash, the credit pool, credit paid at tides, sales and shares paid as credit, or each colony&rsquo;s credit winnings. Its credit, NEAR owed, pending and solvency rows are recomputed from the ledger as the CLI&rsquo;s are.
+          It shows 37 rows in its own wording (listed in <C>web/src/components/verify/VerifyRun.tsx</C>). Next to the CLI it has one row for every PETRI burned, and no rows of their own for the code hash, the credit pool, credit paid at tides, sales and shares paid as credit, or each colony&rsquo;s credit winnings. Its credit, NEAR owed, pending and solvency rows are recomputed from the ledger as the CLI&rsquo;s are.
         </li>
         <li>The lock (full-access keys) is shown apart from the replay, in amber rather than red: it is a step still to come, not a mismatch.</li>
         <li>

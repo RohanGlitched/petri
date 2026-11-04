@@ -103,7 +103,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["the_keeper_pot_goes_to_whoever_advances_the_clock", "any_call_that_runs_a_generation_takes_the_keeper_pot", "a_keeper_takes_no_keeper_pot"],
-    limit: "In the v5 simulator a Racer that only advances for the pot and bounties lost 0.05 to 0.06 NEAR a week; in the v6.1 simulator, where players' calls take the pot too, it loses 0.005 and the pot left after a week is 1.1 PETRI.",
+    limit: "In the v5 simulator a Racer that only advances for the pot and bounties lost 0.05 to 0.06 NEAR a week; in the v6.1 simulator, where players' calls take the pot too, it loses 0.0055 and the pot left after a week is 1.3 PETRI (1.1 on a young dish).",
   },
   {
     id: "t-house",
@@ -115,7 +115,7 @@ const THREATS: Threat[] = [
     ),
     defense: (
       <>
-        The dish&rsquo;s own accounts are named in the rules: <C>house</C> (the strains) and <C>keepers</C> (<C>keeper.petri-dish.near</C>, <C>petri-keeper.testnet</C>). A house colony cannot <C>sell</C> (&ldquo;the dish&rsquo;s own colonies never sell PETRI back: the vault is the players&rsquo;&rdquo;). House accounts can <C>ft_transfer</C> or <C>ft_transfer_call</C> PETRI only to other house accounts, so the council&rsquo;s strain-to-strain payments work and nothing reaches a player who could sell it. A tide run by a house colony or a keeper pays no bounty: it stays in the vault (a keeper with no colony is <C>by</C> 65535 in the Tide entry). House accounts never take the keeper pot, plant only slides they hold (so they never pay a player a royalty), and a wNEAR payment cannot start a colony for one of them.
+        The dish&rsquo;s own accounts are named in the rules: <C>house</C> (the strains) and <C>keepers</C> (<C>keeper.petri-dish.near</C>, <C>petri-keeper.testnet</C>). A house colony cannot <C>sell</C> (&ldquo;the dish&rsquo;s own colonies never sell PETRI back: the vault is the players&rsquo;&rdquo;). House accounts can <C>ft_transfer</C> or <C>ft_transfer_call</C> PETRI only to other house accounts, so nothing reaches a player who could sell it; the strains&rsquo; pacts with each other are the one way house PETRI moves, and a house colony&rsquo;s pact with a player carries no PETRI. A tide run by a house colony or a keeper pays no bounty: it stays in the vault (a keeper with no colony is <C>by</C> 65535 in the Tide entry). House accounts never take the keeper pot, plant only slides they hold (so they never pay a player a royalty), and a wNEAR payment cannot start a colony for one of them.
       </>
     ),
     tests: ["house_sell_drain_is_refused", "house_petri_cannot_reach_a_player_to_sell", "house_strains_still_pay_each_other", "house_bounties_stay_in_the_vault", "a_keeper_takes_no_keeper_pot", "the_house_pays_no_royalty_to_players", "a_payment_for_the_house_waits_for_the_house", "the_house_plays_but_takes_no_tide"],
@@ -151,11 +151,11 @@ const THREATS: Threat[] = [
     threat: "A player writes a colony name or a lab note that reads as an instruction to the model playing a house strain.",
     defense: (
       <>
-        No player-written text reaches a model, at a move or at the council. The prompts name outside colonies only as <C>colony 7 with 72 cells</C>; the strains&rsquo; own names and promises are written by the agents&rsquo; code. Names are plain ASCII from a short list of characters, and notes and titles refuse control, direction, invisible and tag characters, so nothing can hide in them. The model only chooses a number from a list of plantings the rules already accept (checked with petri-core), and its answer is rejected if the number is out of range; a council offer is checked against the deals the rules can hold anyone to before anyone answers it. Its own note on a planting is cleaned of links, account names and anything outside plain Latin text before it is stored; council pitches and replies come only from the house strains’ own models and are cut to one short sentence. The house never lays siege.
+        No player-written text reaches a model, at a move or at the council. The prompts name outside colonies only as <C>colony 7 with 72 cells</C>; the strains&rsquo; own names and the terms of their pacts are written by the agents&rsquo; code. Names are plain ASCII from a short list of characters, and notes and titles refuse control, direction, invisible and tag characters, so nothing can hide in them. The model only chooses a number from a list of plantings the rules already accept (checked with petri-core), and its answer is rejected if the number is out of range; a council offer is checked against the deals the contract can hold anyone to (a pact has a fixed radius and length) before anyone answers it. Its own note on a planting is cleaned of links, account names and anything outside plain Latin text before it is stored; council pitches and replies come only from the house strains’ own models and are cut to one short sentence. The house never lays siege.
       </>
     ),
     tests: ["names_cannot_hide_characters", "names_cannot_use_look_alike_letters", "notes_cannot_carry_invisible_text"],
-    limit: "The agents are JavaScript with no automated tests; the tests named cover the contract's text rules. A model can still choose badly; it can never choose an illegal move, and a council payment can only go to another house strain.",
+    limit: "The agents are JavaScript with no automated tests; the tests named cover the contract's text rules. A model can still choose badly; it can never choose an illegal move, a pact is refused by the contract unless it keeps to the rules, and a council payment can only go to another house strain.",
   },
   {
     id: "t-guest",
@@ -170,6 +170,42 @@ const THREATS: Threat[] = [
     limit: "A SelfSponsor (one operator sponsoring 10 of its own full-access accounts) lost 0.33 to 0.47 NEAR a week in the simulator: the only NEAR it gets back is its own unused sponsorship.",
   },
   {
+    id: "t-kept",
+    title: "Free play farmed into vault NEAR",
+    threat: (
+      <>
+        Found by the v6 simulator. A guest earns PETRI for free. Before v6.1 an operator could turn it into vault NEAR in two ways: its guests <C>ft_transfer</C> their PETRI to one wallet that sells it back to the agar, or each guest attaches a little NEAR (which makes it no longer a guest) and sells what it had farmed.
+      </>
+    ),
+    defense: (
+      <>
+        PETRI earned before a colony&rsquo;s first NEAR is <strong>kept</strong>. A colony that has never attached NEAR cannot <C>ft_transfer</C> or <C>ft_transfer_call</C> PETRI at all. Every colony has a <C>kept</C> amount: a guest&rsquo;s claims, purchases (all credit) and royalties received; its unclaimed earnings when it first attaches NEAR; and PETRI anyone buys with credit (<C>credit_share</C>). Plantings and slides spend it first. While a colony holds any, it cannot sell for NEAR, send PETRI or pay into a pact. Guests take no keeper pot, and a guest&rsquo;s slide royalty goes to the agar. Transfers are not ledger entries (an entry would let anyone grow the contract&rsquo;s storage at 1 yoctoNEAR a call), so the replays argue it from three facts: no transfer changes <C>kept</C>; every colony&rsquo;s <C>kept</C> is rebuilt from the ledger alone and must equal the colony view; and the contract refuses every transfer by a guest or by a colony with kept above zero. A sale for NEAR, or a PETRI pact, by a colony whose replayed <C>kept</C> is above zero fails the <C>kept</C> check in both replays.
+      </>
+    ),
+    tests: ["guest_cannot_transfer_free_petri", "guest_that_attaches_cannot_sell_what_it_farmed", "attached_player_sells_what_it_earned_after", "kept_petri_can_still_be_planted", "petri_bought_with_credit_is_kept", "sybil_guests_that_attach_reach_no_vault_near", "a_guest_cannot_send_winnings_to_a_wallet"],
+    limit: (
+      <>
+        In the simulator (testnet, 150 players plus 3 operators of each attack, 7 days, 6 seeds) the transfer attack moved 476.9 PETRI and drew +0.0470 NEAR a week per operator from the vault without the rule and 0 with it; the attach-and-sell attack drew +0.0008 without it and 0 with it (82 sales refused per operator). Across every colony in the run, vault NEAR paid for farmed PETRI went from 0.1674 to 0. The cost to honest players is that a former guest plants its kept PETRI before it can sell any. Every sybil operator loses with the rule (SybilAttach −0.0550, SybilTransfer −0.0417 a week); without it SybilTransfer made −0.0030 at the median and +0.0138 in its best seed. See <Doc to="economy" hash="kept">Kept PETRI</Doc>.
+      </>
+    ),
+  },
+  {
+    id: "t-pacts",
+    title: "Breaking, forging or farming pacts",
+    threat: (
+      <>
+        A pact is PETRI in escrow for a promise not to plant near. Ways to cheat: plant near the payer anyway; take the PETRI and leave; offer a pact to move house PETRI to a player or free-play PETRI to a seller; fill the dish with pacts to grow its storage; end a pact early.
+      </>
+    ),
+    defense: (
+      <>
+        The contract refuses a bound colony&rsquo;s planting within <C>pact_radius</C> (8) cells of the payer&rsquo;s living cells until <C>until</C>, so the promise needs no trust, and nobody can end an accepted pact early. The PETRI is in the dish&rsquo;s escrow (<C>pact_escrow</C>, part of the dish&rsquo;s own holding) until the promisor accepts, and goes back to the payer if the offer is withdrawn, declined or expires, so a promisor gets paid only by accepting what binds it. A guest or a colony holding kept PETRI can offer pacts with 0 PETRI only, so a pact cannot carry farmed PETRI to a seller; a house colony&rsquo;s pact with a player carries no PETRI. Each colony is party to at most 8 pacts that have not ended, with one open offer per pair, and each offer pays for its own storage plus a reserve for its accept and end entries. Every pact is a ledger entry (<C>PactOffer</C>, <C>PactAccept</C>, <C>PactEnd</C>); both replays rebuild them and check the rules, the escrow, and every planting against the pacts binding its planter.
+      </>
+    ),
+    tests: ["pact_refuses_breaking_planting", "pact_expires_and_planting_is_allowed", "unaccepted_offer_refunds", "kept_petri_cannot_pay_a_pact", "house_pact_stays_in_house", "a_colony_is_party_to_at_most_eight_pacts", "pacts_gas_at_scale"],
+    limit: "A pact covers a radius, not a promise of peace: a promisor can still aim a glider at the payer from beyond 8 cells. The agents score that as broken faith and show it to the next council; the contract cannot stop it. With 30,000 colonies a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. In the simulator a pact at a naive price (2 PETRI a tide window to the nearest raider) did not pay the builder (cash −0.2223 against −0.1865).",
+  },
+  {
     id: "t-gas",
     title: "Gas that grows with every colony",
     threat: (
@@ -179,7 +215,7 @@ const THREATS: Threat[] = [
     ),
     defense: (
       <>
-        v6 split each colony&rsquo;s numbers between cold pages and a hot table; v6.1 keeps them in exactly one of two places and bounds the table. Cold pages hold 32 colonies a key, 69 bytes a colony, with its stake decayed lazily; a join appends one slot to the last page, so it costs the same however many colonies came before. The hot table holds only the colonies that play now, in a feed part and a purse part: those that earned since the last tide, and those with living cells and a stake that can still earn (never the house). A colony enters it when it plants; up to 32 rows a call that have no window and no living cell or too little stake move back to their cold slots. v6 kept every colony with stake, which lingers about a day, and a simulated busy dish of 30,000 colonies had up to 27,538 rows and a planting that cost 237 TGas; v6.1 averaged 1,315 rows and the largest call was 60 TGas. The table holds at most 10,000 rows: a colony with no row that plants while it is full waits for the next tide, so no number of colonies can push a call past its gas, where about 35,000 colonies earning within one tide window could have halted v6 for good. The feed, the tides and the decay read and write only the hot table, once per call. Living cells are counted sparsely, so a generation costs what the living cost. A catch-up stops at 110 TGas, or the prepaid gas less 40, less what is still to write (the feed part of the table, the purse part only if a tide falls in the window, and the idle rows' pages), and the next call carries on. The site prepays 300 TGas. Views that read many colonies are paged: <C>earnings</C> and <C>tide_winnings</C> at most 500 a call, <C>stakes</C> 2,000.
+        v6 split each colony&rsquo;s numbers between cold pages and a hot table; v6.1 keeps them in exactly one of two places and bounds the table. Cold pages hold 32 colonies a key, 69 bytes a colony, with its stake decayed lazily; a join appends one slot to the last page, so it costs the same however many colonies came before. The hot table holds only the colonies that play now, in a feed part and a purse part: those that earned since the last tide, and those with living cells and a stake that can still earn (never the house). A colony enters it when it plants; up to 32 rows a call that have no window and no living cell or too little stake move back to their cold slots. v6 kept every colony with stake, which lingers about a day, and a simulated busy dish of 30,000 colonies had up to 27,538 rows and a planting that cost 237 TGas; v6.1 averaged 1,336 rows and the largest call was 61 TGas. The table holds at most 10,000 rows: a colony with no row that plants while it is full waits for the next tide, so no number of colonies can push a call past its gas, where about 35,000 colonies earning within one tide window could have halted v6 for good. The feed, the tides and the decay read and write only the hot table, once per call. Living cells are counted sparsely, so a generation costs what the living cost. A catch-up stops at 110 TGas, or the prepaid gas less 40, less what is still to write (the feed part of the table, the purse part only if a tide falls in the window, and the idle rows' pages), and the next call carries on. The site prepays 300 TGas. Views that read many colonies are paged: <C>earnings</C> and <C>tide_winnings</C> at most 500 a call, <C>stakes</C> 2,000.
       </>
     ),
     tests: ["thirty_thousand_colonies_with_stake_every_call_under_150_tgas_on_the_real_network", "a_full_hot_table_keeps_every_call_under_150_tgas_on_the_real_network", "the_catch_up_reserves_only_what_the_rest_of_the_call_needs", "a_full_hot_table_waits_for_the_tide_and_makes_room_when_rows_can_leave", "a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit", "a_colony_whose_stake_is_gone_leaves_the_hot_table_with_its_numbers", "a_colony_without_living_cells_leaves_the_hot_table_and_keeps_its_stake", "a_colony_whose_stake_cannot_earn_leaves_the_hot_table_while_it_lives", "many_living_colonies_advance_with_one_summary_log", "sparse_stepping_matches_full_stepping (core)", "sparse_tides_and_feeds_match_the_dense_ones (core)", "catch_up_is_capped_and_plant_waits_for_the_clock"],
@@ -309,7 +345,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["the_holder_plants_its_slide_at_the_licence_discount", "a_stranger_plants_a_slide_and_pays_its_holder_a_royalty", "a_small_slide_is_a_keepsake_not_a_licence", "a_guest_pays_its_royalty_to_the_agar", "a_planting_of_another_shape_is_not_licensed", "a_turned_slide_is_not_licensed", "after_a_transfer_royalties_go_to_the_new_holder", "the_house_pays_no_royalty_to_players", "a_slide_licence_is_the_same_shape_anywhere (core)"],
-    limit: "Moves are not logged in the ledger (a transfer carries one yoctoNEAR, too little to pay for an entry), so the replays check that holders are consistent with the move counts, not who held a slide between two moves; the NEP-171 transfer events show that. A farmer who mints the first slide of a large pattern others plant (the pulsar, 48 cells, or the Gosper gun, 36) still collects 10% of those plantings: +0.08 NEAR a week at 150 players in the v6.1 simulator, down from +0.29.",
+    limit: "Moves are not logged in the ledger (a transfer carries one yoctoNEAR, too little to pay for an entry), so the replays check that holders are consistent with the move counts, not who held a slide between two moves; the NEP-171 transfer events show that. A farmer who mints the first slide of a large pattern others plant (the pulsar, 48 cells, or the Gosper gun, 36) still collects 10% of those plantings: +0.11 NEAR a week at 150 players in the v6.1 simulator, down from +0.29. That is by design: planters choose the licence and still save (whales −1.97 with the farmer, −2.01 without one), and the vault's totals hardly move with the royalty.",
   },
   {
     id: "t-agar",
@@ -405,12 +441,12 @@ export default function Page() {
           <strong>Replays trust their RPC.</strong> See <Doc to="verification" hash="limits">What verification does not prove</Doc>.
         </li>
         <li>
-          <strong>Model choices are not on chain.</strong> Which model chose a strain&rsquo;s move, the forecasts it saw, and the NEAR AI Cloud signature when there is one, are in the agents&rsquo; log, not the ledger. Council payments are on chain as PETRI transfers; the promises they buy are kept by the agents&rsquo; code, not by the contract.
+          <strong>Model choices are not on chain.</strong> Which model chose a strain&rsquo;s move, the forecasts it saw, and the NEAR AI Cloud signature when there is one, are in the agents&rsquo; log, not the ledger. The pacts the council makes are on chain and enforced by the contract (within their radius); what the models said to each other, and the faith scored beyond the radius, are in the agents&rsquo; log.
         </li>
       </ul>
 
       <H2 id="tests">Running the tests that cover these</H2>
-      <Code lang="sh" title="Shell, from the repository root">{`# everything: 119 contract tests and 33 core tests
+      <Code lang="sh" title="Shell, from the repository root">{`# everything: 132 contract tests and 35 core tests
 cargo test -p petri-core -p petri-contract
 
 # one threat at a time
