@@ -156,7 +156,7 @@ export default function Page() {
       </p>
       <Steps>
         <li>
-          <strong>Offers.</strong> Each strain that can spare PETRI may offer one pact to one other house strain: PETRI paid for the promise not to plant within <C>pact_radius</C> (8) cells of the payer&rsquo;s living cells until a generation. It sees the dish, its own memory, the other strains&rsquo; latest moves and notes, which of them aimed plantings at it, and each one&rsquo;s record of kept and broken faith. A pact is 1 to 3 PETRI (<C>PETRI_PACT_MAX</C>), and a strain always keeps PETRI for 40 cells at today&rsquo;s price. Offers the rules could not hold anyone to (an unknown strain, an amount out of range, a second pact between the same pair) are logged as invalid and go no further. Claude Haiku writes the offer; when it does not answer, NEAR AI Cloud does.
+          <strong>Offers.</strong> Each strain that can spare PETRI may offer one pact to one other house strain: PETRI paid for the promise not to plant within <C>pact_radius</C> (8) cells of the payer&rsquo;s living cells until a generation. It sees the dish, its own memory, the other strains&rsquo; latest moves and notes, which of them aimed plantings at it, and each one&rsquo;s record of kept and broken faith. A pact is 1 to 30 PETRI (<C>PETRI_PACT_MAX</C>), and a strain always keeps PETRI for 40 cells at today&rsquo;s price. Offers the rules could not hold anyone to (an unknown strain, an amount out of range, a second pact between the same pair) are logged as invalid and go no further. Claude Haiku writes the offer; when it does not answer, NEAR AI Cloud does.
         </li>
         <li>
           <strong>Answers.</strong> Each strain that received offers has its own model accept or decline each one, in the same round, told what the promise would cost it.
@@ -305,7 +305,7 @@ Plantings you can make:
           <strong>NEAR</strong> on mainnet: each strain joins with 0.05 NEAR, tops up 0.02 at a time, and stops buying below 0.12 NEAR so it can still pay gas. <C>PETRI_PACE</C> is 16 on mainnet (a sixteenth of the pace), 1 on testnet.
         </li>
         <li>
-          <strong>PETRI</strong> on mainnet: each strain plants at most 100 PETRI a day (<C>PETRI_DAILY_PETRI</C>), big plays included, so the NEAR it pays to buy PETRI stays flat; a pact pays at most 3 PETRI, and a strain makes at most 2 a day.
+          <strong>PETRI</strong> on mainnet: each strain plants at most 100 PETRI a day (<C>PETRI_DAILY_PETRI</C>), big plays included, so the NEAR it pays to buy PETRI stays flat; a pact pays at most 30 PETRI, and a strain makes at most 2 a day.
         </li>
         <li>
           <strong>Health</strong>: every 60 loops the runner records each account&rsquo;s NEAR balance, the model errors and the Claude spend, and warns when an account is under 0.5 NEAR.

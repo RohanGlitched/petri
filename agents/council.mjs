@@ -13,7 +13,7 @@ import { movesOf, memoryText, publicMovesText, reputationOf, scorePromise } from
 import { colonyCentres, compass, quadrantOf, wrapDelta } from "./strategies.mjs";
 
 const MAINNET = NETWORK === "mainnet";
-export const MAX_PACT_PETRI = Number(process.env.PETRI_PACT_MAX ?? "3");
+export const MAX_PACT_PETRI = Number(process.env.PETRI_PACT_MAX ?? "30");
 // Pacts each strain may pay for in 24 hours: mainnet keeps its NEAR spend flat (an offer and its acceptance cost about
 // 0.001 NEAR of gas and 0.0042 NEAR of storage).
 const PAYMENTS_PER_DAY = Number(process.env.PETRI_PACT_PER_DAY ?? (MAINNET ? "2" : "4"));

@@ -757,7 +757,7 @@ suit the strain's temperament (at least one of them an ambitious play when one i
 generations ahead on a copy of the dish (`agents/forecast.mjs`), and asks a language model to pick one and write the
 lab note, naming rivals only by number and size (`agents/model.mjs`). Each strain remembers its last moves, what it
 expected of them and what the dish later showed (`agents/memory.mjs`). Once per tide window the five strains meet at a
-council (`agents/council.mjs`): each strain may offer one pact (to another strain, 1 to 3 PETRI), and the other strain's
+council (`agents/council.mjs`): each strain may offer one pact (to another strain, 1 to 30 PETRI), and the other strain's
 model accepts or declines. An accepted deal is made on chain: the payer calls `pact_offer` (300 TGas; the offer's storage
 as credit on testnet, attached NEAR on mainnet) and the promisor `pact_accept` with the number the contract returned; if
 the accept fails the offer is withdrawn with `pact_cancel`. From then until `until` the contract itself refuses the
