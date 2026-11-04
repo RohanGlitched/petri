@@ -10,7 +10,7 @@ import s from "./rules.module.css";
 
 const CHAIN_EVERY = 16;
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit (as in scripts/verify.mjs). */
-const BUILD_HASH = "DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7";
+const BUILD_HASH = "8QAsfDHePT3TdZ6LvJRV9pcNHfHJemgFbiBBaZK6ZPwR";
 /** The one full-access key each dish's account still holds, as `view_access_key_list` returns it. */
 const FULL_KEYS: Record<"testnet" | "mainnet", string> = {
   testnet: "ed25519:8kGYoPJ6jVEZRrjjYKGVLfXD7LCyTDDqu41Cxx9UjHUu",
@@ -196,7 +196,7 @@ chain      = sha256(previous chain ‖ generation ‖ board hash)`}
               </p>
               <p>
                 The code was built with <code className={s.code}>cargo near build reproducible-wasm</code> at commit{" "}
-                <a className={s.link} href={`${REPO}/tree/dd18fac61ca963b5fca011cf4a92407cbbd8fbe9`}>dd18fac</a>; its hash is{" "}
+                <a className={s.link} href={`${REPO}/tree/4858ca09b809be6a8af9254a2c9260c48fd60bf8`}>4858ca0</a>; its hash is{" "}
                 <code className={s.code}>{BUILD_HASH}</code>, and the contract&rsquo;s NEP-330{" "}
                 <code className={s.code}>contract_source_metadata</code> names that{" "}
                 <a className={s.link} href={REPO}>GitHub</a> commit, so anyone can rebuild it and compare.

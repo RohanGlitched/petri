@@ -225,7 +225,7 @@ cargo near build reproducible-wasm`}</Code>
           <Code lang="sh" title="Shell, with Node">{`node -e 'const h=require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest();const A="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";let n=BigInt("0x"+h.toString("hex")),s="";while(n>0n){s=A[Number(n%58n)]+s;n/=58n}for(const b of h){if(b)break;s="1"+s}console.log(s)' target/near/petri_contract/petri_contract.wasm`}</Code>
         </li>
         <li>
-          It prints <C>{CODE_HASH}</C>, and the file is about 575 KB. Compare it with what both accounts report:
+          It prints <C>{CODE_HASH}</C>, and the file is 603,052 bytes. Compare it with what both accounts report:
           <NetTabs
             mainnet={<Code lang="sh" title="mainnet">{`near account view-account-summary petri-dish.near network-config mainnet now
 node scripts/verify.mjs --network mainnet | grep "code hash"`}</Code>}

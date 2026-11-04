@@ -169,9 +169,9 @@ Node 20 or later, nothing to install: the script loads the committed WebAssembly
 
 ```
   match   Solvent (NEAR held >= owed, from the ledger) yes
-  match   Deployed code hash                           DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7
+  match   Deployed code hash                           8QAsfDHePT3TdZ6LvJRV9pcNHfHJemgFbiBBaZK6ZPwR
   DIFFERS  Full-access keys                             1  (expected: 0)
-Source: https://github.com/RohanGlitched/petri/tree/dd18fac61ca963b5fca011cf4a92407cbbd8fbe9; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
+Source: https://github.com/RohanGlitched/petri/tree/4858ca09b809be6a8af9254a2c9260c48fd60bf8; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
 …
   The contract account still has a full-access key: whoever holds it could deploy different code.
 1 check(s) differ.
@@ -181,29 +181,29 @@ Source: https://github.com/RohanGlitched/petri/tree/dd18fac61ca963b5fca011cf4a92
 
 ### Rebuild the contract and compare its hash
 
-Both dishes run one build, made with `cargo near build reproducible-wasm` at commit `dd18fac`. With [cargo-near](https://github.com/near/cargo-near) 0.22 and Docker:
+Both dishes run one build, made with `cargo near build reproducible-wasm` at commit `4858ca0`. With [cargo-near](https://github.com/near/cargo-near) 0.22 and Docker:
 
 ```bash
 git clone https://github.com/RohanGlitched/petri && cd petri
-git checkout dd18fac61ca963b5fca011cf4a92407cbbd8fbe9
+git checkout 4858ca09b809be6a8af9254a2c9260c48fd60bf8
 cd contract && cargo near build reproducible-wasm
 ```
 
-It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb` (pinned in `contract/Cargo.toml`), in under a minute once the image is pulled, and ends with (the file is about 575 KB):
+It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb` (pinned in `contract/Cargo.toml`), in under a minute once the image is pulled, and ends with (the file is 603,052 bytes):
 
 ```
-     - SHA-256 checksum hex : bae7a8b834848176acf89b0768a2439815baa04056abec19434a5ff7c1b892b4
-     - SHA-256 checksum bs58: DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7
+     - SHA-256 checksum hex : 6df154bd52b56999299185743e7011e0cec690dacdba1d3e8be2a15c49a2bd7c
+     - SHA-256 checksum bs58: 8QAsfDHePT3TdZ6LvJRV9pcNHfHJemgFbiBBaZK6ZPwR
 ```
  The contract's `contract_source_metadata` (NEP-330) names the same commit and image. Its `build_info.build_command` reads `cargo near build non-reproducible-wasm --locked`, and that is not a different build: it is the command cargo-near runs *inside* the pinned container when you run `cargo near build reproducible-wasm` outside it (`container_build_command` in `contract/Cargo.toml`). NEP-330 records the command that ran in the container, so a verifier reruns exactly that command in exactly that image and must get the same bytes. To read the deployed hash yourself:
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_account","finality":"final","account_id":"petri-dish.near"}}'
-# "code_hash":"DabiJwsVJnfizmhfTFGCmdUma2o3THFUZ89eHMjGoMC7"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
+# "code_hash":"8QAsfDHePT3TdZ6LvJRV9pcNHfHJemgFbiBBaZK6ZPwR"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
 
 near account view-account-summary petri-dish.near network-config mainnet now
-# near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": bae7a8b834848176acf89b0768a2439815baa04056abec19434a5ff7c1b892b4
+# near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": 6df154bd52b56999299185743e7011e0cec690dacdba1d3e8be2a15c49a2bd7c
 ```
 
 ### The lock
