@@ -346,6 +346,7 @@ function Offer({ o, from, to, net }: { o: CouncilOffer; from: Colony | undefined
           <cite>{to?.name ?? o.to}{o.replyModel ? `, ${o.replyModel}` : ""}</cite>
         </blockquote>
       )}
+      {o.cleared && <p className={c.dimLine}>Sealed round: {o.cleared}.</p>}
       {(o.outcome || o.faith) && (
         <p className={c.outcome}>
           {o.outcome && (

@@ -122,9 +122,10 @@ const PROPOSE_SCHEMA = {
     deal: { type: "boolean" },
     to: { type: "string" },
     petri: { type: "integer" },
+    max_petri: { type: "integer" },
     pitch: { type: "string" },
   },
-  required: ["deal", "to", "petri", "pitch"],
+  required: ["deal", "to", "petri", "max_petri", "pitch"],
   additionalProperties: false,
 };
 
@@ -135,8 +136,8 @@ const ANSWER_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        properties: { offer: { type: "integer" }, accept: { type: "boolean" }, reply: { type: "string" } },
-        required: ["offer", "accept", "reply"],
+        properties: { offer: { type: "integer" }, accept: { type: "boolean" }, ask: { type: "integer" }, reply: { type: "string" } },
+        required: ["offer", "accept", "ask", "reply"],
         additionalProperties: false,
       },
     },
@@ -214,7 +215,8 @@ Outside colonies: ${outside.length ? outside.join("; ") : "none alive"}.`;
     const system = `You are ${s.name}, one of the five house strains on a shared Petri dish run by a NEAR smart contract. ${s.voice}
 The dish follows Conway's Life. House strains are never fed: you play for living cells and territory. The house council meets once per tide window (${T} generations). You may offer at most one pact to another house strain: you pay it PETRI, held by the contract until it accepts, and in return the contract itself refuses every planting of that strain within ${radius} cells of your living cells for the next ${holdGens} generations. It cannot break the pact; it could still aim gliders at you from farther away, and the council remembers faith broken that way.
 PETRI you pay is PETRI you cannot plant. Offer only when the protection is worth more to you than the cells it would buy. No deal is often the right answer.
-Answer with JSON only. If you offer nothing, set deal false, to "", petri 0, pitch "". The pitch is one short sentence to the other strain, at most 80 characters.`;
+The council clears by sealed bids: besides the open offer (petri), state max_petri, the most you would pay for this pact (at least petri). The other strain never sees it; if it declines your offer but its own sealed ask is at most your max_petri, the deal clears at the midpoint of the two.
+Answer with JSON only. If you offer nothing, set deal false, to "", petri 0, max_petri 0, pitch "". The pitch is one short sentence to the other strain, at most 80 characters.`;
     const user = `${dish}
 ${memoryText(mem, s.account, nameOf, 4)}
 What the other house strains did lately:
@@ -235,6 +237,7 @@ You hold ${(held.get(s.account) / 1e6).toFixed(1)} PETRI and may offer 1 to ${ma
     // Only pacts the contract will take are offered on.
     const to = byName.get(String(j.to).trim().toLowerCase());
     const petri = Math.round(Number(j.petri));
+    const bid = Math.min(maxPay, Math.max(petri, Math.round(Number(j.max_petri) || 0)));
     let bad = null;
     if (!to || to === s) bad = `unknown counterparty ${String(j.to).slice(0, 30)}`;
     else if (!(petri >= 1 && petri <= maxPay)) bad = `amount ${j.petri} outside 1..${maxPay}`;
@@ -249,6 +252,7 @@ You hold ${(held.get(s.account) / 1e6).toFixed(1)} PETRI and may offer 1 to ${ma
       toAccount: to?.account ?? null,
       payerColony: me,
       petri,
+      bid,
       radius,
       until: world.due + holdGens,
       pitch: trimNote(j.pitch),
@@ -282,6 +286,7 @@ You hold ${(held.get(s.account) / 1e6).toFixed(1)} PETRI and may offer 1 to ${ma
     };
     const system = `You are ${s.name}, one of the five house strains on a shared Petri dish run by a NEAR smart contract. ${s.voice}
 At the house council other strains offer you PETRI for a pact: if you accept, the contract pays you the PETRI and then refuses every planting of yours within ${radius} cells of the payer's living cells for ${holdGens} generations. You cannot break it. PETRI buys cells (about ${(cellPrice / 1e6).toFixed(2)} PETRI each). Accept when the PETRI is worth more than the ground you give up. Each offer says how much of the open agar where you play the pact would bar: a pact around a colony far from your own costs you almost nothing, so its PETRI is nearly free; one around your close neighbour costs ground you would use.
+The council clears by sealed bids: with each answer give ask, the least PETRI for which you would take this pact (0 if no price would do). The payer never sees it; if you decline but your ask is at most the payer's own sealed bid, the deal clears at the midpoint, so state your true price.
 Answer with JSON only: one answer per offer, with a reply of one short sentence, at most 80 characters.`;
     const user = `${dish}
 ${memoryText(mem, s.account, nameOf, 3)}
@@ -293,6 +298,15 @@ ${mine.map((p, i) => `${i + 1}. ${p.from} offers ${p.petri} PETRI: ${p.terms}. $
       p.reply = trimNote(a?.reply ?? "");
       p.status = a?.accept ? "accepted" : "declined";
       events.push({ ...eventOf(p, world), note: p.reply || (r ? "" : "no answer from a model"), model: r?.model ?? null });
+      // The sealed round: a declined offer still clears when the promisor's ask is within the payer's sealed bid.
+      const ask = Math.round(Number(a?.ask) || 0);
+      if (!a?.accept && ask >= 1 && ask <= p.bid) {
+        const offered = p.petri;
+        p.petri = Math.ceil((ask + p.bid) / 2);
+        p.terms = termsText(p);
+        p.status = "accepted";
+        events.push({ ...eventOf(p, world), status: "cleared", note: `cleared in the sealed round at ${p.petri} PETRI (offered ${offered}, sealed bid ${p.bid}, sealed ask ${ask})`, model: null });
+      }
     }
   }
 

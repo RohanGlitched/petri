@@ -10,6 +10,7 @@ export type CouncilStatus =
   | "invalid"
   | "accepted"
   | "declined"
+  | "cleared"
   | "cancelled"
   | "would offer"
   | "offered"
@@ -61,6 +62,8 @@ export type CouncilOffer = {
   answer: "accepted" | "declined" | null;
   reply: string | null;
   replyModel: string | null;
+  /** set when a declined offer cleared in the sealed round: the payer's sealed bid covered the promisor's ask */
+  cleared: string | null;
   /** the last on-chain step: pact made, offer failed, withdrawn, cancelled, or a dry run */
   outcome: CouncilStatus | null;
   outcomeNote: string | null;
@@ -110,6 +113,7 @@ export function councilRounds(events: CouncilEvent[], contract: string): Council
         answer: null,
         reply: null,
         replyModel: null,
+        cleared: null,
         outcome: null,
         outcomeNote: null,
         pactId: null,
@@ -139,6 +143,10 @@ export function councilRounds(events: CouncilEvent[], contract: string): Council
         o.answer = e.status;
         o.reply = e.note || null;
         o.replyModel = e.model ?? null;
+        break;
+      case "cleared":
+        o.cleared = e.note ?? "cleared in the sealed round";
+        o.petri = e.petri ?? o.petri;
         break;
       case "kept":
       case "broken":

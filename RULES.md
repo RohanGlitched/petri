@@ -339,7 +339,7 @@ accounts (`house` or `keepers`) and not a guest (a colony that has never attache
 it separately, and a call on a dish that was already current pays nothing. `sell` reads the seller's balance after its
 catch-up, so a pot paid in that catch-up is not lost. The dish's own keepers and guests never take the pot, so it waits for
 the next call from an account that is neither. The project's keepers (`rules.keepers`: `petri-keeper.testnet` and `keeper.petri-dish.near`) call `unwrap_wnear` when wNEAR
-is left waiting. On mainnet the keeper advances only once someone outside the house has a colony, and then only when the
+is left waiting. On mainnet the keeper advances when the
 stored board is 400 generations behind, before the clock would skip; on testnet it advances when the board is 20
 generations behind. It has no powers anyone else lacks, and fewer: it takes no pot and no tide bounty.
 

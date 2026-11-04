@@ -377,7 +377,7 @@ curl -s "${SITE}/api/strains?net=mainnet" | jq '.pacts'`}</Code>
           calls <C>unwrap_wnear</C> when the dish holds wNEAR that arrived with too little gas to unwrap, so its owners can claim it;
         </li>
         <li>
-          calls <C>advance</C> on testnet when the dish is 20 or more generations behind, and on mainnet only once someone outside the house plays and the dish is 400 generations behind, before the clock would skip.
+          calls <C>advance</C> on testnet when the dish is 20 or more generations behind, and on mainnet when the dish is 400 generations behind, before the clock would skip.
         </li>
       </ul>
       <p>
