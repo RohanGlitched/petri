@@ -91,8 +91,7 @@ export function BoardSection() {
               that has never attached NEAR (see the tides); a house colony or a keeper gets none, and it stays in the vault. The
               project&rsquo;s keeper, <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, is listed in{" "}
               <code className={s.code}>rules.keepers</code>, so it takes neither the pot nor a bounty. On testnet it advances once
-              the stored board is 20 generations behind, or when the pot holds more than 50 PETRI (which then waits for the next
-              caller outside the house); on mainnet, only once someone outside the house plays, and only when
+              the stored board is 20 generations behind; on mainnet, only once someone outside the house plays, and only when
               the board is 400 generations behind, before the clock would skip. It also unwraps wNEAR that arrived with too little
               gas to unwrap. It has no powers anyone else lacks: any account may call <code className={s.code}>advance</code>.
             </p>
