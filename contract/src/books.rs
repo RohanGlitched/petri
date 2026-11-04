@@ -51,8 +51,9 @@ pub(crate) const HOT_WRITE_GAS_PER_BYTE: u64 = 72_000_000;
 pub(crate) const COLD_PAGE_GAS: u64 = 350_000_000_000;
 const FEED_KEY: &[u8] = b"h";
 const PURSE_KEY: &[u8] = b"j";
-/// v6.1 kept its cold pages under `X`; v6.2 uses `x`, so a page a relaunch missed is never read as v6.2 state.
-pub(crate) const COLD_PREFIX: u8 = b'x';
+/// v6.1 kept its cold pages under `X` and v6.2 under `x`; v6.3 uses `w`, so a page a relaunch missed is never read as
+/// v6.3 state.
+pub(crate) const COLD_PREFIX: u8 = b'w';
 const ATTACHED: u8 = 1;
 const KEPT: u8 = 2;
 

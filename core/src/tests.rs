@@ -607,3 +607,15 @@ fn petri_for_near_is_exact_for_any_deposit() {
         last = got;
     }
 }
+
+#[test]
+fn planting_stake_counts_only_petri_that_is_not_kept() {
+    // A guest, or a planting that spends no kept PETRI, adds the full stake.
+    assert_eq!(planting_stake(6, false, 1_000, 1_000), 6 * STAKE_UNIT);
+    assert_eq!(planting_stake(6, true, 1_000, 0), 6 * STAKE_UNIT);
+    // An attached colony paying entirely with kept PETRI adds none; partly, in proportion, rounded down.
+    assert_eq!(planting_stake(6, true, 1_000, 1_000), 0);
+    assert_eq!(planting_stake(6, true, 1_000, 5_000), 0);
+    assert_eq!(planting_stake(6, true, 1_000, 250), 4_500);
+    assert_eq!(planting_stake(7, true, 3, 1), 7 * STAKE_UNIT * 2 / 3);
+}

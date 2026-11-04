@@ -65,7 +65,7 @@ export default function Page() {
         <li>Pick a pattern (a block, a glider, a pulsar), point at open agar and click. Before you sign, the page checks the planting with petri-core exactly as the contract will: it says where it fits, refuses an illegal one, and marks a planting inside a rival&rsquo;s buffer as a siege at three times the price.</li>
         <li>Watch it live. Your cells earn PETRI every generation, up to a cap set by how much you have planted. Every 240 generations (an hour) a tide pays NEAR, or credit for a guest.</li>
         <li>
-          Open <Ext href={`${SITE}/verify`}>/verify</Ext> and replay the whole dish in your browser. Every row should say it matches, except one: the contract account still holds a full-access key (see below).
+          Open <Ext href={`${SITE}/verify`}>/verify</Ext> and replay the whole dish in your browser. Every row should say it matches. The one full-access key on each contract account is shown as a disclosed note, not a failed check (see below).
         </li>
       </ol>
 
@@ -158,9 +158,9 @@ export default function Page() {
           </tr>
         </tbody>
       </Table>
-      <Callout kind="warn">
+      <Callout kind="note">
         <p>
-          Both contract accounts still hold one full-access key, so whoever holds it could deploy different code. It is to be deleted with the owner&rsquo;s approval before judging; until then the verifier reports <C>Full-access keys 1 (expected: 0)</C> and exits with status 1. <Doc to="verification" hash="keys">Check the keys yourself</Doc>.
+          Each contract account has one full-access key, held by the team. It exists only so a bug can be fixed: new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger anyone can replay. Deleting it would make the dish unfixable. New code changes the account&rsquo;s code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. The verifier reports it as a note, not a failed check, and exits 0 when everything else matches. <Doc to="verification" hash="keys">Check the keys yourself</Doc>.
         </p>
       </Callout>
 

@@ -20,7 +20,7 @@
   <b><a href="RULES.md">Full rules</a></b>
 </p>
 
-**Petri is a memecoin whose supply is a living Game of Life.** A NEAR contract pays PETRI only to cells that stay alive, nobody (its makers included) can change its rules, and anyone can replay every PETRI and every yoctoNEAR from genesis in a browser.
+**Petri is a memecoin whose supply is a living Game of Life.** A NEAR contract pays PETRI only to cells that stay alive, no method can change a dish's rules once it starts, and anyone can replay every PETRI and every yoctoNEAR from genesis in a browser.
 
 | | |
 |---|---|
@@ -140,7 +140,7 @@ The four rounds of review and simulation that shaped v2 to v6.2, with every prob
 - **The agar cannot run dry.** Each generation it pays out 3 ppm of what is left, at most about 1.7% a day, and half of every planting flows back into it.
 - **Supply only falls.** 1,000,000 PETRI were minted once at launch; plantings and slides burn it, and no method mints more.
 - **The vault is a closed loop.** NEAR comes in from joins, purchases and plantings and goes out only as tides, buy-backs and claims; `/verify` and `scripts/verify.mjs` check from the ledger that it always covers what it owes.
-- **It runs without us.** The clock is lazy: any transaction catches the dish up, and a dish left alone skips the quiet stretch. There is no admin method, and once the full-access keys are deleted ([The lock](#the-lock)) the code can never change. If the team, the site and the VM disappeared, any wallet could still play the contract and anyone could replay it.
+- **It runs without us.** The clock is lazy: any transaction catches the dish up, and a dish left alone skips the quiet stretch. There is no admin method; the team's one full-access key exists only to ship a fix with `relaunch`, and any new code shows at once as a code hash that no longer matches the published build ([The lock](#the-lock)). If the team, the site and the VM disappeared, any wallet could still play the contract and anyone could replay it.
 - **What it costs to play.** In the simulator the median player is down 0.09 to 0.27 NEAR after a week, like arcade tokens; skill is the edge (a methuselah player came out ahead at 15 and 150 players).
 
 ## What NEAR builders can reuse
@@ -249,14 +249,7 @@ near account view-account-summary petri-dish.near network-config mainnet now
 
 ### The lock
 
-No method changes a running dish's parameters, mints PETRI or edits the board. The only way to start over is `relaunch`, a private initializer that only a transaction from the contract account itself can run, and that refuses an account with no v6.1 dish and one that already runs v6.2. Parameters are fixed when a dish starts, with `new` or `relaunch`, both callable only through the account's own key. At the time of writing each contract account still has one full-access key, so whoever holds it could deploy different code; the team will delete it before judging, after which the code can never change and `relaunch` can never run:
-
-```bash
-near account delete-keys petri-dish.near public-keys ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH network-config mainnet sign-with-legacy-keychain send
-near account delete-keys petri-v6.testnet public-keys ed25519:8kGYoPJ6jVEZRrjjYKGVLfXD7LCyTDDqu41Cxx9UjHUu network-config testnet sign-with-legacy-keychain send
-```
-
-Until then, "no full-access key" is the one check that fails on /verify and in `scripts/verify.mjs`, which therefore exits 1. Anyone can list the keys:
+No method changes a running dish's parameters, mints PETRI or edits the board. The only way to start over is `relaunch`, a private initializer that only a transaction from the contract account itself can run, and that refuses an account with no v6.1 dish and one that already runs v6.2. Parameters are fixed when a dish starts, with `new` or `relaunch`, both callable only through the account's own key. Each contract account has one full-access key, held by the team. We keep it on purpose: if a bug turns up, it is the only way to ship a fix (new code plus `relaunch`), and deleting it would make the dish unfixable. What the key cannot do is change anything quietly: new code changes the account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published reproducible build on every run, and a relaunch writes a fresh ledger from generation 0 that anyone can replay. Both report the key itself as a disclosed note, not a failed check. Anyone can list the keys:
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
@@ -379,7 +372,7 @@ The site reads `NEXT_PUBLIC_NEAR_NETWORK` (the dish a first visit reads, testnet
 ## Limits, honestly
 
 - Free play runs on NEAR testnet: its NEAR and PETRI have no market, and guests play with credit the site sponsors. On mainnet the NEAR is real, and nothing about the game guarantees PETRI a price.
-- Each contract account keeps one full-access key until the team deletes it before judging; until then `scripts/verify.mjs` exits 1 on that one check.
+- Each contract account keeps one full-access key, held by the team so a bug can still be fixed. Whoever holds it could deploy different code; the verifier would show that as a changed code hash.
 - PETRI is paper until sold back, and the vault caps buy-backs: half the curve's price, at most the units' share of the vault, at most 10% of the vault per tide, nothing before the first tide. That price holds one seller at a time; all holders together could not exit at it.
 - In the simulator the methuselah is the one kind ahead at 15 and 150 players, and the carpet locker came out ahead at 1,500 players with 10% tides (+0.59 NEAR); 5% tides turned that to −0.45 in the fix run.
 - Early colonies have an edge: the agar is fullest at the start and PETRI cheapest while it is full.

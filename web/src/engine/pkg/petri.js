@@ -45,8 +45,9 @@ export class Engine {
         }
     }
     /**
-     * Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is above zero):
-     * from then on its tide shares are paid in NEAR.
+     * Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is at least
+     * `min_join`): from then on its tide shares are paid in NEAR. The first time, its stake goes to zero (v6.3; the
+     * house keeps its stake): the cells it planted as a guest stop earning until it plants with PETRI that is not kept.
      * @param {number} colony
      */
     attach(colony) {
@@ -378,7 +379,7 @@ export class Engine {
         }
     }
     /**
-     * Plant without checks (replaying the contract's log).
+     * Plant without checks, adding the full stake (a guest's planting; forecasts and demos).
      * @param {number} colony
      * @param {Uint32Array | number[]} cells
      */
@@ -387,6 +388,33 @@ export class Engine {
         const ptr0 = passArray32ToWasm0(cells, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         wasm.engine_plant(this.__wbg_ptr, val2, ptr0, len0);
+    }
+    /**
+     * Plant without checks as the contract does (replaying its log, after `attach` for a planting that attaches): a
+     * colony that has attached NEAR, outside the house, stakes only the part of `paid` (cost and royalty, decimal) that
+     * its `kept` PETRI before the planting (decimal, spent first) did not cover; any other colony stakes in full.
+     * @param {number} colony
+     * @param {Uint32Array | number[]} cells
+     * @param {string} paid
+     * @param {string} kept
+     */
+    plant_paid(colony, cells, paid, kept) {
+        const val4 = +colony;
+        let ptr0, len0, ptr1, len1, ptr2, len2;
+        try {
+            ptr0 = passArray32ToWasm0(cells, wasm.__wbindgen_malloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(paid, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+            ptr2 = passStringToWasm0(kept, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len2 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr2) { wasm.__wbindgen_free(ptr2, len2 * 1, 1); }
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 4, 4); }
+            throw e;
+        }
+        wasm.engine_plant_paid(this.__wbg_ptr, val4, ptr0, len0, ptr1, len1, ptr2, len2);
     }
     /**
      * A specimen slide as the contract captures it: `colony`'s living cells in the `w` × `h` rectangle at (`x`, `y`),
@@ -443,6 +471,15 @@ export class Engine {
         const ptr0 = passArray64ToWasm0(stakes, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         wasm.engine_set_stakes(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * A colony's stake in thousandths of a planted cell, as the contract's `stakes` view gives it.
+     * @param {number} colony
+     * @returns {number}
+     */
+    stake_of(colony) {
+        const ret = wasm.engine_stake_of(this.__wbg_ptr, colony);
+        return ret;
     }
     /**
      * Advance `n` generations, tracking the chain and the agar's feed exactly as the contract does.

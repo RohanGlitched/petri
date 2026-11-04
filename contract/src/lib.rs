@@ -11,7 +11,8 @@
 //!   that rises as it empties, feeds a share of itself to living cells every generation (releasing it for at least
 //!   `live_floor` counted cells), and buys PETRI back at half the curve's price, never above its share of the vault.
 //! - Planting costs PETRI at a price that tracks what a cell earns (`siege_x` times that inside a rival's buffer); half
-//!   is burned, half goes back to the agar. Planting also adds stake, which decays every tide.
+//!   is burned, half goes back to the agar. Planting also adds stake, which decays every tide (a colony that has
+//!   attached NEAR stakes only PETRI that is not kept, and its first NEAR clears the stake it planted as a guest).
 //! - A colony is paid for at most `reach` living cells per cell of stake, so splitting into many colonies never earns
 //!   more and holding ground means planting again now and then.
 //! - NEAR players attach collects in the tide vault; NEAR from sponsored credit collects in a separate credit pool.
@@ -52,7 +53,7 @@ use near_sdk::json_types::{Base64VecU8, U128, U64};
 use near_sdk::serde_json::json;
 use near_sdk::store::{LookupMap, LookupSet, Vector};
 use near_sdk::{env, log, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue};
-use petri_core::{chain_due, chain_next, credit_share, decay_stake, feed_per_cell, feed_with, licensed_cost, petri_for_near, planting_cost, royalty, sell_back, tide_due_sparse, tide_split_sparse, ColonyId, Dish, PlantError, EMPTY, STAKE_UNIT};
+use petri_core::{chain_due, chain_next, credit_share, decay_stake, feed_per_cell, feed_with, licensed_cost, petri_for_near, planting_cost, planting_stake, royalty, sell_back, tide_due_sparse, tide_split_sparse, ColonyId, Dish, PlantError, EMPTY};
 
 mod books;
 mod intents;
@@ -73,7 +74,7 @@ const MAX_NOTE_BYTES: usize = 280;
 const MAX_NOTE_CHARS: usize = 140;
 /// Lab notes by ledger index (u32). The keys a relaunch might miss (balances, grants and pending NEAR of accounts it
 /// was not told about) and the cold pages use prefixes no earlier version used, so nothing an earlier version left
-/// behind can be read as v6.2 state (see `relaunch`).
+/// behind can be read as v6.3 state (see `relaunch`).
 const NOTE_PREFIX: &[u8] = b"N";
 /// The tide index: ledger positions of Tide entries, packed `TIDE_PAGE` to a key (`V` + page number).
 const TIDE_PREFIX: u8 = b'V';
@@ -946,8 +947,11 @@ impl Petri {
         self.store_dish(&dish);
         self.total_live += cells.len() as u32;
         // A colony that plants plays: its numbers move into the hot table if they are not there yet. The house is never
-        // fed and takes no share, so its stake stays in its cold slot.
-        let added = cells.len() as u64 * STAKE_UNIT;
+        // fed and takes no share, so its stake stays in its cold slot. A colony that has attached NEAR adds stake only for
+        // the part it paid with PETRI that is not kept (kept PETRI is spent first): free play never buys NEAR tides.
+        let kept_before = colony.kept.0 as u128;
+        let is_house = colony.house;
+        let added = planting_stake(cells.len() as u32, !guest && !colony.house, cost + toll, kept_before);
         let (tides, keep) = (self.tides, self.rules.stake_keep_bps);
         if colony.house {
             let mut c = books::cold_get(id);
@@ -982,7 +986,11 @@ impl Petri {
         require!(deposit >= storage + fee, format!("this planting needs {} NEAR for its storage and fee", fmt_near(storage + fee)));
         let (near, cred) = split_after_storage(attached, from_credit, storage);
         self.ledger.set(index as u32, Entry::Plant { generation: U64(self.generation), colony: id, cells: short, cost: U64(cost as u64), near: U128(near), credit: U128(cred), siege: check.siege, spent, licence: licence.clone() });
-        self.attach(id, near);
+        // A planting that attaches the colony stakes like an attached colony's: its first NEAR cleared its stake.
+        if self.attach(id, near) && !is_house {
+            let add = planting_stake(cells.len() as u32, true, cost + toll, kept_before);
+            self.hot_table().get_feed_mut(id).unwrap().stake += add;
+        }
         self.vault += near;
         self.near_in += near;
         self.credit_pool += cred;
@@ -1379,8 +1387,8 @@ impl Petri {
             ledger: Vector::new(b"L"),
             plant_count: 0,
             plant_index: Vector::new(b"I"),
-            balances: LookupMap::new(b"r"),
-            grants: LookupMap::new(b"e"),
+            balances: LookupMap::new(b"s"),
+            grants: LookupMap::new(b"g"),
             house: Vec::new(),
             sold: 0,
             fed: 0,
@@ -1412,7 +1420,7 @@ impl Petri {
             owned: LookupMap::new(b"T"),
             slides_burned: 0,
             royalties: 0,
-            pending: LookupMap::new(b"z"),
+            pending: LookupMap::new(b"y"),
             pending_owed: 0,
             wrapped: 0,
             unwrapping: 0,
@@ -1503,8 +1511,11 @@ impl Petri {
 
     /// Note that colony `id` brought `near` that reached the vault. At least `min_join` of it in one call attaches the
     /// colony (less only feeds the vault, so a yoctoNEAR on a credit-paid call never turns credit into NEAR). The first
-    /// time, what it earned before and has not claimed becomes kept PETRI (what it claimed as a guest already is).
-    fn attach(&mut self, id: u16, near: u128) {
+    /// time, what it earned before and has not claimed becomes kept PETRI (what it claimed as a guest already is), and
+    /// its stake (v6.3) goes to zero, in its hot row and its cold slot: the cells it planted as a guest were paid for by
+    /// free play, so they stop earning until it plants with PETRI that is not kept. The house keeps its stake. Returns
+    /// whether this call attached it.
+    fn attach(&mut self, id: u16, near: u128) -> bool {
         let b = self.books(id);
         if near >= self.rules.min_join.0 && !b.attached {
             self.update_books(id, |b| b.attached = true);
@@ -1512,8 +1523,22 @@ impl Petri {
             c.attached = true;
             let kept = c.kept.0 + b.earned;
             self.keep(id, &mut c, kept);
+            let house = c.house;
             self.colonies.set(id as u32 - 1, c);
+            if !house {
+                if let Some(r) = self.hot_table().get_feed_mut(id) {
+                    r.stake = 0;
+                }
+                let mut cold = books::cold_get(id);
+                if cold.stake != 0 {
+                    cold.stake = 0;
+                    cold.stake_tide = self.tides as u32;
+                    books::cold_set_many(&[(id, cold)]);
+                }
+            }
+            return true;
         }
+        false
     }
 
     /// Set colony `id`'s kept PETRI in its record `c`, and the flag its books mirror for the tides.
@@ -1547,7 +1572,7 @@ impl Petri {
                 self.colonies.set(id as u32 - 1, c);
             }
         } else {
-            self.attach(id, near);
+            let _ = self.attach(id, near);
             if from_credit > 0 {
                 let mut c = self.colony(id);
                 let kept = c.kept.0 + from_credit;
@@ -2073,7 +2098,7 @@ fn alive_colonies(dish: &Dish) -> Vec<ColonyId> {
 }
 
 pub(crate) fn emit(event: &str, data: near_sdk::serde_json::Value) {
-    log!("EVENT_JSON:{}", json!({ "standard": "petri", "version": "6.2.0", "event": event, "data": [data] }));
+    log!("EVENT_JSON:{}", json!({ "standard": "petri", "version": "6.3.0", "event": event, "data": [data] }));
 }
 
 pub(crate) fn fmt_petri(units: u128) -> String {

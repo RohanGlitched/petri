@@ -31,12 +31,14 @@ export const engine_load_compact: (a: number, b: number, c: number, d: number, e
 export const engine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
 export const engine_pact_breach: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
 export const engine_plant: (a: number, b: number, c: number, d: number) => void;
+export const engine_plant_paid: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
 export const engine_region_bitmap: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
 export const engine_set_agar: (a: number, b: number, c: number) => void;
 export const engine_set_colonies: (a: number, b: number) => void;
 export const engine_set_counted: (a: number, b: number) => void;
 export const engine_set_house: (a: number, b: number, c: number) => void;
 export const engine_set_stakes: (a: number, b: number, c: number) => void;
+export const engine_stake_of: (a: number, b: number) => number;
 export const engine_step: (a: number, b: number) => void;
 export const engine_tide: (a: number, b: number, c: number, d: number, e: number) => [number, number];
 export const engine_tide_due: (a: number) => number;

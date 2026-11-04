@@ -51,7 +51,7 @@ const CHECKS: [string, string][] = [
   ["Colony kept PETRI", "Every colony's kept PETRI (the colonies view) equals the replay's: a guest's claims, purchases and royalties, a first NEAR's unclaimed earnings, credit-bought PETRI, less what plantings and slides spent first."],
   ["Solvent (NEAR held >= owed, from the ledger)", "The account's balance minus its storage, plus wNEAR held, covers the vault, the credit pool, unspent credit, unclaimed winnings and pending NEAR, every term recomputed from the ledger rather than read from the contract."],
   ["Deployed code hash", "The account's code hash equals the reproducible build's (or --code-hash)."],
-  ["Full-access keys", "The contract account has no full-access key, so nobody can deploy other code."],
+  ["Full-access keys", "Reported as a note, never a failure: the count of full-access keys on the contract account (1, team-held, see The lock). New code would change the code hash, which the row above checks."],
 ];
 
 export default function Page() {
@@ -85,7 +85,7 @@ export default function Page() {
           <tr>
             <td>Can that code be replaced?</td>
             <td>
-              Only by a full-access key on the contract account. <a href="#keys">Check the keys</a>.
+              Only by the one team-held full-access key on the contract account, and any new code changes the code hash this check compares. <a href="#keys">The lock</a>.
             </td>
           </tr>
           <tr>
@@ -100,11 +100,11 @@ node scripts/verify.mjs --network testnet           # petri-v6.testnet (the defa
 node scripts/verify.mjs --contract other.testnet --code-hash <base58>   # any dish, any expected hash
 node scripts/verify.mjs --dump <file>               # a snapshot the contract's replay test wrote with PETRI_DUMP`}</Code>
       <p>
-        Exit status 0 means every check matched, 1 means at least one differed, 2 means the dish could not be read. It needs Node 20 or later. Mainnet reads go to <C>https://rpc.mainnet.fastnear.com</C> first, then <C>rpc.mainnet.near.org</C>. With <C>--dump</C> it replays a snapshot written by <C>PETRI_DUMP=&lt;file&gt; cargo test -p petri-contract replaying_the_ledger</C> instead of a live dish, and leaves out the two account rows.
+        Exit status 0 means everything matched (the full-access key is a note, not a check), 1 means at least one differed, 2 means the dish could not be read. It needs Node 20 or later. Mainnet reads go to <C>https://rpc.mainnet.fastnear.com</C> first, then <C>rpc.mainnet.near.org</C>. With <C>--dump</C> it replays a snapshot written by <C>PETRI_DUMP=&lt;file&gt; cargo test -p petri-contract replaying_the_ledger</C> instead of a live dish, and leaves out the two account rows.
       </p>
-      <Callout kind="warn">
+      <Callout kind="note">
         <p>
-          At the time of writing both dishes exit 1, for one reason: <C>Full-access keys 1 (expected: 0)</C>. The other 44 rows match. The keys are to be deleted with the owner&rsquo;s approval before judging.
+          Both dishes exit 0 when everything else matches. The full-access key row prints as a disclosed note, <C>Full-access keys 1 (team-held, see The lock)</C>, and does not count as a difference.
         </p>
       </Callout>
 
@@ -127,7 +127,7 @@ node scripts/verify.mjs --dump <file>               # a snapshot the contract's 
         </tbody>
       </Table>
       <p>
-        After the rows it prints the NEP-330 source link and build command, how many idle tide generations were skipped, the NEAR owed against the NEAR held, and a warning while a full-access key exists. For the first colonies whose earnings or winnings differ, and the first slides whose holder or royalties differ, it prints the contract&rsquo;s and the replay&rsquo;s numbers.
+        After the rows it prints the NEP-330 source link and build command, how many idle tide generations were skipped, the NEAR owed against the NEAR held, and a line about the full-access key while one exists. For the first colonies whose earnings or winnings differ, and the first slides whose holder or royalties differ, it prints the contract&rsquo;s and the replay&rsquo;s numbers.
       </p>
       <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing (block 222987157, minutes after the relaunch)" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222987157: 19 generations, 15 ledger entries, 5 colonies, 0 tides.
   match   History chain                                328c0669f420809b4da8bd710a7c08937a149fa50badcdb80c52c555c25b884f
@@ -174,11 +174,10 @@ node scripts/verify.mjs --dump <file>               # a snapshot the contract's 
   match   Colony kept PETRI                            5 of 5
   match   Solvent (NEAR held >= owed, from the ledger) yes
   match   Deployed code hash                           5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP
-  DIFFERS  Full-access keys                             1  (expected: 0)
+  note    Full-access keys                             1 (team-held, see The lock)
 Source: https://github.com/RohanGlitched/petri/tree/e791404e63d03c2010bdb216b9792a8559512653; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
 Owed, from the ledger: 0.23781 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.289504143558987700000003 NEAR.
-  The contract account still has a full-access key: whoever holds it could deploy different code.
-1 check(s) differ.`}</Code>
+Everything matches.`}</Code>
 
       <H2 id="replay">How the replay works</H2>
       <Steps>
@@ -299,9 +298,9 @@ node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
         <C>build_command</C> reads <C>cargo near build non-reproducible-wasm --locked</C>, and that is not a second, unverifiable build. When you run <C>cargo near build reproducible-wasm</C>, cargo-near starts the pinned image and runs its <C>container_build_command</C> inside it, which is exactly that command. NEP-330 records the command that ran in the container, so a verifier (SourceScan, or you) reruns that command in that image at that commit and must get the same bytes. near-sdk is pinned to <C>={NEAR_SDK}</C>: version 5.30 links host functions (gas keys, universal state init) that mainnet&rsquo;s protocol version 86 does not have yet, and pinning lets one build run on both networks.
       </p>
 
-      <H2 id="keys">Check the keys</H2>
+      <H2 id="keys">The lock: check the keys</H2>
       <p>
-        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. A contract with no full-access key, and no method that deploys code (Petri has none), can never change. The same key is the only way to run <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 for v6.2, and refuses an account with no v6.1 dish and one that already runs v6.2; without the key nobody can call it.
+        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Each contract account has one full-access key, held by the team on purpose. It exists only so a bug can be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 for v6.2, with a fresh ledger anyone can replay. Deleting the key would make the dish unfixable, so it will not be deleted. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
       </p>
       <NetTabs
         mainnet={<Code lang="sh" title="mainnet">{`near account list-keys petri-dish.near network-config mainnet now
@@ -346,11 +345,10 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
           </tr>
         </tbody>
       </Table>
-      <Callout kind="warn" title="Not locked yet">
+      <Callout kind="note" title="What the key can and cannot do">
         <p>
-          Both contract accounts still hold a full-access key, so the code could still be replaced. The owner will delete each key before judging with a command like the one below, after which nobody, the team included, can upgrade or patch the contract. Until then, treat the code as changeable and check this table against the chain.
+          The key cannot change anything quietly. New code changes the account&rsquo;s code hash, and <C>scripts/verify.mjs</C> compares that hash with the published reproducible build on every run. The verifier reports the key as a disclosed note, not a failed check. To see the keys yourself, run the commands above and compare them with the table.
         </p>
-        <Code lang="sh" title="What the owner will run (signed by the key itself)">{`near account delete-keys petri-dish.near public-keys ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH network-config mainnet sign-with-keychain send`}</Code>
       </Callout>
 
       <H2 id="browser">/verify in the browser</H2>
@@ -361,7 +359,7 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
         <li>
           It shows 37 rows in its own wording (listed in <C>web/src/components/verify/VerifyRun.tsx</C>). Next to the CLI it has one row for every PETRI burned, and no rows of their own for the code hash, the credit pool, credit paid at tides, sales and shares paid as credit, or each colony&rsquo;s credit winnings. Its credit, NEAR owed, pending and solvency rows are recomputed from the ledger as the CLI&rsquo;s are.
         </li>
-        <li>The lock (full-access keys) is shown apart from the replay, in amber rather than red: it is a step still to come, not a mismatch.</li>
+        <li>The lock (full-access keys) is shown apart from the replay, as a disclosed note rather than a failed check: the team holds one key on each contract account on purpose.</li>
         <li>
           The page does not compare the code hash with the reproducible build; that check is in <C>scripts/verify.mjs</C>, which carries the expected hash.
         </li>

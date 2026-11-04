@@ -11,8 +11,9 @@ export class Engine {
     add_credit_won(colony: number, amount: string): void;
     agar(): string;
     /**
-     * Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is above zero):
-     * from then on its tide shares are paid in NEAR.
+     * Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is at least
+     * `min_join`): from then on its tide shares are paid in NEAR. The first time, its stake goes to zero (v6.3; the
+     * house keeps its stake): the cells it planted as a guest stop earning until it plants with PETRI that is not kept.
      */
     attach(colony: number): void;
     board_hash_hex(): string;
@@ -77,9 +78,15 @@ export class Engine {
      */
     pact_breach(cells: Uint32Array | number[], _protected: Uint16Array | number[], radius: number): string;
     /**
-     * Plant without checks (replaying the contract's log).
+     * Plant without checks, adding the full stake (a guest's planting; forecasts and demos).
      */
     plant(colony: number, cells: Uint32Array | number[]): void;
+    /**
+     * Plant without checks as the contract does (replaying its log, after `attach` for a planting that attaches): a
+     * colony that has attached NEAR, outside the house, stakes only the part of `paid` (cost and royalty, decimal) that
+     * its `kept` PETRI before the planting (decimal, spent first) did not cover; any other colony stakes in full.
+     */
+    plant_paid(colony: number, cells: Uint32Array | number[], paid: string, kept: string): void;
     /**
      * A specimen slide as the contract captures it: `colony`'s living cells in the `w` × `h` rectangle at (`x`, `y`),
      * as the bitmap a Slide entry holds (see `Dish::region_bitmap`). Count its set bits for the cells.
@@ -102,6 +109,10 @@ export class Engine {
      * Each colony's stake, as the contract's `stakes` view returns it (when the engine starts mid-history).
      */
     set_stakes(stakes: BigUint64Array | bigint[]): void;
+    /**
+     * A colony's stake in thousandths of a planted cell, as the contract's `stakes` view gives it.
+     */
+    stake_of(colony: number): number;
     /**
      * Advance `n` generations, tracking the chain and the agar's feed exactly as the contract does.
      */
@@ -204,12 +215,14 @@ export interface InitOutput {
     readonly engine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
     readonly engine_pact_breach: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly engine_plant: (a: number, b: number, c: number, d: number) => void;
+    readonly engine_plant_paid: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly engine_region_bitmap: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly engine_set_agar: (a: number, b: number, c: number) => void;
     readonly engine_set_colonies: (a: number, b: number) => void;
     readonly engine_set_counted: (a: number, b: number) => void;
     readonly engine_set_house: (a: number, b: number, c: number) => void;
     readonly engine_set_stakes: (a: number, b: number, c: number) => void;
+    readonly engine_stake_of: (a: number, b: number) => number;
     readonly engine_step: (a: number, b: number) => void;
     readonly engine_tide: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly engine_tide_due: (a: number) => number;

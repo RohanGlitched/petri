@@ -57,7 +57,7 @@ export default function Page() {
     >
       <Callout kind="check">
         <p>
-          The rules are fixed when a dish launches (<C>new</C>, or <C>relaunch</C> on an account that ran v6.1) and no method changes them while it runs. Both can be called only through the account&rsquo;s own key: <C>relaunch</C> is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, and it refuses an account with no v6.1 dish and one that already runs v6.2. Once that key is deleted, nobody can start the dish again or change a parameter. Read the live values with the <C>rules</C> view, below.
+          The rules are fixed when a dish launches (<C>new</C>, or <C>relaunch</C> on an account that ran v6.1) and no method changes them while it runs. Both can be called only through the account&rsquo;s own key: <C>relaunch</C> is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, and it refuses an account with no v6.1 dish and one that already runs v6.2. The team keeps that key on purpose, so a bug can be fixed with new code and <C>relaunch</C>; no method changes a parameter while a dish runs. Read the live values with the <C>rules</C> view, below.
         </p>
       </Callout>
 

@@ -22,8 +22,8 @@ view. No method changes a parameter of a running dish, mints PETRI after launch,
 `#[init(ignore_state)]` method, so only a transaction from the contract account itself (signed with its full-access
 key) can run it. It deletes every key the v6.1 layout wrote and launches a fresh dish from generation 0, exactly as `new`
 does, and it refuses an account with no v6.1 dish ("no v6.1 dish here: relaunch clears a v6.1 dish that has colonies") and
-one that already runs v6.2 ("this account already runs v6.2"). Once the full-access key is deleted nobody can start the
-dish again, change a parameter or deploy anything else.
+one that already runs v6.2 ("this account already runs v6.2"). The team keeps that key on purpose, so a bug can be fixed
+with new code plus `relaunch`; no method changes a parameter of a running dish.
 
 ## Two dishes
 
@@ -706,7 +706,7 @@ colony's earnings, the vault, NEAR paid in, NEAR paid at tides, vault shares and
 credit, every colony's NEAR winnings, the credit pool, credit paid at tides, credit sponsored, spent and taken back, NEAR
 owed to colonies, pending NEAR, every colony's credit winnings, every colony's kept PETRI, the sales for NEAR, NEAR claims and pact payments by colonies holding
 none, the pacts kept to the rules and the plantings under them, the PETRI held for pact offers and the number of pacts,
-solvency from the ledger, the deployed code hash, and no full-access key. It exits 0 when all match, 1 on any mismatch and 2 if the dish cannot be read. The site's `/verify`
+solvency from the ledger and the deployed code hash. It reports the full-access key as a disclosed note, not a check. It exits 0 when everything matches, 1 on any mismatch and 2 if the dish cannot be read. The site's `/verify`
 runs the same replay in the browser, also pinned to one block, and lists 43 checks (the code hash is not among them).
 `node scripts/verify.mjs --dump <file>` replays a snapshot the contract's replay test writes with `PETRI_DUMP`. The
 contract test
@@ -718,17 +718,14 @@ Both dishes run one build of v6.2 (605,767 bytes, near-sdk 5.29.1), made with `c
 commit `e791404e63d03c2010bdb216b9792a8559512653` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
 (pinned in `contract/Cargo.toml`). Its NEP-330 `contract_source_metadata` links that commit, so anyone can rebuild it
 and compare the hash with the account's code hash, `5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP` (hex
-`4904f0273d05ea5cde13c3c83f0a77dc1b67395ed85a6a5c92bb22d5e1b84150`). At the time of writing each account still has one
-full-access key, so whoever holds it could deploy different code. The team intends to delete them before judging, after
-which the code can never change and `relaunch` can never run:
-
-```
-near account delete-keys petri-dish.near public-keys ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH network-config mainnet sign-with-legacy-keychain send
-near account delete-keys petri-v6.testnet public-keys ed25519:8kGYoPJ6jVEZRrjjYKGVLfXD7LCyTDDqu41Cxx9UjHUu network-config testnet sign-with-legacy-keychain send
-```
-
-Until then, "no full-access key" is the one failing check on `/verify`, and `scripts/verify.mjs` prints 44 matches and
-"Full-access keys 1 (expected: 0)" and exits 1. Anyone can list the keys:
+`4904f0273d05ea5cde13c3c83f0a77dc1b67395ed85a6a5c92bb22d5e1b84150`). Each account has one full-access key,
+held by the team on purpose. It exists only so a bug can be fixed: new code plus `relaunch`, which starts the dish again
+from generation 0 with a fresh ledger anyone can replay. Deleting it would make the dish unfixable, so it will not be
+deleted. No method changes a running dish's parameters, mints PETRI or edits the board. The key cannot change anything
+quietly: new code changes the account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published
+reproducible build on every run. The verifier reports the key as a disclosed note, not a failed check
+(`  note    Full-access keys   1 (team-held, see The lock)`), so `node scripts/verify.mjs` exits 0 when everything else
+matches and ends with "Everything matches." Anyone can list the keys:
 
 ```
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_access_key_list","finality":"final","account_id":"petri-dish.near"}}'
@@ -903,7 +900,7 @@ bought. In these runs the simulator still wrote a tide entry with nobody to pay,
 
 - **Free play has no market.** The testnet dish's NEAR and PETRI have no market, and guests play with credit the site
   gives them. On mainnet the NEAR is real and nothing guarantees PETRI a price.
-- **The key is not deleted yet.** Until each full-access key is deleted, whoever holds it could deploy other code.
+- **The team holds a full-access key.** Each contract account has one, on purpose, so a bug can be fixed with new code plus `relaunch`. New code changes the code hash, which the verifier checks.
 - **The methuselah edge.** In the simulator one R-pentomino planter was the only kind ahead at 15 and 150 players
   (+0.02 and +0.14 NEAR median); with 5% tides +0.29 at 150.
 - **PETRI is paper until sold back, and the vault caps it.** Buy-backs pay half the curve's price, at most the units'

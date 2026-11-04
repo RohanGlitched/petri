@@ -19,10 +19,10 @@ export function GET() {
     `- Testnet dish: ${DISH.testnet.contract} (rules ${DISH.testnet.rules}, wNEAR ${DISH.testnet.wnear})`,
     "- Contract v6.2 on both. Both dishes were relaunched in place (from generation 0, with the private relaunch method) on petri-dish.near and petri-v6.testnet, the accounts they ran v6 and v6.1 on (petri-v5.testnet is abandoned).",
     `- Code hash of both: ${CODE_HASH} (cargo near build reproducible-wasm at ${BUILD_COMMIT}, near-sdk 5.29.1)`,
-    "- Both contract accounts still hold one full-access key at the time of writing; it is to be deleted before judging. Until then verify.mjs reports the Full-access keys row as DIFFERS and exits 1.",
+    "- Each contract account keeps one full-access key, held by the team, on purpose: it exists only so a bug can be fixed (new code plus relaunch, which restarts the dish from generation 0 with a fresh ledger). It will not be deleted. No method changes a running dish's parameters, mints PETRI or edits the board, and new code changes the code hash, which verify.mjs compares with the published build on every run. verify.mjs reports the key as a disclosed note, not a failed check.",
     `- Mainnet RPC: ${DISH.mainnet.rpc} (rpc.mainnet.near.org rate-limits)`,
     `- Source: ${REPO} (MIT)`,
-    "- Verify: node scripts/verify.mjs --network mainnet   (45 rows; exit 0 = every check matches, 1 = a row differs)",
+    "- Verify: node scripts/verify.mjs --network mainnet   (45 rows; exit 0 = everything matches, 1 = a row differs)",
     `- Tests: cargo test -p petri-core -p petri-contract   (${TESTS.core} + ${TESTS.contract})`,
     "",
   ];

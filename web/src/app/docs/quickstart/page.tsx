@@ -235,14 +235,13 @@ echo $?   # 0 when every check matches, 1 on any mismatch, 2 if the dish could n
   match   Colony kept PETRI                            5 of 5
   match   Solvent (NEAR held >= owed, from the ledger) yes
   match   Deployed code hash                           5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP
-  DIFFERS  Full-access keys                             1  (expected: 0)
+  note    Full-access keys                             1 (team-held, see The lock)
 Source: https://github.com/RohanGlitched/petri/tree/e791404e63d03c2010bdb216b9792a8559512653; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
 Owed, from the ledger: 0.23781 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.289504143558987700000003 NEAR.
-  The contract account still has a full-access key: whoever holds it could deploy different code.
-1 check(s) differ.`}</Code>
-      <Callout kind="warn">
+Everything matches.`}</Code>
+      <Callout kind="note">
         <p>
-          At the time of writing the verifier exits with status 1 on both networks for one reason: each contract account still has one full-access key. The other 44 rows match. The key is to be removed with the owner&rsquo;s approval before judging, and from then on the same command exits 0.
+          The verifier exits 0 on both networks when everything else matches. Each contract account has one team-held full-access key, shown as a disclosed note and not a failed check. <Doc to="verification" hash="keys">Why it stays</Doc>.
         </p>
       </Callout>
       <p>

@@ -1,24 +1,24 @@
-//! Starting a dish again from generation zero on an account that ran v6.1 (petri-dish.near and petri-v6.testnet).
+//! Starting a dish again from generation zero on an account that ran v6.2 (petri-dish.near and petri-v6.testnet).
 //!
-//! v6.1's layout, every key it could write: its state (`STATE`, overwritten here), the board (`board`), the vectors of
+//! v6.2's layout, every key it could write: its state (`STATE`, overwritten here), the board (`board`), the vectors of
 //! colonies (`C`), the ledger (`L`), the planting index (`I`, u32 ledger positions) and slides (`D`), each element at
 //! prefix + u32 index; lab notes (`N` + u32 ledger index); the tide index (`V` + u32 page); maps keyed by prefix +
-//! borsh: colony ids (`F`), names (`A`), PETRI balances (`R`), sponsors' grants (`E`), slides by owner (`T`) and
-//! pending NEAR (`Z`); the cold pages (`X` + u16 page, 32 colonies a page); the hot table (`h`, `j`); pacts (`P` + u32
+//! borsh: colony ids (`F`), names (`A`), PETRI balances (`r`), sponsors' grants (`e`), slides by owner (`T`) and
+//! pending NEAR (`z`); the cold pages (`x` + u16 page, 32 colonies a page); the hot table (`h`, `j`); pacts (`P` + u32
 //! number, from 1) and each colony's pact list (`Q` + u16 colony id). Vectors and the tide index are found by probing
 //! their indexes, pacts by probing their numbers, notes from the planting index, cold pages and pact lists from the
 //! number of colonies; colony accounts, names and slide owners are read from their records; accounts that hold a
-//! balance, credit or pending NEAR without a colony or a slide are passed in `accounts`. v6.2 keeps everything under the
-//! same keys (all deleted here) except balances (`r`), grants (`e`), pending NEAR (`z`) and the cold pages (`x`), the
-//! keys a wrong account list could leave behind: under prefixes v6.1 never used, such a key is never read as v6.2
-//! state; it only keeps its storage.
+//! balance, credit or pending NEAR without a colony or a slide are passed in `accounts`. v6.3 keeps everything under the
+//! same keys (all deleted here) except balances (`s`), grants (`g`), pending NEAR (`y`) and the cold pages (`w`), the
+//! keys a wrong account list could leave behind: under prefixes no earlier version used, such a key is never read as
+//! v6.3 state; it only keeps its storage.
 //!
 //! The method is private: only a transaction signed with the contract account's own full-access key can run it, at
 //! the deploy. Once that key is deleted nobody can, and nothing can change the rules.
 
 use crate::*;
 
-const V61_PAGE: u32 = 32;
+const V62_PAGE: u32 = 32;
 
 fn key(prefix: &[u8], rest: &[u8]) -> Vec<u8> {
     let mut k = prefix.to_vec();
@@ -56,16 +56,16 @@ fn drain(prefix: &[u8], from: u32, mut each: impl FnMut(&[u8])) -> u32 {
 
 #[near]
 impl Petri {
-    /// Delete everything v6.1 stored and launch a fresh dish with `rules`, as `new` does. `accounts` are the accounts
-    /// with a v6.1 PETRI registration, sponsored credit or pending NEAR that had neither a colony nor a slide (keepers,
-    /// guests sponsored before they joined, accounts paid for with wNEAR). Logs any pending NEAR v6.1 still owed, so it
+    /// Delete everything v6.2 stored and launch a fresh dish with `rules`, as `new` does. `accounts` are the accounts
+    /// with a v6.2 PETRI registration, sponsored credit or pending NEAR that had neither a colony nor a slide (keepers,
+    /// guests sponsored before they joined, accounts paid for with wNEAR). Logs any pending NEAR v6.2 still owed, so it
     /// can be settled by hand.
     #[private]
     #[init(ignore_state)]
     pub fn relaunch(rules: Rules, accounts: Vec<AccountId>) -> Self {
-        // Only a v6.1 dish: its first cold page exists once anyone joined, and v6.2 writes its pages under another prefix.
-        require!(env::storage_has_key(&[b'X', 0, 0]), "no v6.1 dish here: relaunch clears a v6.1 dish that has colonies");
-        require!(!env::storage_has_key(&books::cold_key(0)), "this account already runs v6.2");
+        // Only a v6.2 dish: its first cold page exists once anyone joined, and v6.3 writes its pages under another prefix.
+        require!(env::storage_has_key(&[b'x', 0, 0]), "no v6.2 dish here: relaunch clears a v6.2 dish that has colonies");
+        require!(!env::storage_has_key(&books::cold_key(0)), "this account already runs v6.3");
         let mut owners: Vec<String> = accounts.iter().map(|a| a.to_string()).collect();
         let mut names: Vec<String> = Vec::new();
         let colonies = drain(b"C", 0, |v| {
@@ -89,21 +89,21 @@ impl Petri {
         owners.dedup();
         for a in &owners {
             let b = borsh_str(a);
-            if let Some(p) = env::storage_read(&key(b"Z", &b)) {
+            if let Some(p) = env::storage_read(&key(b"z", &b)) {
                 let near = u128::from_le_bytes(p[..16].try_into().unwrap());
                 if near > 0 {
-                    log!("v6.1 owed {} pending NEAR to {}", fmt_near(near), a);
+                    log!("v6.2 owed {} pending NEAR to {}", fmt_near(near), a);
                 }
             }
-            for prefix in [b"F", b"R", b"E", b"T", b"Z"] {
+            for prefix in [b"F", b"r", b"e", b"T", b"z"] {
                 env::storage_remove(&key(prefix, &b));
             }
         }
         for n in &names {
             env::storage_remove(&key(b"A", &borsh_str(n)));
         }
-        for page in 0..colonies.div_ceil(V61_PAGE) {
-            env::storage_remove(&key(b"X", &(page as u16).to_le_bytes()));
+        for page in 0..colonies.div_ceil(V62_PAGE) {
+            env::storage_remove(&key(b"x", &(page as u16).to_le_bytes()));
         }
         for id in 1..=colonies {
             env::storage_remove(&key(b"Q", &(id as u16).to_le_bytes()));

@@ -368,7 +368,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["relaunch_leaves_nothing_of_v6_1", "relaunch_refuses_an_account_without_a_v6_1_dish", "relaunch_refuses_a_dish_that_runs_v6_2"],
-    limit: "While the full-access key exists, its holder could deploy different code anyway; once it is deleted, nobody can call relaunch or deploy.",
+    limit: "The team keeps one full-access key on each contract account on purpose, so its holder can deploy new code and run relaunch to fix a bug. That restarts the dish from generation 0 with a fresh ledger, and new code changes the code hash that verify compares.",
   },
 ];
 
@@ -387,9 +387,9 @@ export default function Page() {
         <li>Every record is paid for by whoever writes it.</li>
         <li>The house is never fed, takes no tide share, bounty or keeper pot, never sells, and never hands PETRI to a player, so the operators cannot profit from their own players.</li>
       </ul>
-      <Callout kind="warn">
+      <Callout kind="note">
         <p>
-          The one thing not in place yet: at the time of writing both contract accounts still hold a full-access key, so the code could be replaced, and <C>node scripts/verify.mjs</C> reports that row as differing. It is to be deleted with the owner&rsquo;s approval before judging. <Doc to="verification" hash="keys">Check it</Doc>.
+          Each contract account has one full-access key, held by the team on purpose, so a bug can be fixed with new code plus <C>relaunch</C>. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board, and new code changes the code hash, which <C>node scripts/verify.mjs</C> compares with the published build on every run. It is reported as a disclosed note. <Doc to="verification" hash="keys">Check it</Doc>.
         </p>
       </Callout>
 
@@ -420,7 +420,7 @@ export default function Page() {
       <H2 id="limits">Known limits</H2>
       <ul>
         <li>
-          <strong>The code is not locked yet.</strong> Each contract account has one full-access key. Until it is deleted, the owner could deploy different code or run <C>relaunch</C> on a v6.1 account; after it is deleted, nobody can fix a bug.
+          <strong>The team holds a full-access key.</strong> Each contract account has one, on purpose: it exists only so a bug can be fixed with new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger. It cannot change anything quietly, because new code changes the code hash that the verifier checks. Deleting it would make the dish unfixable.
         </li>
         <li>
           <strong>Most players lose NEAR.</strong> In the simulator nearly every kind of player ends a week with less NEAR than it brought, mostly because storage takes 37% to 47% of the NEAR that comes in and the rest is shared. Petri is a game with a live economy, not an investment. See <Doc to="simulations" hash="losses">What loses money</Doc>.

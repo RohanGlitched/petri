@@ -2,7 +2,7 @@
 //! run the dish ahead of the stored generation, replay its whole history from the plant log and check the result
 //! against the contract's history chain.
 
-use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, licensed_cost, petri_for_near, planting_cost, royalty, sell_back, slide_svg as core_slide_svg, tide_due, tide_split, Dish, PlantError, STAKE_UNIT};
+use petri_core::{chain_due, chain_next, decay_stake, feed, feed_per_cell, licensed_cost, petri_for_near, planting_cost, planting_stake, royalty, sell_back, slide_svg as core_slide_svg, tide_due, tide_split, Dish, PlantError, STAKE_UNIT};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -108,11 +108,15 @@ impl Engine {
         self.attached.resize(n as usize + 1, false);
     }
 
-    /// Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is above zero):
-    /// from then on its tide shares are paid in NEAR.
+    /// Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is at least
+    /// `min_join`): from then on its tide shares are paid in NEAR. The first time, its stake goes to zero (v6.3; the
+    /// house keeps its stake): the cells it planted as a guest stop earning until it plants with PETRI that is not kept.
     pub fn attach(&mut self, colony: u16) {
         if colony > self.colonies {
             self.set_colonies(colony);
+        }
+        if !self.attached[colony as usize] && !self.house.contains(&colony) {
+            self.planted[colony as usize] = 0;
         }
         self.attached[colony as usize] = true;
     }
@@ -157,13 +161,30 @@ impl Engine {
         self.dish.cells.clone()
     }
 
-    /// Plant without checks (replaying the contract's log).
+    /// Plant without checks, adding the full stake (a guest's planting; forecasts and demos).
     pub fn plant(&mut self, colony: u16, cells: &[u32]) {
         if colony > self.colonies {
             self.set_colonies(colony);
         }
         self.dish.plant_unchecked(colony, cells);
         self.planted[colony as usize] += cells.len() as u64 * STAKE_UNIT;
+    }
+
+    /// Plant without checks as the contract does (replaying its log, after `attach` for a planting that attaches): a
+    /// colony that has attached NEAR, outside the house, stakes only the part of `paid` (cost and royalty, decimal) that
+    /// its `kept` PETRI before the planting (decimal, spent first) did not cover; any other colony stakes in full.
+    pub fn plant_paid(&mut self, colony: u16, cells: &[u32], paid: &str, kept: &str) {
+        if colony > self.colonies {
+            self.set_colonies(colony);
+        }
+        self.dish.plant_unchecked(colony, cells);
+        let attached = self.attached[colony as usize] && !self.house.contains(&colony);
+        self.planted[colony as usize] += planting_stake(cells.len() as u32, attached, paid.parse().unwrap_or(0), kept.parse().unwrap_or(0));
+    }
+
+    /// A colony's stake in thousandths of a planted cell, as the contract's `stakes` view gives it.
+    pub fn stake_of(&self, colony: u16) -> f64 {
+        self.planted.get(colony as usize).copied().unwrap_or(0) as f64
     }
 
     /// Check a planting the way the contract will. Returns "" when it would be accepted, "siege:<rival>" when it is

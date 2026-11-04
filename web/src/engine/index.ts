@@ -4,7 +4,7 @@ import init, { Engine, buy_quote, credit_share, licence, pattern_cells, quote, s
 
 let ready: Promise<void> | null = null;
 /** First 12 hex digits of sha256(public/petri_bg.wasm); update when the engine is rebuilt (scripts/build-engine.sh does). */
-export const ENGINE_HASH = "e4c36bf4c5f0";
+export const ENGINE_HASH = "b271f39c9ece";
 
 export function loadEngine(): Promise<void> {
   if (!ready) {

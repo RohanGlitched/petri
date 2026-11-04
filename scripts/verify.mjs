@@ -315,8 +315,10 @@ for (;;) {
       burned += burn;
       returned += cost - burn;
       e.set_agar((BigInt(e.agar()) + cost - burn).toString());
-      e.plant(p.colony, cells);
+      // v6.3: a colony's first NEAR clears the stake it planted as a guest, and an attached colony stakes only the part
+      // of the cost and royalty its kept PETRI (spent first) did not pay.
       if (BigInt(p.near) >= BigInt(rules.min_join)) e.attach(p.colony);
+      e.plant_paid(p.colony, cells, (cost + BigInt(p.licence?.royalty ?? 0)).toString(), keptBefore.toString());
       vault += BigInt(p.near);
       nearIn += BigInt(p.near);
       pool += BigInt(p.credit);
