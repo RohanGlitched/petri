@@ -319,6 +319,18 @@ ${mine.map((p, i) => `${i + 1}. ${p.from} offers ${p.petri} PETRI: ${p.terms}. $
       continue;
     }
     const payer = strains.find((s) => s.account === p.fromAccount);
+    // The contract measures a pact's end from the dish as stored (after the call's own catch-up), not from the clock.
+    // On a slow dish (mainnet) that lags the clock by hundreds of generations, so the end is clamped to what the
+    // stored dish allows; the call can only move the dish forward, which keeps it within pact_max_gens.
+    if (!dry) {
+      const st = await view("state");
+      const maxGens = Number(world.rules?.pact_max_gens ?? 2880);
+      const latest = Number(st.generation) + maxGens - 1;
+      if (p.until > latest) {
+        p.until = latest;
+        p.terms = termsText(p);
+      }
+    }
     const args = { to: p.toAccount, petri: String(BigInt(p.petri) * 1_000_000n), until: String(p.until) };
     if (dry) {
       p.status = "would offer";

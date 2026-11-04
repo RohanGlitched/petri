@@ -62,7 +62,14 @@ const PLAYERS = MAINNET ? STRAINS : [...STRAINS, ...BENCH];
 const attaches = (s) => !!s.bench || MAINNET;
 // On mainnet the house plays at a sixteenth of the pace (a few plantings a day each), so its NEAR lasts past
 // judging: each planting costs it about 0.004 NEAR of gas and storage.
-const KEEPER_LAG = process.env.PETRI_KEEPER_LAG ?? "400";
+const KEEPER_LAG_IDLE = process.env.PETRI_KEEPER_LAG ?? "400";
+// During judging (PETRI_JUDGING="from,to" as ISO times) the mainnet keeper keeps the dish within
+// PETRI_KEEPER_LAG_JUDGING generations, so anyone who opens it finds it current; that costs about 0.1 NEAR a day.
+const JUDGING = (process.env.PETRI_JUDGING ?? "").split(",").map((t) => Date.parse(t));
+const keeperLag = () =>
+  JUDGING.length === 2 && JUDGING.every(Number.isFinite) && Date.now() >= JUDGING[0] && Date.now() < JUDGING[1]
+    ? Number(process.env.PETRI_KEEPER_LAG_JUDGING ?? "120")
+    : Number(KEEPER_LAG_IDLE);
 const PACE = Number(process.env.PETRI_PACE ?? (MAINNET ? "32" : "1"));
 const PORT = Number(process.env.PETRI_LOG_PORT ?? 0);
 // Forecasts: generations ahead (one tide window) and the CPU each move may spend on them.
@@ -136,6 +143,19 @@ function serve() {
   const outcomes = new Map(read("outcomes.jsonl").map((o) => [o.tx, o.outcome]));
   for (const a of recent) if (outcomes.has(a.tx)) a.outcome = outcomes.get(a.tx);
   for (const e of read(`council-${NETWORK}.jsonl`).slice(-300)) recentCouncil.push(e);
+  // A relaunch starts the dish again from generation 0 on the same account: drop what the strains did on the dish
+  // before it, so the window only shows moves on the dish that is running now.
+  view("state")
+    .then((st) => {
+      const launched = Number(st.epoch_ms);
+      const keep = (list) => {
+        const kept = list.filter((x) => !x.at || Date.parse(x.at) >= launched);
+        list.splice(0, list.length, ...kept);
+      };
+      keep(recent);
+      keep(recentCouncil);
+    })
+    .catch(() => {});
   http
     .createServer((req, res) => {
       const body = req.url?.startsWith("/health")
@@ -155,7 +175,10 @@ const MIN_NEAR = Number(process.env.PETRI_MIN_NEAR ?? "0.12");
 const lastClaim = new Map();
 const lastSlide = new Map();
 // A house strain fossilizes its densest patch now and then, so the dish keeps a record of how it grew.
-const SLIDE_EVERY_MS = Number(process.env.PETRI_SLIDE_HOURS ?? (MAINNET ? "12" : "6")) * 3600_000;
+// On mainnet a slide's storage deposit (about 0.3 NEAR with its gas) would use most of a strain's NEAR, so the house
+// mints slides only on testnet unless PETRI_SLIDE_HOURS says otherwise.
+const SLIDE_HOURS = Number(process.env.PETRI_SLIDE_HOURS ?? (MAINNET ? "0" : "6"));
+const SLIDE_EVERY_MS = SLIDE_HOURS * 3600_000;
 const SLIDE_SIDE = 16;
 const SLIDE_MIN_CELLS = 12;
 
@@ -175,7 +198,7 @@ function densestWindow(world, colony) {
 }
 
 async function maybeFossilize(s, world, me, balance) {
-  if (s.bench || dry) return;
+  if (s.bench || dry || !(SLIDE_HOURS > 0)) return;
   if (Date.now() - (lastSlide.get(s.account) ?? 0) < SLIDE_EVERY_MS) return;
   lastSlide.set(s.account, Date.now());
   const win = densestWindow(world, me.id);
@@ -472,7 +495,7 @@ async function keep() {
   // On mainnet every advance is real gas, and the house's own plantings step the dish; the keeper steps in once the
   // dish is KEEPER_LAG generations behind (before the clock would skip at max_lag), about 14 times a day.
   // Keepers take no keeper pot (rules.keepers), so the pot is no reason to advance.
-  const due = MAINNET ? behind >= Number(KEEPER_LAG) : behind >= 20;
+  const due = MAINNET ? behind >= keeperLag() : behind >= 20;
   if (due) {
     try {
       const r = await callDish(KEEPER, "advance", {}, 300);

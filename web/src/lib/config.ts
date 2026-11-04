@@ -123,3 +123,6 @@ export const NETWORK_LABEL: Record<Network, { name: string; chain: string; line:
   testnet: { name: "Free play", chain: "NEAR testnet", line: "A guest account and sponsored credit. Nothing on this dish costs real money." },
   mainnet: { name: "Real NEAR", chain: "NEAR mainnet", line: "Your own wallet and your own NEAR, or pay with any token through NEAR Intents." },
 };
+
+/** A free-play guest account (g-….petri-guests.testnet): a key, not a name, so the dish shows its colony's name instead. */
+export const isGuestAccount = (account: string) => /(^|\.)petri-guests\./.test(account);

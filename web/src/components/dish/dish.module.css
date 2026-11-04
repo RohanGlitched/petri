@@ -702,3 +702,64 @@
 .offerBox .stickyCta { margin-top: 4px; }
 .inspectTall { flex-wrap: wrap; white-space: normal; border-radius: 16px; row-gap: 2px; }
 .inspectPact { flex-basis: 100%; font-size: 12.5px; color: var(--amber-2); }
+
+/* Free play: the guest's card keeps the game in front and the chain behind Details. */
+.firstStep {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--bone);
+  background: rgba(242, 180, 90, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.42);
+}
+.firstStep b {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--amber);
+  margin-bottom: 1px;
+}
+.details { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.details summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--dim);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+}
+.details summary::-webkit-details-marker { display: none; }
+.details summary::before { content: "›"; display: inline-block; font-size: 16px; transition: transform 0.15s ease; }
+.details[open] summary::before { transform: rotate(90deg); }
+.details summary:hover { color: var(--bone); }
+.details summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 6px; }
+.details .meStats { margin-top: 10px; }
+.freeLead { margin: 10px 0 0; font-size: 15.5px; line-height: 1.4; color: var(--bone); }
+.fine { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--dim); }
+.meWait { min-height: 120px; }
+.meWait p { margin: 0; font-size: 14px; color: var(--dim); }
+
+/* A gentle one-time pulse on the dock until the first stamp is picked. */
+.dockPulse { animation: dockPulse 2.4s ease-in-out infinite; }
+@keyframes dockPulse {
+  0%, 100% { box-shadow: inset 0 0 0 1px var(--line), 0 24px 50px -20px rgba(0, 0, 0, 0.8); }
+  50% { box-shadow: inset 0 0 0 1.5px rgba(242, 180, 90, 0.75), 0 0 26px -4px rgba(242, 180, 90, 0.4), 0 24px 50px -20px rgba(0, 0, 0, 0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dockPulse { animation: none; box-shadow: inset 0 0 0 1.5px rgba(242, 180, 90, 0.75), 0 24px 50px -20px rgba(0, 0, 0, 0.8); }
+}
+
+/* Touch screens: the account links are full tap targets. */
+@media (pointer: coarse) {
+  .acctLinks { gap: 4px 10px; }
+  .acctLinks .linkish { min-height: 44px; padding: 0 6px; display: inline-flex; align-items: center; }
+  .details summary { min-height: 44px; }
+}
+@media (max-width: 799px) {
+  /* Hold the colony card's space while a guest's colony is read, so the page below does not jump. */
+  .meWait { min-height: 300px; }
+}

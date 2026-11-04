@@ -20,9 +20,22 @@
   <b><a href="RULES.md">Full rules</a></b>
 </p>
 
-**Petri is a coin that is alive.** One shared 128×128 dish runs Conway's Game of Life inside a NEAR smart contract, and every living cell belongs to a NEAR account. All 1,000,000 PETRI were minted once, into the dish's own reserve, the *agar*. You buy PETRI from the agar with NEAR, at a price that rises as it empties, and can sell it back at half that price. Every 15 seconds the agar feeds a sliver of itself to whatever is alive, but a colony is paid for at most 8 living cells per cell of stake (the cells it planted, of which 87.5% remains after each tide), so splitting into many colonies never earns more and holding ground means planting again now and then. Planting costs what a cell earns in two hours; half is burned and half goes back to the agar. Planting within three cells of a rival is allowed but costs three times as much, so nobody can close the dish to newcomers. The NEAR players attach collects in a tide vault, and every hour 5% of it is paid out by what each colony earned that hour. A colony can fix a patch of its living cells as a specimen slide, an NFT whose picture the contract draws itself and which licenses its pattern: planting that exact pattern elsewhere costs 25% less, and anyone but the slide's holder pays the holder 10% of that cost in PETRI. On mainnet anyone can pay with other tokens through NEAR Intents. Five AI strains play around the clock, forecasting every move on a copy of the dish and negotiating pacts with each other that the contract itself enforces (one pays PETRI, held in escrow, for the other's promise not to plant near it for a while), without ever taking a share of the tides or selling PETRI back, and free play can never extract NEAR: PETRI earned before a colony's first NEAR cannot be sold for NEAR or sent, and a guest cannot send PETRI at all. The browser runs the very same Rust engine as the contract, so anyone can rebuild the whole history, PETRI and NEAR, from the ledger and check it to the last unit.
+**Petri is a memecoin whose supply is a living Game of Life.** A NEAR contract pays PETRI only to cells that stay alive, nobody (its makers included) can change its rules, and anyone can replay every PETRI and every yoctoNEAR from genesis in a browser.
 
-Built for the NEAR HACKATHON (November 2026). Tracks: Memecoins With Mechanics, Games With Real Economies, NFTs That Do Something (the specimen slides), AI Swarms, Open Innovation. The full documentation is at <https://docs.playpetri.xyz>.
+| | |
+|---|---|
+| **What it is** | One shared 128×128 dish of Conway's Life inside a NEAR contract. Every living cell belongs to a NEAR account; every 15 seconds the dish's reserve, the *agar*, feeds PETRI to what is alive, and planting costs PETRI, half of it burned. |
+| **Who it is for** | Players who want a coin with a game inside it rather than a chart: you earn by building patterns that survive and by sending gliders at rivals, not by being first into a pool. Free play needs no wallet. |
+| **What is new** | The token's issuance *is* the game state. AI house players make pacts with each other that the contract enforces. NFT slides of your own cells license their pattern and earn royalties. Everything can be replayed and checked from the ledger. |
+| **Evidence** | Live on mainnet (`petri-dish.near`) and testnet (`petri-v6.testnet`) from one reproducible build (NEP-330); 175 tests; `node scripts/verify.mjs` replays a dish from generation 0 and runs 43 checks; a simulator played the economy before launch (`sim/`). |
+| **Try it** | <https://www.playpetri.xyz/dish>: type a name, press **Start my colony**, plant a glider. Every step and what you should see is in [Try it in two minutes](#try-it-in-two-minutes). |
+| **Limits** | PETRI has no outside market; most players lose a little NEAR a week, the cost of play; the house strains are a subsidy the team funds. See [Limits, honestly](#limits-honestly). |
+
+### The whole game in one paragraph
+
+One shared 128×128 dish runs Conway's Game of Life inside a NEAR smart contract, and every living cell belongs to a NEAR account. All 1,000,000 PETRI were minted once, into the dish's own reserve, the *agar*. You buy PETRI from the agar with NEAR, at a price that rises as it empties, and can sell it back at half that price. Every 15 seconds the agar feeds a sliver of itself to whatever is alive, but a colony is paid for at most 8 living cells per cell of stake (the cells it planted, of which 87.5% remains after each tide), so splitting into many colonies never earns more and holding ground means planting again now and then. Planting costs what a cell earns in two hours; half is burned and half goes back to the agar. Planting within three cells of a rival is allowed but costs three times as much, so nobody can close the dish to newcomers. The NEAR players attach collects in a tide vault, and every hour 5% of it is paid out by what each colony earned that hour. A colony can fix a patch of its living cells as a specimen slide, an NFT whose picture the contract draws itself and which licenses its pattern: planting that exact pattern elsewhere costs 25% less, and anyone but the slide's holder pays the holder 10% of that cost in PETRI. On mainnet anyone can pay with other tokens through NEAR Intents. Five AI strains play around the clock (slowly on mainnet, so their NEAR lasts), forecasting every move on a copy of the dish and negotiating pacts with each other that the contract itself enforces (one pays PETRI, held in escrow, for the other's promise not to plant near it for a while), without ever taking a share of the tides or selling PETRI back, and free play can never extract NEAR: PETRI earned before a colony's first NEAR cannot be sold for NEAR or sent, and a guest cannot send PETRI at all. The browser runs the very same Rust engine as the contract, so anyone can rebuild the whole history, PETRI and NEAR, from the ledger and check it to the last unit.
+
+Built for the NEAR HACKATHON (November 2026). Tracks: Memecoins With Mechanics, Games With Real Economies, Open Innovation. Petri is our only entry. The full documentation is at <https://docs.playpetri.xyz>.
 
 ---
 
@@ -109,86 +122,34 @@ Every offer carries at least 1 PETRI (`MIN_PACT_PETRI`), except between two hous
 
 ### The economics, in NEAR
 
-The simulator (`sim/`, results in `sim/out-v5/`, and for v6.1 in `sim/out-v6.1/`) plays petri-core's rules from `contract/launch-rules.json` for 7 and 30 days with 15, 150 and 1,500 scripted players, relayer guests and the five strains, and counts cash: NEAR actually withdrawn minus NEAR actually paid, gas included. Its published runs predate three launched changes (they paid 10% tides, paid guests' winnings in NEAR their accounts could not move, and ran tides with nobody to pay); its fix table re-runs single changes, including 5% tides. Median cash per player after 7 days:
+The simulator (`sim/`; the current numbers are in `sim/out-v6.1/summary.txt`, run with `cargo run --release -- out-v6.1 all --seeds 8` from `sim/`) plays petri-core's rules from `contract/launch-rules.json` and `launch-rules-mainnet.json` with scripted players, relayer guests and the five strains, and counts cash: NEAR a player actually got back minus NEAR it actually paid, storage and gas included. Medians over 8 seeds, after 7 days:
 
-- Builders, raiders, defenders and late joiners: −0.27 to −0.15 NEAR at 150 players, −0.15 to −0.09 at 1,500. Storage takes 37% to 44% of all the NEAR that comes in.
-- The methuselah (an R-pentomino an hour): +0.02 at 15 players and +0.14 at 150, the only kind ahead; −0.04 at 1,500. With 5% tides, +0.29 at 150.
-- The carpet locker (a lattice of blocks laid at launch so every empty cell is in its buffer): −0.89, −0.58 and +0.59. With 5% tides, −1.21 at 150 and −0.45 at 1,500.
-- The 2-NEAR whale: −3.97, −2.12, −0.99. Sybils lose too: a builder with 10 relayer guests beside it −0.16 to −0.10, and a player sponsoring 10 of its own accounts and taking the credit back −0.47 to −0.33.
-- Each house strain: about −1.1 NEAR a week, paid to the other players.
+- At 150 players: a builder −0.187 NEAR, a penny player (a 0.01 NEAR join and one block kept alive) −0.046, a 2-NEAR whale −2.01; the methuselah (an R-pentomino an hour) +0.35, the one kind ahead.
+- On a young mainnet dish with 20 outsiders: builders −0.25, a sniper −0.11, the methuselah +0.21 (+0.10 to +0.39); with 5 outsiders the methuselah +0.06.
+- Free play never reaches NEAR: guests that farm PETRI and try to move or sell it took 0 NEAR from the vault (0.167 NEAR a week without the kept rule).
+- A raider bound by pacts aimed 2.0 raids a week elsewhere; a pact bought at a naive price (2 PETRI a tide window) costs the payer 0.035 NEAR a week, so pacts pay only against a real threat.
 
-Tables, the lockout runs and the zero-player runs are in [RULES.md](RULES.md) and on [/rules](https://www.playpetri.xyz/rules#parameters).
+Older runs (`sim/out-v5`, `sim/out-v6`) and the fix runs are in [RULES.md](RULES.md) and on [/rules](https://www.playpetri.xyz/rules#parameters).
 
 ### What changed after review
 
-The first dish (`petri-dish.testnet`) gave every colony free PETRI and split the feed in plain proportion; the first review found it paid players about 2.8 times what they spent and could lock up at about 115 colonies. v2 (`petri-v2.testnet`) fixed that with a NEAR buy-in, payback pricing and accrued earnings. A second round of review found eleven more problems, fixed in v4 and kept since:
+The four rounds of review and simulation that shaped v2 to v6.2, with every problem found and how it was fixed, are in [docs/HISTORY.md](docs/HISTORY.md).
 
-| Found | Fixed |
-|---|---|
-| **Relayer drain.** The relayer attached guests' deposits; calls that failed inside the contract refunded them to the guest. | The relayer relays only zero-deposit calls. Guests pay from on-chain credit (`sponsor`) spendable only in the dish, and hold function-call keys that cannot attach or move NEAR. |
-| **Proof-of-work replay.** One solution could make many guests. | A server-signed 10-minute challenge, an 18-bit proof of work bound to it and the key, and an account name derived from the key: one guest per key. |
-| **Cap splitting.** The 15%-of-the-dish cap rewarded splitting into colonies just under it. | The reach: a fixed number of paid cells per cell a colony paid for (4 per cell planted in v4; 8 per cell of stake now); the parts of a split never weigh more than the whole (property test). |
-| **Carpet lockout.** Blocks spread everywhere could put every empty cell inside someone's buffer. | Sieges: planting inside a rival's buffer is allowed at 3× the price. Ground is never closed. |
-| **Tide sniping.** Tides split by cells alive at the tide, so planting just before one took a full share. | Window tides, split by PETRI earned since the previous tide. |
-| **Keeper pot for nothing.** `advance` on a current dish still paid the pot. | The pot is paid only if the call ran at least one generation. |
-| **Prompt injection through names.** The strains' model read colony names. | Rivals reach the model by number and size only; names are ASCII-only and notes refuse hidden and tag characters. |
-| **No NEAR replay.** The NEAR side was only counters. | Every Buy, Plant, Sell and Tide records its NEAR; the replay checks the vault, NEAR in, tide payouts and every colony's winnings. |
-| **Changeable, unverifiable code.** A full-access key and a non-reproducible build. | `cargo near build reproducible-wasm` with NEP-330 metadata linking the commit; the key is to be deleted before judging (below). |
-| **Claims in PETRI.** The simulator reported PETRI earned over PETRI spent. | It now reports NEAR per player, cash and PETRI held (valued at the sell-back price) apart. |
-| **The house ate the agar.** The strains were fed like players; on a quiet dish they drained it. | House colonies are never fed and take no tide share. |
+## Does it last?
 
-v4 (`petri-v4.testnet`) also made the agar release its ration for at least 1,000 counted cells and never more per cell, so on a sparse dish a cell earns what its price assumes. v5 (`petri-v5.testnet`, and the first `petri-dish.near`) then: put sponsored credit in its own credit pool paid out only as credit, and paid colonies that never attached NEAR in credit, so free play never yields NEAR; made stake decay at each tide, with the reach raised to 8; skipped tides with nobody to pay; kept tide winnings in packed per-colony arrays (the simulator's biggest 1,500-player tide fell from about 104 TGas to about 11); cut tides from 10% to 5%; skipped a long-idle clock ahead; sent failed sale and bounty payouts back to the vault with a `Refund` entry; added the `solvency` view; and added specimen slides, paying with any token and rename. The build pins near-sdk 5.29.1, because 5.30 links host functions mainnet's protocol 86 does not have yet, so the same code runs on both networks.
+- **The agar cannot run dry.** Each generation it pays out 3 ppm of what is left, at most about 1.7% a day, and half of every planting flows back into it.
+- **Supply only falls.** 1,000,000 PETRI were minted once at launch; plantings and slides burn it, and no method mints more.
+- **The vault is a closed loop.** NEAR comes in from joins, purchases and plantings and goes out only as tides, buy-backs and claims; `/verify` and `scripts/verify.mjs` check from the ledger that it always covers what it owes.
+- **It runs without us.** The clock is lazy: any transaction catches the dish up, and a dish left alone skips the quiet stretch. There is no admin method, and once the full-access keys are deleted ([The lock](#the-lock)) the code can never change. If the team, the site and the VM disappeared, any wallet could still play the contract and anyone could replay it.
+- **What it costs to play.** In the simulator the median player is down 0.09 to 0.27 NEAR after a week, like arcade tokens; skill is the edge (a methuselah player came out ahead at 15 and 150 players).
 
-A fourth round of review, of v5, found nine more problems. v6 fixed each with a regression test named after the attack (v6.1 and then v6.2, the version both dishes run now, are below):
+## What NEAR builders can reuse
 
-| Found | Fixed in v6 |
-|---|---|
-| **Sponsor hijack.** `sponsor` overwrote an account's one sponsor, so anyone could sponsor 1 yoctoNEAR and a day later `unsponsor` everyone's credit as NEAR. | Credit is kept per sponsor (at most 8), a sponsorship brings at least 0.01 NEAR, and a sponsor takes back only what is left of its own, a day after it last gave or the account drew on it (`sponsor_hijack_takes_nothing_but_its_own_and_the_real_sponsor_still_reclaims`). |
-| **House sell drain.** The house holds most PETRI outside the agar and could sell it into the vault. | House strains and keepers never sell, send PETRI only to one another, take no tide bounty or keeper pot and plant only slides they hold (`house_sell_drain_is_refused`, `house_petri_cannot_reach_a_player_to_sell`, `house_bounties_stay_in_the_vault`, `a_keeper_takes_no_keeper_pot`). |
-| **Gas grew with every colony.** v5 rewrote seven arrays covering every colony on each join and catch-up; it would have halted near 27,000 colonies. | Each colony's numbers live in cold pages (64 colonies a page in v6, 32 since v6.1) and, while it plays, in a hot table of the colonies with stake. A join writes one slot; a catch-up and a tide touch only the hot table (v6.1 narrowed the table, below; its gas tests are `thirty_thousand_colonies_with_stake_every_call_under_150_tgas_on_the_real_network` and `a_full_hot_table_keeps_every_call_under_150_tgas_on_the_real_network`). |
-| **Small intents refunded and lost.** A 1Click delivery under 0.01 wNEAR was refunded to the intents contract. | wNEAR is never refunded; any amount is pending NEAR for its account, or `Dust` in the vault if too small for a record (v6.2 refunds an amount too small for its records instead), and the quote route refuses quotes below `intent_minimum` (`an_intent_below_the_minimum_is_kept_for_its_account_not_refunded`, `the_dish_tells_1click_the_least_a_payment_needs`). |
-| **Colonies named by strangers.** Anyone paying for an account chose its colony's name. | A colony someone else paid to start gets a neutral "Culture" name and may rename once (`a_proxy_join_gets_a_neutral_name_and_never_the_payers_text`, `neutral_names_cannot_be_taken_first`). |
-| **Orders stuck without gas.** Pending NEAR could not be spent on its order later. | The order is stored with the NEAR and anyone may run it with `settle_pending` (`an_order_without_gas_waits_and_anyone_can_settle_it`, `a_settle_spends_only_the_orders_near`). |
-| **Self-reported solvency.** /verify trusted the contract's credit, owed and pending counters. | Sponsor, Unsponsor, Claim, Pending, Unpend, Dust (v6.2 no longer writes it) and Burn entries, and Refunds tied to the payout they refund, so both replays rebuild every solvency term from the ledger alone. |
-| **Failed payouts and token edge cases.** A failed sale went to the vault; a reclaim had no callback; NEP-141 and NEP-145 edge cases kept PETRI that should burn; `nft_tokens` drew up to 50 SVGs a call. | Every failed payout but a bounty becomes pending NEAR for its account; a refund to an unregistered sender and a forced unregistration burn, with a `Burn` entry; NFT pages hold at most 10 (`a_failed_sale_payout_is_pending_for_the_seller`, `a_failed_reclaim_is_pending_for_the_sponsor`, `a_refund_to_an_unregistered_sender_is_burned`, `a_forced_unregistration_burns_the_balance`, `nft_enumeration_draws_at_most_ten_images_a_call`). |
-| **Slides did nothing.** Owning a slide changed nothing in the dish. | Slides are pattern licences: a discount on the exact pattern and a royalty to the holder, checked by both replays (`a_stranger_plants_a_slide_and_pays_its_holder_a_royalty`, `a_turned_slide_is_not_licensed`, `after_a_transfer_royalties_go_to_the_new_holder`). |
-
-The v5 dishes were hours old and held only the team's colonies, so v6 started both from generation 0 rather than carry their history: on mainnet the account kept its name and ran `relaunch`, a private initializer that deletes every key v5 wrote and launches a fresh dish; on testnet v6 is a new account.
-
-### What changed after the simulator found more (v6.1)
-
-Re-running the simulator on v6 (`sim/out-v6/`) found more, and v6.1 fixes each; `sim/out-v6.1/` re-runs the same seeds with v6's rules set back and measures the difference. Both dishes were hours old, so v6.1 started them again from generation 0 with `relaunch`, which deletes every key v6 wrote and refuses an account with no v6 dish or one that already runs v6.1 (`relaunch_leaves_nothing_of_v6` builds a real v6 state with v6's frozen code and checks the result is byte for byte a fresh v6.1 launch). A new layout for tides and cold slots meant old entries would no longer deserialize, so a migration would have had to keep both formats in both replayers.
-
-| Found in the v6 simulator | Fixed in v6.1 |
-|---|---|
-| **Gas at 30,000 colonies.** The hot table held every colony with stake, which lingers about a day, so on a busy dish it held up to 27,538 rows and a planting cost 237 TGas; 116,731 calls passed 150 TGas and 16,102 passed their prepaid gas. | The hot table holds only colonies that earned since the last tide or have living cells and a stake that can still earn (never the house), at most 10,000 rows, 32 leaving a call; the rest wait in 69-byte cold slots whose stake decays lazily. The catch-up reserves only what the rest of the call will write. Hot rows 17,102 to 1,336 on average, the largest call 237 to 61 TGas, calls over 150 TGas to 0. |
-| **Tide entries cost too much.** A tide stored 289 bytes, 39% of a lone outsider's tide pay. | A tide is 130 bytes (126 plus 4 in a packed index), 21% of that pay; its amounts are worked out by the replay and logged in a `tide` event. Buy, Plant, Sell, Claim and the other entries shrank too. |
-| **Royalty farming.** Minting small common patterns (blocks, gliders, beehives) and licensing them paid 10% of every planting of them. | A slide is a licence only if it captured at least 12 cells (`licence_min_cells`). Licensed plantings 7,852 to 466, royalties 6,296 to 3,171 PETRI. The pulsar and the Gosper gun are still licensable, so a farmer still nets +0.11 NEAR a week at 150 players in the model: that is by design, and the planters still come out ahead (below). |
-| **Guest royalty leak.** Planters that had never attached NEAR paid royalties to a sybil wallet: 56 PETRI. | Their royalty goes to the agar. 56 to 0 PETRI. |
-| **Stranded keeper pot.** The pot waited for `advance` and stood at 1,480 PETRI after a week on a young dish with 20 outsiders. | It goes to the account whose call ran the generation. 1,480 to 1.1 PETRI. |
-| **Free play could reach NEAR.** Guests could `ft_transfer` their PETRI to a wallet that sold it, or attach 0.01 NEAR and sell what they farmed. | PETRI earned before a first NEAR is kept: it cannot be sold for NEAR or sent, a guest cannot send PETRI, and credit-bought PETRI is kept too. 0.1674 NEAR of vault payments for farmed PETRI to 0 in the attack run. |
-| **Promises held by code.** The council's promises were kept only by the agents' own code, and testnet pacts were not transfers at all. | Pacts the contract enforces: escrowed PETRI, `pact_accept`, plantings within 8 cells refused. |
-| **Gas on the site.** The heaviest calls could pass the gas the site prepaid. | 300 TGas prepaid for join, plant, buy, sell, claim, advance and mint_slide (unused gas is refunded); the relay cap is 300. |
-
-Two items the simulator flags were measured and left as they are: the pulsar farmer's +0.11 NEAR a week is the licence working as designed (planters choose it and still come out ahead, and the vault's totals hardly move), and `tide_cap_bps` 2500, which would trim the lone first player's subsidy, took only 28% of it while costing the Methuselah 0.055 NEAR a week with 5 outsiders. See [RULES.md](RULES.md) under Known limits.
-
-### What changed after the fifth review (v6.2)
-
-A fifth round of review, of v6.1, and notes from a judge who knows NEAR found more. v6.2 fixes each with a regression test, and both dishes started again from generation 0 on 4 November 2026 through the same `relaunch`, which now clears a v6.1 dish (it refuses an account with no v6.1 dish, and one that already runs v6.2; `relaunch_leaves_nothing_of_v6_1` builds a real v6.1 state with v6.1's frozen code and checks the result is byte for byte a fresh v6.2 launch). v6.2 moves the keys a wrong `accounts` list could leave behind to prefixes v6.1 never used (balances `r`, grants `e`, pending NEAR `z`, cold pages `x`).
-
-| Found in v6.1 | Fixed in v6.2 |
-|---|---|
-| **One yoctoNEAR turned credit into NEAR.** A single yoctoNEAR attached to a credit-paid call made a colony count as having attached NEAR. | A colony attaches NEAR only when one join, buy or planting puts at least `min_join` (0.01 NEAR), net of storage, into the vault. Smaller amounts go to the vault and attach nothing (`one_yocto_does_not_turn_credit_into_near`). |
-| **Kept PETRI was paid in NEAR.** A colony that held kept PETRI still won NEAR at tides and claimed it. | A tide's vault share and bounty go to a colony as NEAR only if it has attached NEAR and holds no kept PETRI; otherwise they are credit. `claim` pays NEAR only while kept PETRI is 0: while it is above 0 only the PETRI is claimed and the NEAR stays owed. Both replays count a `Claim` by a colony holding kept PETRI as a violation (`kept_petri_is_paid_in_credit_and_claims_no_near`). |
-| **Royalties from kept PETRI reached holders.** A planter spent kept PETRI first, so its royalty could be paid out of it. | When the planter has not attached NEAR, or holds more kept PETRI than the planting costs, the whole royalty goes to the agar (`kept_petri_pays_its_royalty_to_the_agar`). |
-| **Pact offers could jam a colony.** Anyone could fill another colony's eight pact slots with offers, and guests could offer pacts of 0 PETRI. | Every offer carries at least 1 PETRI unless both colonies are the house's; the cap of 8 counts only accepted pacts and the offers a colony made; offers waiting for a colony have a cap of 16 that it empties by declining (`offers_cannot_jam_a_colonys_pacts`). |
-| **A pact's reach was not written down.** | Documented: a pact protects the payer's living cells as the board stands at each planting, including cells planted after it was accepted. |
-| **Dust wNEAR grew the dish's storage.** | An amount no larger than what its records cost is refunded whole and writes nothing (`dust_wnear_is_refunded`). |
-| **Small gaps.** A join on credit ran the clock, `petri_for_near` was not exact for large deposits, `set_payout` and `rename` took no deposit for the storage they add, and `sell` and `mint_slide` did not need a current dish. | A join runs the clock only if the NEAR attached to the call is at least `min_join`; `petri_for_near` is exact for any deposit (a 256-bit multiply-divide in petri-core); `set_payout` and `rename` are payable and charge the storage they add (0.001 NEAR covers it; the rest comes back); `sell` and `mint_slide` need the dish to be current, as `plant` does. |
-
-The site follows: before a plant, sell, mint or buy it reads the dish, and if the dish has fallen further behind than one call catches up it adds up to three `advance` calls to the same transaction (the relayer accepts a call preceded by up to three `advance` calls, with no deposit). The strains advance a dish that is more than 120 generations behind before they plant or mint. The council now clears pacts by sealed bids (see [Pacts](#pacts)).
-
-Open: a 1Click join delivered at exactly the floor `intent_minimum` returns nets under 0.01 NEAR after the join's own storage, so it does not attach; that colony is a guest until it buys 0.01 NEAR net. Skip entries are still charged to nobody.
+- **A template for verifiable on-chain games:** one `no_std` Rust engine (`core/`) runs in the contract, in the browser (WASM) and in the simulator, so every state is replayable.
+- **Binding deals between AI agents:** pacts are escrowed PETRI for a promise the contract enforces on every planting, priced by the strains' sealed bids.
+- **Pattern-licence NFTs:** a slide of living cells (NEP-171/177/178/181) that discounts planting its pattern and pays its holder a royalty.
+- **A walletless relayer whose credit never becomes NEAR:** NEP-366 meta transactions, function-call keys that cannot attach NEAR, and sponsored credit kept apart from the vault.
+- **An Intents on-ramp:** join from USDC, ETH, SOL or BTC on other chains through NEAR Intents 1Click.
 
 ## Verify it yourself
 
@@ -255,6 +216,8 @@ Owed, from the ledger: 0.23781 NEAR (vault, credit pool, unspent credit, unclaim
 1 check(s) differ.
 ```
 
+The **Deployed code hash** row compares the hash the chain reports with the one published in `scripts/verify.mjs`; it proves the two dishes run the published build, not that the build is this source. That proof is rebuilding it yourself, in the next section.
+
 `--contract <account>` checks another dish, `--code-hash <base58>` another build, and `--dump <file>` replays a snapshot the contract's replay test writes when run with `PETRI_DUMP` set.
 
 ### Rebuild the contract and compare its hash
@@ -305,6 +268,8 @@ curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
 ```bash
 cargo test -p petri-core -p petri-contract
 ```
+
+We run them on Linux (WSL, Rust 1.99.1): about 3 minutes to compile and 75 seconds to run. The contract's own build is pinned separately, by `cargo near build reproducible-wasm` and its image (see [Rebuild the contract and compare its hash](#rebuild-the-contract-and-compare-its-hash)).
 
 36 engine tests (including property tests against a plain reference implementation of Life, one showing that splitting a colony never earns more, and the slide-pattern match) and 139 contract tests, among them a regression test for each attack the reviews found and dishes of 30,000 colonies whose calls must stay well under the gas limit. Most contract tests end by checking that every PETRI and every yoctoNEAR is accounted for and that the contract is solvent; one replays the ledger and must land on the same board, chain, agar, vault and earnings.
 
@@ -424,7 +389,9 @@ The site reads `NEXT_PUBLIC_NEAR_NETWORK` (the dish a first visit reads, testnet
 - The site, the relayer, the keeper, the strains and the bench all run on one small VM. If it stops, the site and free-play guests stop with it, but the contracts do not: any wallet transaction still catches the dish up, `scripts/verify.mjs` still replays it, and the site runs locally with `npm run dev`; a dish left alone for more than 480 generations skips the quiet stretch, and nothing is fed for the skipped generations.
 - A pact covers a radius, not a promise of peace: the contract refuses plantings within 8 cells of the payer's living cells and cannot stop a raid aimed from farther away, and it follows the payer's living cells as the board stands at each planting, not a place. In the simulator a pact at a naive price (2 PETRI a tide window) did not pay the builder; it pays only against a real threat, which the strains' models price. Guests made before the pact methods existed cannot call them from their old keys.
 - Former guests plant before they sell: PETRI earned before a colony's first NEAR, and PETRI bought with credit, must be planted before the colony can sell or send any PETRI. That is the price of free play never reaching NEAR.
-- The strains need a model to answer: Claude Haiku within a fixed budget, NEAR AI Cloud when it has credits. Without either they play by written rules, and the log says so.
+- The strains need a model to answer: Claude Haiku within a fixed budget, NEAR AI Cloud when it has credits. So far Claude Haiku has made every model decision; NEAR AI Cloud is wired in as the second model and has not yet been needed. Without either they play by written rules, and the log says so.
+- On mainnet the house plays slowly on purpose (a few plantings a day per strain), so its NEAR lasts through judging; with no outside colonies the mainnet dish runs no tides.
+- Cells a colony planted with credit or kept PETRI keep their stake after the colony attaches NEAR, so for about a day of tides they can earn NEAR from the vault. On mainnet credit only comes from a sponsor's own NEAR, so this moves a sponsor's NEAR around rather than creating any; the fix (stake bought with kept PETRI or credit earns credit) is written up for the next version.
 - Verification proves the board and balances follow from the ledger; it trusts the RPC provider you read the ledger from.
 
 ## Built with
@@ -435,6 +402,7 @@ Everything in this repository was written during the hackathon window; no templa
 |---|---|
 | Contract | [near-sdk](https://github.com/near/near-sdk-rs) 5.29.1, `hex`, `base64`; built with [cargo-near](https://github.com/near/cargo-near) 0.22 (reproducible image) |
 | Engine | `sha2` (history chain); `proptest` for the property tests |
+| Simulator | `serde`, `serde_json` (reads the launch rules) |
 | Browser engine | [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen) 0.2, `hex`, built with wasm-pack |
 | Site | [Next.js](https://nextjs.org) 16.4, React 19.3, [near-api-js](https://github.com/near/near-api-js) 7.4, [@hot-labs/near-connect](https://www.npmjs.com/package/@hot-labs/near-connect) 0.11.4 (wallets), [borsh](https://github.com/near/borsh-js) 2.0, [@noble/curves](https://github.com/paulmillr/noble-curves) and [@noble/hashes](https://github.com/paulmillr/noble-hashes) 2.2 (relayer signature checks, guest proof of work), `qrcode-generator` 2.0 (deposit addresses); fonts Gloock and Figtree from Google Fonts |
 | Agents | near-api-js 7.4 and `@anthropic-ai/sdk` 1.3 (the strains' model calls) on Node |

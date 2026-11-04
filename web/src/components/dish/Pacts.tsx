@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { hex, int, petri } from "@/lib/live";
-import { accountUrl, shortAccount } from "@/lib/config";
+import { accountUrl, isGuestAccount, shortAccount } from "@/lib/config";
 import type { Colony } from "@/lib/chain";
 import { phaseOf, type Pact } from "@/lib/pacts";
 import s from "./dish.module.css";
@@ -131,7 +131,12 @@ export function PickedColony({ c, live, pacts, me, g, radius, maxGens, names, ca
         <div>
           <h2 id="picked-title">{c.name}<BenchTag account={c.account} /></h2>
           <span>
-            <a href={accountUrl(c.account)}>{shortAccount(c.account, 28)}</a> · <span className="num">{int(live)}</span> living cells
+            {isGuestAccount(c.account) ? (
+              <a href={accountUrl(c.account)}>A free-play guest</a>
+            ) : (
+              <a href={accountUrl(c.account)}>{shortAccount(c.account, 28)}</a>
+            )}{" "}
+            · <span className="num">{int(live)}</span> living cells
           </span>
         </div>
         <button className={s.close} aria-label="Close" onClick={onClose}>×</button>
