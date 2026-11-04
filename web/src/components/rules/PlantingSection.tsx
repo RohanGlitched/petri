@@ -145,7 +145,7 @@ export function PlantingSection() {
   const deposits = useDeposits(ready);
   const matches = ready && BigInt(Math.round(cellPrice)) === now.price;
   return (
-    <section id="planting" className={`band ${s.section}`} aria-labelledby="planting-title">
+    <section id="planting" data-section="Planting and sieges" className={`band ${s.section}`} aria-labelledby="planting-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="planting-title" className={s.h2}>Planting new life</h2>

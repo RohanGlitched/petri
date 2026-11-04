@@ -161,7 +161,7 @@ export function CoinSection() {
   const check = (ok: boolean | null) => (ok === null ? "Reading the contract" : ok ? "Holds on the live dish" : "Does not hold");
 
   return (
-    <section id="coin" className={`band band-paper ${s.section}`} aria-labelledby="coin-title">
+    <section id="coin" data-section="The coin and the reach" className={`band band-paper ${s.section}`} aria-labelledby="coin-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="coin-title" className={s.h2}>PETRI leaves the agar for NEAR and for life, and comes back with planting</h2>

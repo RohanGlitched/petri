@@ -63,7 +63,7 @@ export function SlideHistoryBand({ id, cells }: { id: string; cells: number | nu
   const own = h.licensed.filter((l) => !l.holder && !l.toAgar).length;
 
   return (
-    <section className="band band-2" aria-labelledby="sp-history">
+    <section id="history" data-section="Its history" className="band band-2" aria-labelledby="sp-history">
       <div className="wrap">
         <div className={s.split}>
           <div>

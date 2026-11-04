@@ -11,7 +11,7 @@ export const metadata = {
 export default function VerifyPage() {
   return (
     <>
-      <section className="wrap">
+      <section id="replay" data-section="Rebuild the dish" className="wrap">
         <header className={s.head}>
           <h1 className={s.title}>Rebuild the dish from nothing</h1>
           <p className="lede">
@@ -29,7 +29,7 @@ export default function VerifyPage() {
         <VerifyRun />
       </section>
 
-      <section className="band band-paper" aria-labelledby="chain-title">
+      <section id="chain" data-section="How the history chain is built" className="band band-paper" aria-labelledby="chain-title">
         <div className="wrap">
           <div className="section-head">
             <h2 id="chain-title" className="h2">How the history chain is built</h2>
@@ -73,7 +73,7 @@ export default function VerifyPage() {
         </div>
       </section>
 
-      <section className="band" aria-labelledby="cli-title">
+      <section id="terminal" data-section="Run it without this page" className="band" aria-labelledby="cli-title">
         <div className="wrap">
           <div className="section-head">
             <h2 id="cli-title" className="h2">Run it without this page</h2>

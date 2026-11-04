@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { RulesHeader, RulesJump } from "@/components/rules/RulesHeader";
+import { RulesHeader } from "@/components/rules/RulesHeader";
 import { BoardSection } from "@/components/rules/BoardSection";
 import { LifeSection } from "@/components/rules/LifeSection";
 import { PlantingSection } from "@/components/rules/PlantingSection";
@@ -20,7 +20,6 @@ export default function RulesPage() {
   return (
     <>
       <RulesHeader />
-      <RulesJump />
       <BoardSection />
       <LifeSection />
       <PlantingSection />

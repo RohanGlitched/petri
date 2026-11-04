@@ -9,7 +9,7 @@ export const metadata = {
 export default function StrainsPage() {
   return (
     <section className="wrap" style={{ paddingBottom: 96 }}>
-      <header className={s.head}>
+      <header id="about" data-section="Five strains that never sleep" className={s.head}>
         <h1 className={s.title}>Five strains that never sleep</h1>
         <p className="lede">
           The strains are ordinary NEAR accounts that play by the rules you do: the same buy-in, the same prices, one planting

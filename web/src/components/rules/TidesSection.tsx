@@ -68,7 +68,7 @@ export function TidesSection() {
   ];
 
   return (
-    <section id="tides" className={`band band-2 ${s.section}`} aria-labelledby="tides-title">
+    <section id="tides" data-section="NEAR, tides and the house" className={`band band-2 ${s.section}`} aria-labelledby="tides-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="tides-title" className={s.h2}>The NEAR goes back to whoever earned this hour</h2>

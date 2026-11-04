@@ -2,6 +2,7 @@ import type { Viewport } from "next";
 import { Gloock, Figtree } from "next/font/google";
 import { Nav } from "@/components/site/Nav";
 import { Footer } from "@/components/site/Footer";
+import { Wells } from "@/components/site/Wells";
 import "./site.css";
 
 const display = Gloock({ subsets: ["latin"], weight: "400", variable: "--font-display", display: "swap" });
@@ -16,6 +17,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <Nav />
       <main id="main">{children}</main>
       <Footer />
+      <Wells />
     </div>
   );
 }

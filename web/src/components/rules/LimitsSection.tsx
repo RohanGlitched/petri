@@ -101,7 +101,7 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
 
 export function LimitsSection() {
   return (
-    <section id="limits" className={`band band-2 ${s.section}`} aria-labelledby="limits-title">
+    <section id="limits" data-section="Known limits" className={`band band-2 ${s.section}`} aria-labelledby="limits-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="limits-title" className={s.h2}>Known limits</h2>
@@ -125,7 +125,7 @@ export function LimitsSection() {
 
 export function RulesCta() {
   return (
-    <section className="band" aria-labelledby="rules-cta-title">
+    <section id="plant" data-section="Now plant something" className="band" aria-labelledby="rules-cta-title">
       <div className="wrap">
         <div className={s.cta}>
           <h2 id="rules-cta-title" className={s.h2}>Now plant something</h2>

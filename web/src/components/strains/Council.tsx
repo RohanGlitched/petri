@@ -59,7 +59,7 @@ export function Council({ log }: { log: StrainLog | null }) {
   const colonyFor = (name: string, account: string | null) => (account ? byAccount.get(account) : undefined) ?? byStrainName.get(name);
 
   return (
-    <section className={c.council} aria-labelledby="council-title">
+    <section id="council" data-section="The council" className={c.council} aria-labelledby="council-title">
       <div className={c.head}>
         <div>
           <h2 id="council-title" className="h2">The council</h2>

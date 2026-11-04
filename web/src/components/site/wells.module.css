@@ -1,0 +1,333 @@
+/* The well strip. Fixed, so it never moves the page; it appears and changes by opacity and transform only.
+   Colours fall back to the site's tokens so the docs (which scope their own) can use the lens too. */
+
+.wells {
+  --w-bg: rgba(18, 10, 5, 0.95);
+  --w-line: rgba(243, 233, 218, 0.14);
+  --w-line-2: rgba(243, 233, 218, 0.26);
+  --w-amber: #f2b45a;
+  --w-bone: #f3e9da;
+  --w-ink: #1d1208;
+  --w-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.wells[data-ready] { opacity: 1; }
+
+/* Desktop: the strip at the right edge, centred on the viewport. top: 50% plus a transform keeps the position
+   independent of how many wells there are. */
+.dock {
+  position: fixed;
+  right: 12px;
+  top: 50%;
+  z-index: 30;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transform: translateY(-50%);
+}
+
+.strip {
+  position: relative;
+  display: grid;
+  margin: 0;
+  padding: 8px 5px;
+  list-style: none;
+  border-radius: 999px;
+  background: var(--w-bg);
+  box-shadow: inset 0 0 0 1px var(--w-line), 0 18px 40px -20px rgba(0, 0, 0, 0.8);
+}
+.strip > li { display: block; }
+
+/* The capillary between the wells, filled down to the one being read. */
+.track {
+  position: absolute;
+  left: calc(50% - 0.5px);
+  top: 20px;
+  bottom: 20px;
+  width: 1px;
+  background: var(--w-line);
+  pointer-events: none;
+}
+.track i {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(var(--w-amber), rgba(242, 180, 90, 0.55));
+  transform-origin: top;
+  transform: scaleY(var(--fill, 0));
+  transition: transform 0.6s var(--w-ease);
+}
+
+.well {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.well:focus-visible,
+.lens:focus-visible {
+  outline: 2px solid var(--w-amber);
+  outline-offset: 1px;
+  border-radius: 50%;
+}
+
+/* One well of agar: a dark cup with a lit rim. */
+.dish {
+  position: relative;
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #060301 0, #160d06 62%, #2b1a0d 100%);
+  box-shadow: inset 0 1.5px 2px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(243, 233, 218, 0.17);
+  transition: transform 0.35s var(--w-ease);
+}
+/* A colony that grew here (wells already read), and the glow of the live one. Both by opacity. */
+.dish::before,
+.dish::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.dish::before {
+  inset: 3.5px;
+  background: radial-gradient(circle at 35% 30%, #f6d6a4, #b9772b 70%);
+}
+.dish::after {
+  inset: -4px;
+  background: radial-gradient(circle, rgba(242, 180, 90, 0.34), rgba(242, 180, 90, 0) 70%);
+}
+.dish[data-state="past"]::before { opacity: 0.55; }
+.dish[data-state="here"] {
+  transform: scale(1.55);
+  box-shadow: inset 0 1.5px 2px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(242, 180, 90, 0.6);
+}
+.dish[data-state="here"]::after { opacity: 1; }
+.well:hover .dish[data-state="past"],
+.well:hover .dish[data-state="ahead"] { transform: scale(1.2); }
+
+/* A blinker: three cells that turn a quarter each generation. */
+.blinker {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5px;
+  animation: blink 1.6s steps(1, end) infinite;
+}
+.blinker i {
+  width: 2.7px;
+  height: 2.7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff1d6, #f2b45a 55%, #9a5a14);
+}
+@keyframes blink {
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+  100% { transform: rotate(90deg); }
+}
+
+/* The name of a well: a paper slide label, shown on hover and on keyboard focus. */
+.tag {
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 50%;
+  padding: 6px 10px 6px 11px;
+  border-radius: 7px;
+  background: var(--w-bone);
+  color: var(--w-ink);
+  font: 500 13.5px/1.2 var(--body, system-ui, sans-serif);
+  white-space: nowrap;
+  /* The ink hairline keeps the label distinct where it sits over a paper band. */
+  box-shadow: 0 0 0 1px rgba(29, 18, 8, 0.3), 0 12px 28px -12px rgba(0, 0, 0, 0.75);
+  opacity: 0;
+  transform: translate(6px, -50%);
+  transition: opacity 0.16s ease, transform 0.2s var(--w-ease);
+  pointer-events: none;
+}
+.well[aria-current="location"] .tag { box-shadow: inset 3px 0 0 var(--w-amber), 0 0 0 1px rgba(29, 18, 8, 0.3), 0 12px 28px -12px rgba(0, 0, 0, 0.75); }
+.well:hover .tag,
+.well:focus-visible .tag,
+.lens:hover .tag,
+.lens:focus-visible .tag {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+/* The objective lens: back to the top. Hidden for the first screen. */
+.lens {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--w-bone);
+  background: radial-gradient(circle at 50% 40%, #2b1a0d, #120a05 72%);
+  box-shadow: inset 0 0 0 1px var(--w-line-2), inset 0 0 0 4px rgba(18, 10, 5, 0.9), inset 0 0 0 5px rgba(242, 180, 90, 0.3),
+    0 14px 30px -16px rgba(0, 0, 0, 0.85);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px) scale(0.92);
+  transition: opacity 0.25s ease, transform 0.3s var(--w-ease), visibility 0s linear 0.3s;
+}
+.lens svg { transition: transform 0.2s var(--w-ease); }
+.lens:hover svg { transform: translateY(-1.5px); }
+.lens:hover { box-shadow: inset 0 0 0 1px var(--w-line-2), inset 0 0 0 4px rgba(18, 10, 5, 0.9), inset 0 0 0 5px rgba(242, 180, 90, 0.75), 0 14px 30px -16px rgba(0, 0, 0, 0.85); }
+.wells[data-past] .lens {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 0.25s ease, transform 0.3s var(--w-ease), visibility 0s;
+}
+
+/* Phones and narrow windows: the current section's name and the lens, in the bottom-right corner, after a screen. */
+.corner {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  height: 44px;
+  pointer-events: none;
+}
+.corner > * { pointer-events: auto; }
+.corner > .lens { position: absolute; right: 0; top: 0; }
+.lensCorner { width: 44px; height: 44px; }
+
+/* The pill hangs from a fixed point 52px in from the right and is pulled left by its own width with a transform, so a
+   longer or shorter section name never moves its layout box (a box that grew leftwards would count as a shift). */
+.pill {
+  position: absolute;
+  top: 0;
+  left: calc(100% - 52px);
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  height: 44px;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 32px - 52px));
+  padding: 0 16px 0 15px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--w-bg);
+  box-shadow: inset 0 0 0 1px var(--w-line-2), 0 16px 36px -16px rgba(0, 0, 0, 0.85);
+  color: var(--w-bone);
+  font: 500 14px/1 var(--body, system-ui, sans-serif);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-100%, 8px);
+  transition: opacity 0.25s ease, transform 0.3s var(--w-ease), visibility 0s linear 0.3s;
+}
+.pill:focus-visible { outline: 2px solid var(--w-amber); outline-offset: 2px; border-radius: 999px; }
+.pillName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wells[data-past] .corner:not([data-foot]) .pill {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-100%, 0);
+  transition: opacity 0.25s ease, transform 0.3s var(--w-ease), visibility 0s;
+}
+
+/* The sheet of wells. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  padding: 0;
+  border: 0;
+  background: rgba(8, 4, 2, 0.6);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0s linear 0.25s;
+}
+.sheet {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+  max-width: 460px;
+  margin-left: auto;
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 8px 8px;
+  border-radius: 22px;
+  background: #21140b;
+  box-shadow: inset 0 0 0 1px var(--w-line-2), 0 30px 70px -20px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(24px);
+  transition: opacity 0.22s ease, transform 0.32s var(--w-ease), visibility 0s linear 0.32s;
+}
+.scrim[data-open],
+.sheet[data-open] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 0.22s ease, transform 0.32s var(--w-ease), visibility 0s;
+}
+.sheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px 10px 12px;
+}
+.sheetHead p { margin: 0; font: 600 13.5px/1.3 var(--body, system-ui, sans-serif); color: #bba78f; }
+.sheetList { list-style: none; margin: 0; padding: 0; }
+.sheetList button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 50px;
+  padding: 8px 12px 8px 16px;
+  border: 0;
+  border-top: 1px solid var(--w-line);
+  border-radius: 0;
+  background: none;
+  color: #e2d5c3;
+  font: 400 19px/1.25 var(--display, Georgia, serif);
+  text-align: left;
+  cursor: pointer;
+}
+.sheetList button:hover { background: rgba(243, 233, 218, 0.04); }
+.sheetList button[aria-current="location"] { color: var(--w-bone); background: rgba(242, 180, 90, 0.08); border-radius: 12px; border-top-color: transparent; }
+.sheetList li:first-child > button,
+.sheetList li[data-after] > button { border-top-color: transparent; }
+.sheetList button:focus-visible { outline: 2px solid var(--w-amber); outline-offset: -2px; border-radius: 12px; }
+
+@media (min-width: 1180px) {
+  .dock { display: flex; }
+  .wells[data-rail] .corner { display: none; }
+  .scrim,
+  .sheet { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blinker { animation: none; }
+  .wells,
+  .dish,
+  .track i,
+  .tag,
+  .lens,
+  .pill,
+  .scrim,
+  .sheet { transition-duration: 0s; transition-delay: 0s; }
+}

@@ -88,7 +88,7 @@ export function StrategySection() {
   const perCounted = perCell;
   const payback = ready && perCounted > 0 ? cellPrice / perCounted : NaN;
   return (
-    <section id="strategies" className={`band band-2 ${s.section}`} aria-labelledby="strategies-title">
+    <section id="strategies" data-section="Strategies" className={`band band-2 ${s.section}`} aria-labelledby="strategies-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="strategies-title" className={s.h2}>Ways to play, and what they pay</h2>

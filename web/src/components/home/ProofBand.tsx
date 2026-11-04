@@ -38,7 +38,7 @@ export function ProofBand() {
   const { d, ready } = useLive();
   const net = useNet();
   return (
-    <section className="band" aria-labelledby="proof-title">
+    <section id="proof" data-section="Replay it yourself" className="band" aria-labelledby="proof-title">
       <div className="wrap">
         <div className={s.proof}>
           <div>
@@ -79,7 +79,7 @@ export function ProofBand() {
 export function CtaBand() {
   const net = useNet();
   return (
-    <section className="band" aria-labelledby="cta-title">
+    <section id="start" data-section="Plant a colony" className="band" aria-labelledby="cta-title">
       <div className="wrap">
         <div className={s.cta}>
           <h2 id="cta-title" className="h2">Stake a few cents of NEAR, plant a colony, hold your ground.</h2>

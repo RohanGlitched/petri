@@ -9,7 +9,7 @@ export function SpecimensBand() {
   const { all, rows } = useSpecimenRows();
   const latest = rows.slice(0, 3);
   return (
-    <section className="band band-2" aria-labelledby="specimens-title">
+    <section id="specimens" data-section="Fossils of a living coin" className="band band-2" aria-labelledby="specimens-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="specimens-title" className="h2">Fossils of a living coin</h2>

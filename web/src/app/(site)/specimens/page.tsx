@@ -12,7 +12,7 @@ export const metadata = {
 export default function SpecimensPage() {
   return (
     <>
-      <section className="wrap">
+      <section id="slides" data-section="The slide box" className="wrap">
         <header className={s.head}>
           <div>
             <h1 className={s.title}>Fossils of a living coin</h1>
@@ -33,7 +33,7 @@ export default function SpecimensPage() {
         <Gallery />
       </section>
 
-      <section className="band band-paper" aria-labelledby="make-title" style={{ marginTop: 96 }}>
+      <section id="make" data-section="How a cell becomes a specimen" className="band band-paper" aria-labelledby="make-title" style={{ marginTop: 96 }}>
         <div className="wrap">
           <div className="section-head">
             <h2 id="make-title" className="h2">How a living cell becomes a specimen</h2>
@@ -63,7 +63,7 @@ export default function SpecimensPage() {
         </div>
       </section>
 
-      <section id="proof" className="band" aria-labelledby="proof-title">
+      <section id="proof" data-section="A picture anyone can check" className="band" aria-labelledby="proof-title">
         <div className="wrap">
           <div className={s.split}>
             <div className={s.proofText}>
@@ -89,7 +89,7 @@ export default function SpecimensPage() {
         </div>
       </section>
 
-      <section className="band band-2" aria-labelledby="std-title">
+      <section id="token" data-section="An ordinary NEAR token" className="band band-2" aria-labelledby="std-title">
         <div className="wrap">
           <div className="section-head">
             <h2 id="std-title" className="h2">An ordinary NEAR token</h2>

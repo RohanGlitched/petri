@@ -86,7 +86,7 @@ export function StrainsView() {
       )}
       {log?.error && <p className={s.honest}>The strains&rsquo; log could not be reached just now. It is retried every 20 seconds.</p>}
 
-      <ul className={s.grid}>
+      <ul id="lab-notes" data-section="Their lab notes" className={s.grid}>
         {STRAINS.map((st) => {
           const c = colonies.find((x) => x.account === st.account);
           const mine = c ? plants.filter((p) => p.colony === c.id).reverse() : [];
@@ -144,7 +144,7 @@ export function StrainsView() {
             </li>
           );
         })}
-        <li className={`${s.card} ${s.keeper}`}>
+        <li id="keeper" data-section="The keeper" className={`${s.card} ${s.keeper}`}>
           <header className={s.cardHead}>
             <i className="swatch" style={{ background: "#bba78f", width: 18, height: 18 }} />
             <h2>The keeper</h2>
@@ -226,7 +226,7 @@ function RunwayNote() {
   const hrs = r ? Math.max(1, Math.round(r.hours)) : 0;
   const span = !r ? "" : r.young ? `the dish's first ${hrs} ${hrs === 1 ? "hour" : "hours"} (so the pace is rough)` : r.hours >= 23.5 ? "the last 24 hours" : `the last ${hrs} hours`;
   return (
-    <section className={s.runway} aria-labelledby="runway-title">
+    <section id="runway" data-section="Runway" className={s.runway} aria-labelledby="runway-title">
       <div>
         <h2 id="runway-title" className="h3">Runway</h2>
         <p>

@@ -31,7 +31,7 @@ export function BoardSection() {
     ["Next generation in", ready ? `${secs} s` : "—"],
   ];
   return (
-    <section id="board" className={`band ${s.section}`} aria-labelledby="board-title">
+    <section id="board" data-section="The board and the clock" className={`band ${s.section}`} aria-labelledby="board-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="board-title" className={s.h2}>A small world on a clock</h2>

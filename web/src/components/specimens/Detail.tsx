@@ -62,7 +62,7 @@ export function SpecimenDetail({ id }: { id: string }) {
 
   return (
     <>
-      <section className="wrap">
+      <section id="slide" data-section="The slide" className="wrap">
         <p className={s.crumb}><Link href="/specimens">Specimens</Link> / No. {sl.id}</p>
         <div className={s.detailTop}>
           <SlideGlass size="large" src={pictureOf(sl, c?.color)} id={sl.id} title={sl.title} colony={c} generation={sl.generation} count={sl.count} />
@@ -159,7 +159,7 @@ export function SpecimenDetail({ id }: { id: string }) {
 
       <SlideHistoryBand id={sl.id} cells={sl.count} />
 
-      <section className="band band-paper" aria-labelledby="sp-proof">
+      <section id="proof" data-section="How you know these cells lived" className="band band-paper" aria-labelledby="sp-proof">
         <div className="wrap">
           <div className={s.split}>
             <div>
@@ -182,7 +182,7 @@ export function SpecimenDetail({ id }: { id: string }) {
         </div>
       </section>
 
-      <section className="band" aria-labelledby="sp-token">
+      <section id="token" data-section="The token" className="band" aria-labelledby="sp-token">
         <div className="wrap">
           <div className={s.split}>
             <div>

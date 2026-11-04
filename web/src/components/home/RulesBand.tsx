@@ -99,7 +99,7 @@ function Demo({ sc }: { sc: Scene }) {
 
 export function RulesBand() {
   return (
-    <section className="band" aria-labelledby="rules-title">
+    <section id="rules" data-section="Three rules" className="band" aria-labelledby="rules-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="rules-title" className="h2">Three rules, all enforced by the contract</h2>

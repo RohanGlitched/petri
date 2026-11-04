@@ -74,6 +74,9 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   font-weight: 600;
 }
 .skip:focus { top: 12px; }
+/* A section or main that took focus from the well strip is a landing place, not a control. */
+[data-section]:focus-visible,
+main:focus-visible { outline: none; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* Shared layout */
@@ -184,10 +187,8 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   content: "";
   position: absolute;
   inset: 0;
-  /* Nearly opaque, so text scrolling underneath never shows through, even where backdrop blur is unsupported. */
-  background: rgba(18, 10, 5, 0.94);
-  backdrop-filter: blur(16px) saturate(1.3);
-  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  /* Opaque, so text scrolling underneath never shows through (the cream paper bands showed even at 94%). */
+  background: rgb(18, 10, 5);
   border-bottom: 1px solid var(--line);
   opacity: var(--nav-solid, 1);
   transition: opacity 0.3s ease;
@@ -532,6 +533,10 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
 }
 @media (min-width: 800px) {
   .footer-dish { display: none; }
+}
+/* Room under the last line for the corner lens, so it never sits on the footer's links. */
+@media (max-width: 1179px) {
+  .footer:not(.footer-dish) { padding-bottom: 84px; }
 }
 @media (max-width: 900px) {
   .foot-top { grid-template-columns: 1fr 1fr; }

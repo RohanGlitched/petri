@@ -129,7 +129,7 @@ export function CoinBand() {
   // Before the first tide there is nothing paid to report, so the card counts down to it instead.
   const firstTide = !!st && v("tides") === 0;
   return (
-    <section id="coin" className="band band-paper" aria-labelledby="coin-title">
+    <section id="coin" data-section="The coin is the nutrient" className="band band-paper" aria-labelledby="coin-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="coin-title" className="h2">The coin is the nutrient</h2>

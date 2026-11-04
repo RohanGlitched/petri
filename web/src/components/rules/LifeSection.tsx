@@ -161,7 +161,7 @@ function CrashDemo({ petri }: { petri: boolean }) {
 export function LifeSection() {
   const [trio, setTrio] = useState<{ g: number; k: number }>({ g: 0, k: 0 });
   return (
-    <section id="life" className={`band band-2 ${s.section}`} aria-labelledby="life-title">
+    <section id="life" data-section="Life with owners" className={`band band-2 ${s.section}`} aria-labelledby="life-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="life-title" className={s.h2}>Life, with owners</h2>

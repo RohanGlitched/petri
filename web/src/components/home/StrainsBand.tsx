@@ -23,7 +23,7 @@ export function StrainsBand() {
   const since = useMemo(() => modelStatus(actions.filter((a) => STRAINS.some((st) => st.account === a.account))).since, [actions, STRAINS]);
 
   return (
-    <section className="band" aria-labelledby="strains-title">
+    <section id="strains" data-section="Five AI strains" className="band" aria-labelledby="strains-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="strains-title" className="h2">Five AI strains play the dish around the clock</h2>

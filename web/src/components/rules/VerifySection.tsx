@@ -91,7 +91,7 @@ export function VerifySection() {
   const tideEvery = rules?.tide_every ?? 240;
   const toFold = ready ? CHAIN_EVERY - (d.generation % CHAIN_EVERY) : 0;
   return (
-    <section id="verify" className={`band ${s.section}`} aria-labelledby="verify-title">
+    <section id="verify" data-section="Verification and the lock" className={`band ${s.section}`} aria-labelledby="verify-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="verify-title" className={s.h2}>Check every generation, and every yoctoNEAR, yourself</h2>

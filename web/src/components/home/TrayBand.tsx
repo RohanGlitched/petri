@@ -18,7 +18,7 @@ export function TrayBand() {
   const offsets = usePatternOffsets();
   const cost = (n: number) => cellPrice * n;
   return (
-    <section className="band band-2" aria-labelledby="tray-title">
+    <section id="stamps" data-section="Stamps and ways to play" className="band band-2" aria-labelledby="tray-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="tray-title" className="h2">Eleven stamps, four ways to play</h2>

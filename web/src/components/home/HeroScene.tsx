@@ -155,7 +155,7 @@ export function HeroScene() {
   }, [w]);
 
   return (
-    <div ref={scene} className={s.scene}>
+    <div ref={scene} id="alive" data-section="A coin that is alive" className={s.scene}>
       <div className={s.stage}>
         <div ref={mask} className={s.mask}>
           <div className={s.reveal}>

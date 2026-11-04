@@ -306,7 +306,7 @@ export function ParamsSection() {
     ["keepers", (r.keepers ?? []).join(", ") || "none", "The dish's keepers, house accounts too: no tide bounty, no keeper pot, and PETRI only to other house accounts."],
   ];
   return (
-    <section id="parameters" className={`band ${s.section}`} aria-labelledby="params-title">
+    <section id="parameters" data-section="Parameters and the simulator" className={`band ${s.section}`} aria-labelledby="params-title">
       <div className="wrap">
         <div className="section-head">
           <h2 id="params-title" className={s.h2}>How the parameters were chosen</h2>

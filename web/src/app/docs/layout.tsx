@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Gloock, Figtree } from "next/font/google";
 import { Shell } from "@/components/docs/Shell";
+import { Wells } from "@/components/site/Wells";
 import { DOCS } from "@/components/docs/facts";
 import "./docs.css";
 
@@ -19,6 +20,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className={`docs ${display.variable} ${body.variable}`}>
       <Shell>{children}</Shell>
+      <Wells topOnly root="#doc" focus="#doc" footer=".d-foot" />
     </div>
   );
 }
