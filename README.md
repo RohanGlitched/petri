@@ -6,7 +6,7 @@
   <a href="https://www.playpetri.xyz"><img alt="Live site" src="https://img.shields.io/badge/live-playpetri.xyz-f2b45a?style=flat-square&labelColor=120a05" /></a>
   <a href="https://nearblocks.io/address/petri-dish.near"><img alt="Mainnet contract" src="https://img.shields.io/badge/mainnet-petri--dish.near-9fd8a8?style=flat-square&labelColor=120a05" /></a>
   <a href="https://testnet.nearblocks.io/address/petri-v6.testnet"><img alt="Testnet contract" src="https://img.shields.io/badge/testnet-petri--v6.testnet-9fd8a8?style=flat-square&labelColor=120a05" /></a>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-167-9fd8a8?style=flat-square&labelColor=120a05" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-175-9fd8a8?style=flat-square&labelColor=120a05" />
   <img alt="Rust" src="https://img.shields.io/badge/rust-near--sdk%205.29.1-e2d5c3?style=flat-square&labelColor=120a05" />
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/licence-MIT-e2d5c3?style=flat-square&labelColor=120a05" /></a>
 </p>
@@ -229,9 +229,9 @@ Replaying petri-dish.near (mainnet) at block 222964645: 14 generations, 15 ledge
   match   Colony credit winnings                       5 of 5
   match   Colony kept PETRI                            5 of 5
   match   Solvent (NEAR held >= owed, from the ledger) yes
-  match   Deployed code hash                           8QAsfDHePT3TdZ6LvJRV9pcNHfHJemgFbiBBaZK6ZPwR
+  match   Deployed code hash                           5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP
   DIFFERS  Full-access keys                             1  (expected: 0)
-Source: https://github.com/RohanGlitched/petri/tree/4858ca09b809be6a8af9254a2c9260c48fd60bf8; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
+Source: https://github.com/RohanGlitched/petri/tree/e791404e63d03c2010bdb216b9792a8559512653; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
 Owed, from the ledger: 0.23761 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.304743164372527200000003 NEAR.
   The contract account still has a full-access key: whoever holds it could deploy different code.
 1 check(s) differ.
@@ -241,29 +241,29 @@ Owed, from the ledger: 0.23761 NEAR (vault, credit pool, unspent credit, unclaim
 
 ### Rebuild the contract and compare its hash
 
-Both dishes run one build, made with `cargo near build reproducible-wasm` at commit `4858ca0`. With [cargo-near](https://github.com/near/cargo-near) 0.22 and Docker:
+Both dishes run one build, made with `cargo near build reproducible-wasm` at commit `e791404`. With [cargo-near](https://github.com/near/cargo-near) 0.22 and Docker:
 
 ```bash
 git clone https://github.com/RohanGlitched/petri && cd petri
-git checkout 4858ca09b809be6a8af9254a2c9260c48fd60bf8
+git checkout e791404e63d03c2010bdb216b9792a8559512653
 cd contract && cargo near build reproducible-wasm
 ```
 
-It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb` (pinned in `contract/Cargo.toml`), in under a minute once the image is pulled, and ends with (the file is 603,052 bytes):
+It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb` (pinned in `contract/Cargo.toml`), in under a minute once the image is pulled, and ends with (the file is 605,767 bytes):
 
 ```
-     - SHA-256 checksum hex : 6df154bd52b56999299185743e7011e0cec690dacdba1d3e8be2a15c49a2bd7c
-     - SHA-256 checksum bs58: 8QAsfDHePT3TdZ6LvJRV9pcNHfHJemgFbiBBaZK6ZPwR
+     - SHA-256 checksum hex : 4904f0273d05ea5cde13c3c83f0a77dc1b67395ed85a6a5c92bb22d5e1b84150
+     - SHA-256 checksum bs58: 5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP
 ```
  The contract's `contract_source_metadata` (NEP-330) names the same commit and image. Its `build_info.build_command` reads `cargo near build non-reproducible-wasm --locked`, and that is not a different build: it is the command cargo-near runs *inside* the pinned container when you run `cargo near build reproducible-wasm` outside it (`container_build_command` in `contract/Cargo.toml`). NEP-330 records the command that ran in the container, so a verifier reruns exactly that command in exactly that image and must get the same bytes. To read the deployed hash yourself:
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_account","finality":"final","account_id":"petri-dish.near"}}'
-# "code_hash":"8QAsfDHePT3TdZ6LvJRV9pcNHfHJemgFbiBBaZK6ZPwR"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
+# "code_hash":"5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
 
 near account view-account-summary petri-dish.near network-config mainnet now
-# near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": 6df154bd52b56999299185743e7011e0cec690dacdba1d3e8be2a15c49a2bd7c
+# near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": 4904f0273d05ea5cde13c3c83f0a77dc1b67395ed85a6a5c92bb22d5e1b84150
 ```
 
 ### The lock
@@ -288,7 +288,7 @@ curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
 cargo test -p petri-core -p petri-contract
 ```
 
-35 engine tests (including property tests against a plain reference implementation of Life, one showing that splitting a colony never earns more, and the slide-pattern match) and 132 contract tests, among them a regression test for each attack the reviews found and dishes of 30,000 colonies whose calls must stay well under the gas limit. Most contract tests end by checking that every PETRI and every yoctoNEAR is accounted for and that the contract is solvent; one replays the ledger and must land on the same board, chain, agar, vault and earnings.
+36 engine tests (including property tests against a plain reference implementation of Life, one showing that splitting a colony never earns more, and the slide-pattern match) and 139 contract tests, among them a regression test for each attack the reviews found and dishes of 30,000 colonies whose calls must stay well under the gas limit. Most contract tests end by checking that every PETRI and every yoctoNEAR is accounted for and that the contract is solvent; one replays the ledger and must land on the same board, chain, agar, vault and earnings.
 
 ## Architecture
 

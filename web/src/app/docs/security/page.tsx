@@ -446,7 +446,7 @@ export default function Page() {
       </ul>
 
       <H2 id="tests">Running the tests that cover these</H2>
-      <Code lang="sh" title="Shell, from the repository root">{`# everything: 132 contract tests and 35 core tests
+      <Code lang="sh" title="Shell, from the repository root">{`# everything: 139 contract tests and 36 core tests
 cargo test -p petri-core -p petri-contract
 
 # one threat at a time

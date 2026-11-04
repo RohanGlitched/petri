@@ -679,11 +679,11 @@ contract test
 
 ## The lock
 
-Both dishes run one build of v6.1 (603,052 bytes, near-sdk 5.29.1), made with `cargo near build reproducible-wasm` at
-commit `4858ca09b809be6a8af9254a2c9260c48fd60bf8` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
+Both dishes run one build of v6.1 (605,767 bytes, near-sdk 5.29.1), made with `cargo near build reproducible-wasm` at
+commit `e791404e63d03c2010bdb216b9792a8559512653` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
 (pinned in `contract/Cargo.toml`). Its NEP-330 `contract_source_metadata` links that commit, so anyone can rebuild it
-and compare the hash with the account's code hash, `8QAsfDHePT3TdZ6LvJRV9pcNHfHJemgFbiBBaZK6ZPwR` (hex
-`6df154bd52b56999299185743e7011e0cec690dacdba1d3e8be2a15c49a2bd7c`). At the time of writing each account still has one
+and compare the hash with the account's code hash, `5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP` (hex
+`4904f0273d05ea5cde13c3c83f0a77dc1b67395ed85a6a5c92bb22d5e1b84150`). At the time of writing each account still has one
 full-access key, so whoever holds it could deploy different code. The team intends to delete them before judging, after
 which the code can never change and `relaunch` can never run:
 
