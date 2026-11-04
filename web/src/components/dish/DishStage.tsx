@@ -25,6 +25,7 @@ import { useSlideLicence } from "@/components/specimens/licence";
 import { pactZone, usePacts, type Pact } from "@/lib/pacts";
 import { MyPacts, PickedColony, pactLines, pactsOn, zoneColonies, type PactActions } from "./Pacts";
 import s from "./dish.module.css";
+import { NetTag } from "@/components/site/NetTag";
 
 type Cell = { x: number; y: number };
 
@@ -1071,18 +1072,27 @@ export function DishStage() {
       <div ref={hudBox} className={s.hud} aria-live="polite">
         <div className={s.hudGen}>
           <Countdown ms={d.nextInMs} total={genMs} />
-          <div>
-            <span>{stale ? "Last seen" : "Generation"}</span>
-            <b className="num">{ready ? int(d.generation) : stale ? int(cache!.generation) : "—"}</b>
-          </div>
+          {ready || stale || d.status === "error" ? (
+            <div>
+              <span>{stale ? "Last seen" : "Generation"}</span>
+              <b className="num">{ready ? int(d.generation) : stale ? int(cache!.generation) : "—"}</b>
+            </div>
+          ) : (
+            // First visit, nothing cached: say what is being read rather than show a dash.
+            <div className={s.hudReading}>
+              <span>Generation</span>
+              <b>reading {net.contract}…</b>
+            </div>
+          )}
         </div>
-        <div><span>Next in</span><b className="num">{ready ? `${secs}s` : "—"}</b></div>
-        <div><span>Living cells</span><b className="num">{ready ? int(d.totalLive) : stale ? int(cache!.totalLive) : "—"}</b></div>
+        <div><span>Next in</span><b className="num">{ready ? `${secs}s` : "…"}</b></div>
+        <div><span>Living cells</span><b className="num">{ready ? int(d.totalLive) : stale ? int(cache!.totalLive) : "…"}</b></div>
         <div title="What one more counted cell would earn each generation at today's feed">
           <span>A new cell earns</span>
-          <b className="num">{ready ? petri(perCell, 4) : stale ? petri(cache!.perCell, 4) : "—"}</b>
+          <b className="num">{ready ? petri(perCell, 4) : stale ? petri(cache!.perCell, 4) : "…"}</b>
         </div>
-        <div><span>Agar</span><b className="num">{ready ? petri(d.agar) : stale ? petri(cache!.agar) : "—"}</b></div>
+        <div><span>Agar</span><b className="num">{ready ? petri(d.agar) : stale ? petri(cache!.agar) : "…"}</b></div>
+        <div className={s.hudNet}><NetTag short /></div>
       </div>
       {ready && warming && (
         <div ref={warmBox} className={s.warmChip}>

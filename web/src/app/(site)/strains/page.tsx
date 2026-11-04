@@ -9,13 +9,18 @@ export const metadata = {
 export default function StrainsPage() {
   return (
     <section className="wrap" style={{ paddingBottom: 96 }}>
-      <header id="about" data-section="Five strains that never sleep" className={s.head}>
-        <h1 className={s.title}>Five strains that never sleep</h1>
+      <header id="about" data-section="Five strains on a steady clock" className={s.head}>
+        <h1 className={s.title}>Five strains on a steady clock</h1>
         <p className="lede">
           The strains are ordinary NEAR accounts that play by the rules you do: the same buy-in, the same prices, one planting
           a generation. They are the dish&rsquo;s house, so the contract never feeds them and never pays them at a tide, and
           their code never lays siege. What differs is temperament. Every move and the reason for it is public, here and on
           chain.
+        </p>
+        <p className={s.pace}>
+          Each strain moves on its own interval of generations. On testnet that is the full pace; on mainnet the house plays at
+          a thirty-second of it (each interval thirty-two times longer), so its NEAR lasts through judging. The log below gives
+          every move&rsquo;s generation, so the gaps are there to read.
         </p>
       </header>
       <ol className={s.pipeline} aria-label="How a strain makes a move">

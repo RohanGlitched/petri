@@ -11,6 +11,8 @@ export type GlassProps = {
   title?: string | null;
   colony?: { name: string; color: number } | null;
   generation?: number | null;
+  /** The generation it was minted in, when that differs from the one its cells were fixed at. */
+  mintedGen?: number | null;
   count?: number | null;
   /** Rectangle size, so a wide or tall specimen keeps its proportions under the coverslip. */
   w?: number;
@@ -23,7 +25,7 @@ export type GlassProps = {
 
 /** A specimen mounted the way a lab keeps one: a glass slide with a frosted label at one end, the cells under a
  * coverslip at the other. */
-export function SlideGlass({ src, id, title, colony, generation, count, w = 1, h = 1, size = "card", href, placeholder }: GlassProps) {
+export function SlideGlass({ src, id, title, colony, generation, mintedGen, count, w = 1, h = 1, size = "card", href, placeholder }: GlassProps) {
   const label = title?.trim() || placeholder || "Untitled specimen";
   const body = (
     <>
@@ -37,7 +39,16 @@ export function SlideGlass({ src, id, title, colony, generation, count, w = 1, h
               {colony.name}
             </span>
           )}
-          {generation != null && <span className="num">gen {int(generation)}</span>}
+          {generation != null && (
+            <span className="num" title="The generation of the board the contract fixed these cells from">
+              fixed at gen {int(generation)}
+            </span>
+          )}
+          {mintedGen != null && generation != null && mintedGen !== generation && (
+            <span className="num" title="The generation the slide was minted in; the stored board can trail the dish's clock">
+              minted gen {int(mintedGen)}
+            </span>
+          )}
           {count != null && <span className="num">{int(count)} {count === 1 ? "cell" : "cells"}</span>}
         </span>
       </div>

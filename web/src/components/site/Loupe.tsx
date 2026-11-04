@@ -32,6 +32,7 @@ export function Loupe({ target, width, height, cells, prevCells, changedAt, pale
 
   useEffect(() => {
     let raf = 0;
+    let last = "";
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const t = target.current;
@@ -41,6 +42,10 @@ export function Loupe({ target, width, height, cells, prevCells, changedAt, pale
       const cam = t.camera();
       const v = t.view();
       const S = el.clientWidth;
+      // Only touch the reticle when the big view has moved.
+      const key = `${cam.cx.toFixed(2)},${cam.cy.toFixed(2)},${cam.zoom.toFixed(3)},${v.w},${v.h},${S}`;
+      if (key === last) return;
+      last = key;
       const f = S / (Math.max(width, height) * Math.SQRT2);
       const vw = (v.w / cam.zoom) * f;
       const vh = (v.h / cam.zoom) * f;

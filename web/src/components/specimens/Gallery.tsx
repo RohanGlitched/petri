@@ -6,7 +6,7 @@ import { useLive, hex, int, petri } from "@/lib/live";
 import { useNet } from "@/lib/use-net";
 import { slideRules, type Slide } from "@/lib/slides";
 import { SlideGlass } from "./SlideGlass";
-import { order, pictureOf, useAllSlides, useColonyOf } from "./data";
+import { order, pictureOf, useAllSlides, useColonyOf, useMintedGen } from "./data";
 import s from "./specimens.module.css";
 
 /** Why a read failed, in words: usually the dish predates specimens or is not deployed yet. */
@@ -28,6 +28,7 @@ export function useSpecimenRows() {
 export function FeaturedSlide() {
   const { all, rows } = useSpecimenRows();
   const first = rows[0];
+  const mintedGen = useMintedGen();
   // Every state keeps the caption line, so the header (and its buttons, centred beside it) never moves when the slide
   // box arrives.
   if (all.status === "loading" || !first)
@@ -47,6 +48,7 @@ export function FeaturedSlide() {
         title={first.sl.title}
         colony={first.c}
         generation={first.sl.generation}
+        mintedGen={mintedGen(first.sl)}
         count={first.sl.count}
       />
       <p className={s.featureCap}>The newest specimen on the dish. <Link href={`/specimens/${encodeURIComponent(first.sl.id)}`}>See its proof</Link>.</p>
@@ -58,7 +60,7 @@ type Sort = "new" | "old";
 
 export function Gallery() {
   const net = useNet();
-  const { ready, rules } = useLive();
+  const { ready, rules, d } = useLive();
   const price = slideRules(rules).cellPrice;
   const { all, rows } = useSpecimenRows();
   const [colony, setColony] = useState<number | null>(null);
@@ -82,15 +84,16 @@ export function Gallery() {
   }, [rows, colony, sort]);
 
   const cells = rows.reduce((a, r) => a + (r.sl.count ?? 0), 0);
-  // The price per cell is fixed in the rules, so what the slides burned is the cells they hold times that price.
-  const burned = price !== null ? Number(price) * cells : null;
+  // The dish counts what slides burned (`slides_burned`); before its state is read, the cells they hold times the
+  // rules' price per cell gives the same number.
+  const burned = d.state?.slides_burned != null ? Number(d.state.slides_burned) : price !== null ? Number(price) * cells : null;
 
   return (
     <>
       <dl className={`${s.counts} num`} aria-live="polite">
         <div><dt>Specimens on {net.contract}</dt><dd>{all.status === "ready" ? int(rows.length) : "—"}</dd></div>
         <div><dt>Cells fixed on glass</dt><dd>{all.status === "ready" ? int(cells) : "—"}</dd></div>
-        <div><dt>PETRI burned to make them</dt><dd>{all.status === "ready" && burned !== null ? petri(burned, 2) : "—"}</dd></div>
+        <div><dt>PETRI burned to make them</dt><dd>{burned !== null ? petri(burned, 2) : all.status === "ready" ? "…" : "—"}</dd></div>
         <div><dt>Colonies with a slide</dt><dd>{all.status === "ready" ? int(makers.length) : "—"}</dd></div>
       </dl>
 
@@ -155,6 +158,7 @@ export function Gallery() {
 }
 
 export function SpecimenCard({ sl, c, size }: { sl: Slide; c: { name: string; color: number } | null; size?: "card" | "mini" }) {
+  const mintedGen = useMintedGen();
   return (
     <SlideGlass
       size={size}
@@ -164,6 +168,7 @@ export function SpecimenCard({ sl, c, size }: { sl: Slide; c: { name: string; co
       title={sl.title}
       colony={c}
       generation={sl.generation}
+      mintedGen={mintedGen(sl)}
       count={sl.count}
     />
   );

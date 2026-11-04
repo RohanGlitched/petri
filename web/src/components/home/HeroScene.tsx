@@ -5,6 +5,8 @@ import { useEffect, useRef } from "react";
 import { Culture, type CultureHandle } from "@/components/Culture";
 import { Loupe } from "@/components/site/Loupe";
 import { LiveBadge } from "./LiveBadge";
+import { NetTag } from "@/components/site/NetTag";
+import { useNet } from "@/lib/use-net";
 import { useLive, int, petri, hex } from "@/lib/live";
 import s from "./hero.module.css";
 
@@ -41,6 +43,7 @@ export function HeroScene() {
   const { d, rules, palette, perCell, warming, warmth, ready, colonies, supply, w, h, secs } = useLive();
   const scene = useRef<HTMLDivElement>(null);
   const lens = useRef<CultureHandle>(null);
+  const net = useNet();
   const mask = useRef<HTMLDivElement>(null);
   const scrim = useRef<HTMLDivElement>(null);
   const rim = useRef<HTMLDivElement>(null);
@@ -184,21 +187,29 @@ export function HeroScene() {
           <h1 id="hero-title" className={s.title}>A coin that is alive.</h1>
           <div className={s.row}>
             <div className={s.ledeBox}>
-              <p className={s.lede}>
-                Every bead of colour here is a living cell on NEAR, owned by a real account. A shared agar feeds players&rsquo;
-                living cells a share of what it holds every fifteen seconds{ready && warming ? (d.counted === 0 ? `, from the first player's cell, in full once ${int(floor)} are counted` : `, in full once ${int(floor)} of them are counted`) : ""};
-                bringing new cells to life pays half back to it and burns the other half.
-              </p>
+              <ol className={s.steps} aria-label="How to play">
+                <li><span><b>Plant a pattern</b> on the one shared dish.</span></li>
+                <li><span><b>It lives by Conway&rsquo;s rules,</b> a generation every fifteen seconds.</span></li>
+                <li><span><b>Living cells earn PETRI,</b> and the hourly tide pays out NEAR.</span></li>
+              </ol>
               <p className={s.dishes}>
-                Two dishes run the same contract: <b>mainnet</b>, with real NEAR, and <b>testnet</b>, free to play with a guest
-                account in one click.
+                Every bead here is a living cell on NEAR, owned by a real account. Two dishes run the same contract:{" "}
+                <b>mainnet</b>, with real NEAR, and <b>testnet</b>, free with a guest account in one click.
               </p>
             </div>
             <div className={s.actions}>
-              <Link className="btn btn-amber" href="/dish">Start a colony</Link>
+              {net.freePlay ? (
+                <Link className="btn btn-amber" href="/dish">Play free on testnet</Link>
+              ) : (
+                <Link className="btn btn-amber" href="/dish">Start a colony</Link>
+              )}
               <Link className="btn btn-ghost" href="/rules">How the coin works</Link>
             </div>
           </div>
+          <p className={s.statsHead}>
+            <NetTag />
+            <span>{net.freePlay ? "The free-play dish, read live from NEAR testnet" : "Read live from NEAR mainnet"}</span>
+          </p>
           <dl className={s.stats} aria-live="polite" aria-busy={!ready}>
             <div><dt>Living cells</dt><dd className="num">{ready ? int(d.totalLive) : skel}</dd></div>
             {ready && warming ? (

@@ -14,6 +14,7 @@ import { accountUrl, shortAccount } from "@/lib/config";
 import { useNet } from "@/lib/use-net";
 import { sideOf } from "@/lib/strains";
 import s from "./records.module.css";
+import { BENCH_LABEL, BENCH_TITLE } from "@/components/site/BenchTag";
 
 /** Generations between samples of the rebuilt board: lifetimes are measured to within this. */
 const SAMPLE = 8;
@@ -156,7 +157,8 @@ function Holder({ c }: { c: Colony | undefined }) {
     <span className={s.holder}>
       <i className="swatch" style={{ background: hex(c.color) }} />
       <b>{c.name}</b>
-      {side !== "player" && <em>{side}</em>}
+      {side === "house" && <em>{side}</em>}
+      {side === "bench" && <em title={BENCH_TITLE}>{BENCH_LABEL}</em>}
       <a href={accountUrl(c.account)}>{shortAccount(c.account, 26)}</a>
     </span>
   );

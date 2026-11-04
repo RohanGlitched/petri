@@ -5,6 +5,7 @@ import { RuleDemo, type Seed } from "@/components/site/RuleDemo";
 import { hex } from "@/lib/live";
 import { DEMO } from "./shared";
 import s from "./rules.module.css";
+import { PhoneFold } from "./PhoneFold";
 
 const C: Record<number, number> = { 1: DEMO.red, 2: DEMO.green, 3: DEMO.violet };
 const NAME: Record<number, string> = { 1: "Red", 2: "Green", 3: "Violet" };
@@ -170,64 +171,66 @@ export function LifeSection() {
             are Conway&rsquo;s Life exactly. Ownership adds the other two.
           </p>
         </div>
+        <PhoneFold label="The four rules, worked through">
 
-        <ul className={s.hoods}>
-          {RULES.map((r) => (
-            <li key={r.title} className={s.card}>
-              <Hood cells={r.cells} result={r.result} label={r.label} />
-              <h3 className="h3">{r.title}</h3>
-              <p>{r.body}</p>
-            </li>
-          ))}
-        </ul>
+          <ul className={s.hoods}>
+            {RULES.map((r) => (
+              <li key={r.title} className={s.card}>
+                <Hood cells={r.cells} result={r.result} label={r.label} />
+                <h3 className="h3">{r.title}</h3>
+                <p>{r.body}</p>
+              </li>
+            ))}
+          </ul>
 
-        <figure className={`${s.figure} ${s.trio}`}>
-          <div className={s.dish} style={{ aspectRatio: "36 / 8" }}>
-            <RuleDemo
-              width={36}
-              height={8}
-              seeds={TRIO}
-              loop={3}
-              colors={C}
-              stepMs={900}
-              stillAt={1}
-              label="Three L-shaped trios of cells owned by one, two and three colonies"
-              onGeneration={(g, _c, k) => setTrio({ g, k })}
-            />
-          </div>
-          <figcaption className={s.caption}>
-            <div className={s.trioCaps}>
-              <p>
-                <b>One owner.</b> The corner square has three red parents, so a red cell is born and the L becomes a block, a
-                still life.
-              </p>
-              <p>
-                <b>Two owners.</b> Two red parents and one green: the birth is red. The green cell survives and keeps its colour.
-              </p>
-              <p>
-                <b>Three owners.</b> Red, green and violet parents. The corner is contested, every cell keeps two neighbours, and
-                the L never changes.
-              </p>
+          <figure className={`${s.figure} ${s.trio}`}>
+            <div className={s.dish} style={{ aspectRatio: "36 / 8" }}>
+              <RuleDemo
+                width={36}
+                height={8}
+                seeds={TRIO}
+                loop={3}
+                colors={C}
+                stepMs={900}
+                stillAt={1}
+                label="Three L-shaped trios of cells owned by one, two and three colonies"
+                onGeneration={(g, _c, k) => setTrio({ g, k })}
+              />
             </div>
-            <p className={s.live} aria-live="off">
-              <span className="num">Generation {trio.g}</span>
-              <span>
-                Births contested this generation <b className="num">{trio.k}</b>
-              </span>
-            </p>
-          </figcaption>
-        </figure>
+            <figcaption className={s.caption}>
+              <div className={s.trioCaps}>
+                <p>
+                  <b>One owner.</b> The corner square has three red parents, so a red cell is born and the L becomes a block, a
+                  still life.
+                </p>
+                <p>
+                  <b>Two owners.</b> Two red parents and one green: the birth is red. The green cell survives and keeps its colour.
+                </p>
+                <p>
+                  <b>Three owners.</b> Red, green and violet parents. The corner is contested, every cell keeps two neighbours, and
+                  the L never changes.
+                </p>
+              </div>
+              <p className={s.live} aria-live="off">
+                <span className="num">Generation {trio.g}</span>
+                <span>
+                  Births contested this generation <b className="num">{trio.k}</b>
+                </span>
+              </p>
+            </figcaption>
+          </figure>
 
-        <div className={s.pair}>
-          <CrashDemo petri={false} />
-          <CrashDemo petri />
-        </div>
-        <p className={s.footnote}>
-          These dishes run <code className={s.code}>petri-core</code> compiled to WebAssembly, the code the contract runs. The
-          scenes were chosen by simulating them; nothing is drawn by hand. On the real dish the trios would be sieges, since
-          each cell sits inside a rival&rsquo;s three-cell buffer and would cost three times the price. The three gliders
-          start outside each other&rsquo;s buffers, so they would pay the normal price.
-        </p>
+          <div className={s.pair}>
+            <CrashDemo petri={false} />
+            <CrashDemo petri />
+          </div>
+          <p className={s.footnote}>
+            These dishes run <code className={s.code}>petri-core</code> compiled to WebAssembly, the code the contract runs. The
+            scenes were chosen by simulating them; nothing is drawn by hand. On the real dish the trios would be sieges, since
+            each cell sits inside a rival&rsquo;s three-cell buffer and would cost three times the price. The three gliders
+            start outside each other&rsquo;s buffers, so they would pay the normal price.
+          </p>
+        </PhoneFold>
       </div>
     </section>
   );

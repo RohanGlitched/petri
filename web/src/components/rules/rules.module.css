@@ -700,3 +700,18 @@
 .foldBody .refusals { grid-template-columns: 1fr; }
 .foldBody .changeList { margin-top: 0; }
 .foldBody .change { grid-template-columns: 1fr; gap: 6px; }
+
+/* Long sections fold on a phone (PhoneFold); on wider screens the fold is invisible and the section reads as before. */
+.phoneFoldBody { min-width: 0; }
+@media (min-width: 701px) {
+  .phoneFold { margin-top: 0; border-radius: 0; background: none; box-shadow: none; }
+  .phoneFold > summary { display: none; }
+}
+@media (max-width: 700px) {
+  .phoneFold > summary { flex-wrap: wrap; row-gap: 2px; }
+  .phoneFold > summary small { flex-basis: 100%; order: 2; }
+  .phoneFold:not([open]) > .phoneFoldBody { display: none; }
+  .phoneFold[open] { background: none; box-shadow: none; }
+  .phoneFold[open] > summary { padding: 0 0 14px; font-weight: 500; font-size: 13.5px; color: var(--dim); }
+  .phoneFold[open] > summary::after { margin-left: 8px; }
+}

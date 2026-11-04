@@ -54,6 +54,21 @@ function useLoad<T>(load: () => Promise<T>, empty: T, key: string, everyMs = 30_
   return st;
 }
 
+/**
+ * The generation a slide was minted in, from its mint time and the dish's clock. The contract fixes the cells at the
+ * stored board's generation, which can trail the clock, so the two can differ and the cards name both.
+ */
+export function useMintedGen() {
+  const d = useDish();
+  const epoch = d.state ? Number(d.state.epoch_ms) : null;
+  const genMs = d.rules ? Number(d.rules.generation_ms) : null;
+  return (sl: Slide): number | null => {
+    if (sl.minted == null || epoch === null || !genMs) return null;
+    const ms = sl.minted > 1e14 ? sl.minted / 1e6 : sl.minted;
+    return Math.max(0, Math.floor((ms - epoch) / genMs));
+  };
+}
+
 export const useAllSlides = () => useLoad(allSlides, [] as Slide[], "all");
 
 export const useSlide = (id: string) =>

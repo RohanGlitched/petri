@@ -314,3 +314,4 @@
   .slides { grid-template-columns: 1fr; }
   .slides li:nth-child(3) { display: block; }
 }
+.strainsNet { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 14px 0 0; font-size: 13.5px; color: var(--dim); }

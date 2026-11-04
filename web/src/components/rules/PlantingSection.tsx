@@ -7,6 +7,7 @@ import { useNet } from "@/lib/use-net";
 import { getPlantDeposit } from "@/lib/chain";
 import { LAUNCH } from "./shared";
 import s from "./rules.module.css";
+import { PhoneFold } from "./PhoneFold";
 
 /** The buffer around a rival block: a planted cell inside the hatched square is a siege and costs `siege_x` times as much. */
 function SiegeFigure({ buffer, siegeX }: { buffer: number; siegeX: number }) {
@@ -155,234 +156,236 @@ export function PlantingSection() {
             convenience; the contract sees a list of cells.
           </p>
         </div>
+        <PhoneFold label="Limits, sieges and the price, worked through">
 
-        <div className={s.split}>
-          <ul className={s.limits}>
-            <li className={s.limit}>
-              <h3 className="h3">Up to {r.max_plant_cells} cells, once a generation</h3>
-              <p>
-                One planting brings at most {r.max_plant_cells} cells to life (a glider gun is 36), and each colony plants at most
-                once per generation, every {Number(r.generation_ms) / 1000} seconds.
-              </p>
-            </li>
-            <li className={s.limit}>
-              <h3 className="h3">Empty cells only</h3>
-              <p>Every target cell must be dead. You cannot plant over anyone&rsquo;s cells, including your own.</p>
-            </li>
-            <li className={s.limit}>
-              <h3 className="h3">Near a rival costs {r.siege_x}×</h3>
-              <p>
-                If another colony has a live cell within {r.buffer} cells of any planted cell, counting diagonals and across the
-                wrapped edges, the planting is a siege and costs {r.siege_x} times the price. It is never refused for being close,
-                so no colony can close the dish to newcomers by spreading cells everywhere. Your own cells do not count.
-              </p>
-            </li>
-            <li className={s.limit}>
-              <h3 className="h3">A slide&rsquo;s pattern costs {r.slide_discount_bps / 100}% less</h3>
-              <p>
-                A specimen slide that captured at least {r.licence_min_cells ?? 12} cells is a pattern licence (a smaller one is a
-                keepsake). Plant exactly a slide&rsquo;s cells, moved anywhere on the dish but not
-                turned or flipped, and name the slide: the planting costs {r.slide_discount_bps / 100}% less, for anyone. A
-                planter that does not hold the slide also pays its holder {r.slide_royalty_bps / 100}% of that discounted cost in
-                PETRI, or the agar, if the planter has never attached NEAR. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.
-              </p>
-            </li>
-            <li className={s.limit}>
-              <h3 className="h3">A lab note, if you like</h3>
-              <p>
-                Up to 140 characters and 280 bytes, stored on chain with the planting and shown in the dish&rsquo;s log. Notes
-                may not contain control, direction, invisible or tag characters, and colony names are plain ASCII letters,
-                digits and a little punctuation, so nothing can hide in either.
-              </p>
-            </li>
-          </ul>
-          <figure className={`${s.figure} ${s.bufferFig}`}>
-            <SiegeFigure buffer={r.buffer} siegeX={r.siege_x} />
-            <figcaption className={s.caption}>
-              <p>
-                Green&rsquo;s block and its {r.buffer}-cell buffer. Red&rsquo;s cell inside the hatched square is a siege and
-                pays {r.siege_x} times the price; the one just outside pays the normal price. The buffer is checked only when
-                planting, so a glider sent from outside gets in for the normal price.
-              </p>
-            </figcaption>
-          </figure>
-        </div>
+          <div className={s.split}>
+            <ul className={s.limits}>
+              <li className={s.limit}>
+                <h3 className="h3">Up to {r.max_plant_cells} cells, once a generation</h3>
+                <p>
+                  One planting brings at most {r.max_plant_cells} cells to life (a glider gun is 36), and each colony plants at most
+                  once per generation, every {Number(r.generation_ms) / 1000} seconds.
+                </p>
+              </li>
+              <li className={s.limit}>
+                <h3 className="h3">Empty cells only</h3>
+                <p>Every target cell must be dead. You cannot plant over anyone&rsquo;s cells, including your own.</p>
+              </li>
+              <li className={s.limit}>
+                <h3 className="h3">Near a rival costs {r.siege_x}×</h3>
+                <p>
+                  If another colony has a live cell within {r.buffer} cells of any planted cell, counting diagonals and across the
+                  wrapped edges, the planting is a siege and costs {r.siege_x} times the price. It is never refused for being close,
+                  so no colony can close the dish to newcomers by spreading cells everywhere. Your own cells do not count.
+                </p>
+              </li>
+              <li className={s.limit}>
+                <h3 className="h3">A slide&rsquo;s pattern costs {r.slide_discount_bps / 100}% less</h3>
+                <p>
+                  A specimen slide that captured at least {r.licence_min_cells ?? 12} cells is a pattern licence (a smaller one is a
+                  keepsake). Plant exactly a slide&rsquo;s cells, moved anywhere on the dish but not
+                  turned or flipped, and name the slide: the planting costs {r.slide_discount_bps / 100}% less, for anyone. A
+                  planter that does not hold the slide also pays its holder {r.slide_royalty_bps / 100}% of that discounted cost in
+                  PETRI, or the agar, if the planter has never attached NEAR. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.
+                </p>
+              </li>
+              <li className={s.limit}>
+                <h3 className="h3">A lab note, if you like</h3>
+                <p>
+                  Up to 140 characters and 280 bytes, stored on chain with the planting and shown in the dish&rsquo;s log. Notes
+                  may not contain control, direction, invisible or tag characters, and colony names are plain ASCII letters,
+                  digits and a little punctuation, so nothing can hide in either.
+                </p>
+              </li>
+            </ul>
+            <figure className={`${s.figure} ${s.bufferFig}`}>
+              <SiegeFigure buffer={r.buffer} siegeX={r.siege_x} />
+              <figcaption className={s.caption}>
+                <p>
+                  Green&rsquo;s block and its {r.buffer}-cell buffer. Red&rsquo;s cell inside the hatched square is a siege and
+                  pays {r.siege_x} times the price; the one just outside pays the normal price. The buffer is checked only when
+                  planting, so a glider sent from outside gets in for the normal price.
+                </p>
+              </figcaption>
+            </figure>
+          </div>
 
-        <div className={s.priceGrid}>
-          <div className={s.card}>
-            <h3 className="h3">A cell costs what a cell earns in {int(r.payback)} generations</h3>
-            <pre className={s.formula}>
-              {`feed per cell = agar × ${r.feed_ppm} ÷ 1,000,000 × (1 − ${keeperPct}%) ÷ max(counted cells, ${int(r.live_floor)})
-price of a cell = max(feed per cell × ${int(r.payback)}, ${fmtPetri(r.min_cell_price)} PETRI)
-cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)
-under a slide's licence: cost × (1 − ${r.slide_discount_bps / 100}%), plus ${r.slide_royalty_bps / 100}% of that to the holder if you are not it`}
-            </pre>
-            <p>
-              An average cell, left alone, earns back its price in {int(r.payback)} generations, about{" "}
-              {Math.round((r.payback * Number(r.generation_ms)) / 3_600_000)} hours. Counted cells are the living cells of fed colonies, each colony
-              capped by its reach. The price counts at least {int(r.live_floor)} of them, and below that the agar releases only
-              that fraction of its ration, so on a nearly empty dish a cell still earns exactly what its price assumes. The price
-              never falls below {fmtPetri(r.min_cell_price)} PETRI a cell, and falls as the agar shrinks and as more than{" "}
-              {int(r.live_floor)} cells are counted. The contract computes it
-              after the planting&rsquo;s own catch-up, in millionths of a PETRI, rounding down at every step. Of every cost,{" "}
-              {burnPct}% is burned and {100 - burnPct}% goes back into the agar; a royalty is a transfer to the slide&rsquo;s
-              holder, neither burned nor returned. Planting first claims the colony&rsquo;s waiting earnings, so they count
-              towards the price.
-            </p>
-            <div className={s.example}>
-              <h4 className={s.h4}>A beehive, right now</h4>
-              <dl className={s.workings}>
-                <div>
-                  <dt>Agar at your browser&rsquo;s generation</dt>
-                  <dd className="num">{ready ? `${fmtPetri(agar, 6)} PETRI` : "—"}</dd>
-                </div>
-                <div>
-                  <dt>This generation&rsquo;s feed, {r.feed_ppm} ppm of it, less the keeper&rsquo;s {keeperPct}%</dt>
-                  <dd className="num">{ready ? fmtPetri(now.toCells, 6) : "—"}</dd>
-                </div>
-                <div>
-                  <dt>
-                    Divided by {ready ? int(now.counted) : "—"}
-                    {ready && live < r.live_floor ? ` (${int(live)} counted, the price counts ${int(r.live_floor)})` : " counted cells"}
-                  </dt>
-                  <dd className="num">{ready ? fmtPetri(now.perCell, 6) : "—"}</dd>
-                </div>
-                <div>
-                  <dt>
-                    Times {int(r.payback)}
-                    {ready && now.floored ? `, below the floor, so ${fmtPetri(r.min_cell_price)}` : ""}
-                  </dt>
-                  <dd className="num">{ready ? `${fmtPetri(now.price, 6)} a cell` : "—"}</dd>
-                </div>
-                <div className={s.workTotal}>
-                  <dt>Six cells</dt>
-                  <dd className="num">{ready ? `${fmtPetri(hive, 6)} PETRI` : "—"}</dd>
-                </div>
-                <div>
-                  <dt>The same six cells as a siege</dt>
-                  <dd className="num">{ready ? `${fmtPetri(hive * BigInt(r.siege_x), 6)} PETRI` : "—"}</dd>
-                </div>
-              </dl>
-              <p className="num">
-                Burned: <b>{ready ? fmtPetri(burn, 6) : "—"}</b>. Back to the agar: <b>{ready ? fmtPetri(back, 6) : "—"}</b>.
+          <div className={s.priceGrid}>
+            <div className={s.card}>
+              <h3 className="h3">A cell costs what a cell earns in {int(r.payback)} generations</h3>
+              <pre className={s.formula}>
+                {`feed per cell = agar × ${r.feed_ppm} ÷ 1,000,000 × (1 − ${keeperPct}%) ÷ max(counted cells, ${int(r.live_floor)})
+  price of a cell = max(feed per cell × ${int(r.payback)}, ${fmtPetri(r.min_cell_price)} PETRI)
+  cost = price of a cell × cells × (${r.siege_x} for a siege, else 1)
+  under a slide's licence: cost × (1 − ${r.slide_discount_bps / 100}%), plus ${r.slide_royalty_bps / 100}% of that to the holder if you are not it`}
+              </pre>
+              <p>
+                An average cell, left alone, earns back its price in {int(r.payback)} generations, about{" "}
+                {Math.round((r.payback * Number(r.generation_ms)) / 3_600_000)} hours. Counted cells are the living cells of fed colonies, each colony
+                capped by its reach. The price counts at least {int(r.live_floor)} of them, and below that the agar releases only
+                that fraction of its ration, so on a nearly empty dish a cell still earns exactly what its price assumes. The price
+                never falls below {fmtPetri(r.min_cell_price)} PETRI a cell, and falls as the agar shrinks and as more than{" "}
+                {int(r.live_floor)} cells are counted. The contract computes it
+                after the planting&rsquo;s own catch-up, in millionths of a PETRI, rounding down at every step. Of every cost,{" "}
+                {burnPct}% is burned and {100 - burnPct}% goes back into the agar; a royalty is a transfer to the slide&rsquo;s
+                holder, neither burned nor returned. Planting first claims the colony&rsquo;s waiting earnings, so they count
+                towards the price.
               </p>
-              <p className={s.note}>
-                Using the {ready ? int(live) : "—"} counted cells your browser has at generation {ready ? int(d.generation) : "—"}.{" "}
-                {ready ? (matches ? "The engine's own quote for one cell agrees to the unit." : "The engine's own quote for one cell is " + fmtPetri(cellPrice, 6) + " PETRI.") : ""}
+              <div className={s.example}>
+                <h4 className={s.h4}>A beehive, right now</h4>
+                <dl className={s.workings}>
+                  <div>
+                    <dt>Agar at your browser&rsquo;s generation</dt>
+                    <dd className="num">{ready ? `${fmtPetri(agar, 6)} PETRI` : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>This generation&rsquo;s feed, {r.feed_ppm} ppm of it, less the keeper&rsquo;s {keeperPct}%</dt>
+                    <dd className="num">{ready ? fmtPetri(now.toCells, 6) : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      Divided by {ready ? int(now.counted) : "—"}
+                      {ready && live < r.live_floor ? ` (${int(live)} counted, the price counts ${int(r.live_floor)})` : " counted cells"}
+                    </dt>
+                    <dd className="num">{ready ? fmtPetri(now.perCell, 6) : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      Times {int(r.payback)}
+                      {ready && now.floored ? `, below the floor, so ${fmtPetri(r.min_cell_price)}` : ""}
+                    </dt>
+                    <dd className="num">{ready ? `${fmtPetri(now.price, 6)} a cell` : "—"}</dd>
+                  </div>
+                  <div className={s.workTotal}>
+                    <dt>Six cells</dt>
+                    <dd className="num">{ready ? `${fmtPetri(hive, 6)} PETRI` : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>The same six cells as a siege</dt>
+                    <dd className="num">{ready ? `${fmtPetri(hive * BigInt(r.siege_x), 6)} PETRI` : "—"}</dd>
+                  </div>
+                </dl>
+                <p className="num">
+                  Burned: <b>{ready ? fmtPetri(burn, 6) : "—"}</b>. Back to the agar: <b>{ready ? fmtPetri(back, 6) : "—"}</b>.
+                </p>
+                <p className={s.note}>
+                  Using the {ready ? int(live) : "—"} counted cells your browser has at generation {ready ? int(d.generation) : "—"}.{" "}
+                  {ready ? (matches ? "The engine's own quote for one cell agrees to the unit." : "The engine's own quote for one cell is " + fmtPetri(cellPrice, 6) + " PETRI.") : ""}
+                </p>
+              </div>
+            </div>
+            <div className={s.prose}>
+              <h3 className="h3">The NEAR a planting carries</h3>
+              <p>
+                The player pays for what their planting stores: the ledger entry, its cells and its note. On top of that every
+                planted cell carries a fee of <b className="num">{near(Number(r.cell_fee), 4)} NEAR</b>. The contract measures the
+                storage the planting actually used and keeps it; everything above that goes to the tide vault, or to the credit
+                pool when it was paid in credit. A wallet attaches the NEAR;{" "}
+                {net.freePlay ? "a guest spends it from the credit the site sponsored for it." : "on the free-play testnet dish, a guest spends it from credit the site sponsored."}
               </p>
+              <pre className={s.formula}>
+                {`bring = (257 + 4 × cells + (note bytes + 64, if there is a note)
+           + (26 + the holder's account length, under a slide's licence)
+           + (125, if that holder has no PETRI registration)
+           + (82, if no colony is playing at all)) bytes × 0.00001 NEAR
+        + ${near(Number(r.cell_fee), 4)} NEAR × cells`}
+              </pre>
+              <p>
+                The <code className={s.code}>plant_deposit(cells, note_bytes, slide)</code> view returns that sum and the site sends
+                it for you. It allows for the colony&rsquo;s row in the table of playing colonies, which a colony&rsquo;s first
+                planting since it last played creates (the table holds at most 10,000 rows; while it is full and none can
+                leave, a colony without a row waits for the next tide); storage not used goes to the vault or the credit pool with the fee. A
+                royalty to a holder with no PETRI registration registers it at the planter&rsquo;s expense. A refused planting
+                changes nothing: attached NEAR comes back and credit is not spent.
+              </p>
+              <details className={s.fold}>
+                <summary>
+                  What plant_deposit returns now <small>5 plantings</small>
+                </summary>
+                <div className={s.foldBody}>
+                  <div className={s.tableWrap}>
+                    <table className={s.table}>
+                      <thead>
+                        <tr>
+                          <th scope="col">Planting</th>
+                          <th scope="col">Bring</th>
+                          <th scope="col">Of which fee</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {DEPOSITS.map((x, i) => (
+                          <tr key={x.label}>
+                            <th scope="row">{x.label}</th>
+                            <td className="num">{deposits[i] ? `${near(Number(deposits[i]), 5)} NEAR` : "—"}</td>
+                            <td className="num">{near(Number(r.cell_fee) * x.cells, 4)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className={s.note}>Read from the contract when this page loaded.</p>
+                </div>
+              </details>
+              <details className={s.fold}>
+                <summary>
+                  One cell at different crowding <small>today&rsquo;s agar and half of it</small>
+                </summary>
+                <div className={s.foldBody}>
+                  <div className={s.tableWrap}>
+                    <table className={s.table}>
+                      <thead>
+                        <tr>
+                          <th scope="col">Counted cells</th>
+                          <th scope="col">Today&rsquo;s agar</th>
+                          <th scope="col">Half the agar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ladder.map((l) => (
+                          <tr key={l}>
+                            <td className="num">{int(l)}</td>
+                            <td className="num">{fmtPetri(priceSteps(agar, r, l).price, 3)}</td>
+                            <td className="num">{fmtPetri(priceSteps(half, r, l).price, 3)}</td>
+                          </tr>
+                        ))}
+                        <tr className={s.nowRow}>
+                          <td className="num">{ready ? `${int(live)}, now` : "Now"}</td>
+                          <td className="num">{ready ? fmtPetri(now.price, 3) : "—"}</td>
+                          <td className="num">{ready ? fmtPetri(priceSteps(half, r, live).price, 3) : "—"}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className={s.note}>
+                    PETRI per cell, before any siege surcharge. Below {int(r.live_floor)} counted cells the price does not move; far
+                    above it the floor of {fmtPetri(r.min_cell_price)} PETRI takes over.
+                  </p>
+                </div>
+              </details>
+              <details className={s.fold}>
+                <summary>
+                  What the contract refuses <small>{REFUSALS.length} checks, in order</small>
+                </summary>
+                <div className={s.foldBody}>
+                  <p>
+                    A refused planting changes nothing and costs only gas. The contract checks in this order and stops at the first
+                    problem, with the message shown.
+                  </p>
+                  <dl className={s.refusals}>
+                    {REFUSALS.map(([plain, msg]) => (
+                      <div key={msg} className={s.refusal}>
+                        <dt>{plain}</dt>
+                        <dd>
+                          <code className={s.code}>{msg}</code>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </details>
             </div>
           </div>
-          <div className={s.prose}>
-            <h3 className="h3">The NEAR a planting carries</h3>
-            <p>
-              The player pays for what their planting stores: the ledger entry, its cells and its note. On top of that every
-              planted cell carries a fee of <b className="num">{near(Number(r.cell_fee), 4)} NEAR</b>. The contract measures the
-              storage the planting actually used and keeps it; everything above that goes to the tide vault, or to the credit
-              pool when it was paid in credit. A wallet attaches the NEAR;{" "}
-              {net.freePlay ? "a guest spends it from the credit the site sponsored for it." : "on the free-play testnet dish, a guest spends it from credit the site sponsored."}
-            </p>
-            <pre className={s.formula}>
-              {`bring = (257 + 4 × cells + (note bytes + 64, if there is a note)
-         + (26 + the holder's account length, under a slide's licence)
-         + (125, if that holder has no PETRI registration)
-         + (82, if no colony is playing at all)) bytes × 0.00001 NEAR
-      + ${near(Number(r.cell_fee), 4)} NEAR × cells`}
-            </pre>
-            <p>
-              The <code className={s.code}>plant_deposit(cells, note_bytes, slide)</code> view returns that sum and the site sends
-              it for you. It allows for the colony&rsquo;s row in the table of playing colonies, which a colony&rsquo;s first
-              planting since it last played creates (the table holds at most 10,000 rows; while it is full and none can
-              leave, a colony without a row waits for the next tide); storage not used goes to the vault or the credit pool with the fee. A
-              royalty to a holder with no PETRI registration registers it at the planter&rsquo;s expense. A refused planting
-              changes nothing: attached NEAR comes back and credit is not spent.
-            </p>
-            <details className={s.fold}>
-              <summary>
-                What plant_deposit returns now <small>5 plantings</small>
-              </summary>
-              <div className={s.foldBody}>
-                <div className={s.tableWrap}>
-                  <table className={s.table}>
-                    <thead>
-                      <tr>
-                        <th scope="col">Planting</th>
-                        <th scope="col">Bring</th>
-                        <th scope="col">Of which fee</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {DEPOSITS.map((x, i) => (
-                        <tr key={x.label}>
-                          <th scope="row">{x.label}</th>
-                          <td className="num">{deposits[i] ? `${near(Number(deposits[i]), 5)} NEAR` : "—"}</td>
-                          <td className="num">{near(Number(r.cell_fee) * x.cells, 4)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className={s.note}>Read from the contract when this page loaded.</p>
-              </div>
-            </details>
-            <details className={s.fold}>
-              <summary>
-                One cell at different crowding <small>today&rsquo;s agar and half of it</small>
-              </summary>
-              <div className={s.foldBody}>
-                <div className={s.tableWrap}>
-                  <table className={s.table}>
-                    <thead>
-                      <tr>
-                        <th scope="col">Counted cells</th>
-                        <th scope="col">Today&rsquo;s agar</th>
-                        <th scope="col">Half the agar</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ladder.map((l) => (
-                        <tr key={l}>
-                          <td className="num">{int(l)}</td>
-                          <td className="num">{fmtPetri(priceSteps(agar, r, l).price, 3)}</td>
-                          <td className="num">{fmtPetri(priceSteps(half, r, l).price, 3)}</td>
-                        </tr>
-                      ))}
-                      <tr className={s.nowRow}>
-                        <td className="num">{ready ? `${int(live)}, now` : "Now"}</td>
-                        <td className="num">{ready ? fmtPetri(now.price, 3) : "—"}</td>
-                        <td className="num">{ready ? fmtPetri(priceSteps(half, r, live).price, 3) : "—"}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <p className={s.note}>
-                  PETRI per cell, before any siege surcharge. Below {int(r.live_floor)} counted cells the price does not move; far
-                  above it the floor of {fmtPetri(r.min_cell_price)} PETRI takes over.
-                </p>
-              </div>
-            </details>
-            <details className={s.fold}>
-              <summary>
-                What the contract refuses <small>{REFUSALS.length} checks, in order</small>
-              </summary>
-              <div className={s.foldBody}>
-                <p>
-                  A refused planting changes nothing and costs only gas. The contract checks in this order and stops at the first
-                  problem, with the message shown.
-                </p>
-                <dl className={s.refusals}>
-                  {REFUSALS.map(([plain, msg]) => (
-                    <div key={msg} className={s.refusal}>
-                      <dt>{plain}</dt>
-                      <dd>
-                        <code className={s.code}>{msg}</code>
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            </details>
-          </div>
-        </div>
+        </PhoneFold>
       </div>
     </section>
   );

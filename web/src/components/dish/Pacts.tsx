@@ -8,6 +8,7 @@ import { accountUrl, shortAccount } from "@/lib/config";
 import type { Colony } from "@/lib/chain";
 import { phaseOf, type Pact } from "@/lib/pacts";
 import s from "./dish.module.css";
+import { BenchTag } from "@/components/site/BenchTag";
 
 const name = (names: Map<number, string>, id: number) => names.get(id) ?? `colony ${id}`;
 const amount = (p: Pact) => (p.petri > 0n ? `${petri(Number(p.petri), Number(p.petri) % 1e6 ? 2 : 0)} PETRI` : "no PETRI");
@@ -127,7 +128,7 @@ export function PickedColony({ c, live, pacts, me, g, radius, maxGens, names, ca
       <div className={s.plantHead}>
         <i className="swatch" style={{ background: hex(c.color), width: 16, height: 16 }} />
         <div>
-          <h2 id="picked-title">{c.name}</h2>
+          <h2 id="picked-title">{c.name}<BenchTag account={c.account} /></h2>
           <span>
             <a href={accountUrl(c.account)}>{shortAccount(c.account, 28)}</a> · <span className="num">{int(live)}</span> living cells
           </span>

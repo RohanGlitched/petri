@@ -6,7 +6,7 @@
 
 import { useSyncExternalStore } from "react";
 import { CONTRACTS, NETWORK, RPCS } from "./config";
-import { useDish } from "./dish-store";
+import { dishSettled, useDish } from "./dish-store";
 
 export type Pulse = {
   status: "loading" | "ready" | "error";
@@ -97,6 +97,8 @@ async function refresh() {
   }
   fetching = true;
   try {
+    // The dish this page reads comes first: the mainnet call waits until it has been drawn (or four seconds).
+    await dishSettled();
     read = await fetchState();
     try {
       sessionStorage.setItem(KEY, JSON.stringify(read));

@@ -11,6 +11,7 @@ import { useStrainLog, modelStatus, actionIndex } from "@/lib/strain-log";
 import { readRunway, nearOf, type Runway } from "@/lib/house-runway";
 import { Council } from "./Council";
 import s from "./strains.module.css";
+import { NetTag } from "@/components/site/NetTag";
 
 function ago(iso: string) {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -55,6 +56,10 @@ export function StrainsView() {
 
   return (
     <>
+      <p className={s.netLine}>
+        <NetTag />
+        <span>{net.freePlay ? "The strains on the free-play testnet dish, at full pace" : "The strains on the mainnet dish, at a thirty-second of the testnet pace"}</span>
+      </p>
       <section className={s.status} aria-live="polite">
         <div>
           <span>

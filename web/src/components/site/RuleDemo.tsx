@@ -64,7 +64,7 @@ export function RuleDemo({ width, height, seeds, loop, colors, bufferFor, refuse
     };
     const tick = () => {
       const e = engineRef.current;
-      if (!e || !visible) return;
+      if (!e || !visible || document.hidden) return;
       if (e.generation() >= loop) return reset();
       const prev = e.cells();
       e.step(1);

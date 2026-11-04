@@ -87,6 +87,10 @@
 .hud b { font-family: var(--display); font-weight: 400; font-size: 19px; }
 .hudGen { display: flex !important; align-items: center; gap: 10px; }
 .hudGen > div { display: grid; }
+.hud .hudReading b { font-family: var(--body); font-size: 14px; color: var(--text-2); padding-top: 3px; }
+.hudNet { align-self: center; }
+.hud .hudNet span { font-size: 11px; }
+.hud .hudNet :global(.nettag-sub) { color: var(--dim); }
 .ring { display: block; }
 /* A young dish: one line under the HUD on how far it is from paying the feed in full. */
 .warmChip {

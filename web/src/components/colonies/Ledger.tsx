@@ -7,6 +7,7 @@ import { getBalance, getTideWinnings } from "@/lib/chain";
 import { accountUrl, shortAccount } from "@/lib/config";
 import { sideOf, strainOf } from "@/lib/strains";
 import s from "./ledger.module.css";
+import { BenchTag, BENCH_LABEL, BENCH_TITLE } from "@/components/site/BenchTag";
 
 type Sort = "live" | "earned" | "spent" | "net" | "joined";
 
@@ -185,7 +186,7 @@ export function Ledger() {
                   <i className="swatch" style={{ background: hex(r.color) }} />
                   {r.name}
                   <span className="num">{((100 * r.live) / total).toFixed(1)}%</span>
-                  {side !== "player" && <em title={side === "house" ? "A house strain: never fed, wins no tides" : "A team bench colony, played from the team's own testnet NEAR"}>{side}</em>}
+                  {side !== "player" && <em title={side === "house" ? "A house strain: never fed, wins no tides" : BENCH_TITLE}>{side === "house" ? side : BENCH_LABEL}</em>}
                 </li>
               );
             })}
@@ -245,6 +246,7 @@ export function Ledger() {
                     <i className="swatch" style={{ background: hex(r.color) }} />
                     {r.name}
                     {ai && <span className={s.ai}>AI, {ai.temperament.toLowerCase()}</span>}
+                    <BenchTag account={r.account} />
                   </p>
                   <a className={s.acct} href={accountUrl(r.account)}>{shortAccount(r.account, 30)}</a>
                   <p className={s.joined}>Joined at generation {int(r.joined)}, planted {int(Number(r.cells_planted))} cells</p>
@@ -259,7 +261,7 @@ export function Ledger() {
                   <dd className={`num ${preFeed ? s.flat : r.net >= 0 ? s.pos : s.neg}`}><span className={s.sign} aria-hidden="true">{r.net >= 0 ? "+" : "−"}</span><span className="sr">{r.net >= 0 ? "plus " : "minus "}</span>{petri(Math.abs(r.net), 2)}</dd>
                   {preFeed &&
                     (sideOf(r.account, r.house) === "bench" ? (
-                      <em title="A team bench colony; nothing has been fed to it yet">bench</em>
+                      <em title={`${BENCH_TITLE} Nothing has been fed to it yet.`}>team test player</em>
                     ) : r.house ? (
                       <em title="A house strain: the contract never feeds it and never pays it at a tide">house</em>
                     ) : (

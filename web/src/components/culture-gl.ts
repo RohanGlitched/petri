@@ -207,6 +207,33 @@ void main() {
 
 export type Camera = { cx: number; cy: number; zoom: number };
 
+const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render|mesa offscreen/i;
+let fast: boolean | null = null;
+
+/**
+ * Whether this browser draws WebGL2 on a real GPU. Checked once, on a throwaway canvas (a canvas that has had a WebGL
+ * context can never get a 2D one): the context must come up without a major performance caveat, and the renderer must
+ * not be a software one (SwiftShader, llvmpipe), as in headless Chrome. `?gl=2d` forces the fallback, for testing.
+ */
+export function fastGL(): boolean {
+  if (fast !== null) return fast;
+  fast = false;
+  try {
+    if (/[?&]gl=2d(&|$)/.test(window.location.search)) return fast;
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    const gl = c.getContext("webgl2", { failIfMajorPerformanceCaveat: true });
+    if (!gl) return fast;
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    fast = !SOFTWARE.test(renderer);
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+  } catch {
+    fast = false;
+  }
+  return fast;
+}
+
 export type LookParams = { agarDeep: [number, number, number]; agarLit: [number, number, number]; light: [number, number, number] };
 
 export const LOOKS: Record<Look, LookParams> = {
@@ -224,7 +251,9 @@ export class CultureGL {
   loc: Record<string, WebGLUniformLocation | null> = {};
 
   constructor(canvas: HTMLCanvasElement, w: number, h: number) {
-    const gl = canvas.getContext("webgl2", { antialias: false, premultipliedAlpha: false, alpha: true });
+    // A software rasteriser would take hundreds of milliseconds a frame on this shader: refuse it, and let the caller
+    // fall back to the 2D renderer (see `fastGL`).
+    const gl = canvas.getContext("webgl2", { antialias: false, premultipliedAlpha: false, alpha: true, failIfMajorPerformanceCaveat: true });
     if (!gl) throw new Error("WebGL2 is not available in this browser");
     this.gl = gl;
     this.w = w;

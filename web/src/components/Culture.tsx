@@ -1,7 +1,8 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { CultureGL, type Camera, type Look } from "./culture-gl";
+import { CultureGL, fastGL, type Camera, type Look } from "./culture-gl";
+import { Culture2D } from "./culture-2d";
 
 export type CultureHandle = {
   centerOn: (x: number, y: number, zoom?: number) => void;
@@ -50,6 +51,11 @@ type Props = {
 };
 
 const TRANSITION_MS = 700;
+/** No canvas draws sharper than this: past 1.5 device px per css px the shader's cost grows faster than anyone can see. */
+const DPR_CAP = 1.5;
+/** A frame that takes longer than this (between animation frames, or inside the draw call) counts as over budget. */
+const SLOW_FRAME_MS = 40;
+const SLOW_DRAW_MS = 16;
 
 const roundFitOf = (w: number, h: number, width: number, height: number) => Math.min(w, h) / (Math.max(width, height) * Math.SQRT2);
 
@@ -75,7 +81,12 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
   const { width, height, cells, prevCells, changedAt, look, round = false, interactive = false } = props;
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const glRef = useRef<CultureGL | null>(null);
+  const glRef = useRef<CultureGL | Culture2D | null>(null);
+  /** The 2D stand-in: no drift and no transitions, one draw per change. */
+  const lite = useRef(false);
+  /** Render scale under the device pixel ratio, lowered while frames run over budget. */
+  const scale = useRef(1);
+  const slow = useRef(0);
   const camRef = useRef<Camera>({ cx: props.start?.x ?? width / 2, cy: props.start?.y ?? height / 2, zoom: 4 });
   const sizeRef = useRef({ w: 0, h: 0, cssW: 0, cssH: 0, dpr: 1 });
   const rafRef = useRef(0);
@@ -86,6 +97,7 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
   const touchedAt = useRef(-1e9);
   const reduceMotion = useRef(false);
   const visible = useRef(true);
+  const hidden = useRef(false);
   const [failed, setFailed] = useState<string | null>(null);
   const cbRef = useRef(props);
   cbRef.current = props;
@@ -101,25 +113,48 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
     rafRef.current = 0;
     const g = glRef.current;
     if (!g) return;
+    // Off screen or in a hidden tab: draw nothing; the observers ask for a frame when it shows again.
+    if (!visible.current || hidden.current) {
+      lastFrame.current = 0;
+      return;
+    }
     const s = sizeRef.current;
-    const dt = lastFrame.current ? Math.min(0.1, (now - lastFrame.current) / 1000) : 0;
+    const gap = lastFrame.current ? now - lastFrame.current : 0;
+    const dt = lastFrame.current ? Math.min(0.1, gap / 1000) : 0;
     lastFrame.current = now;
+    const still = reduceMotion.current || lite.current;
     const drift = cbRef.current.drift;
-    const drifting = !!drift && !reduceMotion.current && visible.current && now - touchedAt.current > 4000;
+    const drifting = !!drift && !still && now - touchedAt.current > 4000;
     if (drifting) {
       const c = camRef.current;
       c.cx = (((c.cx + drift![0] * dt) % width) + width) % width;
       c.cy = (((c.cy + drift![1] * dt) % height) + height) % height;
     }
-    const t = reduceMotion.current ? 1 : Math.min(1, Math.max(0, (now - changedRef.current) / (cbRef.current.transitionMs ?? TRANSITION_MS)));
-    const glow = reduceMotion.current ? 1 : Math.min(1, (now - bornAt.current) / 1600);
+    const t = still ? 1 : Math.min(1, Math.max(0, (now - changedRef.current) / (cbRef.current.transitionMs ?? TRANSITION_MS)));
+    const glow = still ? 1 : Math.min(1, (now - bornAt.current) / 1600);
     const radius = round ? (Math.min(s.cssW, s.cssH) / 2) * s.dpr - 1 : 0;
+    const t0 = performance.now();
     g.draw(camRef.current, { w: s.w, h: s.h }, { radius, t, time: now / 1000, look: cbRef.current.look, glow, ghost: cbRef.current.ghost });
+    const cost = performance.now() - t0;
     const ov = cbRef.current.overlay;
-    const pending = !!ov && !reduceMotion.current && (ov.includes(4) || ov.includes(1));
-    if (t < 1 || pending || drifting || glow < 1) requestDraw();
+    const pending = !!ov && !still && (ov.includes(4) || ov.includes(1));
+    const animating = t < 1 || pending || drifting || glow < 1;
+    // Frame budget: while animating, a run of slow frames lowers the render scale; at the floor the animation stops and
+    // the dish is drawn once per change, so no frame keeps the page from answering.
+    // The first second and a half is page start-up (hydration, the first chain reads), not the dish.
+    if (!lite.current && now - bornAt.current > 1500 && (cost > SLOW_DRAW_MS || gap > SLOW_FRAME_MS)) slow.current++;
+    else slow.current = Math.max(0, slow.current - 1);
+    if (slow.current >= 10) {
+      slow.current = 0;
+      if (scale.current > 0.5) {
+        scale.current = Math.max(0.5, scale.current * 0.7);
+        resizeRef.current();
+      } else lite.current = true;
+    }
+    if (animating && !lite.current) requestDraw();
     else lastFrame.current = 0;
   }
+  const resizeRef = useRef(() => {});
 
   function clampZoom(z: number) {
     const s = sizeRef.current;
@@ -160,24 +195,37 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
 
   useEffect(() => {
     const canvas = canvasRef.current!;
+    // WebGL only on a real GPU; software GL (headless Chrome, remote desktops) gets the 2D renderer.
     try {
+      if (!fastGL()) throw new Error("software GL");
       glRef.current = new CultureGL(canvas, width, height);
-    } catch (e) {
-      setFailed(e instanceof Error ? e.message : String(e));
-      return;
+      lite.current = false;
+    } catch {
+      try {
+        glRef.current = new Culture2D(canvas, width, height);
+        lite.current = true;
+      } catch (e) {
+        setFailed(e instanceof Error ? e.message : String(e));
+        return;
+      }
     }
+    if (cells) glRef.current.setCells(cells, prevCells ?? cells);
+    glRef.current.setPalette(palette);
+    if (props.overlay) glRef.current.setOverlay(props.overlay);
     bornAt.current = performance.now();
     reduceMotion.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const resize = () => {
       const el = wrapRef.current!;
       const cssW = Math.max(60, Math.floor(el.clientWidth));
       const cssH = Math.max(60, Math.floor(el.clientHeight));
-      const dpr = Math.min(cbRef.current.maxDpr ?? 2, window.devicePixelRatio || 1);
+      const dpr = Math.min(cbRef.current.maxDpr ?? DPR_CAP, DPR_CAP, lite.current ? 1 : 4, window.devicePixelRatio || 1) * (lite.current ? 1 : scale.current);
       canvas.width = Math.floor(cssW * dpr);
       canvas.height = Math.floor(cssH * dpr);
       canvas.style.width = cssW + "px";
       canvas.style.height = cssH + "px";
       const first = sizeRef.current.cssW === 0;
+      // The camera's zoom is in device px per cell, so a new pixel ratio (or render scale) rescales it.
+      const ratio = first ? 1 : dpr / sizeRef.current.dpr;
       sizeRef.current = { w: canvas.width, h: canvas.height, cssW, cssH, dpr };
       const W = cssW * dpr;
       const H = cssH * dpr;
@@ -185,9 +233,10 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
       else if ((cbRef.current.fit ?? "contain") === "cover") fitZoomRef.current = Math.max(W / width, H / height);
       else fitZoomRef.current = Math.min(W / width, H / height);
       if (first) camRef.current.zoom = fitZoomRef.current * (cbRef.current.zoomScale ?? 1);
-      else camRef.current.zoom = clampZoom(camRef.current.zoom);
+      else camRef.current.zoom = clampZoom(camRef.current.zoom * ratio);
       requestDraw();
     };
+    resizeRef.current = resize;
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrapRef.current!);
@@ -196,9 +245,16 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
       if (e.isIntersecting) requestDraw();
     });
     io.observe(wrapRef.current!);
+    const onVis = () => {
+      hidden.current = document.hidden;
+      if (!hidden.current) requestDraw();
+    };
+    onVis();
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       ro.disconnect();
       io.disconnect();
+      document.removeEventListener("visibilitychange", onVis);
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
       glRef.current?.dispose();

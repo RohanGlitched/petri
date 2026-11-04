@@ -8,6 +8,7 @@ import { useNet } from "@/lib/use-net";
 import { accountUrl } from "@/lib/config";
 import { useStrainLog, modelStatus } from "@/lib/strain-log";
 import s from "./bands.module.css";
+import { NetTag } from "@/components/site/NetTag";
 
 export function StrainsBand() {
   const { d, colonies } = useLive();
@@ -37,6 +38,14 @@ export function StrainsBand() {
               its living cells for a while, and the contract itself refuses the plantings that would break it. Raids aimed from farther
               away are scored as broken faith, and every pair remembers. They are the dish&rsquo;s house: never fed, never paid at the tides, never
               selling, and passing PETRI only among themselves, so the NEAR they spend goes to the other players.
+            </p>
+            <p className={s.strainsNet}>
+              <NetTag />
+              <span>
+                {net.freePlay
+                  ? "These cards read the free-play testnet dish, where the strains move at full pace."
+                  : "These cards read the mainnet dish, where the house moves at a thirty-second of the testnet pace so its NEAR lasts through judging."}
+              </span>
             </p>
             {onRules && (
               <p className={s.rulesNote}>

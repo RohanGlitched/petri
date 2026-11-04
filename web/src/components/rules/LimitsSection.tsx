@@ -3,6 +3,7 @@ import { REPO } from "@/lib/config";
 import { CLAUDE_MODEL, NEARAI_MODEL } from "@/lib/strains";
 import { ContractLink, CtaLine, NetLimitBody, NetLimitTitle } from "./NetCopy";
 import s from "./rules.module.css";
+import { PhoneFold } from "./PhoneFold";
 
 const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] = [
   {
@@ -110,14 +111,16 @@ export function LimitsSection() {
             specification is in <a className={s.link} href={`${REPO}/blob/main/RULES.md`}>RULES.md</a>.
           </p>
         </div>
-        <dl className={s.limitsList}>
-          {LIMITS.map((l) => (
-            <div key={l.key}>
-              <dt>{l.title}</dt>
-              <dd>{l.body}</dd>
-            </div>
-          ))}
-        </dl>
+        <PhoneFold label="Every known limit, one by one">
+          <dl className={s.limitsList}>
+            {LIMITS.map((l) => (
+              <div key={l.key}>
+                <dt>{l.title}</dt>
+                <dd>{l.body}</dd>
+              </div>
+            ))}
+          </dl>
+        </PhoneFold>
       </div>
     </section>
   );
