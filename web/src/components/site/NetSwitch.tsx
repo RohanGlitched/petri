@@ -1,81 +1,103 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { NETWORK, NETWORK_LABEL, switchNetwork, type Network } from "@/lib/config";
+import { useRef } from "react";
+import { CONTRACTS, NETWORK, switchNetwork, type Network } from "@/lib/config";
+import { useDish } from "@/lib/dish-store";
+import { useMainnetPulse } from "@/lib/mainnet-pulse";
 import { useNet } from "@/lib/use-net";
 
-const ORDER: Network[] = ["testnet", "mainnet"];
+/** Mainnet first: it is the dish with real NEAR, and the one a visitor should know is live. */
+const ORDER: Network[] = ["mainnet", "testnet"];
 
-/** Which dish the site reads: free play on testnet or real NEAR on mainnet. Choosing the other one reloads the page. */
-export function NetSwitch({ variant = "pill" }: { variant?: "pill" | "sheet" }) {
+const SEG: Record<Network, { name: string; sub: string; line: string }> = {
+  mainnet: { name: "Mainnet", sub: "Live, real NEAR", line: "Your own wallet and your own NEAR, or pay with any token through NEAR Intents." },
+  testnet: { name: "Testnet", sub: "Free play", line: "A guest account in one click and sponsored credit. Nothing here costs real money." },
+};
+
+const int = (n: number) => n.toLocaleString("en-US");
+
+/**
+ * Which dish the site reads, with both always in view: mainnet (live, real NEAR) and testnet (free play). Choosing the
+ * other one reloads the page on that network (see `switchNetwork`). `bar` sits in the nav; `sheet` is the phone menu's
+ * fuller version with a line about each dish.
+ */
+export function NetSwitch({ variant = "bar" }: { variant?: "bar" | "sheet" }) {
   const net = useNet();
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
-    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("pointerdown", away);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("pointerdown", away);
-      document.removeEventListener("keydown", key);
-    };
-  }, [open]);
+  const d = useDish();
+  const main = useMainnetPulse();
+  const group = useRef<HTMLDivElement>(null);
 
   const choose = (n: Network) => {
-    setOpen(false);
     if (n !== NETWORK) switchNetwork(n);
+  };
+
+  // Arrow keys move between the two options; Enter or Space picks one (picking reloads, so arrows never do).
+  const onKey = (e: React.KeyboardEvent) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const opts = Array.from(group.current?.querySelectorAll<HTMLButtonElement>("[role=radio]") ?? []);
+    const at = opts.indexOf(document.activeElement as HTMLButtonElement);
+    const next = e.key === "Home" ? 0 : e.key === "End" ? opts.length - 1 : (at + (e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1) + opts.length) % opts.length;
+    opts[next]?.focus();
+  };
+
+  const liveMain = main.status === "ready";
+  const hint = (n: Network) => {
+    const here = net.network === n;
+    if (n === "mainnet") {
+      const gen = liveMain ? `, live at generation ${int(main.generation)} with ${int(main.colonies)} ${main.colonies === 1 ? "colony" : "colonies"}` : "";
+      return `${CONTRACTS.mainnet} on NEAR mainnet${gen}. ${here ? "You are reading this dish." : "Switch to the dish with real NEAR."}`;
+    }
+    const ahead = here && d.status === "ready" && d.ahead > 0 ? ` The contract stored generation ${int(Number(d.state?.generation ?? 0))}; your browser runs the same rules ${int(d.ahead)} ahead.` : "";
+    return `${CONTRACTS.testnet} on NEAR testnet, free play.${ahead} ${here ? "You are reading this dish." : "Switch to free play: no wallet needed."}`;
   };
 
   if (variant === "sheet") {
     return (
-      <div className="netsheet" role="radiogroup" aria-label="Which dish to read">
-        {ORDER.map((n) => (
-          <button key={n} role="radio" aria-checked={net.network === n} className="netsheet-opt" onClick={() => choose(n)}>
-            <i className={`netdot netdot-${n}`} aria-hidden="true" />
-            <span>
-              <b>{NETWORK_LABEL[n].name}</b> <small>{NETWORK_LABEL[n].chain}</small>
-              <em>{NETWORK_LABEL[n].line}</em>
-            </span>
-          </button>
-        ))}
+      <div ref={group} className="netsheet" role="radiogroup" aria-label="Which dish to read" onKeyDown={onKey}>
+        {ORDER.map((n) => {
+          const on = net.network === n;
+          return (
+            <button key={n} type="button" role="radio" aria-checked={on} tabIndex={on ? 0 : -1} className="netsheet-opt" onClick={() => choose(n)} title={hint(n)}>
+              <i className={`netdot netdot-${n}${n === "mainnet" && liveMain ? " netdot-live" : ""}`} aria-hidden="true" />
+              <span>
+                <b>{SEG[n].name}</b> <small>{SEG[n].sub}</small>
+                <em>
+                  {n === "mainnet" && liveMain ? <>Live now at generation <span className="num">{int(main.generation)}</span>. </> : null}
+                  {SEG[n].line}
+                </em>
+              </span>
+              <span className="netsheet-state">{on ? "Reading" : "Switch"}</span>
+            </button>
+          );
+        })}
       </div>
     );
   }
 
   return (
-    <div className="netswitch" ref={box}>
-      <button
-        className="netswitch-btn"
-        aria-expanded={open}
-        aria-haspopup="true"
-        aria-controls="net-menu"
-        onClick={() => setOpen((o) => !o)}
-        title={`Reading ${net.contract} on ${net.label.chain}`}
-      >
-        <i className={`netdot netdot-${net.network}`} aria-hidden="true" />
-        <span className="netswitch-name">{net.label.name}</span>
-        <small>{net.network}</small>
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-          <path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      </button>
-      {open && (
-        <div id="net-menu" className="netswitch-menu" role="menu" aria-label="Which dish to read">
-          <p className="netswitch-head">One contract, two dishes. Pick the one to read and play.</p>
-          {ORDER.map((n) => (
-            <button key={n} role="menuitemradio" aria-checked={net.network === n} className="netswitch-opt" onClick={() => choose(n)}>
-              <i className={`netdot netdot-${n}`} aria-hidden="true" />
-              <span>
-                <b>{NETWORK_LABEL[n].name}</b> <small>{NETWORK_LABEL[n].chain}</small>
-                <em>{NETWORK_LABEL[n].line}</em>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+    <div ref={group} className="netseg" role="radiogroup" aria-label="Which dish to read" onKeyDown={onKey}>
+      {ORDER.map((n) => {
+        const on = net.network === n;
+        return (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            className={`netseg-opt netseg-${n}`}
+            onClick={() => choose(n)}
+            title={hint(n)}
+          >
+            <i className={`netdot netdot-${n}${n === "mainnet" && liveMain ? " netdot-live" : ""}`} aria-hidden="true" />
+            <span className="netseg-text">
+              <span className="netseg-name">{SEG[n].name}</span>
+              <span className="netseg-sub">{SEG[n].sub}</span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDocsHref } from "@/lib/use-docs";
-import { REPO } from "@/lib/config";
+import { CONTRACTS, REPO, accountUrl } from "@/lib/config";
 import { useDish } from "@/lib/dish-store";
 import { useNet } from "@/lib/use-net";
 import { Mark } from "./Mark";
@@ -58,7 +58,8 @@ export function Footer() {
           <div className="foot-col">
             <h3>Runs on</h3>
             <ul>
-              <li><a href={net.contractUrl}>{net.contract}</a></li>
+              <li><a href={accountUrl(CONTRACTS.mainnet, "mainnet")}>{CONTRACTS.mainnet}</a> <span className="foot-net">mainnet, live</span></li>
+              <li><a href={accountUrl(CONTRACTS.testnet, "testnet")}>{CONTRACTS.testnet}</a> <span className="foot-net">testnet, free play</span></li>
               <li><a href="https://near.org">NEAR Protocol</a></li>
               <li><a href="https://near-intents.org">NEAR Intents</a></li>
               <li><a href="https://www.anthropic.com/claude/haiku">Claude Haiku</a> and <a href="https://cloud.near.ai">NEAR AI Cloud</a></li>
@@ -68,6 +69,12 @@ export function Footer() {
         <div className="foot-chain" aria-live="off">
           <span>
             Generation <strong className="num">{d.status === "ready" ? d.generation.toLocaleString("en-US") : "—"}</strong>
+            {/* The browser steps the stored board forward to the clock; say how far, quietly. */}
+            {d.status === "ready" && d.ahead > 0 ? (
+              <small className="foot-ahead num" title="The contract stores the board at the last generation someone advanced to; your browser runs the same rules forward to the clock.">
+                {" "}stored at {Number(d.state?.generation ?? 0).toLocaleString("en-US")}, your browser {d.ahead.toLocaleString("en-US")} ahead
+              </small>
+            ) : null}
           </span>
           <span>
             History chain <code>{d.chain ? d.chain.slice(0, 32) + "…" : "reading…"}</code>

@@ -9,11 +9,12 @@ export const CONTRACTS: Record<Network, string> = {
   testnet: process.env.NEXT_PUBLIC_PETRI_CONTRACT_TESTNET ?? process.env.NEXT_PUBLIC_PETRI_CONTRACT ?? "petri-v6.testnet",
   mainnet: process.env.NEXT_PUBLIC_PETRI_CONTRACT_MAINNET ?? "petri-dish.near",
 };
-const RPCS: Record<Network, string[]> = {
+/** Every network's RPC providers, for the few reads that look at the other dish (the mainnet pulse). */
+export const RPCS: Record<Network, string[]> = {
   mainnet: ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"],
   testnet: ["https://rpc.testnet.fastnear.com", "https://rpc.testnet.near.org", "https://test.rpc.fastnear.com"],
 };
-const EXPLORERS: Record<Network, string> = { mainnet: "https://nearblocks.io", testnet: "https://testnet.nearblocks.io" };
+export const EXPLORERS: Record<Network, string> = { mainnet: "https://nearblocks.io", testnet: "https://testnet.nearblocks.io" };
 
 const isNetwork = (v: unknown): v is Network => v === "testnet" || v === "mainnet";
 /** The dish a first visit reads, and the only one the server knows. */

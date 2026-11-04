@@ -173,7 +173,8 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
-/* Nav */
+/* Nav. One line at every width: the brand, the main links (which fold into More as the window narrows, then into the
+   phone menu), the two dishes side by side, and the one amber button. */
 .nav {
   position: sticky;
   top: 0;
@@ -195,7 +196,7 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
 .nav-in {
   display: flex;
   align-items: center;
-  gap: 34px;
+  gap: 30px;
   height: 68px;
 }
 .brand {
@@ -207,91 +208,136 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   color: var(--bone);
   text-decoration: none;
   letter-spacing: -0.01em;
+  flex: none;
 }
 .brand-mark { width: 24px; height: 24px; flex: none; }
+.nav-main { min-width: 0; }
 .nav-links {
   display: flex;
-  gap: 26px;
+  align-items: center;
+  gap: 24px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.nav-links a {
+.nav-links > li > a,
+.nav-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
   white-space: nowrap;
   color: var(--dim);
   text-decoration: none;
-  font-size: 15px;
-  padding: 6px 0;
+  font: 400 15px/1 var(--body);
   position: relative;
 }
-.nav-links a:hover { color: var(--bone); }
-.nav-links a[aria-current="page"] { color: var(--bone); }
-.nav-links a[aria-current="page"]::after {
+.nav-more-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.nav-more-btn svg { transition: rotate 0.2s ease; }
+.nav-more-btn[aria-expanded="true"] svg { rotate: 180deg; }
+.nav-links > li > a:hover,
+.nav-more-btn:hover,
+.nav-more-btn[aria-expanded="true"] { color: var(--bone); }
+.nav-links > li > a[aria-current="page"] { color: var(--bone); }
+.nav-links > li > a[aria-current="page"]::after,
+.nav-more[data-here="0"] .nav-more-btn::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -2px;
+  bottom: 0;
   height: 2px;
   border-radius: 2px;
   background: var(--amber);
 }
+.nav-more[data-here="0"] .nav-more-btn { color: var(--bone); }
+.nav-more { position: relative; }
+.nav-more-menu {
+  position: absolute;
+  left: -12px;
+  top: calc(100% + 14px);
+  width: 300px;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  border-radius: 18px;
+  background: rgba(33, 20, 11, 0.98);
+  box-shadow: inset 0 0 0 1px var(--line-2), 0 30px 60px -20px rgba(0, 0, 0, 0.8);
+  z-index: 60;
+}
+.nav-more-menu[hidden] { display: none; }
+.nav-more-menu a {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: var(--bone);
+  text-decoration: none;
+}
+.nav-more-menu a:hover { background: rgba(243, 233, 218, 0.05); }
+.nav-more-menu a[aria-current="page"] {
+  background: rgba(242, 180, 90, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.42);
+}
+.nav-more-menu b { font-weight: 600; font-size: 15px; }
+.nav-more-menu span { font-size: 13px; line-height: 1.35; color: var(--dim); }
+/* Links still in the bar are not repeated in More. */
+.nav-more-menu li[data-rank="2"],
+.nav-more-menu li[data-rank="3"] { display: none; }
 .nav-end {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+  flex: none;
 }
-.net {
+
+/* The two dishes, both always in view. Amber where the NEAR is real, green for free play. */
+.netseg {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  color: var(--dim);
-}
-.net-ahead {
-  padding: 1px 7px;
+  gap: 2px;
+  padding: 3px;
   border-radius: 999px;
-  font-size: 11.5px;
-  color: var(--dim);
-  box-shadow: inset 0 0 0 1px var(--line);
+  background: rgba(243, 233, 218, 0.025);
+  box-shadow: inset 0 0 0 1px var(--line-2);
 }
-@media (max-width: 1180px) {
-  .net-ahead { display: none; }
-}
-.pulse {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ok);
-  animation: pulse 2.6s infinite;
-}
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(159, 216, 168, 0.5); }
-  70% { box-shadow: 0 0 0 9px rgba(159, 216, 168, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(159, 216, 168, 0); }
-}
-/* Which dish the site reads. Green for free play, amber where the NEAR is real. */
-.netswitch { position: relative; }
-.netswitch-btn {
+.netseg-opt {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 11px 0 12px;
+  gap: 9px;
+  height: 40px;
+  padding: 0 15px 0 13px;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--bone);
-  font: 600 13.5px/1 var(--body);
-  cursor: pointer;
+  color: var(--text-2);
+  text-align: left;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
 }
-.netswitch-btn:hover { background: rgba(243, 233, 218, 0.05); }
-.netswitch-btn small { font-weight: 400; font-size: 12.5px; color: var(--dim); }
-.netswitch-btn svg { color: var(--dim); transition: rotate 0.2s ease; }
-.netswitch-btn[aria-expanded="true"] svg { rotate: 180deg; }
+.netseg-opt:hover { background: rgba(243, 233, 218, 0.05); color: var(--bone); }
+.netseg-text { display: grid; gap: 1px; }
+.netseg-name { font: 600 13.5px/1.1 var(--body); }
+.netseg-sub { font: 400 11.5px/1.15 var(--body); color: var(--dim); }
+.netseg-opt[aria-checked="true"] {
+  background: var(--surface-2);
+  color: var(--bone);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  cursor: default;
+}
+.netseg-mainnet[aria-checked="true"] {
+  background: rgba(242, 180, 90, 0.11);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.45);
+}
+.netseg-mainnet[aria-checked="true"] .netseg-sub { color: var(--amber-2); }
+.netseg-testnet[aria-checked="true"] .netseg-sub { color: var(--ok); }
+.netseg-opt:focus-visible { outline-offset: 1px; border-radius: 999px; }
 .netdot {
   width: 8px;
   height: 8px;
@@ -300,56 +346,15 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   background: var(--ok);
 }
 .netdot-mainnet { background: var(--amber); }
-.netswitch-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 10px);
-  width: 330px;
-  padding: 8px;
-  border-radius: 18px;
-  background: rgba(33, 20, 11, 0.98);
-  box-shadow: inset 0 0 0 1px var(--line-2), 0 30px 60px -20px rgba(0, 0, 0, 0.8);
-  z-index: 60;
+/* Mainnet answered: a soft ring says the dish is live. */
+.netdot-live { animation: live 2.6s infinite; }
+@keyframes live {
+  0% { box-shadow: 0 0 0 0 rgba(242, 180, 90, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(242, 180, 90, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(242, 180, 90, 0); }
 }
-.netswitch-head { margin: 6px 10px 8px; font-size: 13px; color: var(--dim); line-height: 1.4; }
-.netswitch-opt, .netsheet-opt {
-  display: grid;
-  grid-template-columns: 8px 1fr;
-  gap: 12px;
-  align-items: start;
-  width: 100%;
-  padding: 12px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--bone);
-  text-align: left;
-  cursor: pointer;
-}
-.netswitch-opt .netdot, .netsheet-opt .netdot { margin-top: 7px; }
-.netswitch-opt:hover, .netsheet-opt:hover { background: rgba(243, 233, 218, 0.05); }
-.netswitch-opt[aria-checked="true"], .netsheet-opt[aria-checked="true"] {
-  background: rgba(242, 180, 90, 0.09);
-  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.42);
-}
-.netswitch-opt b, .netsheet-opt b { font-weight: 600; font-size: 15px; }
-.netswitch-opt small, .netsheet-opt small { font-size: 13px; color: var(--dim); margin-left: 4px; }
-.netswitch-opt em, .netsheet-opt em { display: block; font-style: normal; font-size: 13px; line-height: 1.4; color: var(--text-2); margin-top: 3px; }
-.netsheet { display: grid; gap: 6px; margin-top: 22px; }
-.netsheet-opt { padding: 14px; }
-/* The switch names the dish, so on narrower desktops the generation pill and then the button make room for it, and
-   below 1100 px the links move into the menu. */
-@media (max-width: 1500px) {
-  .net { display: none; }
-}
-@media (max-width: 1240px) and (min-width: 1101px) {
-  .nav-in { gap: 24px; }
-  .nav-links { gap: 18px; }
-  .nav-end .btn { display: none; }
-}
-@media (max-width: 420px) {
-  .netswitch-btn small { display: none; }
-  .netswitch-menu { right: -50px; width: min(330px, calc(100vw - 32px)); }
+@media (prefers-reduced-motion: reduce) {
+  .netdot-live { animation: none; box-shadow: 0 0 0 3px rgba(242, 180, 90, 0.25); }
 }
 
 .menu-btn {
@@ -361,32 +366,117 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   background: rgba(243, 233, 218, 0.06);
   color: var(--bone);
   cursor: pointer;
+  flex: none;
 }
+
+/* Folding, widest first: Specimens and Docs move into More, then AI strains and Verify, then the bar hands every link
+   to the phone menu and the dishes drop their second line. */
+@media (max-width: 1239px) {
+  .nav-links > li[data-rank="3"] { display: none; }
+  .nav-more-menu li[data-rank="3"] { display: block; }
+  .nav-more[data-here="3"] .nav-more-btn { color: var(--bone); }
+  .nav-more[data-here="3"] .nav-more-btn::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--amber); }
+}
+@media (max-width: 1059px) {
+  .nav-in { gap: 26px; }
+  .nav-links { gap: 22px; }
+  .nav-links > li[data-rank="2"] { display: none; }
+  .nav-more-menu li[data-rank="2"] { display: block; }
+  .nav-more[data-here="2"] .nav-more-btn { color: var(--bone); }
+  .nav-more[data-here="2"] .nav-more-btn::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--amber); }
+}
+@media (max-width: 899px) {
+  .nav-main { display: none; }
+  .menu-btn { display: inline-grid; place-items: center; }
+  .nav-end { gap: 12px; }
+}
+@media (max-width: 760px) {
+  .netseg-sub { display: none; }
+  .netseg-opt { height: 32px; padding: 0 12px 0 11px; gap: 7px; }
+  .netseg-name { font-size: 13px; }
+}
+@media (max-width: 640px) {
+  .nav-cta { display: none; }
+}
+@media (max-width: 380px) {
+  .brand { font-size: 22px; gap: 8px; }
+  .netseg-opt { padding: 0 10px 0 9px; }
+}
+
+/* Phone menu: grouped like the footer, with the choice of dish inside it. */
 .sheet {
   position: fixed;
   inset: 68px 0 0 0;
   z-index: 49;
-  background: rgba(18, 10, 5, 0.98);
-  padding: 24px var(--gutter);
-  display: grid;
-  align-content: start;
-  gap: 4px;
+  background: var(--bg);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-.sheet a {
-  font-family: var(--display);
-  font-size: 34px;
-  color: var(--bone);
-  text-decoration: none;
+.sheet-in {
+  display: grid;
+  gap: 28px;
+  max-width: 760px;
+  padding: 22px var(--gutter) 36px;
+}
+.sheet-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px 28px;
+}
+.sheet-title {
+  margin: 0 0 4px;
+  font: 600 13.5px/1.3 var(--body);
+  color: var(--dim);
+}
+.sheet-group ul { list-style: none; margin: 0; padding: 0; }
+.sheet-group a {
+  display: block;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
+  font-family: var(--display);
+  font-size: 25px;
+  line-height: 1.2;
+  color: var(--bone);
+  text-decoration: none;
 }
-.sheet .btn { margin-top: 24px; font-family: var(--body); font-size: 16px; border: 0; }
-@media (max-width: 1100px) {
-  .nav-links, .net { display: none; }
-  .menu-btn { display: inline-grid; place-items: center; }
+.sheet-group a[aria-current="page"] { color: var(--amber); }
+.sheet-in > .btn { justify-self: start; min-width: 220px; }
+.netsheet { display: grid; gap: 8px; }
+.netsheet-opt {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(243, 233, 218, 0.03);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--bone);
+  text-align: left;
+  cursor: pointer;
 }
-@media (max-width: 900px) {
-  .nav-end .btn { display: none; }
+.netsheet-opt .netdot { margin-top: 7px; }
+.netsheet-opt:hover { background: rgba(243, 233, 218, 0.05); }
+.netsheet-opt[aria-checked="true"] {
+  background: rgba(242, 180, 90, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.42);
+}
+.netsheet-opt b { font-weight: 600; font-size: 15px; }
+.netsheet-opt small { font-size: 13px; color: var(--dim); margin-left: 4px; }
+.netsheet-opt em { display: block; font-style: normal; font-size: 13.5px; line-height: 1.45; color: var(--text-2); margin-top: 3px; }
+.netsheet-state {
+  align-self: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--dim);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.netsheet-opt[aria-checked="true"] .netsheet-state { color: var(--amber-2); box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.42); }
+@media (min-width: 900px) {
+  .sheet { display: none; }
 }
 
 /* Footer */
@@ -423,6 +513,8 @@ h1, h2, h3, .h2, .h3 { text-wrap: balance; }
   color: var(--dim);
   font-size: 14px;
 }
+.foot-ahead { color: var(--dim); font-size: 13px; white-space: nowrap; }
+.foot-net { color: var(--dim); font-size: 13px; white-space: nowrap; }
 .foot-chain code {
   font-family: var(--body);
   color: var(--text-2);

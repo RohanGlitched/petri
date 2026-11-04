@@ -60,7 +60,7 @@
   margin: 0 auto;
 }
 /* The headline and lede are there on first paint; only the live numbers and the loupe arrive a beat later. */
-.title, .row {
+.live, .title, .row {
   animation: settle 0.7s cubic-bezier(0.2, 0.7, 0.1, 1) both;
 }
 .stats {
@@ -95,6 +95,62 @@
   color: var(--text-2);
   margin: 0;
 }
+.ledeBox { display: grid; gap: 10px; }
+.dishes {
+  max-width: 56ch;
+  margin: 0;
+  font-size: 15px;
+  color: var(--dim);
+}
+.dishes b { font-weight: 600; color: var(--bone); }
+
+/* Above the headline: the mainnet dish is live, with its numbers from the chain. One calm line, not a banner. */
+.live {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 0;
+  max-width: 100%;
+  margin: 0 0 20px;
+  padding: 7px 8px 7px 14px;
+  border-radius: 999px;
+  background: rgba(18, 10, 5, 0.62);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.32);
+  font-size: 13.5px;
+  line-height: 1.3;
+  color: var(--text-2);
+}
+.live > :global(.netdot) { margin-right: 10px; }
+.liveLead { font-weight: 600; color: var(--bone); }
+.liveAcct, .liveFact { white-space: nowrap; }
+.liveAcct::before, .liveFact::before {
+  content: "·";
+  margin: 0 8px;
+  color: var(--dim);
+}
+.liveAcct {
+  color: var(--amber-2);
+  text-decoration: none;
+}
+.liveAcct:hover { text-decoration: underline; text-underline-offset: 3px; }
+.liveGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(242, 180, 90, 0.12);
+  color: var(--amber-2);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.18s ease;
+}
+.liveGo:hover { background: rgba(242, 180, 90, 0.2); }
 .actions {
   display: flex;
   gap: 12px;
@@ -243,6 +299,8 @@
 .loupe p { margin: 0; }
 
 @media (max-width: 900px) {
+  .live { margin-bottom: 14px; font-size: 13px; }
+  .dishes { font-size: 14px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
   .stats dd { font-size: 27px; }
   .loupe { display: none; }
@@ -258,11 +316,21 @@
       linear-gradient(0deg, rgba(18, 10, 5, 0.97) 0, rgba(18, 10, 5, 0.92) var(--copy, 55%), rgba(18, 10, 5, 0.45) calc(var(--copy, 55%) + 56px), rgba(18, 10, 5, 0) calc(var(--copy, 55%) + 140px));
   }
 }
+@media (max-width: 600px) {
+  /* A phone keeps the claim, the account and the generation; the way in stays one tap away in the menu. */
+  /* Two tidy rows: the claim and the generation, then the account and the way in. */
+  .live { border-radius: 16px; padding: 8px 14px; row-gap: 3px; }
+  .live::after { content: ""; order: 1; flex-basis: 100%; }
+  .liveMinor { display: none; }
+  .liveAcct { order: 2; margin-left: 18px; }
+  .liveAcct::before { display: none; }
+  .liveGo { order: 3; margin-left: auto; padding: 0 0 0 12px; background: none; }
+}
 @media (max-height: 760px) and (min-width: 901px) {
   .title { font-size: 56px; margin-bottom: 14px; }
   .stats dd { font-size: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .reveal, .title, .row, .stats, .loupe > *, .skel { animation: none; }
+  .reveal, .live, .title, .row, .stats, .loupe > *, .skel { animation: none; }
   .cueText::before { animation: none; }
 }
