@@ -17,6 +17,24 @@ export const MAX_PACT_PETRI = Number(process.env.PETRI_PACT_MAX ?? "30");
 // Pacts each strain may pay for in 24 hours: mainnet keeps its NEAR spend flat (an offer and its acceptance cost about
 // 0.001 NEAR of gas and 0.0042 NEAR of storage).
 const PAYMENTS_PER_DAY = Number(process.env.PETRI_PACT_PER_DAY ?? (MAINNET ? "2" : "4"));
+/** How far from its own living cells a strain plants (cells across or down): the ground a pact is weighed against. */
+const PLAY_REACH = 16;
+
+/** Cells within `r` (across or down, wrapping) of colony `id`'s living cells, as 0/1 per cell. */
+function near(cells, id, r, w, h) {
+  const out = new Uint8Array(cells.length);
+  for (let i = 0; i < cells.length; i++) {
+    if (cells[i] !== id) continue;
+    const x = i % w;
+    const y = (i / w) | 0;
+    for (let dy = -r; dy <= r; dy++) {
+      const row = ((y + dy + h) % h) * w;
+      for (let dx = -r; dx <= r; dx++) out[row + ((x + dx + w) % w)] = 1;
+    }
+  }
+  return out;
+}
+
 // PETRI a strain always keeps for planting: this many cells at today's price.
 const RESERVE_CELLS = Number(process.env.PETRI_PACT_RESERVE_CELLS ?? "40");
 const MIN_NEAR = Number(process.env.PETRI_MIN_NEAR ?? "0.12");
@@ -247,15 +265,23 @@ You hold ${(held.get(s.account) / 1e6).toFixed(1)} PETRI and may offer 1 to ${ma
     const mine = offers.filter((p) => p.toAccount === s.account);
     if (!mine.length) continue;
     const me = idOf.get(s.account);
+    // The ground a pact takes from this strain: the cells it could no longer plant (within the radius of the payer's
+    // living cells, the contract's square), counted where this strain plays (within PLAY_REACH of its own cells).
+    const playGround = near(world.cells, me, PLAY_REACH, w, h);
     const cost = (p) => {
       const aimed = movesOf(mem, s.account).filter((m) => m.target === p.payerColony).length;
       const c = centres.get(p.payerColony);
       const home = centres.get(me);
       const d = c && home ? Math.round(Math.hypot(wrapDelta(home.x, c.x, w), wrapDelta(home.y, c.y, h))) : null;
-      return `you aimed ${aimed} of your recent plantings at ${p.from}${d != null ? `; it lies ${d} cells ${compass(wrapDelta(home.x, c.x, w), wrapDelta(home.y, c.y, h))} of you` : ""}`;
+      const barred = near(world.cells, p.payerColony, radius, w, h);
+      let lost = 0;
+      let play = 0;
+      for (let i = 0; i < playGround.length; i++) if (playGround[i] && !world.cells[i]) { play++; if (barred[i]) lost++; }
+      const share = play ? Math.round((100 * lost) / play) : 0;
+      return `you aimed ${aimed} of your recent plantings at ${p.from}${d != null ? `; it lies ${d} cells ${compass(wrapDelta(home.x, c.x, w), wrapDelta(home.y, c.y, h))} of you` : ""}; the pact would bar ${lost} of the ${play} open cells within ${PLAY_REACH} of your own colonies (${share}%), worth about ${((lost * cellPrice) / 1e6).toFixed(0)} PETRI at today's cell price if you planted them all`;
     };
     const system = `You are ${s.name}, one of the five house strains on a shared Petri dish run by a NEAR smart contract. ${s.voice}
-At the house council other strains offer you PETRI for a pact: if you accept, the contract pays you the PETRI and then refuses every planting of yours within ${radius} cells of the payer's living cells for ${holdGens} generations. You cannot break it. PETRI buys cells (about ${(cellPrice / 1e6).toFixed(2)} PETRI each). Accept when the PETRI is worth more than the ground you give up.
+At the house council other strains offer you PETRI for a pact: if you accept, the contract pays you the PETRI and then refuses every planting of yours within ${radius} cells of the payer's living cells for ${holdGens} generations. You cannot break it. PETRI buys cells (about ${(cellPrice / 1e6).toFixed(2)} PETRI each). Accept when the PETRI is worth more than the ground you give up. Each offer says how much of the open agar where you play the pact would bar: a pact around a colony far from your own costs you almost nothing, so its PETRI is nearly free; one around your close neighbour costs ground you would use.
 Answer with JSON only: one answer per offer, with a reply of one short sentence, at most 80 characters.`;
     const user = `${dish}
 ${memoryText(mem, s.account, nameOf, 3)}
