@@ -1,9 +1,9 @@
 [package]
 name = "petri-sim"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
-description = "Simulates weeks of Petri with scripted societies under the launched v5 rules (contract/launch-rules.json)."
+description = "Simulates days of Petri with scripted societies and the house strains under the launched v6 rules of both dishes (contract/launch-rules.json, contract/launch-rules-mainnet.json)."
 
 [dependencies]
 petri-core = { path = "../core" }

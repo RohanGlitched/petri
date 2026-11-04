@@ -1,0 +1,93 @@
+PETRI v6: RULES THAT STILL LOOK BROKEN, THE CHANGE THAT FIXES EACH, AND ITS MEASURED EFFECT
+(sim/out-v6; every experiment re-runs the same seeds with one change; the measured tables follow below. contract/, core/, wasm/,
+web/ and agents/ were not changed: these are proposals.)
+
+F1. Tide entries eat a young dish's tides. Each tide that runs stores 289 B (0.00289 NEAR) from its 5% share: 39% of all tide pay
+    with one outsider, 31% with five, 8% with twenty.
+    Change: keep only the history checkpoint on chain per tide (~120 B: generation + chain) and put pay/bounty/paid/as_credit/
+    credit_pay/credit_paid in the event the replayers already read; or run tides less often (tide_every 960) while the dish is young.
+    Measured (sim switch small_tide_entry / --set tide_every=960): tide storage 39% -> 18% (120 B) or 15% (960); Penny alone
+    +0.44 -> +0.65 / +0.60; Methuselah among 5 +0.07 -> +0.19 / +0.31, among 20 +0.27 -> +0.25 / +0.65. Rarer tides leave more in
+    the vault at the end (0.18-0.69 NEAR). Tide bps 200 is worse (storage 50% of pay).
+
+F2. The house subsidy goes to whoever is alone on the dish. A 0.01 NEAR Penny alone took 100% of 164 tides and +0.44 NEAR of the
+    house's 2.3 NEAR in a week. This is the stated design ("the vault keeps what the house paid in for the first real player"), so
+    it is a judgment call, not a bug; if it is unwanted:
+    Change: cap one colony's share of a tide (tide_cap_bps 2500: no colony takes more than 25% of a tide; the rest stays in the vault).
+    Measured: Penny alone +0.44 -> +0.28 and 0.07 NEAR stays in the vault; with 5 or 20 outsiders no measurable change.
+
+F3. Slide-royalty farming pays. A farmer minting 8 common patterns at launch earned 6,296 PETRI of royalties in a week and +0.29
+    NEAR cash (150 players); ordinary players lost 0.01-0.12 more than with no slides.
+    Change: slide_royalty_bps 0 (keep the 25% licence discount, which is the same for everyone), or pay the royalty to the agar,
+    or only to the slide's minter for plantings within N cells of the minting colony.
+    Measured (slide_royalty_bps 0): farmer +0.29 -> -0.20; licensed plantings unchanged (7,852 -> 8,374).
+
+F4. Free play can still reach NEAR through royalties. A colony that never attached NEAR (a relayer guest) pays royalties in PETRI to
+    a slide's holder, who can sell them for vault NEAR: ~56 PETRI (~0.006 NEAR) a week per operator with 10 free guests.
+    Change (contract plant()): when the planter has never attached NEAR (`!books(id).attached`), the royalty goes to the agar.
+    Measured (royalty_guest_to_agar): royalties from credit-only planters 56 -> 0 PETRI; operator cash -0.158 -> -0.151 (noise).
+
+F5. Gas grows with the colonies that have stake, and stake lingers ~60 tides after a colony's last planting. On an active 30,000-
+    colony dish up to 27,500 rows were hot; the largest plant/buy/claim were 237/234/233 TGas and 16,102 calls passed the 200 TGas
+    the site prepays; above ~21,000 hot rows a 200 TGas call steps only one generation.
+    Changes: (a) web/src/lib/wallet.ts: prepay 300 TGas for plant, buy, sell and join (unused gas is refunded); (b) contract
+    books.rs flush_idle: let a row leave once its stake is below STAKE_UNIT / reach (125), where its pay cap is under one cell and it
+    earns nothing anyway (identical feed); (c) lib.rs catch_up_by: reserve only the feed part (26 B a row) for the store unless a
+    tide falls inside the catch-up window, since the purse part is written only by tides and purse changes.
+    Measured: (b) calls over 200 TGas 16,102 -> 28 at 30,000 colonies (max hot rows 27,538 -> 26,080; plant max 237 -> 231 TGas);
+    economics unchanged within seed noise at 150 players. (c) generations per 200 TGas call at 25,000 and 30,000 rows: 1 -> 120
+    (analytic). (a) is needed regardless: the analytic plant is 221 TGas at 30,000 rows.
+
+F6. The keeper pot is stranded on mainnet. Only `advance` pays it, the keeper and house never take it, and outsiders rarely call
+    advance: 1,480 PETRI sat in the pot after a week on the young 20-player dish (12 PETRI at 150 players, where racers exist).
+    Change (lib.rs): pay the pot to any non-house caller whose call ran at least one generation (plant, join, buy, sell, claim).
+    Measured (pot_any_call, 150 players): pot left 12.3 -> 2.2 PETRI; the racer's loss -0.019 -> -0.006; builders unchanged.
+
+F7. The testnet keeper spins (agents/run.mjs line 467). If the keeper is registered it advances whenever the pot holds over 50 PETRI,
+    but v6 never pays it the pot, so the pot never drains: 4,820 advances a day, 1.7 NEAR/day at mainnet gas price (~17 testnet
+    NEAR/day at testnet's 10x price), pot stuck at 461 PETRI.
+    Change: drop `(keeperRegistered && Number(st.keeper_pot) > 50_000_000)` from the testnet condition.
+    Measured: 4,820 -> 30 advances a day; gas 1.73 -> 0.016 NEAR/day.
+
+F8. The mainnet house's NEAR lasts ~5-6 days at 0.55 NEAR per strain (1/8 pace, 100 PETRI/day, 0.12 floor): ~0.08 NEAR per strain
+    per day. To keep playing through judging (Nov 18, ~14 days from relaunch) each strain needs ~1.2 NEAR, or PETRI_PACE 16 and
+    PETRI_DAILY_PETRI 50 (linear estimate from these runs, not simulated). The docs' "about 1.1 NEAR a strain a week" is v5 testnet
+    pace; at mainnet pace a strain spent ~0.46 NEAR before running dry.
+
+Not broken (checked): house laundering (all paths refused; 0 PETRI moved in 343 runs), sybil guests (no NEAR in guest accounts,
+operators lose 0.14-0.16), self-sponsoring (-0.57..-0.72: the grant can only be reclaimed unspent, won credit is spent first), the
+carpet locker (loses at every size), the dormancy skip and idle-tide skips (no storage spent on empty dishes), the join's O(1) cost
+on a current dish.
+
+=== Measured fix experiments (same seeds as the launched-rules runs) ===
+  Young mainnet, 7 days: median cash per player; vault left; house NEAR paid; tide-entry storage as % of tide pay.
+                                                       |     Penny   Builder    Raider   Methus.     Whale |     vault |  house pd |    stor%
+  Penny alone | launched rules                         |   +0.4372         -         -         -         - |    0.0000 |    2.3327 |      39%
+  Penny alone | tide_cap_bps 2500                      |   +0.2800         -         -         -         - |    0.0729 |    2.2439 |      19%
+  Penny alone | small tide entry (120 B)               |   +0.6481         -         -         -         - |    0.0024 |    2.3326 |      18%
+  Penny alone | tide_bps 200                           |   +0.2785         -         -         -         - |    0.0784 |    2.2439 |      50%
+  Penny alone | tide_every 960                         |   +0.6015         -         -         -         - |    0.1805 |    2.2607 |      15%
+  5 outsiders | launched rules                         |   -0.0479   -0.2496   -0.2498   +0.0667         - |    0.0000 |    2.3080 |      31%
+  5 outsiders | tide_cap_bps 2500                      |   -0.0475   -0.2495   -0.2509   +0.0747         - |    0.0000 |    2.2872 |      24%
+  5 outsiders | small tide entry (120 B)               |   -0.0481   -0.2495   -0.2485   +0.1864         - |    0.0008 |    2.2355 |      13%
+  5 outsiders | tide_bps 200                           |   -0.0473   -0.2513   -0.2502   +0.1257         - |    0.0000 |    2.2927 |      51%
+  5 outsiders | tide_every 960                         |   -0.0478   -0.2500   -0.2478   +0.3129         - |    0.2521 |    2.2859 |      10%
+  20 outsiders | launched rules                        |   -0.0469   -0.2484   -0.2457   +0.2724   -2.9984 |    0.0315 |    2.2740 |       8%
+  20 outsiders | tide_cap_bps 2500                     |   -0.0481   -0.2482   -0.2417   +0.3029   -2.9999 |    0.0387 |    2.2866 |       7%
+  20 outsiders | small tide entry (120 B)              |   -0.0485   -0.2467   -0.2463   +0.2463   -3.0002 |    0.0393 |    2.2541 |       3%
+  20 outsiders | tide_bps 200                          |   -0.0473   -0.2489   -0.2479   +0.5319   -2.9985 |    0.0908 |    2.2955 |      11%
+  20 outsiders | tide_every 960                        |   -0.0480   -0.2467   -0.2462   +0.6456   -2.9697 |    0.6925 |    2.2505 |       3%
+
+  Keeper pot, mainnet 150 p 7 d: pot left at the end 12.3 (0.1..21.8) PETRI (launched) vs 2.2 (0.1..3.7) (pot to any call); Racer cash -0.0192 (-0.0204..-0.0170) vs -0.0056 (-0.0058..-0.0053); Builder -0.1931 (-0.2025..-0.1830) vs -0.2019 (-0.2137..-0.1817)
+  Testnet keeper (agents/run.mjs advances whenever the pot > 50 PETRI if registered; v6 never pays it the pot): calls/day 4820 (4699..4866) vs 30 (22..31) unregistered; gas/day 1.7299 (1.6851..1.7448) vs 0.0156 (0.0116..0.0162) NEAR at mainnet gas price (testnet's is 10x); pot left 461.1 (454.5..491.8) PETRI
+  Testnet sybil royalty: SybilRoyalty operator cash -0.1580 (-0.1866..-0.1408) (launched) vs -0.1508 (-0.1998..-0.1416) (royalty from credit-only planters to the agar); royalties 773.5 (525.3..880.8) vs 750.0 (574.9..818.2) PETRI
+  Royalty farmer, 150 p 7 d: farmer cash +0.2910 (+0.0243..+0.3565) (launched) vs -0.1985 (-0.2304..-0.1627) (slide_royalty_bps 0)
+  Gas: generations one call can step at p hot rows with 200 TGas prepaid, launched (reserve both parts of the hot table) vs reserving only the feed part:
+    p  10000: 120 vs 120 generations; plant 77 TGas, advance through a tide 111 TGas
+    p  15000: 120 vs 120 generations; plant 113 TGas, advance through a tide 149 TGas
+    p  20000: 114 vs 120 generations; plant 149 TGas, advance through a tide 187 TGas
+    p  25000:   1 vs 120 generations; plant 185 TGas, advance through a tide 225 TGas
+    p  30000:   1 vs 120 generations; plant 221 TGas, advance through a tide 263 TGas
+  30,000 colonies, 2 days | launched                    : hot rows avg 17102 (17081..17124) max 27538 (27500..27577); max gas plant 237, join 222, claim 233, buy 234 TGas; calls over prepaid 16102 (413134 plants in all)
+  30,000 colonies, 2 days | rows leave below stake 125  : hot rows avg 16660 (16643..16676) max 26080 (26066..26095); max gas plant 231, join 222, claim 224, buy 224 TGas; calls over prepaid 28 (413006 plants in all)
+  Same rule, mainnet 150 p 7 d (economics should not move): Builder -0.1931 (-0.2025..-0.1830) vs -0.1950 (-0.2069..-0.1744); Methuselah +0.4100 (+0.3366..+0.4759) vs +0.3744 (+0.2934..+0.4577); hot rows avg 111 (110..112) vs 86 (85..86)
