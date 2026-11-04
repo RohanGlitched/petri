@@ -278,7 +278,7 @@ const CHANGES_V3: [string, string][] = [
   ],
   [
     "The contract was not a reproducible build and the account kept a full-access key.",
-    "Built with cargo near build reproducible-wasm, with NEP-330 metadata linking the commit; the key is to be deleted before judging, and /verify fails that check until it is.",
+    "Built with cargo near build reproducible-wasm, with NEP-330 metadata linking the commit; the team keeps one full-access key so a bug can be fixed, and the verifiers disclose it and check the code hash.",
   ],
   [
     "The simulator's claims were ratios of PETRI earned to PETRI spent.",

@@ -92,7 +92,7 @@ export default function Page() {
       <H2 id="trust">Trust</H2>
       <Q id="q-change" q="Can the team change the rules?">
         <p>
-          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6.1 dish and one that already runs v6.2, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6, then to v6.1 and then to v6.2, and how <C>petri-v6.testnet</C> moved to v6.1 and v6.2. The team keeps one full-access key on each contract account on purpose, so a bug can be fixed with new code plus <C>relaunch</C>; deleting it would make the dish unfixable. New code changes the code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. <Doc to="verification" hash="keys">Check the keys</Doc>.
+          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6.3 dish and one that already runs v6.4, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6, then to v6.1 and then to v6.2, and how <C>petri-v6.testnet</C> moved to v6.1 and v6.2. The team keeps one full-access key on each contract account on purpose, so a bug can be fixed with new code plus <C>relaunch</C>; deleting it would make the dish unfixable. New code changes the code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. <Doc to="verification" hash="keys">Check the keys</Doc>.
         </p>
       </Q>
       <Q id="q-verify" q="How do I know the board is right?">
@@ -132,7 +132,7 @@ near contract deploy YOUR-DISH.testnet use-file target/near/petri_contract/petri
   prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
 node scripts/verify.mjs --network testnet --contract YOUR-DISH.testnet`}</Code>
         <p>
-          The account needs NEAR for the contract&rsquo;s storage (the build, 606,298 bytes, is about 6.06 NEAR of storage on its own). The reproducible build writes the commit it was built at into the contract&rsquo;s NEP-330 metadata, so only a build at <C>{BUILD_COMMIT_SHORT}</C> has the code hash the verifier expects; for any other commit pass your build&rsquo;s hash with <C>--code-hash</C>. The verifier reports your account&rsquo;s full-access key as a note, not a failed check.
+          The account needs NEAR for the contract&rsquo;s storage (the build, 606,302 bytes, is about 6.06 NEAR of storage on its own). The reproducible build writes the commit it was built at into the contract&rsquo;s NEP-330 metadata, so only a build at <C>{BUILD_COMMIT_SHORT}</C> has the code hash the verifier expects; for any other commit pass your build&rsquo;s hash with <C>--code-hash</C>. The verifier reports your account&rsquo;s full-access key as a note, not a failed check.
         </p>
       </Q>
     </DocPage>

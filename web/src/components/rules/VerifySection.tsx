@@ -11,7 +11,7 @@ import { PhoneFold } from "./PhoneFold";
 
 const CHAIN_EVERY = 16;
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit (as in scripts/verify.mjs). */
-const BUILD_HASH = "55Qn4Kw3kDCz7nj4oCedR3BYVrHegvT1bLs6m89cV4sz";
+const BUILD_HASH = "Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL";
 /** The one full-access key each dish's account still holds, as `view_access_key_list` returns it. */
 const FULL_KEYS: Record<"testnet" | "mainnet", string> = {
   testnet: "ed25519:8kGYoPJ6jVEZRrjjYKGVLfXD7LCyTDDqu41Cxx9UjHUu",
@@ -145,7 +145,7 @@ export function VerifySection() {
                 The terminal script <code className={s.code}>node scripts/verify.mjs</code> (add{" "}
                 <code className={s.code}>--network mainnet</code> for the mainnet dish) pins every read to one final block and
                 prints {CHECKS.length} checks. The <Link className={s.link} href="/verify">verify page</Link> runs the same replay in
-                your browser, also pinned to one block, and shows 37 checks covering the same ground, grouped a little
+                your browser, also pinned to one block, and shows 44 checks covering the same ground, grouped a little
                 differently and without the code hash. The contract test{" "}
                 <code className={s.code}>replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault</code> does it in Rust.
               </p>
@@ -198,12 +198,12 @@ export function VerifySection() {
                 <p>
                   No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is{" "}
                   <code className={s.code}>relaunch</code>, a private method only the contract account itself can call, which
-                  clears a v6.1 dish and refuses an account with no v6.1 dish and one that already runs v6.2. What remains is the account itself: whoever holds a
+                  clears a v6.3 dish and refuses an account with no v6.3 dish and one that already runs v6.4. What remains is the account itself: the team holds a
                   full-access key to <a className={s.link} href={net.contractUrl}>{net.contract}</a> could deploy other code.
                 </p>
                 <p>
                   The code was built with <code className={s.code}>cargo near build reproducible-wasm</code> at commit{" "}
-                  <a className={s.link} href={`${REPO}/tree/29d79b11a69e55f944e7f819a81a0da83694a72e`}>29d79b1</a>; its hash is{" "}
+                  <a className={s.link} href={`${REPO}/tree/749f246465af68dece1a6d02a74995e8956df619`}>749f246</a>; its hash is{" "}
                   <code className={s.code}>{BUILD_HASH}</code>, and the contract&rsquo;s NEP-330{" "}
                   <code className={s.code}>contract_source_metadata</code> names that{" "}
                   <a className={s.link} href={REPO}>GitHub</a> commit, so anyone can rebuild it and compare.

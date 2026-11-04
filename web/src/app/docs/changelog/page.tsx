@@ -8,6 +8,8 @@ export const metadata = docMetadata("changelog");
 // `git log --oneline` on main, newest first, with each commit's date.
 const COMMITS: [string, string, string][] = [
   ["f4a7b0b", "Nov 4", "Site: 2D fallback when WebGL is software, paused off-screen canvases and a frame budget; dish reads in parallel with a 5 s snapshot route; every block of live numbers names its dish; three-step hero; bench colonies tagged; phone rules sections fold"],
+  ["749f246", "Nov 4", "v6.4: first attach also zeroes the tide window; stake counts the cost without the royalty; relaunch by version marker; both dishes relaunched (code hash Bd3dWehn…, 606,302 bytes)"],
+  ["749f246", "Nov 4", "v6.4: first attach also zeroes the tide window; stake counts the cost without the royalty; relaunch by version marker; both dishes relaunched (code hash Bd3dWehn…, 606,302 bytes)"],
   ["29d79b1", "Nov 4", "v6.3: a colony's stake resets when it first attaches NEAR, and an attached colony's planting stakes only PETRI that is not kept; both dishes relaunched (code hash 55Qn4Kw3…, 606,298 bytes)"],
   ["5690ea2", "Nov 4", "Relaunch both dishes on v6.2: code hash 5v38Vgci… (reproducible at e791404, 605,767 bytes); verifier and docs point at it"],
   ["e791404", "Nov 4", "v6.2: a colony is attached only by bringing at least min_join of its own NEAR, kept PETRI holders are paid in credit, dust wNEAR is returned, royalties from kept PETRI go to the agar, pact offers need 1 PETRI and incoming offers have their own cap, sell and mint_slide need a current dish, exact petri_for_near, storage charged for rename and set_payout, NEPs listed in source metadata; site and relay put advance before a move on a lagging dish"],
@@ -63,10 +65,14 @@ const commit = (h: string) => `${REPO}/commit/${h}`;
 
 export default function Page() {
   return (
-    <DocPage slug="changelog" lede="From the first contract to v6.3, in a few days of November 2026, from the git history. The rules are fixed when a dish starts, so changing them means a new dish. Up to v5 each version was a fresh contract on a fresh account; for v6 the mainnet dish was started again from generation 0 on the same account, petri-dish.near, and testnet moved to petri-v6.testnet; v6.1 and then v6.2 started both again on those accounts.">
-      <H2 id="v6-3">v6.3: petri-v6.testnet and petri-dish.near</H2>
+    <DocPage slug="changelog" lede="From the first contract to v6.4, in a few days of November 2026, from the git history. The rules are fixed when a dish starts, so changing them means a new dish. Up to v5 each version was a fresh contract on a fresh account; for v6 the mainnet dish was started again from generation 0 on the same account, petri-dish.near, and testnet moved to petri-v6.testnet; v6.1 and then v6.2 started both again on those accounts.">
+      <H2 id="v6-4">v6.4: petri-v6.testnet and petri-dish.near</H2>
       <p>
-        The version both dishes run, built reproducibly at <a href={commit(BUILD_COMMIT_SHORT)}>{BUILD_COMMIT_SHORT}</a> with code hash <C>{CODE_HASH}</C> (606,298 bytes, near-sdk 5.29.1, event standard <C>petri</C> 6.3.0). The sixth review found one medium issue: cells a colony planted with sponsored credit or kept PETRI kept their stake after the colony first attached NEAR, so for about a day of tides they could earn NEAR from the vault. v6.3 resets a colony&rsquo;s stake when it first attaches, and an attached colony&rsquo;s planting stakes only the share of its cost paid with PETRI that is not kept. The replay mirrors both rules; the sybil test now runs two tides after the attach. <C>relaunch</C> now clears a v6.2 dish (<C>relaunch_leaves_nothing_of_v6_2</C>), and both dishes started again from generation 0 on 4 November 2026.
+        The version both dishes run, built reproducibly at <a href={commit(BUILD_COMMIT_SHORT)}>{BUILD_COMMIT_SHORT}</a> with code hash <C>{CODE_HASH}</C> (606,302 bytes, near-sdk 5.29.1, event standard <C>petri</C> 6.4.0). The seventh review found that v6.3&rsquo;s first attach reset a colony&rsquo;s stake but not its share of the current tide window; v6.4 zeroes the window too, and a planting&rsquo;s stake counts its cost without the royalty. <C>relaunch</C> writes a version marker and clears a v6.3 dish (<C>relaunch_leaves_nothing_of_v6_3</C>).
+      </p>
+      <H2 id="v6-3">v6.3</H2>
+      <p>
+        The version both dishes ran until v6.4, built reproducibly at <a href={commit("29d79b1")}>29d79b1</a> with code hash <C>55Qn4Kw3kDCz7nj4oCedR3BYVrHegvT1bLs6m89cV4sz</C> (606,298 bytes, near-sdk 5.29.1, event standard <C>petri</C> 6.3.0). The sixth review found one medium issue: cells a colony planted with sponsored credit or kept PETRI kept their stake after the colony first attached NEAR, so for about a day of tides they could earn NEAR from the vault. v6.3 resets a colony&rsquo;s stake when it first attaches, and an attached colony&rsquo;s planting stakes only the share of its cost paid with PETRI that is not kept. The replay mirrors both rules; the sybil test now runs two tides after the attach. <C>relaunch</C> now clears a v6.2 dish (<C>relaunch_leaves_nothing_of_v6_2</C>), and both dishes started again from generation 0 on 4 November 2026.
       </p>
       <H2 id="v6-2">v6.2</H2>
       <p>

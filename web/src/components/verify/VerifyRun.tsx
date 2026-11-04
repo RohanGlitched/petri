@@ -158,7 +158,7 @@ export function VerifyRun() {
               <b>{allOk ? "Everything matches." : replayOk ? "The whole history matches." : "Something differs."}</b>
               <span>
                 {replayOk
-                  ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${allOk ? "" : " One thing is not done yet: the contract account still has a full-access key, so its code could still be replaced. It is deleted before judging; after that this page shows the contract as locked."}`
+                  ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${allOk ? "" : " The contract account has one full-access key, held by the team so a bug can be fixed; it is disclosed in the last row."}`
                   : "A value below came out differently. That is either a bug or tampering, and either way it is worth reporting."}
               </span>
             </div>

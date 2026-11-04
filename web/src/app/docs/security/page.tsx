@@ -364,7 +364,7 @@ const THREATS: Threat[] = [
     threat: "The contract has a method that deletes a dish's state and starts over. Used on a running dish, it would wipe the players' colonies, PETRI and NEAR owed.",
     defense: (
       <>
-        <C>relaunch(rules, accounts)</C> is <C>#[private]</C> and <C>#[init(ignore_state)]</C>: only a transaction from the contract account itself, signed with its full-access key, can run it. It clears only what v6.1 stored, refuses an account with no v6.1 dish (&ldquo;no v6.1 dish here&rdquo;) and one that already runs v6.2 (&ldquo;this account already runs v6.2&rdquo;), and logs any pending NEAR v6.1 still owed. It was used to start <C>petri-dish.near</C> from generation 0 when v6 was deployed there, and again on both dishes when v6.1 and v6.2 were.
+        <C>relaunch(rules, accounts)</C> is <C>#[private]</C> and <C>#[init(ignore_state)]</C>: only a transaction from the contract account itself, signed with its full-access key, can run it. It clears only what v6.1 stored, refuses an account with no v6.3 dish (&ldquo;no v6.3 dish here&rdquo;) and one that already runs v6.4 (&ldquo;this account already runs v6.4&rdquo;), and logs any pending NEAR v6.1 still owed. It was used to start <C>petri-dish.near</C> from generation 0 when v6 was deployed there, and again on both dishes when v6.1 and v6.2 were.
       </>
     ),
     tests: ["relaunch_leaves_nothing_of_v6_1", "relaunch_refuses_an_account_without_a_v6_1_dish", "relaunch_refuses_a_dish_that_runs_v6_2"],
@@ -381,7 +381,7 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          The rules are fixed for a dish&rsquo;s life: there is no admin method, no parameter setter, no mint, no code-deploy method. The one privileged method, <C>relaunch</C>, can only be run by the contract account itself and refuses a dish that already runs v6.2 (<a href="#t-relaunch">below</a>).
+          The rules are fixed for a dish&rsquo;s life: there is no admin method, no parameter setter, no mint, no code-deploy method. The one privileged method, <C>relaunch</C>, can only be run by the contract account itself and refuses a dish that already runs v6.4 (<a href="#t-relaunch">below</a>).
         </li>
         <li>Every NEAR and PETRI movement is in the ledger, and the replay recomputes every solvency term from it.</li>
         <li>Every record is paid for by whoever writes it.</li>
