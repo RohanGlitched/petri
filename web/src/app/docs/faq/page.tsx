@@ -132,7 +132,7 @@ near contract deploy YOUR-DISH.testnet use-file target/near/petri_contract/petri
   prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
 node scripts/verify.mjs --network testnet --contract YOUR-DISH.testnet`}</Code>
         <p>
-          The account needs NEAR for the contract&rsquo;s storage (the build, 605,767 bytes, is about 6.06 NEAR of storage on its own). The reproducible build writes the commit it was built at into the contract&rsquo;s NEP-330 metadata, so only a build at <C>{BUILD_COMMIT_SHORT}</C> has the code hash the verifier expects; for any other commit pass your build&rsquo;s hash with <C>--code-hash</C>. The verifier reports your account&rsquo;s full-access key as a note, not a failed check.
+          The account needs NEAR for the contract&rsquo;s storage (the build, 606,298 bytes, is about 6.06 NEAR of storage on its own). The reproducible build writes the commit it was built at into the contract&rsquo;s NEP-330 metadata, so only a build at <C>{BUILD_COMMIT_SHORT}</C> has the code hash the verifier expects; for any other commit pass your build&rsquo;s hash with <C>--code-hash</C>. The verifier reports your account&rsquo;s full-access key as a note, not a failed check.
         </p>
       </Q>
     </DocPage>

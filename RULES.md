@@ -20,14 +20,14 @@ Every parameter is set once, when a dish is launched (`new`, or `relaunch` below
 view. No method changes a parameter of a running dish, mints PETRI after launch, or edits the board. `new` and
 `relaunch(rules, accounts)` can be called only through the contract account's own key: `relaunch` is a private
 `#[init(ignore_state)]` method, so only a transaction from the contract account itself (signed with its full-access
-key) can run it. It deletes every key the v6.1 layout wrote and launches a fresh dish from generation 0, exactly as `new`
-does, and it refuses an account with no v6.1 dish ("no v6.1 dish here: relaunch clears a v6.1 dish that has colonies") and
-one that already runs v6.2 ("this account already runs v6.2"). The team keeps that key on purpose, so a bug can be fixed
+key) can run it. It deletes every key the v6.2 layout wrote and launches a fresh dish from generation 0, exactly as `new`
+does, and it refuses an account with no v6.2 dish ("no v6.2 dish here: relaunch clears a v6.2 dish that has colonies") and
+one that already runs v6.3 ("this account already runs v6.3"). The team keeps that key on purpose, so a bug can be fixed
 with new code plus `relaunch`; no method changes a parameter of a running dish.
 
 ## Two dishes
 
-The same build (v6.2) runs on two networks. `petri-v6.testnet` is free play: guests, a relayer and sponsored credit.
+The same build (v6.3) runs on two networks. `petri-v6.testnet` is free play: guests, a relayer and sponsored credit.
 `petri-dish.near` is mainnet: real NEAR, wallets only, and payment in other tokens through NEAR Intents. Both ran v6
 and then v6.1 briefly first (hours, not days) and were relaunched in place with `relaunch`, from generation 0; the testnet account kept the
 name it was made with for v6. (v5's `petri-v5.testnet` is no longer played.) Their parameters are
@@ -714,11 +714,11 @@ contract test
 
 ## The lock
 
-Both dishes run one build of v6.2 (605,767 bytes, near-sdk 5.29.1), made with `cargo near build reproducible-wasm` at
-commit `e791404e63d03c2010bdb216b9792a8559512653` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
+Both dishes run one build of v6.3 (606,298 bytes, near-sdk 5.29.1), made with `cargo near build reproducible-wasm` at
+commit `29d79b11a69e55f944e7f819a81a0da83694a72e` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
 (pinned in `contract/Cargo.toml`). Its NEP-330 `contract_source_metadata` links that commit, so anyone can rebuild it
-and compare the hash with the account's code hash, `5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP` (hex
-`4904f0273d05ea5cde13c3c83f0a77dc1b67395ed85a6a5c92bb22d5e1b84150`). Each account has one full-access key,
+and compare the hash with the account's code hash, `55Qn4Kw3kDCz7nj4oCedR3BYVrHegvT1bLs6m89cV4sz` (hex
+`3c8ff49c7b65f6d5083f502a7082e3d1db76c525404b52072c544419f50eb449`). Each account has one full-access key,
 held by the team on purpose. It exists only so a bug can be fixed: new code plus `relaunch`, which starts the dish again
 from generation 0 with a fresh ledger anyone can replay. Deleting it would make the dish unfixable, so it will not be
 deleted. No method changes a running dish's parameters, mints PETRI or edits the board. The key cannot change anything

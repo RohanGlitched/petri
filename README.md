@@ -6,7 +6,7 @@
   <a href="https://www.playpetri.xyz"><img alt="Live site" src="https://img.shields.io/badge/live-playpetri.xyz-f2b45a?style=flat-square&labelColor=120a05" /></a>
   <a href="https://nearblocks.io/address/petri-dish.near"><img alt="Mainnet contract" src="https://img.shields.io/badge/mainnet-petri--dish.near-9fd8a8?style=flat-square&labelColor=120a05" /></a>
   <a href="https://testnet.nearblocks.io/address/petri-v6.testnet"><img alt="Testnet contract" src="https://img.shields.io/badge/testnet-petri--v6.testnet-9fd8a8?style=flat-square&labelColor=120a05" /></a>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-175-9fd8a8?style=flat-square&labelColor=120a05" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-178-9fd8a8?style=flat-square&labelColor=120a05" />
   <img alt="Rust" src="https://img.shields.io/badge/rust-near--sdk%205.29.1-e2d5c3?style=flat-square&labelColor=120a05" />
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/licence-MIT-e2d5c3?style=flat-square&labelColor=120a05" /></a>
 </p>
@@ -27,7 +27,7 @@
 | **What it is** | One shared 128×128 dish of Conway's Life inside a NEAR contract. Every living cell belongs to a NEAR account; every 15 seconds the dish's reserve, the *agar*, feeds PETRI to what is alive, and planting costs PETRI, half of it burned. |
 | **Who it is for** | Players who want a coin with a game inside it rather than a chart: you earn by building patterns that survive and by sending gliders at rivals, not by being first into a pool. Free play needs no wallet. |
 | **What is new** | The token's issuance *is* the game state. AI house players make pacts with each other that the contract enforces. NFT slides of your own cells license their pattern and earn royalties. Everything can be replayed and checked from the ledger. |
-| **Evidence** | Live on mainnet (`petri-dish.near`) and testnet (`petri-v6.testnet`) from one reproducible build (NEP-330); 175 tests; `node scripts/verify.mjs` replays a dish from generation 0 and runs 43 checks; a simulator played the economy before launch (`sim/`). |
+| **Evidence** | Live on mainnet (`petri-dish.near`) and testnet (`petri-v6.testnet`) from one reproducible build (NEP-330); 178 tests; `node scripts/verify.mjs` replays a dish from generation 0 and runs 43 checks; a simulator played the economy before launch (`sim/`). |
 | **Try it** | <https://www.playpetri.xyz/dish>: type a name, press **Start my colony**, plant a glider. Every step and what you should see is in [Try it in two minutes](#try-it-in-two-minutes). |
 | **Limits** | PETRI has no outside market; most players lose a little NEAR a week, the cost of play; the house strains are a subsidy the team funds. See [Limits, honestly](#limits-honestly). |
 
@@ -41,7 +41,7 @@ Built for the NEAR HACKATHON (November 2026). Tracks: Memecoins With Mechanics, 
 
 ## Two dishes
 
-The same build of the same contract, v6.2, runs twice. Both dishes started again from generation 0 on 4 November 2026, in place: on mainnet on `petri-dish.near`, and on testnet on `petri-v6.testnet` (named for the v6 it first ran; the v5 testnet dish, `petri-v5.testnet`, is no longer played). Each had run v6 and then v6.1 for a few hours before v6.2 replaced it. The switch in the site's navigation picks which one you read and play.
+The same build of the same contract, v6.3, runs twice. Both dishes started again from generation 0 on 4 November 2026, in place: on mainnet on `petri-dish.near`, and on testnet on `petri-v6.testnet` (named for the v6 it first ran; the v5 testnet dish, `petri-v5.testnet`, is no longer played). Each had run v6, v6.1 and v6.2 for a few hours before v6.3 replaced it. The switch in the site's navigation picks which one you read and play.
 
 | | Free play | Real NEAR |
 |---|---|---|
@@ -133,7 +133,7 @@ Older runs (`sim/out-v5`, `sim/out-v6`) and the fix runs are in [RULES.md](RULES
 
 ### What changed after review
 
-The four rounds of review and simulation that shaped v2 to v6.2, with every problem found and how it was fixed, are in [docs/HISTORY.md](docs/HISTORY.md).
+The rounds of review and simulation that shaped v2 to v6.3, with every problem found and how it was fixed, are in [docs/HISTORY.md](docs/HISTORY.md).
 
 ## Does it last?
 
@@ -208,9 +208,9 @@ Replaying petri-dish.near (mainnet) at block 222987157: 19 generations, 15 ledge
   match   Colony credit winnings                       5 of 5
   match   Colony kept PETRI                            5 of 5
   match   Solvent (NEAR held >= owed, from the ledger) yes
-  match   Deployed code hash                           5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP
+  match   Deployed code hash                           55Qn4Kw3kDCz7nj4oCedR3BYVrHegvT1bLs6m89cV4sz
   DIFFERS  Full-access keys                             1  (expected: 0)
-Source: https://github.com/RohanGlitched/petri/tree/e791404e63d03c2010bdb216b9792a8559512653; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
+Source: https://github.com/RohanGlitched/petri/tree/29d79b11a69e55f944e7f819a81a0da83694a72e; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
 Owed, from the ledger: 0.23781 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.289504143558987700000003 NEAR.
   The contract account still has a full-access key: whoever holds it could deploy different code.
 1 check(s) differ.
@@ -222,34 +222,34 @@ The **Deployed code hash** row compares the hash the chain reports with the one 
 
 ### Rebuild the contract and compare its hash
 
-Both dishes run one build, made with `cargo near build reproducible-wasm` at commit `e791404`. With [cargo-near](https://github.com/near/cargo-near) 0.22 and Docker:
+Both dishes run one build, made with `cargo near build reproducible-wasm` at commit `29d79b1`. With [cargo-near](https://github.com/near/cargo-near) 0.22 and Docker:
 
 ```bash
 git clone https://github.com/RohanGlitched/petri && cd petri
-git checkout e791404e63d03c2010bdb216b9792a8559512653
+git checkout 29d79b11a69e55f944e7f819a81a0da83694a72e
 cd contract && cargo near build reproducible-wasm
 ```
 
-It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb` (pinned in `contract/Cargo.toml`), in under a minute once the image is pulled, and ends with (the file is 605,767 bytes):
+It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb` (pinned in `contract/Cargo.toml`), in under a minute once the image is pulled, and ends with (the file is 606,298 bytes):
 
 ```
-     - SHA-256 checksum hex : 4904f0273d05ea5cde13c3c83f0a77dc1b67395ed85a6a5c92bb22d5e1b84150
-     - SHA-256 checksum bs58: 5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP
+     - SHA-256 checksum hex : 3c8ff49c7b65f6d5083f502a7082e3d1db76c525404b52072c544419f50eb449
+     - SHA-256 checksum bs58: 55Qn4Kw3kDCz7nj4oCedR3BYVrHegvT1bLs6m89cV4sz
 ```
  The contract's `contract_source_metadata` (NEP-330) names the same commit and image. Its `build_info.build_command` reads `cargo near build non-reproducible-wasm --locked`, and that is not a different build: it is the command cargo-near runs *inside* the pinned container when you run `cargo near build reproducible-wasm` outside it (`container_build_command` in `contract/Cargo.toml`). NEP-330 records the command that ran in the container, so a verifier reruns exactly that command in exactly that image and must get the same bytes. To read the deployed hash yourself:
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_account","finality":"final","account_id":"petri-dish.near"}}'
-# "code_hash":"5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
+# "code_hash":"55Qn4Kw3kDCz7nj4oCedR3BYVrHegvT1bLs6m89cV4sz"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
 
 near account view-account-summary petri-dish.near network-config mainnet now
-# near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": 4904f0273d05ea5cde13c3c83f0a77dc1b67395ed85a6a5c92bb22d5e1b84150
+# near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": 3c8ff49c7b65f6d5083f502a7082e3d1db76c525404b52072c544419f50eb449
 ```
 
 ### The lock
 
-No method changes a running dish's parameters, mints PETRI or edits the board. The only way to start over is `relaunch`, a private initializer that only a transaction from the contract account itself can run, and that refuses an account with no v6.1 dish and one that already runs v6.2. Parameters are fixed when a dish starts, with `new` or `relaunch`, both callable only through the account's own key. Each contract account has one full-access key, held by the team. We keep it on purpose: if a bug turns up, it is the only way to ship a fix (new code plus `relaunch`), and deleting it would make the dish unfixable. What the key cannot do is change anything quietly: new code changes the account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published reproducible build on every run, and a relaunch writes a fresh ledger from generation 0 that anyone can replay. Both report the key itself as a disclosed note, not a failed check. Anyone can list the keys:
+No method changes a running dish's parameters, mints PETRI or edits the board. The only way to start over is `relaunch`, a private initializer that only a transaction from the contract account itself can run, and that refuses an account with no v6.2 dish and one that already runs v6.3. Parameters are fixed when a dish starts, with `new` or `relaunch`, both callable only through the account's own key. Each contract account has one full-access key, held by the team. We keep it on purpose: if a bug turns up, it is the only way to ship a fix (new code plus `relaunch`), and deleting it would make the dish unfixable. What the key cannot do is change anything quietly: new code changes the account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published reproducible build on every run, and a relaunch writes a fresh ledger from generation 0 that anyone can replay. Both report the key itself as a disclosed note, not a failed check. Anyone can list the keys:
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
@@ -264,7 +264,7 @@ cargo test -p petri-core -p petri-contract
 
 We run them on Linux (WSL, Rust 1.99.1): about 3 minutes to compile and 75 seconds to run. The contract's own build is pinned separately, by `cargo near build reproducible-wasm` and its image (see [Rebuild the contract and compare its hash](#rebuild-the-contract-and-compare-its-hash)).
 
-36 engine tests (including property tests against a plain reference implementation of Life, one showing that splitting a colony never earns more, and the slide-pattern match) and 139 contract tests, among them a regression test for each attack the reviews found and dishes of 30,000 colonies whose calls must stay well under the gas limit. Most contract tests end by checking that every PETRI and every yoctoNEAR is accounted for and that the contract is solvent; one replays the ledger and must land on the same board, chain, agar, vault and earnings.
+37 engine tests (including property tests against a plain reference implementation of Life, one showing that splitting a colony never earns more, and the slide-pattern match) and 141 contract tests, among them a regression test for each attack the reviews found and dishes of 30,000 colonies whose calls must stay well under the gas limit. Most contract tests end by checking that every PETRI and every yoctoNEAR is accounted for and that the contract is solvent; one replays the ledger and must land on the same board, chain, agar, vault and earnings.
 
 ## Architecture
 
@@ -384,7 +384,6 @@ The site reads `NEXT_PUBLIC_NEAR_NETWORK` (the dish a first visit reads, testnet
 - Former guests plant before they sell: PETRI earned before a colony's first NEAR, and PETRI bought with credit, must be planted before the colony can sell or send any PETRI. That is the price of free play never reaching NEAR.
 - The strains need a model to answer: Claude Haiku within a fixed budget, NEAR AI Cloud when it has credits. So far Claude Haiku has made every model decision; NEAR AI Cloud is wired in as the second model and has not yet been needed. Without either they play by written rules, and the log says so.
 - On mainnet the house plays slowly on purpose (a few plantings a day per strain), so its NEAR lasts through judging; with no outside colonies the mainnet dish runs no tides.
-- Cells a colony planted with credit or kept PETRI keep their stake after the colony attaches NEAR, so for about a day of tides they can earn NEAR from the vault. On mainnet credit only comes from a sponsor's own NEAR, so this moves a sponsor's NEAR around rather than creating any; the fix (stake bought with kept PETRI or credit earns credit) is written up for the next version.
 - Verification proves the board and balances follow from the ledger; it trusts the RPC provider you read the ledger from.
 
 ## Built with

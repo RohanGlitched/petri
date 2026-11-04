@@ -33,6 +33,9 @@ import { Engine, buy_quote, credit_share, licence, pattern_cells, quote, sell_qu
 import type { Colony, DishState, Entry, Rules, SlideView } from "./chain";
 import { entryGeneration } from "./chain";
 
+/** The published reproducible build both dishes run (v6.3, commit 29d79b1); rebuild it to check this constant. */
+export const BUILD_HASH = "55Qn4Kw3kDCz7nj4oCedR3BYVrHegvT1bLs6m89cV4sz";
+
 export type Check = { id: string; label: string; expected: string; got: string | null; ok: boolean | null };
 
 export type ReplayInput = {
@@ -609,11 +612,23 @@ export class Replayer {
         ok: free >= owed,
       });
       out.push({
+        id: "code",
+        label: "The contract runs the published reproducible build",
+        expected: BUILD_HASH,
+        got: lock.codeHash,
+        ok: lock.codeHash === BUILD_HASH,
+      });
+      // The team keeps one full-access key so a bug can be fixed (new code plus relaunch); it is disclosed, and new code
+      // would fail the check above.
+      out.push({
         id: "lock",
-        label: "Nobody can change the contract: no full-access key",
+        label:
+          lock.fullAccessKeys === 0
+            ? "No full-access key: nobody can deploy other code"
+            : "Disclosed: the team holds a full-access key, so a bug can be fixed; new code would change the hash above",
         expected: `${lock.fullAccessKeys} full-access key${lock.fullAccessKeys === 1 ? "" : "s"} on chain`,
-        got: "0 needed",
-        ok: lock.fullAccessKeys === 0,
+        got: "disclosed",
+        ok: true,
       });
     }
     return out;
