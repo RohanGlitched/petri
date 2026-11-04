@@ -111,12 +111,14 @@ impl Engine {
     /// Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is at least
     /// `min_join`): from then on its tide shares are paid in NEAR. The first time, its stake goes to zero (v6.3; the
     /// house keeps its stake): the cells it planted as a guest stop earning until it plants with PETRI that is not kept.
+    /// Its tide window goes to zero too (v6.4), so what it earned as a guest wins nothing at the coming tide.
     pub fn attach(&mut self, colony: u16) {
         if colony > self.colonies {
             self.set_colonies(colony);
         }
         if !self.attached[colony as usize] && !self.house.contains(&colony) {
             self.planted[colony as usize] = 0;
+            self.window[colony as usize] = 0;
         }
         self.attached[colony as usize] = true;
     }

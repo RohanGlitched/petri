@@ -48,6 +48,7 @@ export class Engine {
      * Note that `colony` put NEAR into the vault itself (replaying a Buy or Plant entry whose `near` is at least
      * `min_join`): from then on its tide shares are paid in NEAR. The first time, its stake goes to zero (v6.3; the
      * house keeps its stake): the cells it planted as a guest stop earning until it plants with PETRI that is not kept.
+     * Its tide window goes to zero too (v6.4), so what it earned as a guest wins nothing at the coming tide.
      * @param {number} colony
      */
     attach(colony) {

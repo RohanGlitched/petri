@@ -28,7 +28,7 @@ function busiest(cells: Uint16Array, w: number, h: number) {
         at = { x: bx + B / 2, y: by + B / 2 };
       }
     }
-  return at;
+  return { ...at, n: best };
 }
 
 /** Placeholder for a number still being read from NEAR: a faint shimmer, never a fake zero. */
@@ -55,10 +55,12 @@ export function HeroScene() {
 
   useEffect(() => {
     if (centred.current || !d.cells) return;
-    centred.current = true;
     const at = busiest(d.cells, w, h);
     const k = lens.current?.camera().zoom;
     const v = lens.current?.view();
+    // A young dish may read as bare agar for a frame or two: wait for living cells (and a measured view) to aim at.
+    if (at.n <= 0 || !k || !v?.w) return;
+    centred.current = true;
     // On a phone the headline and stats cover the lower half, so the busy patch is placed in the open band above them.
     const copy = layers.current[0];
     if (k && v?.w && copy && window.innerWidth < 900) {
@@ -66,6 +68,12 @@ export function HeroScene() {
       // Between the nav and where the scrim starts to darken above the copy.
       const want = Math.max(110, (68 + copy.offsetTop - 100) / 2);
       lens.current?.centerOn(at.x, at.y + ((H / 2 - want) * v.dpr) / k, k);
+    } else if (copy) {
+      // On a desktop the headline covers the left of the dish: put the busy patch in the open area right of it.
+      const W = v.w / v.dpr;
+      const right = copy.getBoundingClientRect().right;
+      const wantX = right > 0 && right < W * 0.75 ? (right + W) / 2 : W / 2;
+      lens.current?.centerOn((((at.x + ((W / 2 - wantX) * v.dpr) / k) % w) + w) % w, at.y, k);
     } else lens.current?.centerOn(at.x, at.y, k);
   }, [d.cells, w, h]);
 

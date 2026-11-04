@@ -68,13 +68,17 @@ pub use pacts::{Pact, PactView, MAX_OFFERS_IN, MAX_PACTS, MIN_PACT_PETRI, PACT_D
 pub use slides::Slide;
 
 const BOARD_KEY: &[u8] = b"board";
+/// Which version launched the dish (v6.4 on): written by `new` and `relaunch`, so a relaunch can tell a v6.3 dish (which
+/// has none) from one that already runs this version.
+pub(crate) const VERSION_KEY: &[u8] = b"v";
+pub(crate) const VERSION: &[u8] = b"6.4";
 const MAX_NAME_BYTES: usize = 24;
 const MAX_NAME_CHARS: usize = 24;
 const MAX_NOTE_BYTES: usize = 280;
 const MAX_NOTE_CHARS: usize = 140;
 /// Lab notes by ledger index (u32). The keys a relaunch might miss (balances, grants and pending NEAR of accounts it
-/// was not told about) and the cold pages use prefixes no earlier version used, so nothing an earlier version left
-/// behind can be read as v6.3 state (see `relaunch`).
+/// was not told about) and the cold pages use prefixes v6.2 and earlier never used, so nothing they left behind is
+/// read as state. v6.4 keeps v6.3's prefixes, so its relaunch must be told every such account (see `relaunch`).
 const NOTE_PREFIX: &[u8] = b"N";
 /// The tide index: ledger positions of Tide entries, packed `TIDE_PAGE` to a key (`V` + page number).
 const TIDE_PREFIX: u8 = b'V';
@@ -951,7 +955,7 @@ impl Petri {
         // the part it paid with PETRI that is not kept (kept PETRI is spent first): free play never buys NEAR tides.
         let kept_before = colony.kept.0 as u128;
         let is_house = colony.house;
-        let added = planting_stake(cells.len() as u32, !guest && !colony.house, cost + toll, kept_before);
+        let added = planting_stake(cells.len() as u32, !guest && !colony.house, cost, kept_before);
         let (tides, keep) = (self.tides, self.rules.stake_keep_bps);
         if colony.house {
             let mut c = books::cold_get(id);
@@ -988,7 +992,7 @@ impl Petri {
         self.ledger.set(index as u32, Entry::Plant { generation: U64(self.generation), colony: id, cells: short, cost: U64(cost as u64), near: U128(near), credit: U128(cred), siege: check.siege, spent, licence: licence.clone() });
         // A planting that attaches the colony stakes like an attached colony's: its first NEAR cleared its stake.
         if self.attach(id, near) && !is_house {
-            let add = planting_stake(cells.len() as u32, true, cost + toll, kept_before);
+            let add = planting_stake(cells.len() as u32, true, cost, kept_before);
             self.hot_table().get_feed_mut(id).unwrap().stake += add;
         }
         self.vault += near;
@@ -1373,6 +1377,7 @@ impl Petri {
         require!(rules.pact_radius >= 1 && rules.pact_radius <= 16 && rules.pact_max_gens >= 1, "a pact covers 1 to 16 cells and lasts at least a generation");
         let dish = Dish::new(rules.width, rules.height);
         env::storage_write(BOARD_KEY, &dish.to_compact());
+        env::storage_write(VERSION_KEY, VERSION);
         let this = Self {
             agar: rules.max_supply.0,
             rules,
@@ -1513,8 +1518,9 @@ impl Petri {
     /// colony (less only feeds the vault, so a yoctoNEAR on a credit-paid call never turns credit into NEAR). The first
     /// time, what it earned before and has not claimed becomes kept PETRI (what it claimed as a guest already is), and
     /// its stake (v6.3) goes to zero, in its hot row and its cold slot: the cells it planted as a guest were paid for by
-    /// free play, so they stop earning until it plants with PETRI that is not kept. The house keeps its stake. Returns
-    /// whether this call attached it.
+    /// free play, so they stop earning until it plants with PETRI that is not kept. Its tide window (v6.4) goes to zero
+    /// too: what it earned as a guest is paid nothing at the coming tide, so a window played on credit never turns into
+    /// NEAR. The house keeps both. Returns whether this call attached it.
     fn attach(&mut self, id: u16, near: u128) -> bool {
         let b = self.books(id);
         if near >= self.rules.min_join.0 && !b.attached {
@@ -1526,8 +1532,10 @@ impl Petri {
             let house = c.house;
             self.colonies.set(id as u32 - 1, c);
             if !house {
+                // A cold slot holds no window: only rows with no window leave the hot table.
                 if let Some(r) = self.hot_table().get_feed_mut(id) {
                     r.stake = 0;
+                    r.window = 0;
                 }
                 let mut cold = books::cold_get(id);
                 if cold.stake != 0 {
@@ -2098,7 +2106,7 @@ fn alive_colonies(dish: &Dish) -> Vec<ColonyId> {
 }
 
 pub(crate) fn emit(event: &str, data: near_sdk::serde_json::Value) {
-    log!("EVENT_JSON:{}", json!({ "standard": "petri", "version": "6.3.0", "event": event, "data": [data] }));
+    log!("EVENT_JSON:{}", json!({ "standard": "petri", "version": "6.4.0", "event": event, "data": [data] }));
 }
 
 pub(crate) fn fmt_petri(units: u128) -> String {

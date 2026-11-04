@@ -385,3 +385,9 @@
   .reveal, .live, .title, .row, .stats, .loupe > *, .skel { animation: none; }
   .cueText::before { animation: none; }
 }
+
+/* Touch screens and phones: the chip and the skip button are full 44 px tap targets. */
+@media (pointer: coarse), (max-width: 799px) {
+  .liveGo { min-height: 44px; padding: 0 14px; }
+  .skip { height: auto; min-height: 44px; padding: 0 16px; }
+}

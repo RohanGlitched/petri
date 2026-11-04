@@ -668,8 +668,9 @@ pub fn feed_weight(live: u32, stake: u64, reach: u32) -> u128 {
 }
 
 /// The stake a planting of `cells` cells adds (v6.3). A colony that has attached NEAR (`attached`; the house never
-/// counts as attached here) adds stake only for the part of what it paid (`paid`, the cost and any royalty) that was not
-/// kept PETRI: `cells × STAKE_UNIT × (paid − kept) / paid`, rounded down, where `kept` is the kept PETRI it held before
+/// counts as attached here) adds stake only for the part of the planting's cost (`paid`; a royalty never counts, v6.4,
+/// so paying one to a slide held by one's own second account buys no stake) that was not kept PETRI:
+/// `cells × STAKE_UNIT × (paid − min(kept, paid)) / paid`, rounded down, where `kept` is the kept PETRI it held before
 /// the planting (spent first). So PETRI earned on free play or bought with credit never buys a share of NEAR tides. A
 /// colony that has never attached NEAR adds the full `cells × STAKE_UNIT`: what it wins is credit and kept PETRI.
 pub fn planting_stake(cells: u32, attached: bool, paid: u128, kept: u128) -> u64 {

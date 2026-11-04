@@ -10,16 +10,16 @@
 // comes from the key, so one key makes at most one guest.
 
 import { NextResponse } from "next/server";
-import { Account, JsonRpcProvider, PublicKey, actions, nearToYocto } from "near-api-js";
+import { PublicKey, actions, nearToYocto } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { CONTRACT, NETWORK, RPC_URLS } from "@/lib/config";
+import { CONTRACT, NETWORK } from "@/lib/config";
+import { relayerAccount, sponsorUntilCredited } from "./credit";
 
 export const runtime = "nodejs";
 
 const GUEST_NEAR = "0.003";
-const GUEST_CREDIT = "0.05";
 const DIFFICULTY = 18;
 const CHALLENGE_MS = 10 * 60_000;
 const PER_IP_PER_HOUR = 4;
@@ -108,13 +108,14 @@ export async function POST(req: Request) {
   // One key, one guest: the name is derived from the key.
   const suffix = bytesToHex(sha256(new TextEncoder().encode(publicKey))).slice(0, 10);
   const accountId = `g-${suffix}.${c.relayer}`;
-  const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
-  const relayer = new Account(c.relayer, provider, c.key as `ed25519:${string}`);
+  const relayer = relayerAccount(c.relayer, c.key);
   try {
     await relayer.signAndSendTransaction({
       receiverId: accountId,
       actions: [actions.createAccount(), actions.transfer(nearToYocto(GUEST_NEAR)), actions.addFunctionCallAccessKey(PublicKey.fromString(publicKey), CONTRACT, METHODS)],
-      waitUntil: "FINAL",
+      // Executed is enough: the browser waits until RPC sees the key before it signs anything, and the sponsor call
+      // below does not need the account to exist. Waiting for FINAL only added seconds.
+      waitUntil: "EXECUTED_OPTIMISTIC",
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -126,15 +127,7 @@ export async function POST(req: Request) {
       { status: 502 },
     );
   }
-  try {
-    await relayer.signAndSendTransaction({
-      receiverId: CONTRACT,
-      actions: [actions.functionCall("sponsor", { account_id: accountId }, 30n * 10n ** 12n, nearToYocto(GUEST_CREDIT))],
-      waitUntil: "EXECUTED_OPTIMISTIC",
-    });
-  } catch (e) {
-    console.error("guest sponsorship failed", e instanceof Error ? e.message : String(e));
-    return NextResponse.json({ accountId, warning: "The guest exists but its credit did not arrive yet." });
-  }
-  return NextResponse.json({ accountId });
+  // Credit is retried and read back here; if it still is not there, the page asks /api/guest/sponsor before joining.
+  const credited = await sponsorUntilCredited(relayer, accountId).catch(() => false);
+  return NextResponse.json({ accountId, credited });
 }

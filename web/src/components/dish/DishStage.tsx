@@ -227,6 +227,33 @@ function Countdown({ ms, total }: { ms: number; total: number }) {
   );
 }
 
+/** The dish refuses a join without credit with this; a relaunched dish has none for a guest remembered from before. */
+const NO_CREDIT = /won and sponsored credit|no credit|credit.*(left|enough)/i;
+
+/** Ask the site to sponsor this guest's free credit on the current dish (it checks the guest and pays at most once). */
+async function topUpGuest(accountId: string): Promise<void> {
+  for (let i = 0; i < 2; i++) {
+    const res = await fetch("/api/guest/sponsor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accountId }) }).catch(() => null);
+    const body = res ? await res.json().catch(() => ({})) : {};
+    if (res?.ok && body.credited) return;
+    // An answer that will not change on a retry: say it plainly.
+    if (res && (res.status === 400 || res.status === 403 || res.status === 409) && body.error) throw new Error(body.error);
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw new Error(FREE_ON_ITS_WAY);
+}
+
+const FREE_ON_ITS_WAY = "Your free PETRI is still on its way. Retry in a few seconds.";
+
+/** What the start panel says when starting failed: plain words, never a raw contract panic. */
+function startFailure(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (NO_CREDIT.test(msg)) return FREE_ON_ITS_WAY;
+  if (/already (has|joined|a colony)|colony already/i.test(msg)) return "This account already has a colony on the dish. Reload the page to see it.";
+  if (/Smart contract panicked|panicked at|wasm execution failed|FunctionCallError|ExecutionError/i.test(msg)) return "The dish did not take the join this time. Retry in a few seconds.";
+  return msg;
+}
+
 export function DishStage() {
   const { d, rules, palette, perCell, warming, ready, colonies, w, h, secs, vault, tideIn } = useLive();
   // The dish as this browser last saw it, drawn at once while the live one is read from NEAR.
@@ -275,9 +302,13 @@ export function DishStage() {
   const [picked, setPicked] = useState<number | null>(null);
   /** A stamp has been picked in this browser before: the dock's one-time pulse is over. */
   const [everPicked, setEverPicked] = useState(true);
-  /** Just after a planting lands the hover verdict stays quiet, so the new cells do not read as "already alive". */
-  const [quiet, setQuiet] = useState(false);
-  const quietTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Just after a planting lands the hover verdict stays quiet, so the new cells do not read as "already alive": the
+   * stamp as it was planted, until the stamp moves. */
+  const [quietKey, setQuietKey] = useState<string | null>(null);
+  /** The account whose join just landed: its start form is gone even before its colony is read. */
+  const [justJoined, setJustJoined] = useState<string | null>(null);
+  /** The account the view has been centred on once (a remembered guest opens on its own colony). */
+  const centredFor = useRef<string | null>(null);
   /** The cells just planted, ringed on the dish until a few generations have passed. */
   const [glow, setGlow] = useState<{ cells: number[]; until: number } | null>(null);
   /** A touch screen: the hints say tap, not click. */
@@ -295,10 +326,7 @@ export function DishStage() {
     const on = () => setCoarse(mq.matches);
     on();
     mq.addEventListener("change", on);
-    return () => {
-      mq.removeEventListener("change", on);
-      if (quietTimer.current) clearTimeout(quietTimer.current);
-    };
+    return () => mq.removeEventListener("change", on);
   }, []);
   const markPicked = () => {
     if (everPicked) return;
@@ -421,6 +449,12 @@ export function DishStage() {
     const c = cellsAt(anchor.x, anchor.y);
     return c ? Array.from(c) : null;
   }, [cellsAt, anchor]);
+  const stampKey = stamp ? stamp.join(",") : "";
+  const quiet = quietKey !== null && quietKey === stampKey;
+  // Once the stamp has moved off the planted spot, its verdict speaks again (even if it comes back later).
+  useEffect(() => {
+    if (quietKey !== null && stampKey !== quietKey) setQuietKey(null);
+  }, [stampKey, quietKey]);
 
   const verdict = useMemo(() => {
     if (!stamp || !rules) return null;
@@ -610,26 +644,72 @@ export function DishStage() {
       setError("Connect a NEAR wallet first: on the mainnet dish your own wallet signs and pays.");
       return;
     }
+    const guest = !player || player.kind === "guest";
+    const step = (n: number, text: string) => setBusy(guest ? `${n}/3 ${text}…` : `${text}…`);
     try {
+      let accountId = player?.accountId ?? "";
       if (!player) {
-        setBusy("Making your guest account on NEAR testnet…");
-        await createGuest();
+        step(1, "Making your account");
+        accountId = await createGuest();
       }
-      setBusy("Joining the dish…");
-      const r = await joinDish(name, color);
+      // A guest joins with the credit the relayer sponsored. A relaunched dish starts with none, so a remembered guest
+      // (or one whose credit was slow to land) is topped up first.
+      if (guest) {
+        step(2, "Adding free credit");
+        const have = BigInt(await getCredit(accountId).catch(() => "0"));
+        if (have < JOIN_NEAR) await topUpGuest(accountId);
+      }
+      step(3, "Joining the dish");
+      let r: { hash: string };
+      try {
+        r = await joinDish(name, color);
+      } catch (e) {
+        if (!guest || !NO_CREDIT.test(e instanceof Error ? e.message : String(e))) throw e;
+        step(2, "Adding free credit");
+        await topUpGuest(accountId);
+        step(3, "Joining the dish");
+        r = await joinDish(name, color);
+      }
+      // Swap the start form for the colony card now, from the chain as the join left it, not on the next poll.
+      setJustJoined(accountId);
+      centredFor.current = accountId;
+      const held = await readJoined(accountId);
+      const amount = held !== null ? petri(held, 2) : `about ${petri(joinPetri)}`;
       setDone({
         text: net.freePlay
-          ? `${name} is on the dish with about ${petri(joinPetri)} PETRI to plant. Pick a stamp below and plant it.`
-          : `${name} is on the dish. Its 0.02 NEAR stake bought about ${petri(joinPetri)} PETRI from the agar. Pick a stamp below and plant it.`,
+          ? `${name} is on the dish with ${amount} PETRI to plant. Pick a stamp below and plant it.`
+          : `${name} is on the dish. Its 0.02 NEAR stake bought ${amount} PETRI from the agar. Pick a stamp below and plant it.`,
         hash: r.hash,
       });
       await refreshDish();
-      await loadMe();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(startFailure(e));
     } finally {
       setBusy(null);
     }
+  }
+
+  /** Read the colony a join just made (an optimistic read can lag a block, so a few tries), show it at once, and
+   * return its PETRI balance. */
+  async function readJoined(accountId: string): Promise<number | null> {
+    for (let i = 0; i < 8; i++) {
+      const c = await getColonyOf(accountId).catch(() => null);
+      if (c) {
+        const [b, cr, cl] = await Promise.all([
+          getBalance(accountId).catch(() => null),
+          getCredit(accountId).catch(() => null),
+          getClaimable(accountId).catch(() => null),
+        ]);
+        setMe(c);
+        if (b !== null) setBalance(Number(b));
+        if (cr !== null) setCredit(BigInt(cr));
+        if (cl) setClaimable({ petri: Number(cl.petri), near: Number(cl.near) });
+        setLoadedFor(accountId);
+        return b !== null ? Number(b) : null;
+      }
+      await new Promise((res) => setTimeout(res, 600));
+    }
+    return null;
   }
 
   async function connect() {
@@ -664,10 +744,8 @@ export function DishStage() {
       });
       setPending({ cells, label: info.label, at: Date.now(), hash: r.hash });
       setGlow({ cells, until: genAtStart + 4 });
-      // The stamp's verdict would now read "already alive" over the new cells: keep it quiet for a moment.
-      setQuiet(true);
-      if (quietTimer.current) clearTimeout(quietTimer.current);
-      quietTimer.current = setTimeout(() => setQuiet(false), 2000);
+      // The stamp's verdict would now read "already alive" over the new cells: keep it quiet until the stamp moves.
+      setQuietKey(cells.join(","));
       // Pan to the new cells, measured across the wrapping edges from the first one.
       const x0 = cells[0] % w;
       const y0 = (cells[0] / w) | 0;
@@ -1092,6 +1170,20 @@ export function DishStage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownCells, rules]);
 
+  // A guest remembered from an earlier visit opens on its own colony, once its colony and the dish are read.
+  useEffect(() => {
+    if (!player || player.kind !== "guest" || !me || !d.cells || centredFor.current === player.accountId) return;
+    if (!(d.liveCounts[me.id] > 0)) return;
+    centredFor.current = player.accountId;
+    findMine();
+    // findMine reads the same cells; it runs once per account.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player, me, d.cells]);
+  // Another account (a wallet connected, a guest forgotten) gets its own start form back.
+  useEffect(() => {
+    if (justJoined && player?.accountId !== justJoined) setJustJoined(null);
+  }, [player, justJoined]);
+
   const hovered = hover && d.cells ? d.cells[hover.y * w + hover.x] : 0;
   const hoveredColony = hovered ? colonies.find((c) => c.id === hovered) : null;
   const pickedColony = picked ? d.colonies.find((c) => c.id === picked) ?? null : null;
@@ -1196,6 +1288,12 @@ export function DishStage() {
           }}
           label={fossilOn ? `The live dish, generation ${d.generation}. Drag across your colony to frame a slide; the arrow keys move the frame.` : `The live dish, generation ${d.generation}. Drag to move, scroll or pinch to zoom.`}
         />
+        {/* Phones hide the zoom buttons; with a stamp in hand, finding open agar is one tap away. */}
+        {(pattern || custom) && !fossilOn && (
+          <button type="button" className={s.findFab} onClick={findOpen}>
+            Find open agar
+          </button>
+        )}
       </div>
 
       <div ref={hudBox} className={s.hud} aria-live="polite">
@@ -1263,14 +1361,20 @@ export function DishStage() {
           </button>
         )}
         {/* Until a returning player's colony is read, its card's space is held so nothing below it jumps. */}
-        {!me && player && loadedFor !== player.accountId && !busy && (
+        {!me && player && loadedFor !== player.accountId && justJoined !== player.accountId && !busy && (
           <section className={`${s.card} ${s.meWait}`} aria-busy="true">
             <p className={s.busy}><i className={s.spin} />Reading your colony from NEAR…</p>
+          </section>
+        )}
+        {!me && player && justJoined === player.accountId && (
+          <section className={`${s.card} ${s.meWait}`} aria-busy="true">
+            <p className={s.busy}><i className={s.spin} />Your colony is on the dish. Reading it from NEAR…</p>
           </section>
         )}
         {!me &&
           !startFolded &&
           !(player && loadedFor !== player.accountId) &&
+          !(player && justJoined === player.accountId) &&
           (net.freePlay || player ? (
             <JoinForm onStart={start} onConnect={connect} onPay={net.freePlay ? undefined : () => setPayOpen(true)} onFold={() => setStartFolded(true)} busy={!!busy} player={player} grant={ready ? petri(joinPetri) : "…"} colonies={d.colonies} freePlay={net.freePlay} />
           ) : (
@@ -1314,8 +1418,8 @@ export function DishStage() {
             </div>
             <p className={s.hint}>{info.note}</p>
             <div className={s.row}>
-              <button className="btn btn-ghost btn-small" onClick={() => setRotate((r) => (r + 1) % 4)}>Rotate <kbd>R</kbd></button>
-              <button className="btn btn-ghost btn-small" onClick={() => setFlip((f) => !f)}>Flip <kbd>F</kbd></button>
+              <button className="btn btn-ghost btn-small" onClick={() => setRotate((r) => (r + 1) % 4)}>Rotate{!coarse && <> <kbd>R</kbd></>}</button>
+              <button className="btn btn-ghost btn-small" onClick={() => setFlip((f) => !f)}>Flip{!coarse && <> <kbd>F</kbd></>}</button>
             </div>
             <p className={`${s.verdict} ${breach ? s.bad : verdict === "" ? s.ok : siege ? s.warn : verdict ? s.bad : ""}`}>
               {quiet ? "Planted. Pick another spot of open agar, or put the stamp down." : !anchor ? (coarse ? "Tap the dish to place, then confirm." : "Point at the dish, then click where it should grow.") : breach ? `Pact ${breach.pact.id} with ${names.get(breach.pact.from) ?? `colony ${breach.pact.from}`}: your colony promised not to plant within ${radius} cells of its living cells until generation ${int(breach.pact.until)}, and this comes that close to its cell at ${breach.at.x}, ${breach.at.y}. The outlined zone is off limits; the dish would refuse it.` : verdict === "" ? `${snapped && target ? "That spot was taken, so the stamp moved to the nearest one that fits: " : "Fits at "}${anchor.x}, ${anchor.y}.${target ? "" : coarse ? " Tap to place it." : " Click to place it."}` : explain(verdict, w, names, rules?.siege_x)}
@@ -1504,7 +1608,7 @@ export function DishStage() {
         )}
 
         {(busy || error || done) && (
-          <section className={`${s.card} ${s.status}`} aria-live="polite">
+          <section className={`${s.card} ${s.status} ${s.toast}`} aria-live="polite">
             {busy && <p className={s.busy}><i className={s.spin} />{busy}</p>}
             {error && <p className={s.bad}>{error}</p>}
             {done && (

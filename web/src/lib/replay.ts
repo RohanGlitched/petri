@@ -326,9 +326,9 @@ export class Replayer {
         this.returned += cost - burn;
         this.e.set_agar((BigInt(this.e.agar()) + cost - burn).toString());
         // v6.3: a colony's first NEAR clears the stake it planted as a guest, and an attached colony stakes only the part
-        // of the cost and royalty its kept PETRI (spent first) did not pay.
+        // of the planting's cost (not its royalty, v6.4) its kept PETRI (spent first) did not pay.
         if (BigInt(p.near) >= BigInt(rules.min_join)) this.e.attach(p.colony);
-        this.e.plant_paid(p.colony, cells, (cost + BigInt(p.licence?.royalty ?? 0)).toString(), keptBefore.toString());
+        this.e.plant_paid(p.colony, cells, cost.toString(), keptBefore.toString());
         this.vault += BigInt(p.near);
         this.nearIn += BigInt(p.near);
         this.pool += BigInt(p.credit);

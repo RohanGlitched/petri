@@ -33,8 +33,9 @@
 // vault, the credit pool, credit given, won, sold, spent and reclaimed, NEAR owed, pending NEAR) is recomputed from the
 // ledger alone, compared with the contract's own counters, and the contract's NEAR must cover them. It also checks the
 // deployed code hash (--code-hash, by default the hash of `cargo near build reproducible-wasm` at the commit the
-// contract's own metadata names: rebuild it to check this constant) and that the contract account has no full-access
-// key, so nobody can change the code.
+// contract's own metadata names: rebuild it to check this constant), and reports the contract account's full-access
+// keys as a note: the team keeps one so a bug can be fixed, and the note says whether it has signed anything since the
+// v6.3 setup (its nonce moves with every transaction it signs).
 // Exits 0 when everything matches, 1 on any mismatch, 2 if the dish could not be read. Needs Node 20 or later.
 
 import fs from "node:fs";
@@ -316,9 +317,9 @@ for (;;) {
       returned += cost - burn;
       e.set_agar((BigInt(e.agar()) + cost - burn).toString());
       // v6.3: a colony's first NEAR clears the stake it planted as a guest, and an attached colony stakes only the part
-      // of the cost and royalty its kept PETRI (spent first) did not pay.
+      // of the planting's cost (not its royalty, v6.4) its kept PETRI (spent first) did not pay.
       if (BigInt(p.near) >= BigInt(rules.min_join)) e.attach(p.colony);
-      e.plant_paid(p.colony, cells, (cost + BigInt(p.licence?.royalty ?? 0)).toString(), keptBefore.toString());
+      e.plant_paid(p.colony, cells, cost.toString(), keptBefore.toString());
       vault += BigInt(p.near);
       nearIn += BigInt(p.near);
       pool += BigInt(p.credit);
@@ -484,6 +485,16 @@ const slideBad = slidesView.filter((v, i) => {
   return !s || v.moves < s.moves || (v.moves === s.moves && v.owner_id !== s.holder) || BigInt(v.royalties) !== s.royalties;
 });
 const fullKeys = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").length : null;
+// The full-access key's nonce when the v6.3 setup ended (4 Nov 2026, after the relaunch and the house refills). Any
+// later use of the key, a deploy, a transfer or a relaunch, moves it.
+const SETUP_NONCE = { "petri-dish.near": 222916366000037n, "petri-v6.testnet": 276116858000008n };
+const fullNonce = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").map((k) => BigInt(k.access_key.nonce)) : [];
+const keyUse = (() => {
+  const base = SETUP_NONCE[CONTRACT];
+  if (!fullNonce.length || base === undefined) return "";
+  const used = fullNonce.reduce((a, n) => a + (n > base ? n - base : 0n), 0n);
+  return used === 0n ? `; unused since the v6.3 setup (nonce ${base})` : `; signed ${used} transaction(s) since the v6.3 setup (nonce ${base})`;
+})();
 // Solvency from the replayed ledger, not from the contract's counters.
 const outstanding = given + creditWon + creditSold - spent - reclaimed;
 const owedAll = vault + pool + outstanding + owed + pending;
@@ -544,7 +555,7 @@ for (const [name, want, got] of checks) {
 }
 // The team keeps one full-access key on purpose, so a bug can be fixed with new code and `relaunch` (README, The lock).
 // It is disclosed here, not counted as a difference: new code would show above as a changed code hash.
-if (!DUMP) console.log(`  note    ${"Full-access keys".padEnd(44)} ${fullKeys}${fullKeys > 0 ? " (team-held, see The lock)" : ""}`);
+if (!DUMP) console.log(`  note    ${"Full-access keys".padEnd(44)} ${fullKeys}${fullKeys > 0 ? ` (team-held, see The lock${keyUse})` : ""}`);
 for (const c of earnedBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmt(earnings[c.id - 1])}, replay ${fmt(e.earned_of(c.id))}`);
 for (const c of wonBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmtNear(winnings[c.id - 1])} NEAR won, replay ${fmtNear(wonOf(c.id).toString())}`);
 for (const c of keptBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmt(c.kept ?? 0)} kept PETRI, replay ${fmt(keptOf(c.id))}`);

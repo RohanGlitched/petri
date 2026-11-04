@@ -580,3 +580,8 @@ main:focus-visible { outline: none; }
   white-space: nowrap;
   vertical-align: 0.15em;
 }
+
+/* Touch screens and phones: both network switches are full 44 px tap targets. */
+@media (pointer: coarse), (max-width: 799px) {
+  .netseg-opt, .netsheet-opt { min-height: 44px; }
+}
