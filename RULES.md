@@ -672,7 +672,7 @@ credit, every colony's NEAR winnings, the credit pool, credit paid at tides, cre
 owed to colonies, pending NEAR, every colony's credit winnings, every colony's kept PETRI, the sales for NEAR and pact payments by colonies holding
 none, the pacts kept to the rules and the plantings under them, the PETRI held for pact offers and the number of pacts,
 solvency from the ledger, the deployed code hash, and no full-access key. It exits 0 when all match, 1 on any mismatch and 2 if the dish cannot be read. The site's `/verify`
-runs the same replay in the browser, also pinned to one block, and lists 37 checks (the code hash is not among them).
+runs the same replay in the browser, also pinned to one block, and lists 43 checks (the code hash is not among them).
 `node scripts/verify.mjs --dump <file>` replays a snapshot the contract's replay test writes with `PETRI_DUMP`. The
 contract test
 `replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault` does it in Rust.
