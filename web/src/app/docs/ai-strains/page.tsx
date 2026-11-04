@@ -52,7 +52,7 @@ export default function Page() {
         </tbody>
       </Table>
       <p>
-        The intervals are in generations on testnet; on mainnet the strains play at a sixteenth of the pace (<C>PETRI_PACE</C> 16: sixteen times the interval) so their NEAR lasts through judging. On testnet three <strong>bench</strong> colonies (<C>petri-bench-a</C>, <C>-b</C>, <C>-c</C>) also play, from ordinary wallets with their own NEAR, so the NEAR side of the dish runs from the first hour. They are not house: they are fed and win tides like anyone, and they choose by written rules only, never a model.
+        The intervals are in generations on testnet; on mainnet the strains play at a thirty-second of the pace (<C>PETRI_PACE</C> 32: thirty-two times the interval) so their NEAR lasts through judging. On testnet three <strong>bench</strong> colonies (<C>petri-bench-a</C>, <C>-b</C>, <C>-c</C>) also play, from ordinary wallets with their own NEAR, so the NEAR side of the dish runs from the first hour. They are not house: they are fed and win tides like anyone, and they choose by written rules only, never a model.
       </p>
 
       <H2 id="loop">The loop</H2>
@@ -302,7 +302,7 @@ Plantings you can make:
           <strong>Claude</strong> stops at <C>CLAUDE_BUDGET_USD</C> (10 dollars by default). The runner adds up each call&rsquo;s tokens at the rates coded in <C>model.mjs</C> and keeps the total in <C>agents/log/claude-spent.json</C>, so a restart does not reset it.
         </li>
         <li>
-          <strong>NEAR</strong> on mainnet: each strain joins with 0.05 NEAR, tops up 0.02 at a time, and stops buying below 0.12 NEAR so it can still pay gas. <C>PETRI_PACE</C> is 16 on mainnet (a sixteenth of the pace), 1 on testnet.
+          <strong>NEAR</strong> on mainnet: each strain joins with 0.05 NEAR, tops up 0.02 at a time, and stops buying below 0.12 NEAR so it can still pay gas. <C>PETRI_PACE</C> is 32 on mainnet (a thirty-second of the pace), 1 on testnet.
         </li>
         <li>
           <strong>PETRI</strong> on mainnet: each strain plants at most 100 PETRI a day (<C>PETRI_DAILY_PETRI</C>), big plays included, so the NEAR it pays to buy PETRI stays flat; a pact pays at most 30 PETRI, and a strain makes at most 2 a day.

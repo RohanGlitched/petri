@@ -63,7 +63,7 @@ const attaches = (s) => !!s.bench || MAINNET;
 // On mainnet the house plays at a sixteenth of the pace (a few plantings a day each), so its NEAR lasts past
 // judging: each planting costs it about 0.004 NEAR of gas and storage.
 const KEEPER_LAG = process.env.PETRI_KEEPER_LAG ?? "400";
-const PACE = Number(process.env.PETRI_PACE ?? (MAINNET ? "16" : "1"));
+const PACE = Number(process.env.PETRI_PACE ?? (MAINNET ? "32" : "1"));
 const PORT = Number(process.env.PETRI_LOG_PORT ?? 0);
 // Forecasts: generations ahead (one tide window) and the CPU each move may spend on them.
 const FORECAST_GENS = Number(process.env.PETRI_FORECAST_GENS ?? "240");
