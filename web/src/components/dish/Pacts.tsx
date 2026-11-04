@@ -118,8 +118,9 @@ export function PickedColony({ c, live, pacts, me, g, radius, maxGens, names, ca
   const openMine = me ? pacts.find((p) => p.from === me.id && p.to === c.id && phaseOf(p, g) === "open") : undefined;
   const liveCount = (id: number) => pacts.filter((p) => (p.from === id || p.to === id) && p.ended === null && !["due", "lapsed"].includes(phaseOf(p, g))).length;
   const full = me ? liveCount(me.id) >= 8 || liveCount(c.id) >= 8 : false;
-  const units = canPay ? 0n : BigInt(Math.max(0, Math.round(Number(amt || "0") * 1e6)));
-  const badAmt = !canPay && (!/^\d+(\.\d{0,6})?$/.test(amt.trim() || "0") || (holding !== null && Number(units) > holding));
+  const units = BigInt(Math.max(0, Math.round(Number(amt || "0") * 1e6)));
+  // Since v6.2 a pact carries at least 1 PETRI (only two house colonies may make one without).
+  const badAmt = !/^\d+(\.\d{0,6})?$/.test(amt.trim() || "0") || units < 1_000_000n || (holding !== null && Number(units) > holding);
   // A pact must end within pact_max_gens of the dish's generation when the offer lands; a few generations are kept spare.
   const length = Math.min(len, maxGens - 4);
   const until = g + length;
@@ -140,7 +141,7 @@ export function PickedColony({ c, live, pacts, me, g, radius, maxGens, names, ca
         <p className={s.hint}>
           {c.attached
             ? `${petri(Number(c.kept), 2)} of its PETRI is kept in the dish, earned before its first NEAR or bought with credit: it can plant it, not sell or send it.`
-            : `It has never attached NEAR, so its ${petri(Number(c.kept), 2)} PETRI stays in the dish: it can plant it or sell it back for credit, never send it or sell it for NEAR.`}
+            : `It has not attached NEAR, so its ${petri(Number(c.kept), 2)} PETRI stays in the dish: it can plant it or sell it back for credit, never send it or sell it for NEAR.`}
         </p>
       )}
       {lines.length ? (
@@ -158,7 +159,9 @@ export function PickedColony({ c, live, pacts, me, g, radius, maxGens, names, ca
             {c.name} would promise to plant nowhere within {radius} cells of {me.name}&rsquo;s living cells until the generation you name. The dish
             holds the PETRI until it accepts, and pays it back if it never does. Once accepted, the contract refuses every planting of {c.name}&rsquo;s that breaks it.
           </p>
-          {openMine ? (
+          {canPay ? (
+            <p className={s.verdict}>{canPay}</p>
+          ) : openMine ? (
             <p className={s.verdict}>Your offer No. {openMine.id} to {c.name} is still open: one open offer to a colony at a time.</p>
           ) : full ? (
             <p className={s.verdict}>One of the two colonies is already party to 8 pacts, the most the dish allows.</p>
@@ -167,7 +170,7 @@ export function PickedColony({ c, live, pacts, me, g, radius, maxGens, names, ca
               <div className={s.offerFields}>
                 <label className={s.noteField}>
                   <span>PETRI it is paid</span>
-                  <input inputMode="decimal" value={canPay ? "0" : amt} disabled={!!canPay} onChange={(e) => setAmt(e.target.value)} aria-invalid={badAmt} />
+                  <input inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} aria-invalid={badAmt} />
                 </label>
                 <fieldset className={s.lengths}>
                   <legend>For</legend>
@@ -180,12 +183,12 @@ export function PickedColony({ c, live, pacts, me, g, radius, maxGens, names, ca
                 </fieldset>
               </div>
               <p className={s.hint}>
-                {canPay ? `${canPay} ` : ""}Until generation <span className="num">{int(until)}</span>. The offer&rsquo;s storage, at most 0.0042 NEAR,
+                At least 1 PETRI. Until generation <span className="num">{int(until)}</span>. The offer&rsquo;s storage, at most 0.0042 NEAR,
                 comes from your credit or your wallet; what it does not use comes back.
               </p>
               <div className={s.stickyCta}>
                 <button className="btn btn-amber" disabled={busy || badAmt} onClick={() => act.offer(c, units, until)}>
-                  {units > 0n ? `Offer ${petri(Number(units), Number(units) % 1e6 ? 2 : 0)} PETRI for this pact` : "Offer a pact without PETRI"}
+                  {units >= 1_000_000n ? `Offer ${petri(Number(units), Number(units) % 1e6 ? 2 : 0)} PETRI for this pact` : "Name at least 1 PETRI"}
                 </button>
               </div>
             </>

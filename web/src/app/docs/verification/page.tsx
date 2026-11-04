@@ -13,14 +13,14 @@ const CHECKS: [string, string][] = [
   ["Legal plantings", "Every Plant entry passes check_plant on the replayed board, and its siege flag matches."],
   ["Planting prices", "Every Plant paid exactly quote(agar, counted, …) for its cell count and siege flag, less the licence discount (slide_discount_bps) when it names a slide."],
   ["Planting fees", "Every Plant brought at least cell_fee per cell to the pools (near + credit)."],
-  ["Licensed plantings: shape, holder, royalty", "Every Plant under a licence is exactly its slide's pattern moved on the dish (Engine.fits_slide, not turned); its price and royalty are licence(cost, discount, royalty); its slide captured at least licence_min_cells (12) cells; its holder is the minter until the slide's first move and one account between moves; no royalty when the planter held it, and to_agar is true exactly when there is a holder and the planter had never attached NEAR (the royalty then goes to the agar)."],
+  ["Licensed plantings: shape, holder, royalty", "Every Plant under a licence is exactly its slide's pattern moved on the dish (Engine.fits_slide, not turned); its price and royalty are licence(cost, discount, royalty); its slide captured at least licence_min_cells (12) cells; its holder is the minter until the slide's first move and one account between moves; no royalty when the planter held it, and to_agar is true exactly when there is a holder and the planter had never attached NEAR or held more kept PETRI than the cost, read at the planting after its claim (the royalty then goes to the agar)."],
   ["Purchases on the curve", "Every Buy got exactly buy_quote(near + credit) units from the replayed agar."],
   ["Sales on the curve and allowance", "Every Sell got exactly sell_quote, within the allowance left since the last tide, paid in credit exactly when the colony never attached NEAR, and none by a house colony."],
-  ["Tides", "A tide ran at exactly the tide generations where some non-house colony had earned; each has the right chain and stored bytes (130, or 175 on the tide that starts a new index page), and the replay works out its vault share, NEAR shares, credit shares, capped bounty (none when a house colony or keeper ran it) and storage from the ledger before it."],
-  ["Claims of exactly what was owed", "Every Claim took exactly the NEAR its colony was owed in the replay (all it won at the tides, less what it claimed before), and sent it less at most a record's storage."],
+  ["Tides", "A tide ran at exactly the tide generations where some non-house colony had earned; each has the right chain and stored bytes (130, or 175 on the tide that starts a new index page), and the replay works out its vault share, NEAR shares, credit shares, capped bounty (none when a house colony or keeper ran it) and storage from the ledger before it; the share and bounty of a colony holding kept PETRI are credit, not NEAR."],
+  ["Claims of exactly what was owed", "Every Claim took exactly the NEAR its colony was owed in the replay (all it won at the tides, less what it claimed before), sent it less at most a record's storage, and was made by a colony holding no kept PETRI."],
   ["Refunds tied to their payouts", "Every Refund names a payout entry (of) of its kind, refunds exactly the NEAR that entry sent, no payout is refunded twice, and its storage is at most a record's; the rest goes to the vault (a bounty) or to pending NEAR (everything else)."],
-  ["Sales for NEAR and pact payments by colonies holding no kept PETRI", "No Sell for NEAR and no PETRI pact offer was made by a colony whose replayed kept PETRI was above zero (the house is exempt from the pact check)."],
-  ["Pacts kept to the rules and plantings under pacts", "Every pact follows the rules: numbered in order, until within (g, g + pact_max_gens], at most 8 live pacts per colony, one open offer per pair, PETRI offered only by a colony that attached NEAR and holds no kept PETRI, no house PETRI offered to a player, an accept only while open and before until, an accepted pact ended only at until; and every Plant is checked with the engine's pact_breach against the colonies that accepted pacts binding its planter protect, on the board as it stood."],
+  ["Sales for NEAR, NEAR claims and pact payments by colonies holding no kept PETRI", "No Sell for NEAR, no Claim and no PETRI pact offer was made by a colony whose replayed kept PETRI was above zero (the house is exempt from the pact check)."],
+  ["Pacts kept to the rules and plantings under pacts", "Every pact follows the rules: numbered in order, until within (g, g + pact_max_gens], at most 8 pacts per colony that are accepted or that it offered, at most 16 offers waiting for a colony, one open offer per pair, every offer at least 1 PETRI (house-to-house pacts excepted), PETRI offered only by a colony that attached NEAR and holds no kept PETRI, no house PETRI offered to a player, an accept only while open and before until, an accepted pact ended only at until; and every Plant is checked with the engine's pact_breach against the colonies that accepted pacts binding its planter protect, on the board as it stood."],
   ["PETRI held for pact offers", "state().pact_escrow equals the PETRI of the offers made and not yet accepted or ended, rebuilt from the PactOffer, PactAccept and PactEnd entries."],
   ["Pacts", "state().pacts equals the number of PactOffer entries."],
   ["Specimens", "Every Slide is the colony's own cells in its rectangle as the replayed board stood, numbered in order, at least slide_min_cells, priced at slide_cells_price per cell."],
@@ -35,9 +35,9 @@ const CHECKS: [string, string][] = [
   ["Keeper share", "keeper_pot + keeper_paid equals the replayed 2% of every feed."],
   ["Colony earnings", "Every colony's lifetime PETRI earnings (the earnings view) equal the replay's."],
   ["Vault (NEAR)", "The replayed vault equals state().vault, to the yoctoNEAR."],
-  ["NEAR paid in", "NEAR that reached the vault: attached by players, and Dust entries."],
+  ["NEAR paid in", "NEAR that reached the vault: attached by players (and, on ledgers written by v6.1, Dust entries; v6.2 writes none)."],
   ["NEAR paid at tides", "Vault shares paid as claimable NEAR."],
-  ["Vault shares, bounties as credit", "Vault shares and bounties paid as credit to colonies that never attached NEAR."],
+  ["Vault shares, bounties as credit", "Vault shares and bounties paid as credit to colonies that have not attached NEAR or hold kept PETRI."],
   ["Sales paid as credit", "Sales by such colonies, paid as credit."],
   ["Colony tide winnings", "Every colony's NEAR won (the tide_winnings view) equals the replay's."],
   ["Credit pool", "The replayed credit pool equals state().credit_pool."],
@@ -129,26 +129,54 @@ node scripts/verify.mjs --dump <file>               # a snapshot the contract's 
       <p>
         After the rows it prints the NEP-330 source link and build command, how many idle tide generations were skipped, the NEAR owed against the NEAR held, and a warning while a full-access key exists. For the first colonies whose earnings or winnings differ, and the first slides whose holder or royalties differ, it prints the contract&rsquo;s and the replay&rsquo;s numbers.
       </p>
-      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing (block 222964645, minutes after the relaunch)" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222964645: 14 generations, 15 ledger entries, 5 colonies, 0 tides.
-  match   History chain                                0000000000000000000000000000000000000000000000000000000000000000
-  match   Board hash                                   a3d8b3fb1a79f1fdcd1ac1e469e7d092a8fb773070217e620ce8d0fae7f73608
-  match   Living cells                                 179
+      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing (block 222987157, minutes after the relaunch)" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222987157: 19 generations, 15 ledger entries, 5 colonies, 0 tides.
+  match   History chain                                328c0669f420809b4da8bd710a7c08937a149fa50badcdb80c52c555c25b884f
+  match   Board hash                                   19febaa9237ece9984b60a2881f71521e6830ebdf41751419f19c9d0e08bae9e
+  match   Living cells                                 169
   match   Legal plantings                              5 of 5
-  …
+  match   Planting prices                              5 of 5
+  match   Planting fees                                5 of 5
   match   Licensed plantings: shape, holder, royalty   0 of 0
-  …
-  match   Sales for NEAR and pact payments by colonies holding no kept PETRI 0 of 0
+  match   Purchases on the curve                       5 of 5
+  match   Sales on the curve and allowance             0 of 0
+  match   Tides                                        0 of 0
+  match   Claims of exactly what was owed              0 of 0
+  match   Refunds tied to their payouts                0 of 0
+  match   Sales for NEAR, NEAR claims and pact payments by colonies holding no kept PETRI 0 of 0
   match   Pacts kept to the rules and plantings under pacts 0 of 0
   match   PETRI held for pact offers                   0.000000
   match   Pacts                                        0
-  …
+  match   Specimens                                    0 of 0 match the dish
+  match   Slide holders and royalties                  0 of 0
+  match   Agar                                         999,022.468025
+  match   Sold                                         1,072.002455
+  match   Burned                                       94.470480
+  match   Burned by specimens                          0.000000
+  match   Royalties                                    0.000000
+  match   Returned to the agar                         94.470480
+  match   Bought back                                  0.000000
+  match   Keeper share                                 0.000000
+  match   Colony earnings                              5 of 5
+  match   Vault (NEAR)                                 0.23781
+  match   NEAR paid in                                 0.23781
+  match   NEAR paid at tides                           0
+  match   Vault shares, bounties as credit             0
+  match   Sales paid as credit                         0
+  match   Colony tide winnings                         5 of 5
+  match   Credit pool                                  0
+  match   Credit paid at tides                         0
+  match   Credit sponsored                             0
+  match   Credit spent                                 0
+  match   Credit taken back                            0
+  match   NEAR owed to colonies                        0
+  match   Pending NEAR                                 0
   match   Colony credit winnings                       5 of 5
   match   Colony kept PETRI                            5 of 5
   match   Solvent (NEAR held >= owed, from the ledger) yes
-  match   Deployed code hash                           ${CODE_HASH}
+  match   Deployed code hash                           5v38VgcibRJesPt6H7h2rwPGmmE5Bi2715vHKSGrvncP
   DIFFERS  Full-access keys                             1  (expected: 0)
-Source: https://github.com/RohanGlitched/petri/tree/${BUILD_COMMIT}; built with cargo near build non-reproducible-wasm --locked in ${BUILD_IMAGE}@${BUILD_DIGEST}
-Owed, from the ledger: 0.23761 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.304743164372527200000003 NEAR.
+Source: https://github.com/RohanGlitched/petri/tree/e791404e63d03c2010bdb216b9792a8559512653; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
+Owed, from the ledger: 0.23781 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.289504143558987700000003 NEAR.
   The contract account still has a full-access key: whoever holds it could deploy different code.
 1 check(s) differ.`}</Code>
 
@@ -167,13 +195,13 @@ Owed, from the ledger: 0.23761 NEAR (vault, credit pool, unspent credit, unclaim
           <strong>Walk the generations.</strong> At each generation it first checks the tide schedule and works out that tide&rsquo;s amounts itself (a Tide entry stores only the chain, its bytes and who ran it), then applies that generation&rsquo;s entries in ledger order, checking each against the rules. Then it steps Life and the feed to the next generation that has an entry or is a tide generation.
         </li>
         <li>
-          <strong>Track the attachers.</strong> A colony whose <C>Buy</C> or <C>Plant</C> brought <C>near &gt; 0</C> has attached NEAR; from then on its tide shares and sales must be NEAR, before then credit.
+          <strong>Track the attachers.</strong> A colony whose join, <C>Buy</C> or <C>Plant</C> put at least <C>min_join</C> (0.01 NEAR) into the vault in one call has attached NEAR; from then on its tide shares and sales are NEAR, before then credit, and while it holds kept PETRI its tide shares and bounties are credit and it makes no NEAR claim.
         </li>
         <li>
-          <strong>Track the money.</strong> Every NEAR and credit movement is an entry (<C>Sponsor</C>, <C>Unsponsor</C>, <C>Claim</C>, <C>Refund</C>, <C>Pending</C>, <C>Unpend</C>, <C>Dust</C>, <C>Burn</C>, and the <C>spent</C> field of purchases, plantings and slides), so the replay keeps its own vault, credit pool, credit given, won, sold, spent and reclaimed, NEAR owed and pending NEAR, without reading any of the contract&rsquo;s counters.
+          <strong>Track the money.</strong> Every NEAR and credit movement is an entry (<C>Sponsor</C>, <C>Unsponsor</C>, <C>Claim</C>, <C>Refund</C>, <C>Pending</C>, <C>Unpend</C>, <C>Dust</C> (v6.1 only), <C>Burn</C>, and the <C>spent</C> field of purchases, plantings and slides), so the replay keeps its own vault, credit pool, credit given, won, sold, spent and reclaimed, NEAR owed and pending NEAR, without reading any of the contract&rsquo;s counters.
         </li>
         <li>
-          <strong>Track the slides.</strong> Each slide starts with its minter as holder. A licensed planting records the slide&rsquo;s move count, the holder, the royalty and whether it went to the agar; the replay checks the slide had at least 12 cells, that the royalty went to the agar exactly when the planter had never attached NEAR, and the holder is the minter while the count is 0 and the same account for as long as the count stays the same, and adds the royalty to the slide.
+          <strong>Track the slides.</strong> Each slide starts with its minter as holder. A licensed planting records the slide&rsquo;s move count, the holder, the royalty and whether it went to the agar; the replay checks the slide had at least 12 cells, that the royalty went to the agar exactly when the planter had never attached NEAR or held more kept PETRI than the cost, and the holder is the minter while the count is 0 and the same account for as long as the count stays the same, and adds the royalty to the slide.
         </li>
         <li>
           <strong>Compare.</strong> At the stored generation it compares every total and every colony&rsquo;s numbers with the contract&rsquo;s views, each slide&rsquo;s owner, moves and royalties with the <C>slides</C> view, and solvency with the replay&rsquo;s own terms.
@@ -235,7 +263,7 @@ cargo near build reproducible-wasm`}</Code>
           <Code lang="sh" title="Shell, with Node">{`node -e 'const h=require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest();const A="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";let n=BigInt("0x"+h.toString("hex")),s="";while(n>0n){s=A[Number(n%58n)]+s;n/=58n}for(const b of h){if(b)break;s="1"+s}console.log(s)' target/near/petri_contract/petri_contract.wasm`}</Code>
         </li>
         <li>
-          It prints <C>{CODE_HASH}</C>, and the file is 603,052 bytes. Compare it with what both accounts report:
+          It prints <C>{CODE_HASH}</C>, and the file is 605,767 bytes. Compare it with what both accounts report:
           <NetTabs
             mainnet={<Code lang="sh" title="mainnet">{`near account view-account-summary petri-dish.near network-config mainnet now
 node scripts/verify.mjs --network mainnet | grep "code hash"`}</Code>}
@@ -248,7 +276,17 @@ node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
       <Code lang="json" title="contract_source_metadata() on petri-dish.near">{`{
   "version": "0.3.0",
   "link": "https://github.com/RohanGlitched/petri/tree/${BUILD_COMMIT}",
-  "standards": [{ "standard": "nep330", "version": "1.3.0" }],
+  "standards": [
+    { "standard": "nep141", "version": "1.0.0" },
+    { "standard": "nep145", "version": "1.0.0" },
+    { "standard": "nep148", "version": "1.0.0" },
+    { "standard": "nep171", "version": "1.2.0" },
+    { "standard": "nep177", "version": "2.1.0" },
+    { "standard": "nep178", "version": "1.0.0" },
+    { "standard": "nep181", "version": "1.0.0" },
+    { "standard": "nep297", "version": "1.0.0" },
+    { "standard": "nep330", "version": "1.3.0" }
+  ],
   "build_info": {
     "build_environment": "${BUILD_IMAGE}@${BUILD_DIGEST}",
     "build_command": ["cargo", "near", "build", "non-reproducible-wasm", "--locked"],
@@ -263,7 +301,7 @@ node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
 
       <H2 id="keys">Check the keys</H2>
       <p>
-        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. A contract with no full-access key, and no method that deploys code (Petri has none), can never change. The same key is the only way to run <C>relaunch</C>, the private method that started <C>petri-dish.near</C> again from generation 0 for v6 and refuses an account that already ran v6; without the key nobody can call it.
+        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. A contract with no full-access key, and no method that deploys code (Petri has none), can never change. The same key is the only way to run <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 for v6.2, and refuses an account with no v6.1 dish and one that already runs v6.2; without the key nobody can call it.
       </p>
       <NetTabs
         mainnet={<Code lang="sh" title="mainnet">{`near account list-keys petri-dish.near network-config mainnet now
@@ -279,7 +317,7 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
   "params": { "request_type": "view_access_key_list", "finality": "final", "account_id": "petri-v6.testnet" }
 }' | jq '.result.keys[] | {public_key, permission: .access_key.permission}'`}</Code>}
       />
-      <Table caption="Keys at the time of writing (4 November 2026, after the v6 deploy)">
+      <Table caption="Keys at the time of writing (4 November 2026, after the v6.2 relaunch)">
         <thead>
           <tr>
             <th>Account</th>

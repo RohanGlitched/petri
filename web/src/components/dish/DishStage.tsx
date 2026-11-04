@@ -511,8 +511,8 @@ export function DishStage() {
   const keptUnits = me ? Number(me.kept ?? "0") : 0;
   const keptBlocksSale = !!me?.attached && keptUnits > 0;
   const canSell = !!d.state && (balance ?? 0) >= SELL_UNITS && sellNear > 0 && sellNear <= Number(d.state.sell_left) && !keptBlocksSale;
-  /** Why this colony offers pacts without PETRI, or null when it may pay for one. */
-  const pactPayBlock = !me ? null : !me.attached ? "A colony that has never attached NEAR offers pacts without PETRI." : keptUnits > 0 ? `${petri(keptUnits, 2)} of your PETRI is kept in the dish, so a pact you offer carries none until you have planted it.` : null;
+  /** Why this colony cannot pay for a pact, or null when it may. */
+  const pactPayBlock = !me ? null : !me.attached ? "A colony that has not attached NEAR cannot offer a pact: every pact carries at least 1 PETRI that could be sold." : keptUnits > 0 ? `${petri(keptUnits, 2)} of your PETRI is kept in the dish, so you cannot offer a pact until you have planted it.` : null;
   // Planting claims a colony's waiting earnings first, so they count towards the price.
   const spendable = (balance ?? 0) + claimable.petri + Math.max(0, myPending);
   const canAfford = balance !== null && spendable >= licensedCost + (licensed && !licence.holder && licence.royaltyBps ? Math.ceil((licensedCost * licence.royaltyBps) / 10_000) : 0);

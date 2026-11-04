@@ -32,7 +32,7 @@ export default function Page() {
 
       <H2 id="join">Join</H2>
       <p>
-        <C>join(name, color, credit)</C> makes the calling account a colony, once per account. It needs at least 0.01 NEAR, attached or taken from credit. The colony&rsquo;s storage (its record, its name, its balance, its slot in a cold page, the join entry and the purchase entry) comes out of that, and the rest buys PETRI from the agar at the current price. On testnet the house strains joined with 0.05 NEAR of credit each and 0.0426 to 0.0431 NEAR of it was left to buy with, so a join&rsquo;s storage is about 0.007 NEAR (it depends on the account&rsquo;s length); the site attaches 0.02 NEAR.
+        <C>join(name, color, credit)</C> makes the calling account a colony, once per account. It needs at least 0.01 NEAR, attached or taken from credit. The colony&rsquo;s storage (its record, its name, its balance, its slot in a cold page, the join entry and the purchase entry) comes out of that, and the rest buys PETRI from the agar at the current price. On testnet the house strains joined with 0.05 NEAR of credit each and 0.0426 to 0.0431 NEAR of it was left to buy with, so a join&rsquo;s storage is about 0.007 NEAR (it depends on the account&rsquo;s length); the site attaches 0.02 NEAR. Your colony counts as having attached NEAR only if at least 0.01 NEAR, after that storage, reaches the vault in one call: the site&rsquo;s 0.02 NEAR does (about 0.0155 is left), a join of exactly 0.01 NEAR does not.
       </p>
       <ul>
         <li>
@@ -198,7 +198,7 @@ export default function Page() {
           It takes 5% of the vault. 1% of that, at most 0.001 NEAR, is a bounty for the caller whose transaction ran the tide, unless that caller is a house strain or keeper, when the bounty stays in the vault; the tide&rsquo;s own ledger entry is paid for; the rest is split by what each colony earned from the feed since the last tide.
         </li>
         <li>
-          A colony that has ever attached NEAR itself receives its share as NEAR it can claim. A colony that never has (a guest) receives it as credit.
+          A colony that has attached NEAR itself (at least 0.01 NEAR in one call) and holds no kept PETRI receives its share as NEAR it can claim. Any other colony, a guest or one holding kept PETRI, receives it as credit.
         </li>
         <li>It takes 5% of the credit pool and splits it the same way, as credit.</li>
         <li>Every colony&rsquo;s stake decays to 87.5%, the earnings window resets, and the sale allowance reopens at 10% of the vault.</li>
@@ -209,7 +209,7 @@ export default function Page() {
 
       <H2 id="claiming">Claiming</H2>
       <p>
-        <C>claim()</C> moves the colony&rsquo;s unclaimed PETRI into its balance and sends the NEAR it has won at tides to its account, or to the payout account set with <C>set_payout</C> (only a colony that has attached NEAR can set one, and never the dish itself). The claim&rsquo;s own <C>Claim</C> entry is paid from the NEAR, so winnings too small to cover it and a possible refund (about 0.0034 NEAR) stay owed until they grow. If the transfer fails, the NEAR becomes pending NEAR for the colony&rsquo;s account, which it takes with <C>claim_pending</C>. Credit won needs no claim: it is spendable as soon as the tide runs. Check what is waiting with <C>claimable(account_id)</C>.
+        <C>claim()</C> moves the colony&rsquo;s unclaimed PETRI into its balance and sends the NEAR it has won at tides to its account, or to the payout account set with <C>set_payout</C> (only a colony that has attached NEAR can set one, and never the dish itself). While your colony holds kept PETRI, <C>claim</C> brings only the PETRI: the NEAR stays owed until the kept PETRI is planted. The claim&rsquo;s own <C>Claim</C> entry is paid from the NEAR, so winnings too small to cover it and a possible refund (about 0.0034 NEAR) stay owed until they grow. If the transfer fails, the NEAR becomes pending NEAR for the colony&rsquo;s account, which it takes with <C>claim_pending</C>. Credit won needs no claim: it is spendable as soon as the tide runs. Check what is waiting with <C>claimable(account_id)</C>.
       </p>
 
       <H2 id="selling">Selling back</H2>
@@ -221,7 +221,7 @@ export default function Page() {
         <li>
           Between two tides the agar buys back at most 10% of the vault. The allowance is set at each tide, so <strong>no sales are possible before the first tide</strong>; <C>state().sell_left</C> says how much is left.
         </li>
-        <li>A colony that has never attached NEAR is paid in credit, not NEAR.</li>
+        <li>A colony that has not attached NEAR is paid in credit, not NEAR.</li>
         <li>
           <strong>Kept PETRI cannot be sold for NEAR.</strong> PETRI you earned before your colony&rsquo;s first NEAR, and PETRI you bought with credit, is kept: while you hold any, <C>sell</C> for NEAR is refused (and so is sending PETRI, and a guest can never send PETRI). Plant it: plantings and slides spend kept PETRI first, and once it is gone what you hold and what you earn afterwards is sellable. A guest can still sell back for credit. See <Doc to="economy" hash="kept">Kept PETRI</Doc>.
         </li>
@@ -253,7 +253,7 @@ export default function Page() {
       </p>
       <ul>
         <li>The planting costs 25% less (<C>slide_discount_bps</C>), whoever plants it. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.</li>
-        <li>A planter that does not hold the slide also pays the holder 10% of that discounted cost (<C>slide_royalty_bps</C>) in PETRI: a transfer, not a burn. A holder with no PETRI registration is registered at the planter&rsquo;s expense. A planter that has never attached NEAR pays that royalty to the agar instead, and the holder gets nothing.</li>
+        <li>A planter that does not hold the slide also pays the holder 10% of that discounted cost (<C>slide_royalty_bps</C>) in PETRI: a transfer, not a burn. A holder with no PETRI registration is registered at the planter&rsquo;s expense. A planter that has not attached NEAR, or that holds more kept PETRI than the planting costs, pays that royalty to the agar instead, and the holder gets nothing.</li>
         <li>The holder plants its own slide at the discount and pays no royalty. The house plants only slides it holds.</li>
       </ul>
       <p>
@@ -265,7 +265,7 @@ export default function Page() {
         <C>advance(max)</C> steps the stored board up to <C>max</C> due generations (at most 120). Anyone may call it. If it ran at least one generation, the caller receives the keeper pot (as does the caller of any other call that runs a generation: plant, buy, join, sell, claim or mint_slide), provided the caller can hold PETRI (it is a colony or registered with <C>storage_deposit</C>) and is not a house strain or keeper. Tides it runs pay it their bounties, again except to a house strain or keeper.
       </p>
       <p>
-        If nobody touches the dish for more than 480 generations (two hours), the next call does not try to replay all of it: the clock skips ahead to 120 generations behind, records a <C>Skip</C> entry, and catches up from there. A planting refuses to run while the dish is behind; if a planting says <C>the dish is behind the clock; call advance first</C>, call <C>advance</C> once or twice and plant again.
+        If nobody touches the dish for more than 480 generations (two hours), the next call does not try to replay all of it: the clock skips ahead to 120 generations behind, records a <C>Skip</C> entry, and catches up from there. A planting, a sale and a slide mint refuse to run while the dish is behind; if one says <C>the dish is behind the clock; call advance first</C>, call <C>advance</C> once or twice and try again. The site does that for you by putting up to three <C>advance</C> calls ahead of the move in the same transaction.
       </p>
       <Code lang="sh" title="Advance the mainnet dish yourself">{`near contract call-function as-transaction petri-dish.near advance json-args '{"max":120}' prepaid-gas '300.0 Tgas' attached-deposit '0 NEAR' sign-as YOU.near network-config mainnet sign-with-keychain send`}</Code>
 

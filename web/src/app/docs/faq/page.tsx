@@ -53,7 +53,7 @@ export default function Page() {
       </Q>
       <Q id="q-slide-free" q="Does a slide do anything in the game?">
         <p>
-          Yes, if it captured at least 12 cells: then it is a pattern licence. Plant its exact pattern anywhere on the dish (moved, not turned or flipped) with the slide&rsquo;s token id, and the planting costs 25% less. Anyone but the slide&rsquo;s holder also pays the holder 10% of that cost in PETRI (a planter that has never attached NEAR pays the agar instead), so a slide whose pattern others plant earns its holder royalties, whoever holds it now. A smaller slide is a keepsake and does nothing in the dish. The siege surcharge still applies in full. See <Doc to="how-to-play" hash="replant">Replanting a slide</Doc>.
+          Yes, if it captured at least 12 cells: then it is a pattern licence. Plant its exact pattern anywhere on the dish (moved, not turned or flipped) with the slide&rsquo;s token id, and the planting costs 25% less. Anyone but the slide&rsquo;s holder also pays the holder 10% of that cost in PETRI (a planter that has not attached NEAR, or holds more kept PETRI than the planting costs, pays the agar instead), so a slide whose pattern others plant earns its holder royalties, whoever holds it now. A smaller slide is a keepsake and does nothing in the dish. The siege surcharge still applies in full. See <Doc to="how-to-play" hash="replant">Replanting a slide</Doc>.
         </p>
       </Q>
 
@@ -75,7 +75,7 @@ export default function Page() {
       </Q>
       <Q id="q-credit" q="Why did I win credit instead of NEAR?">
         <p>
-          Your colony has never attached NEAR itself (a guest, or a colony that played only on sponsored credit). Such colonies are paid in credit, spendable on moves but never withdrawn, so free play cannot drain the NEAR other players put in. Attach NEAR once (a join, purchase or planting from a wallet) and later tides pay you NEAR. PETRI you earned before that first NEAR (or bought with credit) stays in the dish as kept PETRI: plant it first (kept PETRI is spent first) and then you can sell PETRI for NEAR.
+          Your colony has never attached NEAR itself (a guest, or a colony that played only on sponsored credit). Such colonies are paid in credit, spendable on moves but never withdrawn, so free play cannot drain the NEAR other players put in. Attach NEAR once (one join, purchase or planting from a wallet that puts at least 0.01 NEAR, after storage, into the vault) and later tides pay you NEAR. PETRI you earned before that first NEAR (or bought with credit) stays in the dish as kept PETRI: while you hold any, tides pay you in credit and a claim brings only PETRI. Plant it first (kept PETRI is spent first) and then you can sell PETRI for NEAR and your NEAR is paid again.
         </p>
       </Q>
       <Q id="q-house" q="What does the team earn?">
@@ -92,7 +92,7 @@ export default function Page() {
       <H2 id="trust">Trust</H2>
       <Q id="q-change" q="Can the team change the rules?">
         <p>
-          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6 dish and one that already runs v6.1, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6 and then to v6.1, and how <C>petri-v6.testnet</C> moved to v6.1. Both contract accounts still hold a full-access key, so until it is deleted the code itself could be replaced. It is to be deleted with the owner&rsquo;s approval before judging. <Doc to="verification" hash="keys">Check the keys</Doc>.
+          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6.1 dish and one that already runs v6.2, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6, then to v6.1 and then to v6.2, and how <C>petri-v6.testnet</C> moved to v6.1 and v6.2. Both contract accounts still hold a full-access key, so until it is deleted the code itself could be replaced. It is to be deleted with the owner&rsquo;s approval before judging. <Doc to="verification" hash="keys">Check the keys</Doc>.
         </p>
       </Q>
       <Q id="q-verify" q="How do I know the board is right?">
@@ -102,7 +102,7 @@ export default function Page() {
       </Q>
       <Q id="q-ai" q="Are the AI strains on chain?">
         <p>
-          Their moves are: every planting and its lab note is an ordinary transaction from the strain&rsquo;s account, and so are the pacts the strains make each other at their council (<C>pact_offer</C> and <C>pact_accept</C>, with the PETRI in escrow in the contract, which then refuses the promisor&rsquo;s plantings that would break the pact). How a move was chosen (the forecasts, the strain&rsquo;s memory, which model, its answer, the NEAR AI Cloud signature) and the promises kept or broken are in the agents&rsquo; log, served at <C>/api/strains</C>.
+          Their moves are: every planting and its lab note is an ordinary transaction from the strain&rsquo;s account, and so are the pacts the strains make each other at their council, which clears by sealed bids (<C>pact_offer</C> and <C>pact_accept</C>, with the PETRI in escrow in the contract, which then refuses the promisor&rsquo;s plantings that would break the pact). How a move was chosen (the forecasts, the strain&rsquo;s memory, which model, its answer, the NEAR AI Cloud signature) and the promises kept or broken are in the agents&rsquo; log, served at <C>/api/strains</C>.
         </p>
       </Q>
       <Q id="q-audit" q="Has it been audited?">
@@ -132,7 +132,7 @@ near contract deploy YOUR-DISH.testnet use-file target/near/petri_contract/petri
   prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
 node scripts/verify.mjs --network testnet --contract YOUR-DISH.testnet`}</Code>
         <p>
-          The account needs NEAR for the contract&rsquo;s storage (the build, 603,052 bytes, is about 6.03 NEAR of storage on its own). The reproducible build writes the commit it was built at into the contract&rsquo;s NEP-330 metadata, so only a build at <C>{BUILD_COMMIT_SHORT}</C> has the code hash the verifier expects; for any other commit pass your build&rsquo;s hash with <C>--code-hash</C>. The verifier&rsquo;s last row passes only once your account has no full-access key.
+          The account needs NEAR for the contract&rsquo;s storage (the build, 605,767 bytes, is about 6.06 NEAR of storage on its own). The reproducible build writes the commit it was built at into the contract&rsquo;s NEP-330 metadata, so only a build at <C>{BUILD_COMMIT_SHORT}</C> has the code hash the verifier expects; for any other commit pass your build&rsquo;s hash with <C>--code-hash</C>. The verifier&rsquo;s last row passes only once your account has no full-access key.
         </p>
       </Q>
     </DocPage>

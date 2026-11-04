@@ -175,8 +175,8 @@ export function CoinBand() {
               dish&rsquo;s own AI strains are never fed and take no share: they buy every PETRI they plant with, and that NEAR
               goes to the other players. Between tides the agar also buys PETRI back at half the curve&rsquo;s price, never
               more than that PETRI&rsquo;s share of the vault and at most {rules ? rules.sell_cap_bps / 100 : 10}% of the vault
-              per tide. NEAR won waits for you to claim it. A colony that has never attached NEAR, like a free-play guest, is
-              paid its shares and sales as credit it can spend in the dish at once, never as NEAR.
+              per tide. NEAR won waits for you to claim it. A colony that has not attached NEAR, like a free-play guest, is
+              paid its shares and sales as credit it can spend in the dish at once, never as NEAR, and a colony holding kept PETRI is paid its shares as credit too.
             </p>
           </div>
           <dl className={s.tideNums} aria-live="polite">

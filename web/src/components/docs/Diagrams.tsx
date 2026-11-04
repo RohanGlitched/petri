@@ -61,7 +61,7 @@ export function EconomyFlow() {
         <svg viewBox="0 0 960 660" role="img" aria-labelledby="eco-title eco-desc" fontFamily="var(--body)">
           <title id="eco-title">Where PETRI and NEAR go</title>
           <desc id="eco-desc">
-            PETRI: the agar sells PETRI for NEAR, feeds a share of itself to living colonies every generation (two percent of it to the keeper pot, paid to the first call outside the house that runs a generation), and takes back half of every planting and every sale; the other half of a planting and all of a slide are burned. A planting under a slide&apos;s licence by anyone but its holder also pays the holder a royalty, balance to balance (to the agar, if the planter has never attached NEAR). NEAR: attached NEAR goes to the vault after storage; sponsored credit, once spent, goes to the credit pool. Every tide pays five percent of each by what colonies earned since the last tide: vault shares become claimable NEAR for colonies that attached NEAR and credit for guests; the credit pool pays only credit. Sales back to the agar are paid from the vault.
+            PETRI: the agar sells PETRI for NEAR, feeds a share of itself to living colonies every generation (two percent of it to the keeper pot, paid to the first call outside the house that runs a generation), and takes back half of every planting and every sale; the other half of a planting and all of a slide are burned. A planting under a slide&apos;s licence by anyone but its holder also pays the holder a royalty, balance to balance (to the agar, if the planter has not attached NEAR or holds more kept PETRI than the cost). NEAR: attached NEAR goes to the vault after storage; sponsored credit, once spent, goes to the credit pool. Every tide pays five percent of each by what colonies earned since the last tide: vault shares become claimable NEAR for colonies that attached NEAR and credit for guests; the credit pool pays only credit. Sales back to the agar are paid from the vault.
           </desc>
           <Markers />
           <text x="30" y="28" fill={AMBER} fontSize="15" fontWeight="600">PETRI moves inside the dish</text>
@@ -118,7 +118,7 @@ export function EconomyFlow() {
         </svg>
       </div>
       <figcaption>
-        Amber is PETRI, bone is NEAR, green dashes are credit. A tide also pays its caller a bounty (1% of the vault&rsquo;s share, at most 0.001 NEAR; none when a house colony or a keeper runs it, so it stays in the vault) and the storage of its own ledger entry before the split. A licensed planting by anyone but the slide&rsquo;s holder pays the holder 10% of its discounted price in PETRI, from balance to balance (to the agar, if the planter has never attached NEAR).
+        Amber is PETRI, bone is NEAR, green dashes are credit. A tide also pays its caller a bounty (1% of the vault&rsquo;s share, at most 0.001 NEAR; none when a house colony or a keeper runs it, so it stays in the vault) and the storage of its own ledger entry before the split. A licensed planting by anyone but the slide&rsquo;s holder pays the holder 10% of its discounted price in PETRI, from balance to balance (to the agar, if the planter has not attached NEAR or holds more kept PETRI than the cost).
       </figcaption>
     </figure>
   );

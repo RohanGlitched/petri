@@ -41,7 +41,7 @@ const PARAMS: Row[] = [
   ["slide_discount_bps", "2500", "25%", "A planting of a slide's exact pattern under its licence costs this share less."],
   ["pact_radius", "8", "8 cells", "A pact forbids its promisor to plant within this many cells (across or down, wrapping) of the payer's living cells. Launch refuses a radius outside 1 to 16."],
   ["pact_max_gens", "2880", "2,880 generations (12 h)", "The most a pact can run beyond the dish's stored generation when it is offered."],
-  ["slide_royalty_bps", "1000", "10%", "Anyone but the slide's holder pays the holder this share of a licensed planting's cost, in PETRI; a planter that has never attached NEAR pays the agar instead."],
+  ["slide_royalty_bps", "1000", "10%", "Anyone but the slide's holder pays the holder this share of a licensed planting's cost, in PETRI; a planter that has not attached NEAR, or holds more kept PETRI than the planting costs, pays the agar instead."],
   ["wnear", "see below", "", "The wNEAR contract whose ft_transfer_call joins or buys for the account its message names."],
 ];
 
@@ -57,7 +57,7 @@ export default function Page() {
     >
       <Callout kind="check">
         <p>
-          The rules are fixed when a dish launches (<C>new</C>, or <C>relaunch</C> on an account that ran v6) and no method changes them while it runs. Both can be called only through the account&rsquo;s own key: <C>relaunch</C> is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, and it refuses an account with no v6 dish and one that already runs v6.1. Once that key is deleted, nobody can start the dish again or change a parameter. Read the live values with the <C>rules</C> view, below.
+          The rules are fixed when a dish launches (<C>new</C>, or <C>relaunch</C> on an account that ran v6.1) and no method changes them while it runs. Both can be called only through the account&rsquo;s own key: <C>relaunch</C> is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, and it refuses an account with no v6.1 dish and one that already runs v6.2. Once that key is deleted, nobody can start the dish again or change a parameter. Read the live values with the <C>rules</C> view, below.
         </p>
       </Callout>
 
@@ -247,9 +247,10 @@ licensed = cost − cost × slide_discount_bps ÷ 10,000                   (lice
 royalty  = licensed × slide_royalty_bps ÷ 10,000                       (royalty)         only when the planter does not hold the slide
 burned   = licensed × burn_bps ÷ 10,000;   returned to the agar = licensed − burned
 royalty  -> transferred to the slide's holder (not burned); the holder is registered for PETRI at the planter's expense if it is not
-            -> or added to the agar (counted in returned) when the planter had never attached NEAR before this planting`}</Formula>
+            -> or added to the agar (counted in returned), the whole royalty, when the planter had not attached NEAR before this planting
+               or holds more kept PETRI than the cost (kept read at the planting, after its claim)`}</Formula>
       <p>
-        With the full agar, a licensed block costs <C>5,644,800 − 1,411,200 = 4,233,600</C> units (4.2336 PETRI), and a planter that does not hold the slide also pays the holder <C>423,360</C> units. The house plants only slides it holds. When the planter had never attached NEAR, the holder and the slide&rsquo;s <C>royalties</C> get nothing and the royalty goes to the agar; the licence says so with <C>to_agar</C>, which the replays check equals <C>holder.is_some() &amp;&amp; !attached</C>. The Plant entry carries the licence (token, the slide&rsquo;s move count, the holder, the royalty and <C>to_agar</C>), so both replays check the shape, the 12-cell minimum, the price, the royalty and who held the slide at that point.
+        With the full agar, a licensed block costs <C>5,644,800 − 1,411,200 = 4,233,600</C> units (4.2336 PETRI), and a planter that does not hold the slide also pays the holder <C>423,360</C> units. The house plants only slides it holds. When the planter had not attached NEAR, or holds more kept PETRI than the planting costs (kept PETRI is spent first, so the royalty would come out of it), the holder and the slide&rsquo;s <C>royalties</C> get nothing and the royalty goes to the agar; the licence says so with <C>to_agar</C>, which the replays check equals <C>holder.is_some() &amp;&amp; (!attached || kept &gt; cost)</C>. The Plant entry carries the licence (token, the slide&rsquo;s move count, the holder, the royalty and <C>to_agar</C>), so both replays check the shape, the 12-cell minimum, the price, the royalty and who held the slide at that point.
       </p>
 
       <H2 id="buy">The buy curve</H2>
@@ -277,27 +278,30 @@ after each tide: sell_left = vault × sell_cap_bps ÷ 10,000`}</Formula>
       </p>
 
       <H2 id="kept">Kept PETRI</H2>
-      <Formula>{`guest         = colony that has never attached NEAR
+      <Formula>{`guest         = colony that has not attached NEAR;  a colony attaches when one join, buy or planting puts near ≥ min_join (net of storage) into the vault
 while guest   kept += claimed + bought (all with credit) + slide royalties received
-first NEAR    kept += unclaimed earnings          (a join with NEAR, a purchase or planting with near > 0, a wNEAR join or purchase)
+first NEAR    kept += unclaimed earnings          (a join, purchase or planting with near ≥ min_join in one call, a wNEAR join or purchase)
 any buy       kept += credit_share(units, credit, near + credit)           (units × credit ÷ total, exact to the unit)
 plant, slide  kept −= min(kept, cost + royalty)   and   kept −= min(kept, slide price)      (kept PETRI is spent first)
 sell          refused for NEAR while kept > 0;  a guest's sale for credit spends kept
 ft_transfer, ft_transfer_call   refused for a guest, and while kept > 0
-pact_offer    PETRI offered only when kept = 0 (else petri must be 0)`}</Formula>
+pact_offer    PETRI offered only when kept = 0 and the colony has attached NEAR
+tide share    NEAR only when attached and kept = 0, else won credit;  claim pays NEAR only when kept = 0
+royalty       to the agar when the planter is a guest or kept > cost`}</Formula>
       <p>
         PETRI earned before a colony&rsquo;s first NEAR therefore stays in the dish until it is planted, and PETRI bought with credit never turns into vault NEAR by a sale. The house is exempt from the send check. <C>Colony.kept</C> in the views includes a guest&rsquo;s unclaimed earnings. Both replays rebuild every colony&rsquo;s <C>kept</C> from the ledger alone. See <Doc to="economy" hash="kept">Economy</Doc>.
       </p>
 
       <H2 id="pacts">Pacts</H2>
-      <Formula>{`pact_offer(to, petri, until)   requires  g < until ≤ g + pact_max_gens,  one open offer per pair,  ≤ 8 live pacts per colony,
-                               kept PETRI = 0 if petri > 0,  no house PETRI to a player;   the dish holds petri (pact_escrow)
-pact_accept(id)                the dish pays petri to the promisor;  binding while  g < until
+      <Formula>{`pact_offer(to, petri, until)   requires  g < until ≤ g + pact_max_gens,  one open offer per pair,  petri ≥ 1 PETRI (house-to-house excepted),
+                               ≤ 8 accepted pacts + own offers per colony,  ≤ 16 offers waiting for the promisor,
+                               kept PETRI = 0 and attached if petri > 0,  no house PETRI to a player;   the dish holds petri (pact_escrow)
+pact_accept(id)                ends the promisor's expired pacts, needs its count < 8;  the dish pays petri to the promisor;  binding while  g < until
 a planting by the promisor     refused if any planted cell is within pact_radius (a square: |dx| ≤ 8 and |dy| ≤ 8, wrapping) of a
                                living cell of a colony that accepted a binding pact with it     (Dish::pact_breach)
 pact_cancel(id)                open offer: its petri back to the payer;  accepted: only once until has come`}</Formula>
       <p>
-        <C>pact_breach</C> marks the union of the squares around the protected colonies&rsquo; living cells, so it looks at each dish cell at most once whatever the number of pacts; the contract and both replays call the same function from petri-core. With 30,000 colonies, a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. See <Doc to="contract-api" hash="pact-methods">Pacts</Doc> in the contract API and <Doc to="ai-strains" hash="pacts">the strains&rsquo; use of them</Doc>.
+        The protected ground is the payer&rsquo;s living cells as the board stands at each planting, cells the payer plants after the pact was accepted included: a promise to stay away from a colony, not from a place. <C>pact_breach</C> marks the union of the squares around the protected colonies&rsquo; living cells, so it looks at each dish cell at most once whatever the number of pacts; the contract and both replays call the same function from petri-core. With 30,000 colonies, a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. See <Doc to="contract-api" hash="pact-methods">Pacts</Doc> in the contract API and <Doc to="ai-strains" hash="pacts">the strains&rsquo; use of them</Doc>.
       </p>
 
       <H2 id="tide">Tides: split, bounty and storage</H2>
@@ -306,11 +310,11 @@ pay        = vault × tide_bps ÷ 10,000
 bounty     = min(pay × tide_bounty_bps ÷ 10,000, max_bounty)
 storage    = min(Tide.bytes × the storage byte price, pay − bounty)       (the entry and its slot in the tide index: 130 bytes, or 175 once per 256 tides)
 split      = tide_split(pay − bounty − storage, window, house)     share[c] = amount × window[c] ÷ Σ window
-              colony that attached NEAR      -> NEAR it can claim       (paid)
-              colony that never attached     -> won credit              (as_credit)
+              colony attached and kept = 0   -> NEAR it can claim       (paid)
+              any other colony               -> won credit              (as_credit)
 credit_pay = credit_pool × tide_bps ÷ 10,000
 csplit     = tide_split(credit_pay, window, house)                      -> won credit for every share (credit_paid)
-bounty     -> the caller as NEAR, or as credit when the caller's colony never attached NEAR,
+bounty     -> the caller as NEAR, or as credit when the caller's colony has not attached NEAR or holds kept PETRI,
               or 0 when the caller is a house colony or keeper (it stays in the vault)
 then       stake decays, window = 0, sell_left = vault × sell_cap_bps ÷ 10,000`}</Formula>
       <p>
@@ -327,7 +331,7 @@ step up to min(due, generation + cap) generations, where cap = max_catchup (or a
 stop early once the call has used min(110 TGas, prepaid gas − 40 TGas) less what is still to be written (see CATCHUP_GAS_LIMIT below); always step one
 each generation: Life step; history chain every 16th; feed; tide if due`}</Formula>
       <p>
-        A Skip moves only the clock: the board, the agar and the stakes are exactly as they were. <C>plant</C> also requires <C>generation = due</C> after its catch-up, so a planting always lands on the current board. The contract test <C>an_untended_dish_skips_ahead_instead_of_piling_up_work</C> covers this; the simulator&rsquo;s dormant dish ran one skip of 172,680 generations after 30 idle days.
+        A Skip moves only the clock: the board, the agar and the stakes are exactly as they were. <C>plant</C>, <C>sell</C> and <C>mint_slide</C> also require <C>generation = due</C> after their catch-up, so a planting always lands on the current board and a slide never captures a stale one; the site puts up to three <C>advance</C> calls ahead of the move in the same transaction when the dish lags, and the strains advance it first. The contract test <C>an_untended_dish_skips_ahead_instead_of_piling_up_work</C> covers this; the simulator&rsquo;s dormant dish ran one skip of 172,680 generations after 30 idle days.
       </p>
 
       <H2 id="limits">Limits and validation</H2>
@@ -405,7 +409,9 @@ each generation: Life step; history chain every 16th; feed; tide if due`}</Formu
             ["UNSPONSOR_BYTES", "210 bytes", "contract: what a new grant sets aside for its later Unsponsor entry"],
             ["REFUND_BYTES + PENDING_RECORD_BYTES", "97 + 142 bytes", "contract: what a NEAR payout must be able to pay for, should it fail and become pending"],
             ["HOUSE_RUNNER", "65535", "contract: the by of a tide a keeper with no colony ran"],
-            ["MAX_PACTS", "8", "pacts: pacts per colony that have not ended"],
+            ["MAX_PACTS", "8", "pacts: accepted pacts plus offers it made, per colony"],
+            ["MAX_OFFERS_IN", "16", "pacts: open offers from others waiting for one colony; it empties them by declining"],
+            ["MIN_PACT_PETRI", "1 PETRI", "pacts: the least an offer carries, except between two house colonies"],
             ["PACT_DEPOSIT", "0.0042 NEAR", "pacts: the storage allowance an offer brings (a 75-byte record, a list slot, and a 140-byte reserve for the accept and end entries)"],
             ["PAGE", "32 colonies", "books: colonies per cold page (69 bytes a slot)"],
             ["MAX_PLAYING", "10,000", "books: most rows the hot table holds; a colony with no row cannot plant while it is full and no row can leave"],

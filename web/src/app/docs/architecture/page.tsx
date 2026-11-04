@@ -76,7 +76,7 @@ export default function Page() {
               <C>petri-contract</C> (<C>contract/</C>)
             </td>
             <td>
-              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> 6.1.0): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table of the colonies that play now (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> from v6 (<C>relaunch.rs</C>). 132 tests.
+              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> 6.2.0): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table of the colonies that play now (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> from v6.1 (<C>relaunch.rs</C>). 139 tests.
             </td>
           </tr>
           <tr>
@@ -104,7 +104,7 @@ cd web && npm install && npm run dev                 # the site on http://localh
 
       <H3 id="crates-storage">The contract&rsquo;s storage</H3>
       <p>
-        Everything per account (balances, colony ids, names, grants, owned slides, pending NEAR), the cold pages, the hot table and the tide index have key prefixes v6 never used, so nothing a wrong account list leaves behind when <C>relaunch</C> clears v6 can be read as v6.1 state; it only keeps its storage. Each colony&rsquo;s numbers (unclaimed earnings, NEAR won and not claimed, credit won, whether it attached NEAR, its stake, and while it plays its tide window) are in exactly one of two places: a 69-byte slot in a cold page of 32 colonies, or the hot table of the colonies that play now (at most 10,000). A join appends one slot to the last cold page; the feed, tides and decay read and write only the hot table, so no call costs more as more colonies join.
+        The keys a wrong account list could leave behind when <C>relaunch</C> clears v6.1 (PETRI balances, sponsored credit, pending NEAR and the cold pages) have prefixes v6.1 never used, <C>r</C>, <C>e</C>, <C>z</C> and <C>x</C>, so none of them can be read as v6.2 state; it only keeps its storage. Everything else keeps its v6.1 key and is cleared by <C>relaunch</C> itself. Each colony&rsquo;s numbers (unclaimed earnings, NEAR won and not claimed, credit won, whether it attached NEAR, its stake, and while it plays its tide window) are in exactly one of two places: a 69-byte slot in a cold page of 32 colonies, or the hot table of the colonies that play now (at most 10,000). A join appends one slot to the last cold page; the feed, tides and decay read and write only the hot table, so no call costs more as more colonies join.
       </p>
       <Table>
         <thead>
@@ -123,14 +123,14 @@ cd web && npm install && npm run dev                 # the site on http://localh
             ["L", "The ledger"],
             ["I", "The planting index (ledger positions of Plant entries, u32; 49 bytes a planting)"],
             ["V + page (u32)", "The tide index: ledger positions of Tide entries, 4 bytes each, 256 to a key"],
-            ["R", "PETRI balances (NEP-141 registrations)"],
-            ["E", "Sponsored credit: each account's grants, one per sponsor"],
+            ["r", "PETRI balances (NEP-141 registrations)"],
+            ["e", "Sponsored credit: each account's grants, one per sponsor"],
             ["D", "Specimen slides"],
             ["T", "Each owner's slides, for enumeration"],
-            ["Z", "Pending NEAR, with the order it may still be spent on"],
+            ["z", "Pending NEAR, with the order it may still be spent on"],
             ["P + id (u32)", "A pact: from, to, PETRI, offered, until, accepted, ended (75 bytes with key and record)"],
             ["Q + colony id (u16)", "A colony's live pacts (4 bytes a pact; 47 for a new list)"],
-            ["X + page (u16)", "Cold pages of 32 colonies each, 69 bytes a colony (its numbers, its stake and the tide count the stake was last decayed at)"],
+            ["x + page (u16)", "Cold pages of 32 colonies each, 69 bytes a colony (its numbers, its stake and the tide count the stake was last decayed at)"],
             ["h", "The hot table's feed part: id, stake, window, earnings (26 bytes a row); every catch-up rewrites it"],
             ["j", "The hot table's purse part: id, NEAR owed, credit won and held, attached (51 bytes a row); only tides and a playing colony's own moves rewrite it"],
             ["N + ledger index (u32)", "Lab notes (5-byte keys)"],

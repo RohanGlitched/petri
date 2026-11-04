@@ -91,6 +91,37 @@ const EMPTY: [string, string, string, string][] = [
   ["Only the house, with no budget limit", "957,383", "29.22", "The house paid 75.59 NEAR, gas included; with nobody else to win it, the vault grew to 29.22."],
 ];
 
+const CHANGES_V62: [string, string][] = [
+  [
+    "NEAR attaches at 0.01",
+    "A colony attaches NEAR only when one join, buy or planting puts at least min_join (0.01 NEAR), net of storage, into the vault. Less goes to the vault but attaches nothing, so a yoctoNEAR on a call paid from credit no longer turns credit into NEAR. The site's 0.02 NEAR join nets about 0.0155 and still attaches.",
+  ],
+  [
+    "Kept PETRI is paid in credit",
+    "A colony is paid in NEAR only while it has attached NEAR and holds no kept PETRI. Otherwise its tide share and any bounty are credit, and claim pays out only its PETRI while its NEAR stays owed. A royalty paid out of kept PETRI goes to the agar: when the planter has not attached NEAR, or holds more kept PETRI than the planting costs, the whole royalty goes to the agar.",
+  ],
+  [
+    "Pacts cannot jam a colony",
+    "Every offer carries at least 1 PETRI unless both colonies are the house's, so guests, colonies holding kept PETRI and the house towards players cannot offer a pact. The cap of 8 counts only accepted pacts and the offers a colony made; offers waiting for a colony have their own cap of 16, which it empties by declining. A pact protects the payer's living cells as the board stands at each planting, cells planted after it was accepted included.",
+  ],
+  [
+    "Dust wNEAR is refunded",
+    "An amount of wNEAR no larger than what a pending record and its Pending entry cost is returned whole and writes nothing, so dust cannot grow the dish's storage. Amounts that cover their records are still never refunded.",
+  ],
+  [
+    "A current dish, and small fixes",
+    "sell and mint_slide need the dish to be current, as plant did; the site puts up to three advance calls ahead of the move when the dish lags, and the strains advance it first. A join runs the clock only if it attaches at least 0.01 NEAR, petri_for_near is exact for any deposit, and set_payout and rename are payable and charge the storage they add.",
+  ],
+  [
+    "Sealed bids at the council",
+    "The payer gives a sealed maximum bid and the promisor a sealed ask. An accepted offer is made at the open price; a declined one still clears at the midpoint of ask and bid if the ask is within the bid.",
+  ],
+  [
+    "Started again",
+    "Both dishes were relaunched in place with relaunch, which deleted everything v6.1 stored and started a fresh dish from generation 0. v6.2 moves balances, grants, pending NEAR and the cold pages to prefixes v6.1 never used (r, e, z, x), so nothing a wrong account list leaves behind can be read as v6.2 state.",
+  ],
+];
+
 const CHANGES_V61: [string, string][] = [
   [
     "Gas at 30,000 colonies",
@@ -145,7 +176,7 @@ const CHANGES_V6: [string, string][] = [
   ],
   [
     "Paying with any token",
-    "wNEAR is never refunded: any amount becomes pending NEAR for its account with its order, or goes to the vault with a Dust entry when it cannot pay for its own records. Anyone can complete a waiting order with settle_pending, and intent_minimum tells the site the least a payment needs.",
+    "wNEAR is not refunded: any amount becomes pending NEAR for its account with its order, or goes to the vault with a Dust entry when it cannot pay for its own records (v6.2 refunds such an amount instead). Anyone can complete a waiting order with settle_pending, and intent_minimum tells the site the least a payment needs.",
   ],
   [
     "Names paid for by others",
@@ -300,7 +331,7 @@ export function ParamsSection() {
     ["slide_discount_bps", `${r.slide_discount_bps} (${r.slide_discount_bps / 100}%)`, "How much less a planting of a slide's exact pattern costs under its licence."],
     ["pact_radius", String(r.pact_radius ?? "none"), "Cells around the payer's living cells where a bound colony may not plant, for as long as a pact binds it."],
     ["pact_max_gens", String(r.pact_max_gens ?? "none"), "Most generations a pact can last beyond the dish's stored generation when it is offered."],
-    ["slide_royalty_bps", `${r.slide_royalty_bps} (${r.slide_royalty_bps / 100}%)`, "Share of a licensed planting's cost that anyone but the slide's holder pays the holder, in PETRI (to the agar, from a planter that has never attached NEAR)."],
+    ["slide_royalty_bps", `${r.slide_royalty_bps} (${r.slide_royalty_bps / 100}%)`, "Share of a licensed planting's cost that anyone but the slide's holder pays the holder, in PETRI (to the agar, from a planter that has not attached NEAR or holds more kept PETRI than the planting costs)."],
     ["wnear", r.wnear ?? "none", "The wNEAR contract whose transfers join or buy (pay with any token)."],
     ["house", r.house.join(", "), "The dish's own strains: never fed, no tide share, never sell, send PETRI only to other house accounts, take no tide bounty or keeper pot, and their cells never make a siege."],
     ["keepers", (r.keepers ?? []).join(", ") || "none", "The dish's keepers, house accounts too: no tide bounty, no keeper pot, and PETRI only to other house accounts."],
@@ -311,11 +342,11 @@ export function ParamsSection() {
         <div className="section-head">
           <h2 id="params-title" className={s.h2}>How the parameters were chosen</h2>
           <p className="lede">
-            The numbers are set once, when a dish starts, and no method changes them while it runs. The dish now runs v6.1 as
+            The numbers are set once, when a dish starts, and no method changes them while it runs. The dish now runs v6.2 as
             petri-v6.testnet and, with the same build, as petri-dish.near on mainnet. Earlier testnet dishes (petri-dish.testnet,
             then petri-v2 to petri-v5) were left behind as reviews found problems; each time the rules were changed, tested, and
             launched on a new contract that started again from an empty board. petri-dish.near ran v5 first and was relaunched in
-            place for v6, and both dishes were relaunched again for v6.1: the private relaunch method deleted everything the
+            place for v6, and both dishes were relaunched again for v6.1 and then v6.2: the private relaunch method deleted everything the
             earlier version stored and started again from generation 0.
           </p>
         </div>
@@ -332,7 +363,7 @@ export function ParamsSection() {
               published runs predate three launched changes: they paid 10% tides (now 5%), paid guests&rsquo; winnings in NEAR
               their accounts could not move (now credit), and ran tides with nobody to pay (now skipped). It estimates storage
               and gas rather than measuring them on chain. The runs also predate v6, in which a keeper takes no keeper pot and no
-              tide bounty and the house cannot sell (the simulated house never sold), and v6.1; sim/out-v6.1 reruns v6.1's rules against v6's on the same seeds.
+              tide bounty and the house cannot sell (the simulated house never sold), and v6.1; sim/out-v6.1 reruns v6.1's rules against v6's on the same seeds. v6.2 was not simulated again.
             </p>
             <h3 className="h3">What the runs show</h3>
             <ul className={s.findings}>
@@ -364,6 +395,21 @@ export function ParamsSection() {
             </ul>
           </div>
           <div>
+            <details className={s.fold}>
+              <summary>
+                What changed for v6.2 <small>{CHANGES_V62.length} changes, v6.1 to v6.2</small>
+              </summary>
+              <div className={s.foldBody}>
+                <dl className={s.changeList}>
+                  {CHANGES_V62.map(([was, now]) => (
+                    <div key={was} className={s.change}>
+                      <dt>{was}</dt>
+                      <dd>{now}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </details>
             <details className={s.fold}>
               <summary>
                 What changed for v6.1 <small>{CHANGES_V61.length} changes, v6 to v6.1</small>
@@ -462,7 +508,7 @@ export function ParamsSection() {
                   characters, notes of at most 140 characters, slide titles of at most 40, slides 4 to 32 cells a side, the
                   chain folded every 16 generations, catch-up stopping at 110 TGas less what is still to be written, sponsored credit reclaimable after 5,760
                   generations of wall-clock time unused (each sponsor its own grant, at most 8 sponsors an account, at least 0.01
-                  NEAR a sponsorship), and wNEAR never refunded (any amount waits as pending NEAR, or goes to the vault as dust).
+                  NEAR a sponsorship), and wNEAR that pays for its own records never refunded (it waits as pending NEAR; an amount too small for its records is returned).
                 </p>
               </div>
             </details>

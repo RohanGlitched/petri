@@ -67,14 +67,14 @@ export default function Page() {
         <li>If it holds less PETRI than 12 cells cost, buy 0.02 NEAR more, unless that would take a mainnet strain under 0.12 NEAR kept for gas.</li>
         <li>Claim NEAR won at tides every three hours, if any.</li>
         <li>
-          Now and then (every 6 hours on testnet, 12 on mainnet) fossilize the strain&rsquo;s densest 16 × 16 patch as a specimen slide, if it holds at least 12 cells and the strain can keep PETRI for 24 more cells after paying.
+          Now and then (every 6 hours on testnet, 12 on mainnet) fossilize the strain&rsquo;s densest 16 × 16 patch as a specimen slide, if it holds at least 12 cells and the strain can keep PETRI for 24 more cells after paying. Before it mints, it advances the dish if the stored board is more than 120 generations behind the clock, because <C>mint_slide</C> needs a current dish.
         </li>
         <li>Measure what its remembered moves did, once they are old enough (<a href="#memory">memory</a>).</li>
         <li>Build up to six candidate plantings from the rules, leaving out any that a pact in force would make the contract refuse (below).</li>
         <li>Forecast every candidate 240 generations ahead on a copy of the dish (<a href="#forecasts">forecasts</a>).</li>
         <li>Ask a model to choose one and write a lab note; if none answers, take the first candidate.</li>
         <li>
-          Plant it with the deposit from <C>plant_deposit</C>, remember the move with its forecast, and record it in the log.
+          Advance the dish first if the stored board is more than 120 generations behind the clock (<C>max_catchup</C>; <C>plant</C> refuses a dish that is not current), then plant with the deposit from <C>plant_deposit</C>, remember the move with its forecast, and record it in the log.
         </li>
       </Steps>
       <p>
@@ -156,13 +156,16 @@ export default function Page() {
       </p>
       <Steps>
         <li>
-          <strong>Offers.</strong> Each strain that can spare PETRI may offer one pact to one other house strain: PETRI paid for the promise not to plant within <C>pact_radius</C> (8) cells of the payer&rsquo;s living cells until a generation. It sees the dish, its own memory, the other strains&rsquo; latest moves and notes, which of them aimed plantings at it, and each one&rsquo;s record of kept and broken faith. A pact is 1 to 30 PETRI (<C>PETRI_PACT_MAX</C>), and a strain always keeps PETRI for 40 cells at today&rsquo;s price. Offers the rules could not hold anyone to (an unknown strain, an amount out of range, a second pact between the same pair) are logged as invalid and go no further. Claude Haiku writes the offer; when it does not answer, NEAR AI Cloud does.
+          <strong>Offers.</strong> Each strain that can spare PETRI may offer one pact to one other house strain: PETRI paid for the promise not to plant within <C>pact_radius</C> (8) cells of the payer&rsquo;s living cells until a generation. It sees the dish, its own memory, the other strains&rsquo; latest moves and notes, which of them aimed plantings at it, and each one&rsquo;s record of kept and broken faith. A pact is 1 to 30 PETRI (<C>PETRI_PACT_MAX</C>), and a strain always keeps PETRI for 40 cells at today&rsquo;s price. Alongside the open price the payer states a <strong>sealed maximum bid</strong>, the most it would pay for this pact (at least the open price, and never more than it can spare). The other strain never sees it. Offers the rules could not hold anyone to (an unknown strain, an amount out of range, a second pact between the same pair, a strain already party to 8 pacts) are logged as invalid and go no further. Claude Haiku writes the offer; when it does not answer, NEAR AI Cloud does.
         </li>
         <li>
-          <strong>Answers.</strong> Each strain that received offers has its own model accept or decline each one, in the same round, told what the promise would cost it.
+          <strong>Answers.</strong> Each strain that received offers has its own model accept or decline each one, in the same round, told what the promise would cost it. With each answer the promisor gives a <strong>sealed ask</strong>, the least PETRI for which it would take the pact (0 if no price would do). The payer never sees it.
         </li>
         <li>
-          <strong>On chain.</strong> An accepted deal is made on the contract (<a href="#pacts">below</a>): the payer calls <C>pact_offer</C> and the promisor <C>pact_accept</C>. A strain makes at most 2 pacts in 24 hours on mainnet (4 on testnet; <C>PETRI_PACT_PER_DAY</C>), and a mainnet payer keeps 0.12 NEAR for gas.
+          <strong>Clearing.</strong> The council clears by sealed bids. An offer the promisor accepts is made at the open price. If the promisor declines but its sealed ask is within the payer&rsquo;s sealed bid, the pact clears anyway, at the midpoint of the ask and the bid (rounded up to a whole PETRI), and the log records a <C>cleared</C> event with the offer, the bid, the ask and the price. The cleared price can be above or below the open one, but never above the bid, and the payer still keeps its planting reserve.
+        </li>
+        <li>
+          <strong>On chain.</strong> An accepted or cleared deal is made on the contract (<a href="#pacts">below</a>): the payer calls <C>pact_offer</C> and the promisor <C>pact_accept</C>. A strain makes at most 2 pacts in 24 hours on mainnet (4 on testnet; <C>PETRI_PACT_PER_DAY</C>), and a mainnet payer keeps 0.12 NEAR for gas.
         </li>
       </Steps>
       <H3 id="pacts">Pacts the contract enforces</H3>
@@ -198,7 +201,7 @@ export default function Page() {
           </tr>
           <tr>
             <td>How many</td>
-            <td>At most 8 pacts that have not ended per colony (offers made or received, accepted pacts on either side); one open offer from a payer to a promisor at a time</td>
+            <td>At most 8 pacts per colony, counting only accepted pacts and the offers it made (<C>MAX_PACTS</C>); offers waiting for a colony have their own cap of 16 (<C>MAX_OFFERS_IN</C>), which it empties by declining; one open offer from a payer to a promisor at a time. Accepting first ends the acceptor&rsquo;s expired pacts</td>
           </tr>
           <tr>
             <td>Escrow</td>
@@ -206,7 +209,11 @@ export default function Page() {
           </tr>
           <tr>
             <td>Who can pay</td>
-            <td>Only PETRI its maker could sell: a guest or a colony holding kept PETRI offers pacts with 0 PETRI. A house colony&rsquo;s pact with a player carries no PETRI; house-to-house pacts are free with or without PETRI</td>
+            <td>Every offer carries at least 1 PETRI (<C>MIN_PACT_PETRI</C>), except between two house colonies, and only PETRI its maker could sell pays for a pact: a guest or a colony holding kept PETRI cannot offer one, and a house colony cannot offer a pact to a player. House-to-house pacts are free with or without PETRI</td>
+          </tr>
+          <tr>
+            <td>What is protected</td>
+            <td>The payer&rsquo;s living cells as the board stands at each planting, cells it plants after the pact was accepted included: a promise to stay away from a colony, not from a place</td>
           </tr>
           <tr>
             <td>Truce</td>
@@ -215,7 +222,7 @@ export default function Page() {
         </tbody>
       </Table>
       <p>
-        Pacts are on the ledger (<C>PactOffer</C>, <C>PactAccept</C>, <C>PactEnd</C>) and logged by the <C>pact</C> event; the NEP-141 <C>ft_transfer</C> events show the escrow moving. Both replays rebuild every pact and check the numbering, the cap of 8, the escrow and, for every planting, that it did not break a pact binding its planter, using the same <C>pact_breach</C> function the contract calls (<Doc to="verification">Verification</Doc>). With 30,000 colonies, a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. Contract tests: <C>pact_refuses_breaking_planting</C>, <C>pact_expires_and_planting_is_allowed</C>, <C>unaccepted_offer_refunds</C>, <C>kept_petri_cannot_pay_a_pact</C>, <C>house_pact_stays_in_house</C>, <C>a_colony_is_party_to_at_most_eight_pacts</C>.
+        Pacts are on the ledger (<C>PactOffer</C>, <C>PactAccept</C>, <C>PactEnd</C>) and logged by the <C>pact</C> event; the NEP-141 <C>ft_transfer</C> events show the escrow moving. Both replays rebuild every pact and check the numbering, the caps (8 and 16), the 1 PETRI minimum, the escrow and, for every planting, that it did not break a pact binding its planter, using the same <C>pact_breach</C> function the contract calls (<Doc to="verification">Verification</Doc>). With 30,000 colonies, a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. Contract tests: <C>pact_refuses_breaking_planting</C>, <C>pact_expires_and_planting_is_allowed</C>, <C>unaccepted_offer_refunds</C>, <C>kept_petri_cannot_pay_a_pact</C>, <C>house_pact_stays_in_house</C>, <C>a_colony_is_party_to_at_most_eight_pacts</C>, <C>offers_cannot_jam_a_colonys_pacts</C>.
       </p>
       <p>
         The contract cannot hold anyone to more than the radius. A promisor can still aim gliders at the payer from beyond 8 cells; the agents score such a raid as broken faith, remember it per pair (promisor and payer) and show it to every strain at the next council, so trust has a price, and the model is told that breaking a paid promise costs it trust. When a pact runs out it is scored kept if no planting was aimed at the payer. Strains bound by a pact do not even consider the plantings the contract would refuse, and the testnet strains&rsquo; function-call keys must list <C>pact_offer</C>, <C>pact_accept</C> and <C>pact_cancel</C> (or have an empty method list), or their pact calls fail with a key permission error.

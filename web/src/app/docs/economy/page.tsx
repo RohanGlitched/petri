@@ -144,7 +144,7 @@ agar                         = max_supply − sold − fed + returned + bought_b
               <C>join</C> (at least 0.01 NEAR)
             </td>
             <td>The colony record, its one slot at the end of the last cold page, its name, its balance record, the join entry, and 113 bytes for the purchase entry</td>
-            <td>Buys PETRI; attached NEAR to the vault, credit to the credit pool</td>
+            <td>Buys PETRI; attached NEAR to the vault, credit to the credit pool. The colony attaches NEAR only if what reaches the vault, net of storage, is at least 0.01 NEAR</td>
           </tr>
           <tr>
             <td>
@@ -188,8 +188,8 @@ agar                         = max_supply − sold − fed + returned + bought_b
           </tr>
           <tr>
             <td>wNEAR through NEAR Intents</td>
-            <td>A pending record and its <C>Pending</C> entry, from the amount; an amount too small for those goes to the vault with a <C>Dust</C> entry</td>
-            <td>Pending NEAR with its order, spent on a join or purchase as attached NEAR (at once, or later with <C>settle_pending</C>), or claimed by the account. Never refunded</td>
+            <td>A pending record and its <C>Pending</C> entry, from the amount; an amount no larger than what those two records can cost is refunded whole and writes nothing</td>
+            <td>Pending NEAR with its order, spent on a join or purchase as attached NEAR (at once, or later with <C>settle_pending</C>), or claimed by the account. Never refunded once it covers its records</td>
           </tr>
         </tbody>
       </Table>
@@ -201,7 +201,7 @@ agar                         = max_supply − sold − fed + returned + bought_b
         <li>
           <C>sell</C>: proceeds from the vault.
         </li>
-        <li>Tide bounties, to the caller who ran the tide (as credit if that caller is a guest colony; none to a house colony or keeper). A failed bounty goes back to the vault with a <C>Refund</C> entry.</li>
+        <li>Tide bounties, to the caller who ran the tide (as credit if that caller is a colony not paid in NEAR: a guest, or one holding kept PETRI; none to a house colony or keeper). A failed bounty goes back to the vault with a <C>Refund</C> entry.</li>
         <li>
           <C>unsponsor</C>: a sponsor takes back what is left of its own grant once the account has left it untouched for a day.
         </li>
@@ -220,7 +220,7 @@ credit_won                                                               = Σ ti
 tides_owed                                                               = Σ tides (paid) − Σ claims (near)
 pending                                                                  = Σ Pending (near) + Σ other refunds (near − storage) − Σ Unpend (near)`}</Formula>
       <p>
-        <C>near_in</C> is what purchases, plantings and <C>Dust</C> entries put into the vault. Every term is a sum over ledger entries, so both replays rebuild each one from the ledger alone and compare it with the contract&rsquo;s own counter.
+        <C>near_in</C> is what joins, purchases and plantings put into the vault (on ledgers written by v6.1 it also counts <C>Dust</C> entries; v6.2 refunds that wNEAR instead), however little a call brings. Every term is a sum over ledger entries, so both replays rebuild each one from the ledger alone and compare it with the contract&rsquo;s own counter.
       </p>
 
       <H2 id="pools">Two pools</H2>
@@ -240,7 +240,7 @@ pending                                                                  = Σ Pe
           </tr>
           <tr>
             <th>Pays at tides</th>
-            <td>5%: bounty, entry storage, then shares in NEAR to colonies that attached NEAR, in credit to the rest</td>
+            <td>5%: bounty, entry storage, then shares in NEAR to colonies that attached NEAR and hold no kept PETRI, in credit to the rest</td>
             <td>5%, shares as credit only</td>
           </tr>
           <tr>
@@ -286,7 +286,7 @@ pending                                                                  = Σ Pe
       <H3 id="credit-won">Won credit</H3>
       <ul>
         <li>
-          Every colony&rsquo;s share of the credit pool at each tide; and, for a colony that has never attached NEAR, its share of the vault, its sales back and the bounties of tides it runs.
+          Every colony&rsquo;s share of the credit pool at each tide; and, for a colony that has not attached NEAR or holds kept PETRI, its share of the vault and the bounties of tides it runs, and, for a colony that has not attached NEAR, its sales back.
         </li>
         <li>It is spent before sponsored credit, and no sponsor can take it back.</li>
         <li>It can never be withdrawn. The only way out is spending it on moves, which puts it into the credit pool for the next tides.</li>
@@ -294,12 +294,12 @@ pending                                                                  = Σ Pe
       <H3 id="credit-guest">The guest rules, together</H3>
       <ol>
         <li>A guest&rsquo;s key is a function-call key for the dish only, so it cannot attach NEAR and cannot transfer NEAR or PETRI. The relayer refuses any relayed call that carries a deposit. And the contract refuses <C>ft_transfer</C> and <C>ft_transfer_call</C> from any colony that has never attached NEAR, whatever key signs.</li>
-        <li>A guest never attaches NEAR, so the contract counts its attached total as zero.</li>
-        <li>A colony whose attached total is zero is paid every tide share, sale and bounty as credit.</li>
+        <li>A guest never attaches NEAR, so the contract counts its attached total as zero. A colony attaches NEAR only when one join, buy or planting puts at least 0.01 NEAR, net of storage, into the vault; a smaller amount goes to the vault but attaches nothing, so a yoctoNEAR on a call paid from credit never turns credit into NEAR.</li>
+        <li>A colony whose attached total is zero is paid every tide share, sale and bounty as credit. So is one that has attached NEAR while it holds kept PETRI, apart from its sales, which it cannot make for NEAR at all.</li>
         <li>
           Only a colony that has attached NEAR may <C>set_payout</C>, and the relayer does not relay it.
         </li>
-        <li>A guest takes no keeper pot, and a guest&rsquo;s slide royalty goes to the agar, not to the holder.</li>
+        <li>A guest takes no keeper pot (nor does a join on credit run a generation), and a royalty from a guest, or from a colony whose kept PETRI is more than the planting costs, goes to the agar, not to the holder.</li>
         <li>PETRI a colony earned before its first NEAR, or bought with credit, is kept: it cannot be sold for NEAR or sent until it has been planted (<a href="#kept">kept PETRI</a>).</li>
       </ol>
       <p>
@@ -307,7 +307,7 @@ pending                                                                  = Σ Pe
       </p>
       <Callout kind="note">
         <p>
-          Attaching NEAR is per colony and permanent: once a colony has put any NEAR into the vault itself (a join, purchase or planting with attached NEAR, or wNEAR through NEAR Intents), all of its later tide shares and sales are paid in NEAR.
+          Attaching NEAR is per colony and permanent: once one join, purchase or planting (or wNEAR through NEAR Intents) has put at least 0.01 NEAR, net of storage, into the vault, its later tide shares and sales are paid in NEAR, but only while it holds no kept PETRI. With any, its tide shares and bounties are credit and a claim brings only PETRI.
         </p>
       </Callout>
 
@@ -317,15 +317,15 @@ pending                                                                  = Σ Pe
       </p>
       <ul>
         <li>While a colony is a guest, everything it claims, buys (all of a guest&rsquo;s purchases are credit) and is paid in royalties as a slide holder is added to <C>kept</C>.</li>
-        <li>When it first attaches NEAR (a purchase or planting with attached NEAR, a join with NEAR, a wNEAR join or purchase), its unclaimed earnings are added; what it claimed as a guest already is.</li>
+        <li>When it first attaches NEAR (a join, purchase or planting that puts at least 0.01 NEAR into the vault in one call, a wNEAR join or purchase included), its unclaimed earnings are added; what it claimed as a guest already is.</li>
         <li>PETRI anyone buys with credit is added, attached or not: <C>credit_share(units, credit, near + credit)</C> of the purchase.</li>
         <li>Plantings (cost and royalty) and slides spend kept PETRI first; a guest&rsquo;s sale for credit spends it too.</li>
       </ul>
       <p>
-        While a colony holds any kept PETRI it cannot sell PETRI for NEAR, send PETRI or pay PETRI into a pact. A guest cannot send PETRI at all, kept or not (it can plant, mint slides, receive PETRI and sell back for credit). Once its plantings have spent its kept PETRI, everything it holds is its own, and what it earns afterwards is sellable. The cost is that a former guest plants before it sells.
+        While a colony holds any kept PETRI it cannot sell PETRI for NEAR, send PETRI or pay PETRI into a pact. A guest cannot send PETRI at all, kept or not (it can plant, mint slides, receive PETRI and sell back for credit). While it holds any, a colony is also paid in credit, not NEAR: its tide share and bounties are credit, <C>claim</C> pays out only its PETRI and leaves its NEAR owed (no <C>Claim</C> entry is written), and a royalty it would pay out of kept PETRI goes to the agar. Once its plantings have spent its kept PETRI, everything it holds is its own, what it earns afterwards is sellable, and its NEAR is paid again. The cost is that a former guest plants before it sells.
       </p>
       <p>
-        The rule is &ldquo;none while any is held&rdquo; rather than &ldquo;sellable = balance − kept&rdquo; because balances are not in the ledger (transfers and the keeper pot are not entries), so no replay could check the second exactly. With the first every check is exact: both replays rebuild every colony&rsquo;s <C>kept</C> from the ledger entry by entry and compare it with the view, and a sale for NEAR or a PETRI pact by a colony whose replayed <C>kept</C> is above zero is a violation. The house is exempt from the send check (its PETRI cannot leave the house anyway).
+        The rule is &ldquo;none while any is held&rdquo; rather than &ldquo;sellable = balance − kept&rdquo; because balances are not in the ledger (transfers and the keeper pot are not entries), so no replay could check the second exactly. With the first every check is exact: both replays rebuild every colony&rsquo;s <C>kept</C> from the ledger entry by entry and compare it with the view, and a sale for NEAR, a claim of NEAR or a PETRI pact by a colony whose replayed <C>kept</C> is above zero is a violation. The house is exempt from the send check (its PETRI cannot leave the house anyway).
       </p>
       <Table caption="sim/out-v6.1, fixes.txt P1: testnet, 150 players plus 3 operators of each kind (a wallet and 10 relayer guests), 7 days, 6 seeds, per operator">
         <thead>
@@ -358,7 +358,7 @@ pending                                                                  = Σ Pe
       </p>
       <Callout kind="check" title="Why free play can never extract NEAR">
         <p>
-          NEAR leaves the vault to a colony only as tide winnings (paid as NEAR only to a colony that has attached NEAR), as the price of a sale back to the agar, or as a tide bounty. Sponsored credit is never vault NEAR. A guest is paid in credit; it cannot send PETRI to anyone who could sell it; PETRI it earned or bought with credit cannot be sold for NEAR even after it attaches, until it has been planted. Each step is a refusal in the contract, rebuilt and checked by both replays.
+          NEAR leaves the vault to a colony only as tide winnings (paid as NEAR only to a colony that has attached NEAR and holds no kept PETRI), as the price of a sale back to the agar, or as a tide bounty. Sponsored credit is never vault NEAR. A guest is paid in credit; it cannot send PETRI to anyone who could sell it; PETRI it earned or bought with credit cannot be sold for NEAR even after it attaches, until it has been planted. Each step is a refusal in the contract, rebuilt and checked by both replays.
         </p>
       </Callout>
 

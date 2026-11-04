@@ -327,7 +327,7 @@ export function Records() {
           {r?.licence && <Link className={s.slideLink} href={`/specimens/${encodeURIComponent(r.licence.token)}`}>Specimen {r.licence.token}</Link>}
           <p className={s.detail}>
             {r?.licence
-              ? `Paid to its holders by ${int(r.licence.plantings)} ${r.licence.plantings === 1 ? "planting" : "plantings"} of its pattern.${r.toAgar > 0 ? ` Across all slides, ${petri(r.toAgar, 2)} PETRI of royalties went to the agar from planters who had never attached NEAR.` : ""}`
+              ? `Paid to its holders by ${int(r.licence.plantings)} ${r.licence.plantings === 1 ? "planting" : "plantings"} of its pattern.${r.toAgar > 0 ? ` Across all slides, ${petri(r.toAgar, 2)} PETRI of royalties went to the agar from planters who had not attached NEAR or held more kept PETRI than the planting cost.` : ""}`
               : `A slide of at least ${d.rules?.licence_min_cells ?? 12} cells licenses its pattern: ${(d.rules?.slide_discount_bps ?? 2500) / 100}% off to plant it, and ${(d.rules?.slide_royalty_bps ?? 1000) / 100}% of that to its holder.`}
           </p>
         </li>

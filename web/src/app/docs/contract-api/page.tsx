@@ -89,6 +89,7 @@ const NAME_ERRORS = [
 const ONE_YOCTO = "requires exactly 1 yoctoNEAR";
 const NO_SLIDE = "there is no slide with that id";
 
+const STORAGE_MSG = "this needs {n} NEAR for its storage (attached or as credit); what is not used comes back";
 const KEPT_MSG = "PETRI earned before a colony's first NEAR stays in the dish: you hold {n} kept PETRI; plant it first (kept PETRI is spent first), then you can pay for a pact";
 const DISH: M[] = [
   {
@@ -98,7 +99,7 @@ const DISH: M[] = [
     args: `{ "name": "My Colony", "color": 15905882, "credit": null }`,
     what: (
       <p>
-        Makes the caller a colony, once per account. The NEAR it brings (attached, plus <C>credit</C> yoctoNEAR taken from its sponsored credit; an account with no colony has no won credit yet) pays the colony&rsquo;s storage and 113 bytes for the purchase entry; the rest buys PETRI from the agar. Attached NEAR goes to the vault, credit to the credit pool. Catches the dish up first; tides that catch-up runs pay their bounty to the joining account. An account named in <C>rules.house</C> or <C>rules.keepers</C> joins as a house colony (<C>house: true</C>). A player cannot choose a name of the form <C>Culture &lt;hex digits&gt;</C>: those are kept for colonies someone else paid to start.
+        Makes the caller a colony, once per account. The NEAR it brings (attached, plus <C>credit</C> yoctoNEAR taken from its sponsored credit; an account with no colony has no won credit yet) pays the colony&rsquo;s storage and 113 bytes for the purchase entry; the rest buys PETRI from the agar. Attached NEAR goes to the vault, credit to the credit pool. The colony attaches NEAR only if what reaches the vault, net of storage, is at least <C>min_join</C> (0.01 NEAR): the site&rsquo;s 0.02 NEAR join nets about 0.0155 and attaches, a join of exactly 0.01 NEAR or on credit does not. Catches the dish up first, but only if the NEAR attached to the call is itself at least <C>min_join</C>; a join on credit runs no generation, so it takes no bounty or pot. Tides that catch-up runs pay their bounty to the joining account. An account named in <C>rules.house</C> or <C>rules.keepers</C> joins as a house colony (<C>house: true</C>). A player cannot choose a name of the form <C>Culture &lt;hex digits&gt;</C>: those are kept for colonies someone else paid to start.
       </p>
     ),
     deposit: "At least min_join (0.01 NEAR), attached and credit together, and more than the colony's storage plus 113 bytes. The site attaches 0.02 NEAR.",
@@ -129,7 +130,7 @@ const DISH: M[] = [
           Brings <C>cells</C> (flat indices, <C>y * width + x</C>) to life for the caller&rsquo;s colony. Catches up, requires the stored generation to equal the clock&rsquo;s, claims the colony&rsquo;s earnings into its balance, checks the cells with <C>Dish::check_plant</C> (house cells never make a siege), charges the price (×<C>siege_x</C> = 3 for a siege), burns half, returns half to the agar, adds <C>cells × 1000</C> to the stake (a colony with no row enters the hot table, which holds at most 10,000 rows: while it is full, up to 32 rows that may leave move out first, and if it is still full the planting is refused) and records a <C>Plant</C> entry. NEAR beyond the planting&rsquo;s storage goes to the vault (attached) or the credit pool (credit); nothing is sent back.
         </p>
         <p>
-          With <C>slide</C> (a token id), the planting is made under that specimen slide&rsquo;s licence, if the slide captured at least <C>licence_min_cells</C> (12) cells; a smaller slide is a keepsake and the planting is refused. The cells must be exactly the slide&rsquo;s pattern moved to any place on the wrapped dish, every cell once, not turned or flipped (<C>petri_core::fits_slide</C>). The price is <C>slide_discount_bps</C> (2500, 25%) less, the siege surcharge still applies in full, and a planter that does not hold the slide also pays the holder <C>slide_royalty_bps</C> (1000, 10%) of that discounted cost in PETRI, a transfer, not a burn. A holder with no PETRI registration is registered at the planter&rsquo;s expense (125 bytes). A planter that has never attached NEAR before this planting pays the royalty to the agar instead (counted in <C>returned</C>; the holder and the slide&rsquo;s <C>royalties</C> get nothing). The house may plant only slides it holds. The entry&rsquo;s <C>licence</C> records the token, the slide&rsquo;s move count, the holder, the royalty and <C>to_agar</C>.
+          With <C>slide</C> (a token id), the planting is made under that specimen slide&rsquo;s licence, if the slide captured at least <C>licence_min_cells</C> (12) cells; a smaller slide is a keepsake and the planting is refused. The cells must be exactly the slide&rsquo;s pattern moved to any place on the wrapped dish, every cell once, not turned or flipped (<C>petri_core::fits_slide</C>). The price is <C>slide_discount_bps</C> (2500, 25%) less, the siege surcharge still applies in full, and a planter that does not hold the slide also pays the holder <C>slide_royalty_bps</C> (1000, 10%) of that discounted cost in PETRI, a transfer, not a burn. A holder with no PETRI registration is registered at the planter&rsquo;s expense (125 bytes). A planter that has not attached NEAR before this planting, or that holds more kept PETRI than the planting costs (read after the planting&rsquo;s own claim; kept PETRI is spent first, so the royalty would come out of it), pays the whole royalty to the agar instead (counted in <C>returned</C>; the holder and the slide&rsquo;s <C>royalties</C> get nothing). NEAR beyond the storage attaches the colony only if it is at least <C>min_join</C>. The house may plant only slides it holds. The entry&rsquo;s <C>licence</C> records the token, the slide&rsquo;s move count, the holder, the royalty and <C>to_agar</C>.
         </p>
       </>
     ),
@@ -168,7 +169,7 @@ const DISH: M[] = [
     kind: "payable",
     sig: "pub fn buy(&mut self, credit: Option<U128>) -> U128",
     args: `{ "credit": null }`,
-    what: <p>Buys PETRI from the agar for the caller&rsquo;s colony with the attached NEAR plus <C>credit</C>, at the curve&rsquo;s midpoint price. 113 bytes of storage (0.00113 NEAR) come off the top for the purchase entry, from credit first.</p>,
+    what: <p>Buys PETRI from the agar for the caller&rsquo;s colony with the attached NEAR plus <C>credit</C>, at the curve&rsquo;s midpoint price. 113 bytes of storage (0.00113 NEAR) come off the top for the purchase entry, from credit first. The colony attaches NEAR only if the NEAR that reaches the vault, net of that, is at least <C>min_join</C> (0.01 NEAR) in this one call; less goes to the vault and attaches nothing.</p>,
     deposit: "More than 0.00113 NEAR, attached and credit together. The site uses 0.01 NEAR.",
     gas: "300 TGas (the site's value; unused gas is refunded).",
     returns: "PETRI units bought.",
@@ -182,7 +183,7 @@ const DISH: M[] = [
     args: `{ "petri": "20000000" }`,
     what: (
       <p>
-        Catches up and claims the colony&rsquo;s earnings first, so its balance counts them. Then hands <C>petri</C> units back to the agar for NEAR from the vault: <C>sell_quote(petri)</C>, less the storage of the <C>Sell</C> entry. A colony holding kept PETRI (what it earned before its first NEAR, or bought with credit) cannot sell for NEAR until its plantings have spent it; a colony that never attached NEAR may still sell for credit, which spends its kept PETRI. Limited by <C>state().sell_left</C>, which each tide sets to 10% of the vault (zero before the first tide). The house never sells: a house colony is refused. A colony that never attached NEAR is paid in won credit instead; otherwise the NEAR goes to its payout account or its own. A NEAR sale must also be large enough to pay for a refund&rsquo;s records (239 bytes) should the transfer fail; a failed transfer becomes pending NEAR for the colony&rsquo;s own account (see <a href="#callbacks">on_payout</a>).
+        Catches up, requires the stored generation to equal the clock&rsquo;s afterwards, and claims the colony&rsquo;s earnings, so its balance counts them. Then hands <C>petri</C> units back to the agar for NEAR from the vault: <C>sell_quote(petri)</C>, less the storage of the <C>Sell</C> entry. A colony holding kept PETRI (what it earned before its first NEAR, or bought with credit) cannot sell for NEAR until its plantings have spent it; a colony that never attached NEAR may still sell for credit, which spends its kept PETRI. Limited by <C>state().sell_left</C>, which each tide sets to 10% of the vault (zero before the first tide). The house never sells: a house colony is refused. A colony that has not attached NEAR is paid in won credit instead; otherwise the NEAR goes to its payout account or its own. A NEAR sale must also be large enough to pay for a refund&rsquo;s records (239 bytes) should the transfer fail; a failed transfer becomes pending NEAR for the colony&rsquo;s own account (see <a href="#callbacks">on_payout</a>).
       </p>
     ),
     deposit: "None.",
@@ -193,6 +194,7 @@ const DISH: M[] = [
       JOIN_FIRST,
       "the dish's own colonies never sell PETRI back: the vault is the players'",
       "sell at least some PETRI",
+      "the dish is behind the clock; call advance first",
       "you hold {n} PETRI",
       "that is too little PETRI to buy back",
       "the agar buys back at most {n} NEAR more before the next tide",
@@ -208,7 +210,7 @@ const DISH: M[] = [
     args: `{ "max": 120 }`,
     what: (
       <p>
-        Steps up to <C>max</C> due generations (default and ceiling 120, at least 1). Anyone may call it. Like every call that catches the dish up, if it ran at least one generation and the caller can hold PETRI (a colony, or registered with <C>storage_deposit</C>) and is not one of the house&rsquo;s accounts (a house strain or a keeper) or a guest (a colony that has never attached NEAR), it takes the keeper pot: the catch-up pays it, not <C>advance</C> separately. Tides it runs pay the caller their bounty: in NEAR, or as credit if the caller is a colony that never attached NEAR. A tide run by a house colony or a keeper pays no bounty: it stays in the vault, and a keeper with no colony is recorded as <C>by: 65535</C>.
+        Steps up to <C>max</C> due generations (default and ceiling 120, at least 1). Anyone may call it. Like every call that catches the dish up, if it ran at least one generation and the caller can hold PETRI (a colony, or registered with <C>storage_deposit</C>) and is not one of the house&rsquo;s accounts (a house strain or a keeper) or a guest (a colony that has never attached NEAR), it takes the keeper pot: the catch-up pays it, not <C>advance</C> separately. Tides it runs pay the caller their bounty: in NEAR, or as credit if the caller is a colony that has not attached NEAR or holds kept PETRI. A tide run by a house colony or a keeper pays no bounty: it stays in the vault, and a keeper with no colony is recorded as <C>by: 65535</C>.
       </p>
     ),
     deposit: "None.",
@@ -224,7 +226,7 @@ const DISH: M[] = [
     args: `{}`,
     what: (
       <p>
-        Moves the colony&rsquo;s unclaimed PETRI into its balance and sends the NEAR it has won at tides to its payout account or its own, with a <C>Claim</C> entry paid from that NEAR. NEAR winnings too small for the entry plus a refund&rsquo;s records (about 0.0034 NEAR) stay owed until they are larger. Credit won needs no claim. If the transfer fails, <C>on_payout</C> makes the NEAR pending for the colony&rsquo;s own account.
+        Moves the colony&rsquo;s unclaimed PETRI into its balance and sends the NEAR it has won at tides to its payout account or its own, with a <C>Claim</C> entry paid from that NEAR. It sends NEAR only while the colony holds no kept PETRI: while <C>kept</C> is above 0 it claims only PETRI, its NEAR stays owed and no <C>Claim</C> entry is written. NEAR winnings too small for the entry plus a refund&rsquo;s records (about 0.0034 NEAR) stay owed until they are larger. Credit won needs no claim. If the transfer fails, <C>on_payout</C> makes the NEAR pending for the colony&rsquo;s own account.
       </p>
     ),
     deposit: "None.",
@@ -235,18 +237,18 @@ const DISH: M[] = [
   },
   {
     name: "rename",
-    kind: "change",
+    kind: "payable",
     sig: "pub fn rename(&mut self, name: String, color: u32) -> Colony",
     args: `{ "name": "Better Name", "color": 2364586 }`,
     what: (
       <p>
-        Chooses the name and colour, once, for a colony someone else paid to start (<C>Colony.proxy = true</C>): one that a wNEAR payment from another sender started under a neutral name, <C>Culture</C> and 4 (then 6 to 16) hex digits of <C>sha256(account)</C>. After it, <C>proxy</C> is false. The new name follows the same rules as <C>join</C>&rsquo;s.
+        Chooses the name and colour, once, for a colony someone else paid to start (<C>Colony.proxy = true</C>): one that a wNEAR payment from another sender started under a neutral name, <C>Culture</C> and 4 (then 6 to 16) hex digits of <C>sha256(account)</C>. After it, <C>proxy</C> is false. The new name follows the same rules as <C>join</C>&rsquo;s. The storage a longer name adds is charged from the attached NEAR and the rest is sent back.
       </p>
     ),
-    deposit: "None.",
+    deposit: "The storage the name adds; 0.001 NEAR always covers it, and what is not used comes back. The site attaches 0.001 NEAR.",
     gas: "50 TGas (the site's value).",
     returns: "The updated Colony.",
-    errors: [CALLER, JOIN_FIRST, "only a colony someone else started can be renamed, and only once", ...NAME_ERRORS, "a colony with that name already exists", "color must be 0xRRGGBB"],
+    errors: [CALLER, JOIN_FIRST, "only a colony someone else started can be renamed, and only once", ...NAME_ERRORS, "a colony with that name already exists", "color must be 0xRRGGBB", STORAGE_MSG],
     events: EV("rename"),
   },
 ];
@@ -254,13 +256,13 @@ const DISH: M[] = [
 const PAYOUTS: M[] = [
   {
     name: "set_payout",
-    kind: "change",
+    kind: "payable",
     sig: "pub fn set_payout(&mut self, account_id: Option<AccountId>)",
     args: `{ "account_id": "cold-wallet.near" }`,
-    what: <p>Sends the colony&rsquo;s NEAR payouts (tide claims and sales) to <C>account_id</C> from now on, or back to the colony&rsquo;s own account with <C>null</C>. Only a colony that has attached NEAR may set one, never to the dish itself; the relayer never relays it. A payout that cannot be delivered there becomes pending NEAR for the colony&rsquo;s own account.</p>,
-    deposit: "None.",
+    what: <p>Sends the colony&rsquo;s NEAR payouts (tide claims and sales) to <C>account_id</C> from now on, or back to the colony&rsquo;s own account with <C>null</C>. Only a colony that has attached NEAR may set one, never to the dish itself; the relayer never relays it. A payout that cannot be delivered there becomes pending NEAR for the colony&rsquo;s own account. The storage the account name adds is charged from the attached NEAR; the rest is sent back.</p>,
+    deposit: "The storage the account name adds; 0.001 NEAR always covers it, and what is not used comes back. The site attaches 0.001 NEAR.",
     gas: "50 TGas (the site's value).",
-    errors: [CALLER, JOIN_FIRST, "only a colony that has attached NEAR is paid in NEAR; free play earns credit, which stays in the dish", "payouts cannot go to the dish itself"],
+    errors: [CALLER, JOIN_FIRST, "only a colony that has attached NEAR is paid in NEAR; free play earns credit, which stays in the dish", "payouts cannot go to the dish itself", STORAGE_MSG],
     events: EV("payout"),
   },
 ];
@@ -382,7 +384,7 @@ const SLIDES: M[] = [
     args: `{ "x": 32, "y": 40, "w": 16, "h": 16, "title": "First garden", "credit": null }`,
     what: (
       <p>
-        Mints a specimen slide of the caller colony&rsquo;s own living cells in the <C>w × h</C> rectangle at <C>(x, y)</C>, wrapping, at the stored generation after catching up. Burns <C>slide_cells_price</C> per captured cell (earnings are claimed first). Storage, with a 184-byte reserve for later owners, comes from <C>credit</C> first (up to the storage needed), then the attached NEAR; attached NEAR left over is sent back. Records a <C>Slide</C> ledger entry. A slide that captured at least <C>licence_min_cells</C> (12) cells is then a pattern licence; a smaller one (at least <C>slide_min_cells</C>, 5) is a keepsake: see <a href="#m-plant">plant</a>.
+        Mints a specimen slide of the caller colony&rsquo;s own living cells in the <C>w × h</C> rectangle at <C>(x, y)</C>, wrapping, at the stored generation after catching up (the dish must then be current). Burns <C>slide_cells_price</C> per captured cell (earnings are claimed first). Storage, with a 184-byte reserve for later owners, comes from <C>credit</C> first (up to the storage needed), then the attached NEAR; attached NEAR left over is sent back. Records a <C>Slide</C> ledger entry. A slide that captured at least <C>licence_min_cells</C> (12) cells is then a pattern licence; a smaller one (at least <C>slide_min_cells</C>, 5) is a keepsake: see <a href="#m-plant">plant</a>.
       </p>
     ),
     deposit: <><C>slide_deposit(w, h, title_bytes)</C>, attached or as credit.</>,
@@ -395,6 +397,7 @@ const SLIDES: M[] = [
       "the slide's corner is off the dish",
       "a slide's title may not contain control, direction, invisible or tag characters",
       "a slide's title is at most 40 characters",
+      "the dish is behind the clock; call advance first",
       "a slide needs at least 5 of your living cells; that rectangle holds {n}",
       "a slide of {n} cells costs {p} PETRI; you hold {b}",
       CREDIT,
@@ -460,7 +463,7 @@ const PACTS: M[] = [
           Colony A (the caller) offers the colony of account <C>to</C> (B) <C>petri</C> units of PETRI for B&rsquo;s promise not to plant within <C>pact_radius</C> (8) cells, across or down and wrapping, of A&rsquo;s living cells before generation <C>until</C>. The dish holds the PETRI in escrow (<C>state().pact_escrow</C>) until B accepts. It catches the dish up first; <C>until</C> must be after the stored generation and at most <C>pact_max_gens</C> (2,880, twelve hours) ahead. Returns the pact&rsquo;s number.
         </p>
         <p>
-          Rules: one open offer from A to B at a time; each colony is party to at most 8 pacts that have not ended (expired pacts of both colonies are ended first, so slots free themselves). Only PETRI its maker could sell pays for a pact: a guest or a colony holding kept PETRI may offer <C>petri</C> 0 only. A house colony&rsquo;s pact with a player carries no PETRI; a player may pay the house; house-to-house pacts are free with or without PETRI. Writes a <C>PactOffer</C> ledger entry.
+          Rules: one open offer from A to B at a time. Every offer carries at least 1 PETRI (<C>MIN_PACT_PETRI</C>), except between two house colonies. A colony is party to at most 8 pacts (<C>MAX_PACTS</C>), counting only accepted pacts and offers it made; offers waiting for B are capped separately at 16 (<C>MAX_OFFERS_IN</C>), and B empties that list by declining. Expired pacts of both colonies are ended first, so slots free themselves. Only PETRI its maker could sell pays for a pact, so a guest or a colony holding kept PETRI cannot offer one, and a house colony cannot offer a pact to a player; a player may pay the house, and house-to-house pacts are free with or without PETRI. A pact protects A&rsquo;s living cells as the board stands at each planting, cells A plants after B accepted included: a promise to stay away from a colony, not from a place. Writes a <C>PactOffer</C> ledger entry.
         </p>
       </>
     ),
@@ -472,10 +475,12 @@ const PACTS: M[] = [
       JOIN_FIRST,
       "that account has no colony to make a pact with",
       "a colony makes no pact with itself",
+      "a pact carries at least 1 PETRI (only pacts between the house's colonies may carry less)",
       "the house's PETRI stays in the house: a house colony's pact with a player carries no PETRI",
       "a pact lasts until a later generation, at most pact_max_gens ahead of the dish",
-      "each colony is party to at most 8 pacts at once, and one of these already is",
       "your offer to that colony is still open: one open offer to a colony at a time",
+      "your colony is party to 8 pacts (accepted, or offers it made) at once; one must end first",
+      "that colony has 16 offers waiting; it must accept or decline one first",
       "you hold {n} PETRI",
       "free play's PETRI stays in the dish: a colony that has never attached NEAR cannot send PETRI (it can plant it, or sell it back for credit)",
       KEPT_MSG,
@@ -490,12 +495,12 @@ const PACTS: M[] = [
     args: `{ "id": 1 }`,
     what: (
       <p>
-        The promisor (B) accepts the pact offered to it: the escrowed PETRI is paid to B, and from then until <C>until</C> the contract refuses every planting by B that breaks it. It uses the stored generation (no catch-up); the planting itself catches up and checks the board at its generation. The refusal reads <C>pact N with &lt;A&apos;s name&gt;: your colony promised not to plant within 8 cells of its living cells until generation U; (x, y) is that close to its cell at (x&apos;, y&apos;)</C>. Writes a <C>PactAccept</C> entry.
+        The promisor (B) accepts the pact offered to it. It first ends B&rsquo;s expired pacts and needs B&rsquo;s count (accepted pacts and offers B made) below 8. The escrowed PETRI is then paid to B, and from then until <C>until</C> the contract refuses every planting by B that breaks it. It uses the stored generation (no catch-up); the planting itself catches up and checks the board at its generation. The refusal reads <C>pact N with &lt;A&apos;s name&gt;: your colony promised not to plant within 8 cells of its living cells until generation U; (x, y) is that close to its cell at (x&apos;, y&apos;)</C>. Writes a <C>PactAccept</C> entry.
       </p>
     ),
     deposit: "None.",
     gas: "300 TGas.",
-    errors: [CALLER, JOIN_FIRST, "there is no such pact", "that pact was not offered to your colony", "that pact is no longer open: it was accepted, ended or expired"],
+    errors: [CALLER, JOIN_FIRST, "there is no such pact", "that pact was not offered to your colony", "that pact is no longer open: it was accepted, ended or expired", "your colony is party to 8 pacts (accepted, or offers it made) at once; one must end first"],
     events: EV("pact", "nep141 ft_transfer"),
   },
   {
@@ -525,14 +530,14 @@ const INTENTS: M[] = [
     what: (
       <>
         <p>
-          NEP-141 receiver, called by a token contract. wNEAR from <C>rules.wnear</C> is never refunded, whatever the amount: it is kept whole (returns <C>&quot;0&quot;</C>) and becomes pending NEAR for <C>msg.for</C> (or for <C>sender_id</C> when the message names no valid account), with its order, less its pending record&rsquo;s and <C>Pending</C> entry&rsquo;s storage. An amount too small even for those goes to the vault with a <C>Dust</C> entry. With at least 35 TGas left it is unwrapped with <C>near_withdraw</C> (5 TGas), and <C>on_unwrapped</C> then schedules <C>settle_intent</C> to run the order; with less, the wNEAR waits for <C>unwrap_wnear</C>. Any other token, or an amount of zero, is returned whole. It never panics.
+          NEP-141 receiver, called by a token contract. wNEAR from <C>rules.wnear</C> that pays for its own records is never refunded: it is kept whole (returns <C>&quot;0&quot;</C>) and becomes pending NEAR for <C>msg.for</C> (or for <C>sender_id</C> when the message names no valid account), with its order, less its pending record&rsquo;s and <C>Pending</C> entry&rsquo;s storage. An amount no larger than <C>intent_bytes(account, order)</C> at the byte price (a fresh pending record plus its <C>Pending</C> entry, an upper bound on what arrival writes) is refunded whole, writes no record and no entry, and so cannot grow the dish&rsquo;s storage; 1Click never delivers so little. With at least 35 TGas left it is unwrapped with <C>near_withdraw</C> (5 TGas), and <C>on_unwrapped</C> then schedules <C>settle_intent</C> to run the order; with less, the wNEAR waits for <C>unwrap_wnear</C>. Any other token, or an amount of zero, is returned whole. It never panics.
         </p>
         <p>
           The message&rsquo;s <C>name</C> and <C>color</C> are used only when <C>sender_id</C> is <C>for</C> itself. A colony started by anyone else&rsquo;s payment gets a neutral name (<C>Culture</C> and hex digits of its account&rsquo;s hash), a colour from the same hash and <C>proxy: true</C>. A self-paid join whose name is taken gets the neutral name too. The house&rsquo;s accounts start their own colonies, so a join paid for one of them waits as pending NEAR. See <Doc to="intents" hash="contract">NEAR Intents</Doc> for every branch.
         </p>
       </>
     ),
-    returns: "The unused amount: all of it for another token, otherwise \"0\".",
+    returns: "The unused amount: all of it for another token or a dust amount, otherwise \"0\".",
     events: EV("intents"),
   },
   {
@@ -618,10 +623,10 @@ const LAUNCH: M[] = [
     sig: "#[private]\n#[init(ignore_state)]\npub fn relaunch(rules: Rules, accounts: Vec<AccountId>) -> Self",
     what: (
       <p>
-        Deletes every key the v6 layout wrote (the vectors of colonies, the ledger, the plant and tide indexes, slides and lab notes; the balance, colony, name, grant, owned-slide and pending maps for colony accounts, slide owners and <C>accounts</C>; the cold pages, the hot table and the board) and launches a fresh dish with <C>rules</C>, as <C>new</C> does. <C>accounts</C> are the accounts that held a v6 PETRI registration, sponsored credit or pending NEAR without a colony or a slide; colony accounts, names and slide owners are read from the v6 records. It logs any pending NEAR v6 still owed (<C>v6 owed {"{n}"} pending NEAR to {"{account}"}</C>). Being private, only a transaction from the contract account itself can run it (each dish account holds one key, a full-access key, at the time of writing); it refuses an account with no v6 dish and one that already runs v6.1, and panics with any message of <C>new</C> on bad rules. v6.1 keeps everything per account, the cold pages, the hot table and the tide index under prefixes v6 never used, so a key a wrong <C>accounts</C> list leaves behind can never be read as v6.1 state; it only keeps its storage. The mainnet dish, <C>petri-dish.near</C>, was relaunched in place this way with <C>contract/launch-rules-mainnet.json</C>, and so was the testnet dish, <C>petri-v6.testnet</C>, with <C>contract/launch-rules.json</C>. Once the full-access key is deleted, nobody can run it.
+        Deletes every key the v6.1 layout wrote (the vectors of colonies, the ledger, the plant and tide indexes, slides and lab notes; the balance, colony, name, grant, owned-slide and pending maps for colony accounts, slide owners and <C>accounts</C>; the cold pages, the hot table and the board) and launches a fresh dish with <C>rules</C>, as <C>new</C> does. <C>accounts</C> are the accounts that held a v6.1 PETRI registration, sponsored credit or pending NEAR without a colony or a slide; colony accounts, names and slide owners are read from the v6.1 records. It logs any pending NEAR v6.1 still owed (<C>v6.1 owed {"{n}"} pending NEAR to {"{account}"}</C>). Being private, only a transaction from the contract account itself can run it (each dish account holds one key, a full-access key, at the time of writing); it refuses an account with no v6.1 dish and one that already runs v6.2, and panics with any message of <C>new</C> on bad rules. v6.2 moves the keys a wrong <C>accounts</C> list could leave behind (balances, grants, pending NEAR and the cold pages) to prefixes v6.1 never used, <C>r</C>, <C>e</C>, <C>z</C> and <C>x</C>; everything else keeps its v6.1 key. A key a wrong list leaves behind can therefore never be read as v6.2 state; it only keeps its storage. Its test, <C>relaunch_leaves_nothing_of_v6_1</C>, builds a real v6.1 state with v6.1&rsquo;s frozen code and checks that the result is byte for byte a fresh v6.2 launch. The mainnet dish, <C>petri-dish.near</C>, was relaunched in place this way with <C>contract/launch-rules-mainnet.json</C>, and so was the testnet dish, <C>petri-v6.testnet</C>, with <C>contract/launch-rules.json</C>. Once the full-access key is deleted, nobody can run it.
       </p>
     ),
-    errors: ["no v6 dish here: relaunch clears a v6 dish that has colonies", "this account already runs v6.1"],
+    errors: ["no v6.1 dish here: relaunch clears a v6.1 dish that has colonies", "this account already runs v6.2"],
     events: EV("relaunch", "nep141 ft_mint"),
   },
 ];
@@ -657,7 +662,7 @@ const VIEWS: [string, string, string][] = [
   ["credit_grants(account_id)", "Vec<Grant>", "The sponsored part, one grant per sponsor, in the order it is spent (oldest first)."],
   ["solvency()", "Solvency", "NEAR held against NEAR owed."],
   ["pact(id)", "Option<PactView>", "One pact by its number: from and to (colony ids), petri, until, accepted and ended (the generation, or null), and binding (accepted, not ended, until ahead of the stored generation)."],
-  ["pacts_of(account_id)", "Vec<PactView>", "The pacts that account's colony is party to and that have not ended (open offers made or received, accepted pacts on either side)."],
+  ["pacts_of(account_id)", "Vec<PactView>", "The pacts that account's colony is party to and that have not ended (open offers made or received, accepted pacts on either side). Only accepted pacts and offers the colony made count towards its 8."],
   ["pending_of(account_id)", "U128", "Pending NEAR: wNEAR payments not yet used, and payouts that failed."],
   ["pending_record(account_id)", "Option<PendingView>", "Pending NEAR, how much of it the waiting order may spend, and the order."],
   ["intent_minimum(what, account_id)", "U128", "The least wNEAR a payment for account_id must deliver for its order (\"join\", or anything else for a purchase) to run: min_join or a purchase's 114 bytes, plus the payment's Pending and Unpend entries."],
@@ -678,7 +683,7 @@ const VIEWS: [string, string, string][] = [
   ["nft_tokens(from_index?, limit?)", "Vec<Token>", "NEP-181: default and at most 10 a call (each carries its image)."],
   ["nft_supply_for_owner(account_id)", "U128", "NEP-181."],
   ["nft_tokens_for_owner(account_id, from_index?, limit?)", "Vec<Token>", "NEP-181: default and at most 10 a call."],
-  ["contract_source_metadata()", "ContractSourceMetadata", "NEP-330 (generated by near-sdk and cargo near): version 0.3.0, a link to the commit, standards [nep330 1.3.0], the build image, command and source snapshot."],
+  ["contract_source_metadata()", "ContractSourceMetadata", "NEP-330 (generated by near-sdk and cargo near): version 0.3.0, a link to the commit, the standards the dish implements (nep141 1.0.0, nep145 1.0.0, nep148 1.0.0, nep171 1.2.0, nep177 2.1.0, nep178 1.0.0, nep181 1.0.0, nep297 1.0.0 and nep330 1.3.0; set in the contract with <C>contract_metadata(standard(...))</C>, while the version and link come from cargo near), the build image, command and source snapshot."],
 ];
 
 export default function Page() {
@@ -703,7 +708,7 @@ export default function Page() {
           <C>credit</C> on <C>join</C>, <C>buy</C>, <C>plant</C> and <C>mint_slide</C> spends that many yoctoNEAR of the caller&rsquo;s credit: what its colony won first, then its sponsors&rsquo; grants, oldest first. Drawing on a grant restarts that grant&rsquo;s day. It is how a function-call key pays: such keys cannot attach NEAR.
         </li>
         <li>
-          <C>join</C>, <C>buy</C>, <C>sell</C>, <C>plant</C>, <C>advance</C>, <C>claim</C>, <C>mint_slide</C>, <C>pact_offer</C> and <C>settle_pending</C> catch the dish up first (up to 120 generations), so they pay for the generations they run, and whichever of them steps at least one generation takes the keeper pot if its caller is eligible (see <a href="#m-advance">advance</a>). A catch-up stops at the lesser of 110 TGas and the prepaid gas less 40, less what is still to be written, so a call with more gas steps more generations. The gas values below are what the site attaches (300 TGas for the heavier calls); gas left unused is refunded.
+          <C>join</C>, <C>buy</C>, <C>sell</C>, <C>plant</C>, <C>advance</C>, <C>claim</C>, <C>mint_slide</C>, <C>pact_offer</C> and <C>settle_pending</C> catch the dish up first (up to 120 generations; a <C>join</C> only if the NEAR attached to it is at least <C>min_join</C>), so they pay for the generations they run, and whichever of them steps at least one generation takes the keeper pot if its caller is eligible (see <a href="#m-advance">advance</a>). A catch-up stops at the lesser of 110 TGas and the prepaid gas less 40, less what is still to be written, so a call with more gas steps more generations. The gas values below are what the site attaches (300 TGas for the heavier calls); gas left unused is refunded.
         </li>
         <li>
           Panic messages are the contract&rsquo;s own words; near-sdk prefixes them with <C>Smart contract panicked:</C>. <C>{"{n}"}</C>, <C>{"{p}"}</C> and the like mark a number filled in at run time, and <C>[ … ]</C> a part that appears only in some cases. The contract itself can never be the caller of a player method (<C>{CALLER}</C>).
@@ -726,8 +731,8 @@ export default function Page() {
             ["claim", "300", "none"],
             ["advance", "300", "none"],
             ["mint_slide", "300", "slide_deposit(w, h, title_bytes)"],
-            ["rename", "50", "none"],
-            ["set_payout", "50", "none"],
+            ["rename", "50", "0.001 NEAR (the unused part comes back)"],
+            ["set_payout", "50", "0.001 NEAR (the unused part comes back)"],
             ["settle_pending", "100", "none"],
             ["claim_pending", "30", "none"],
             ["sponsor", "30", "the credit to give (at least 0.01 NEAR)"],
@@ -872,7 +877,7 @@ export default function Page() {
     pub near_sold: U128,                  // NEAR received for PETRI sold back (sales paid as credit are not counted)
     pub credit_won: U128,                 // credit won at the tides (kept in the colony's books; the views fill it in)
     pub proxy: bool,                      // started by someone else's payment, under a neutral name; may rename once
-    pub attached: bool,                   // has ever put NEAR into the vault itself; a guest has not, and cannot send PETRI
+    pub attached: bool,                   // has put at least min_join of NEAR into the vault in one call; a guest has not, and cannot send PETRI
     pub kept: U64,                        // PETRI that stays in the dish until planted (includes a guest's unclaimed earnings)
 }`}</Code>
       <p id="t-rules" />
@@ -928,7 +933,7 @@ export default function Page() {
     pub vault: U128,                      // NEAR waiting in the tide vault
     pub near_in: U128,                    // NEAR that reached the vault: attached, and wNEAR dust
     pub near_tides: U128,                 // NEAR the tides made claimable
-    pub near_as_credit: U128,             // vault shares paid as credit, to colonies that never attached NEAR
+    pub near_as_credit: U128,             // vault shares paid as credit, to colonies that have not attached NEAR or hold kept PETRI
     pub near_bounties: U128, pub near_sold: U128,
     pub near_refunded: U128,              // failed bounty payouts that went back to the vault
     pub tides_owed: U128,                 // NEAR tide winnings not yet claimed
@@ -979,7 +984,7 @@ pub struct Licence { pub token: U64,
                      pub moves: u32,                        // the slide's moves when it was planted
                      pub holder: Option<AccountId>,         // who was paid the royalty; none when the planter held it
                      pub royalty: U64,                      // PETRI units
-                     pub to_agar: bool }                    // the planter had never attached NEAR: the royalty went to the agar
+                     pub to_agar: bool }                    // the planter had not attached NEAR, or held more kept PETRI than the cost: the royalty went to the agar
 /// What a wNEAR transfer's message asks for, kept with the pending NEAR until it is done.
 pub struct Order { pub join: bool,                          // a join (a purchase when the account has a colony), or a purchase
                    pub name: Option<String>,                // only when the account paid for itself
@@ -1014,7 +1019,7 @@ pub enum Entry {
     /// the tide that starts a new index page), and by, the colony whose call ran the tide (0 for a caller without
     /// one, 65535 = HOUSE_RUNNER for a keeper). Nothing else is stored: a replay works out the vault's share (pay),
     /// the bounty (none for a house runner, whose bounty stays in the vault), the storage, the NEAR colonies can
-    /// claim (paid), the part paid as credit (as_credit) and the credit pool's share (credit_pay, credit_paid) from
+    /// claim (paid), the part paid as credit (as_credit, for colonies that have not attached NEAR or hold kept PETRI) and the credit pool's share (credit_pay, credit_paid) from
     /// the ledger before it. The tide event logs all of them.
     Tide { generation: U64, chain: String, bytes: u16, by: u16 },
     /// Nobody tended the dish for max_lag generations; the clock skipped skipped generations at this one.
@@ -1040,6 +1045,7 @@ pub enum Entry {
     /// sent to the account, or spent on the join or purchase its order asked for.
     Unpend { generation: U64, account: AccountId, near: U128, paid: U128 },
     /// wNEAR too small to pay for a pending record went into the vault: near of it, after this entry's storage.
+    /// (v6.1; v6.2 refunds such an amount and writes no entry.)
     Dust { generation: U64, near: U128 },
     /// petri of account's PETRI was burned outside the dish: a forced unregistration, or the refund of a
     /// transfer whose sender had unregistered meanwhile.
@@ -1052,7 +1058,7 @@ pub enum Entry {
     /// The pact ended: an offer withdrawn, declined or expired (the PETRI back to from), or an accepted pact whose until came.
     PactEnd { generation: U64, pact: u32 },
 }`}</Code>
-      <Code lang="json" title="The first three entries of the v6 petri-dish.near (read from the chain; v6.1 writes the same shapes)">{`[
+      <Code lang="json" title="The first three entries of the v6 petri-dish.near (read from the chain; v6.2 writes the same shapes)">{`[
   { "Join": { "generation": "16", "colony": 1 } },
   { "Buy": { "generation": "16", "colony": 1, "petri": "212027519", "near": "42410000000000000000000",
              "credit": "0", "spent": null } },
@@ -1072,7 +1078,7 @@ pub enum Entry {
 
       <H2 id="events">Events</H2>
       <p>
-        Every event is a log line <C>EVENT_JSON:{"{...}"}</C> per NEP-297. Petri&rsquo;s own use <C>{`"standard": "petri", "version": "6.1.0"`}</C>; the token&rsquo;s use NEP-141 1.0.0 and the slides&rsquo; NEP-171 1.2.0. Each has <C>event</C> and a one-element <C>data</C> array.
+        Every event is a log line <C>EVENT_JSON:{"{...}"}</C> per NEP-297. Petri&rsquo;s own use <C>{`"standard": "petri", "version": "6.2.0"`}</C>; the token&rsquo;s use NEP-141 1.0.0 and the slides&rsquo; NEP-171 1.2.0. Each has <C>event</C> and a one-element <C>data</C> array.
       </p>
       <Table>
         <thead>
@@ -1115,7 +1121,7 @@ pub enum Entry {
           ))}
         </tbody>
       </Table>
-      <Code lang="json" title="A plant event">{`EVENT_JSON:{"standard":"petri","version":"6.1.0","event":"plant","data":[{"colony":1,"generation":"16","cells":7,"cost":"9875040","siege":false,"near":"…","note":"…","slide":null,"royalty":"0"}]}`}</Code>
+      <Code lang="json" title="A plant event">{`EVENT_JSON:{"standard":"petri","version":"6.2.0","event":"plant","data":[{"colony":1,"generation":"16","cells":7,"cost":"9875040","siege":false,"near":"…","note":"…","slide":null,"royalty":"0"}]}`}</Code>
 
       <H2 id="errors">Errors</H2>
       <p>
@@ -1123,7 +1129,7 @@ pub enum Entry {
       </p>
       <ul>
         <li>
-          <C>the dish is behind the clock; call advance first</C>: the dish was more than 120 generations behind, so the planting&rsquo;s own catch-up did not reach the clock. Call <C>advance</C> and plant again.
+          <C>the dish is behind the clock; call advance first</C>: the dish was more than 120 generations behind, so the own catch-up of a <C>plant</C>, <C>sell</C> or <C>mint_slide</C> did not reach the clock. Call <C>advance</C> and try again. The site does this for you: when the dish lags that far it puts up to three <C>advance</C> calls ahead of the move in the same transaction.
         </li>
         <li>
           <C>the agar buys back at most 0 NEAR more before the next tide</C>: no tide has run yet, or this tide&rsquo;s allowance is spent.

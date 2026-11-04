@@ -95,7 +95,7 @@ export function SlideHistoryBand({ id, cells }: { id: string; cells: number | nu
                   ) : (
                     <span className={s.disagree}>The contract&rsquo;s slide_royalties says {units(royalties!)} PETRI{ledger.status !== "ready" ? "; the ledger is still being read" : ""}.</span>
                   )}
-                  {h.toAgar > 0n ? ` ${units(h.toAgar)} PETRI more went to the agar from planters who had never attached NEAR.` : ""}
+                  {h.toAgar > 0n ? ` ${units(h.toAgar)} PETRI more went to the agar from planters who had not attached NEAR or held more kept PETRI than the planting cost.` : ""}
                 </p>
               </div>
               <div>
@@ -215,7 +215,7 @@ function Step({ it, byId }: { it: Item; byId: Map<number, Colony> }) {
       <p className={s.stepText}>
         <b>Planted under its licence</b> by <Who c={c} id={l.colony} />: {int(l.cells)} cells for {units(l.cost)} PETRI.{" "}
         {l.toAgar ? (
-          <>Royalty {units(l.royalty)} PETRI <em>to the agar</em>: the planter had never attached NEAR.</>
+          <>Royalty {units(l.royalty)} PETRI <em>to the agar</em>: the planter had not attached NEAR or held more kept PETRI than the planting cost.</>
         ) : l.holder ? (
           <>Royalty {units(l.royalty)} PETRI to <a href={accountUrl(l.holder)}>{shortAccount(l.holder, 28)}</a>, {l.moves === 0 ? "its first holder" : `its holder after ${int(l.moves)} ${l.moves === 1 ? "move" : "moves"}`}.</>
         ) : (

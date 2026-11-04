@@ -20,11 +20,11 @@ export default function Page() {
         A specimen slide fixes a rectangle of one colony&rsquo;s living cells at one generation, the way a lab fixes a sample on glass. It is a NEP-171 token owned by the minter&rsquo;s account. Its picture is an SVG the contract draws from the captured cells every time a wallet asks for the token, so the image cannot go missing or be swapped: it is a function of what the ledger recorded.
       </p>
       <p>
-        A slide that captured at least 12 cells (<C>licence_min_cells</C>) is also a <strong>pattern licence</strong>; a smaller one is a keepsake. Anyone may plant a licensed slide&rsquo;s exact pattern again, moved anywhere on the dish, under the slide&rsquo;s licence: the planting costs 25% less (<C>slide_discount_bps</C>), and a planter that does not hold the slide pays its holder 10% of that discounted cost in PETRI (<C>slide_royalty_bps</C>), or the agar, if the planter has never attached NEAR. A pattern that proved itself is cheaper to plant, and whoever holds the slide earns from every planting of it. See <a href="#replant">The licence</a>. The cells the slide shows may be long dead; the slide keeps them. Browse them in the <Ext href={`${SITE}/specimens`}>specimens gallery</Ext>.
+        A slide that captured at least 12 cells (<C>licence_min_cells</C>) is also a <strong>pattern licence</strong>; a smaller one is a keepsake. Anyone may plant a licensed slide&rsquo;s exact pattern again, moved anywhere on the dish, under the slide&rsquo;s licence: the planting costs 25% less (<C>slide_discount_bps</C>), and a planter that does not hold the slide pays its holder 10% of that discounted cost in PETRI (<C>slide_royalty_bps</C>), or the agar, if the planter has not attached NEAR or holds more kept PETRI than the planting costs. A pattern that proved itself is cheaper to plant, and whoever holds the slide earns from every planting of it. See <a href="#replant">The licence</a>. The cells the slide shows may be long dead; the slide keeps them. Browse them in the <Ext href={`${SITE}/specimens`}>specimens gallery</Ext>.
       </p>
       <Callout kind="note">
         <p>
-          Both dishes started again from generation 0 on 4 November 2026 (v6.1), so neither had minted a slide when it started (<C>state().slides</C> is <C>&quot;0&quot;</C> at the start). The house strains are set to fossilize their densest 16 × 16 patch every 6 hours on testnet and every 12 on mainnet, once they hold at least 12 cells there and can keep enough PETRI to go on planting.
+          Both dishes started again from generation 0 on 4 November 2026 (v6.2), so neither had minted a slide when it started (<C>state().slides</C> is <C>&quot;0&quot;</C> at the start). The house strains are set to fossilize their densest 16 × 16 patch every 6 hours on testnet and every 12 on mainnet, once they hold at least 12 cells there and can keep enough PETRI to go on planting.
         </p>
       </Callout>
 
@@ -34,7 +34,7 @@ export default function Page() {
       </p>
       <ul>
         <li>The rectangle is <C>w × h</C> cells, each side 4 to 32, with its top-left corner at (x, y) on the dish. It wraps at the edges.</li>
-        <li>The dish is caught up first; the slide captures the stored board at that generation.</li>
+        <li>The dish is caught up first and must then be current (<C>the dish is behind the clock; call advance first</C> otherwise); the slide captures the stored board at that generation. The site puts up to three <C>advance</C> calls ahead of the mint when the dish lags, and the strains advance it first.</li>
         <li>
           Only the minting colony&rsquo;s own living cells are captured. Cells of other colonies inside the rectangle, and empty cells, are 0 in the bitmap. Nobody can mint a slide of someone else&rsquo;s cells (<C>nobody_can_mint_a_rivals_cells</C>).
         </li>
@@ -160,7 +160,7 @@ label  = "gen <generation>" in the corner`}</Formula>
         The verifier prints this as <C>Specimens n of n match the dish</C>. A slide that was minted from anything but the real board, or priced wrong, makes it differ.
       </p>
       <p>
-        Plantings under a licence are checked too, in the row <C>Licensed plantings: shape, holder, royalty</C>: each one&rsquo;s slide must have captured at least 12 cells, and its cells must be exactly the slide&rsquo;s pattern moved but not turned (petri-core&rsquo;s <C>fits_slide</C>, the same function the contract calls), its price the discounted one and its royalty exactly 10% of it (the engine&rsquo;s <C>licence</C>), and the holder it paid, or the agar for a planter that had never attached NEAR, the minter until the slide&rsquo;s first move and one and the same account between two moves. At the end, each slide&rsquo;s owner, moves and royalties must match the <C>slides</C> view (row <C>Slide holders and royalties</C>).
+        Plantings under a licence are checked too, in the row <C>Licensed plantings: shape, holder, royalty</C>: each one&rsquo;s slide must have captured at least 12 cells, and its cells must be exactly the slide&rsquo;s pattern moved but not turned (petri-core&rsquo;s <C>fits_slide</C>, the same function the contract calls), its price the discounted one and its royalty exactly 10% of it (the engine&rsquo;s <C>licence</C>), and the holder it paid, or the agar for a planter that had never attached NEAR or held more kept PETRI than the cost, the minter until the slide&rsquo;s first move and one and the same account between two moves. At the end, each slide&rsquo;s owner, moves and royalties must match the <C>slides</C> view (row <C>Slide holders and royalties</C>).
       </p>
 
       <H2 id="replant">The licence: replanting a slide</H2>
@@ -178,7 +178,7 @@ label  = "gen <generation>" in the corner`}</Formula>
           <strong>The discount.</strong> The planting costs <C>slide_discount_bps</C> (2500, 25%) less than the same cells would: <C>quote(cells, siege, licensed: true)</C> gives the price. Half is burned and half goes back to the agar, as with any planting. The discount is the same for everyone, the holder included (<C>the_holder_plants_its_slide_at_the_licence_discount</C>).
         </li>
         <li>
-          <strong>The royalty.</strong> A planter that does not hold the slide also pays its holder <C>slide_royalty_bps</C> (1000, 10%) of that discounted cost, in PETRI, from balance to balance: a transfer, not a burn (<C>a_stranger_plants_a_slide_and_pays_its_holder_a_royalty</C>). After a transfer the royalties go to the new holder (<C>after_a_transfer_royalties_go_to_the_new_holder</C>). A holder with no PETRI registration is registered by the planting, at the planter&rsquo;s expense (the 125 bytes of a balance record). A royalty paid to a holder that has never attached NEAR is kept PETRI (it must be planted before it can be sold). A planter that has never attached NEAR before the planting pays the royalty to the agar instead (counted in <C>returned</C>); the holder and the slide&rsquo;s <C>royalties</C> get nothing (<C>a_guest_pays_its_royalty_to_the_agar</C>).
+          <strong>The royalty.</strong> A planter that does not hold the slide also pays its holder <C>slide_royalty_bps</C> (1000, 10%) of that discounted cost, in PETRI, from balance to balance: a transfer, not a burn (<C>a_stranger_plants_a_slide_and_pays_its_holder_a_royalty</C>). After a transfer the royalties go to the new holder (<C>after_a_transfer_royalties_go_to_the_new_holder</C>). A holder with no PETRI registration is registered by the planting, at the planter&rsquo;s expense (the 125 bytes of a balance record). A royalty paid to a holder that has never attached NEAR is kept PETRI (it must be planted before it can be sold). A planter that has not attached NEAR before the planting, or that holds more kept PETRI than the planting costs (read after the planting&rsquo;s own claim; kept PETRI is spent first, so the royalty would come out of it), pays the whole royalty to the agar instead (counted in <C>returned</C>); the holder and the slide&rsquo;s <C>royalties</C> get nothing (<C>a_guest_pays_its_royalty_to_the_agar</C>, <C>kept_petri_pays_its_royalty_to_the_agar</C>).
         </li>
         <li>
           <strong>Sieges are not waived.</strong> A licensed planting inside a rival&rsquo;s buffer still costs 3 times as much, then 25% less: a licence never makes a rival&rsquo;s ground cheap to take.
@@ -189,7 +189,7 @@ label  = "gen <generation>" in the corner`}</Formula>
       </ul>
       <Formula>{`cost    = planting_cost(cells, siege) − planting_cost(cells, siege) × 2500 / 10000
 royalty = cost × 1000 / 10000     (0 when the planter holds the slide)
-burned  = cost × 5000 / 10000;  back to the agar = cost − burned;  royalty to the holder, or to the agar if the planter never attached NEAR`}</Formula>
+burned  = cost × 5000 / 10000;  back to the agar = cost − burned;  royalty to the holder, or to the agar if the planter never attached NEAR or holds more kept PETRI than the cost`}</Formula>
       <p>
         <C>plant_deposit(cells, note_bytes, slide)</C> quotes the NEAR to bring: the planting&rsquo;s storage and cell fee as always, plus the licence&rsquo;s bytes in the ledger entry and, if the holder has no PETRI registration yet, the holder&rsquo;s registration. The <C>Plant</C> entry carries a <C>licence</C> with the token, the slide&rsquo;s <C>moves</C> at that moment, the <C>holder</C> paid (none when the planter held it), the <C>royalty</C> and <C>to_agar</C> (true when the royalty went to the agar); the <C>plants</C> view shows the slide&rsquo;s id. Moves themselves are not logged, because a transfer carries exactly one yoctoNEAR and could not pay for a ledger entry; the move count in each licence is what lets both replays tell holders apart.
       </p>

@@ -88,9 +88,9 @@ export function BoardSection() {
                 Each generation sets {r.keeper_bps / 100}% of its feed aside in a keeper pot. Whoever&rsquo;s call catches the dish up
                 (<code className={s.code}>advance</code>, or a join, purchase, sale, planting, claim or slide mint) takes the whole
                 pot, but only if that call ran at least one generation and the account can hold PETRI (a colony, or an account registered with{" "}
-                <code className={s.code}>storage_deposit</code>) and is neither one of the house&rsquo;s (a house strain or a keeper) nor a guest (a colony that has never attached NEAR):
+                <code className={s.code}>storage_deposit</code>) and is neither one of the house&rsquo;s (a house strain or a keeper) nor a guest (a colony that has not attached NEAR; a join runs the clock only if it brings at least 0.01 NEAR itself):
                 for those the pot keeps waiting. A call on a dish that is already current pays nothing. Whoever&rsquo;s call runs an hourly tide also gets a small bounty, in NEAR, or as credit to a colony
-                that has never attached NEAR (see the tides); a house colony or a keeper gets none, and it stays in the vault. The
+                that has not attached NEAR or holds kept PETRI (see the tides); a house colony or a keeper gets none, and it stays in the vault. The
                 project&rsquo;s keeper, <a href={accountUrl(KEEPER)} className={s.link}>{KEEPER}</a>, is listed in{" "}
                 <code className={s.code}>rules.keepers</code>, so it takes neither the pot nor a bounty. On testnet it advances once
                 the stored board is 20 generations behind; on mainnet, when

@@ -28,13 +28,13 @@ const CHECKS = [
   "Every planting legal, sieges marked",
   "Every planting at the formula's price",
   "Every planting paid its cell fee",
-  "Every licensed planting: a slide of at least 12 cells, its exact pattern, the licence price, the royalty to the holder of the day (or the agar, for a planter that never attached NEAR)",
+  "Every licensed planting: a slide of at least 12 cells, its exact pattern, the licence price, the royalty to the holder of the day (or the agar, for a planter that never attached NEAR or holds more kept PETRI than the cost)",
   "Every purchase on the curve",
   "Every sale back on the curve and within the allowance",
   "Every tide: ran exactly when due, chain, stored bytes; shares of the vault and the credit pool, bounty (none to the house) and storage worked out from the ledger",
   "Every claim took exactly what its colony was owed",
   "Every refund is for exactly the payout it names, once",
-  "No colony holding kept PETRI sold PETRI for NEAR or paid for a pact",
+  "No colony holding kept PETRI sold PETRI for NEAR, claimed NEAR or paid for a pact",
   "Every pact kept to the rules, and no planting broke a pact binding its colony",
   "PETRI the dish holds for pact offers not yet accepted",
   "Pacts offered",
@@ -127,11 +127,11 @@ export function VerifySection() {
                   against the curve, and a sale against the allowance. A planting is checked for legality and its siege flag, must
                   cost the formula&rsquo;s price and bring its cell fee, and adds its NEAR to the vault and its credit to the pool.
                   A planting under a slide&rsquo;s licence must name a slide of at least 12 cells, exactly its pattern, moved but not turned, at the
-                  licence price, and must have paid the royalty to whoever held the slide then (or the agar, if the planter had never attached NEAR). A slide must hold exactly its
+                  licence price, and must have paid the royalty to whoever held the slide then (or the agar, if the planter had never attached NEAR or held more kept PETRI than the cost). A slide must hold exactly its
                   colony&rsquo;s living cells in its rectangle and burn the rule&rsquo;s price. A tide must run exactly when some
                   colony outside the house had earned, carry the same chain and stored bytes, pay the same shares of the vault and the pool, as NEAR
                   or as credit to the right colonies, and pay no bounty when the house ran it. A claim must take exactly what its
-                  colony was owed, and a refund must match the payout it names. Every colony&rsquo;s kept PETRI is rebuilt, and no colony holding any may sell for NEAR or pay PETRI into a pact. Every pact entry is checked against the pact rules and the escrow, and every planting against the pacts binding its planter.
+                  colony was owed, and a refund must match the payout it names. Every colony&rsquo;s kept PETRI is rebuilt, and no colony holding any may sell for NEAR, claim NEAR or pay PETRI into a pact. Every pact entry is checked against the pact rules and the escrow, and every planting against the pacts binding its planter.
                 </li>
                 <li>Step with petri-core and feed the living, with the reach cap on each colony&rsquo;s decaying stake, the house and the keeper&rsquo;s share.</li>
                 <li>
@@ -198,7 +198,7 @@ export function VerifySection() {
                 <p>
                   No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is{" "}
                   <code className={s.code}>relaunch</code>, a private method only the contract account itself can call, which
-                  clears a v6 dish and refuses an account with no v6 dish and one that already runs v6.1. What remains is the account itself: whoever holds a
+                  clears a v6.1 dish and refuses an account with no v6.1 dish and one that already runs v6.2. What remains is the account itself: whoever holds a
                   full-access key to <a className={s.link} href={net.contractUrl}>{net.contract}</a> could deploy other code.
                 </p>
                 <p>

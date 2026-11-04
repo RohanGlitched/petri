@@ -55,11 +55,11 @@ export function TidesSection() {
       "Planting",
       `The storage the planting used, plus ${near(Number(r.cell_fee), 4)} NEAR for every cell. The contract keeps the storage; everything above it goes to the vault if attached, to the credit pool if it was credit.`,
     ],
-    ["Selling back", "Comes out of the vault: the sale record's storage, and the rest to the seller, in NEAR, or as credit to a colony that has never attached NEAR. A NEAR sale must be large enough to pay for a refund's records too; if its transfer fails, the NEAR becomes pending for the seller. House colonies never sell, and neither does a colony holding kept PETRI (what it earned before its first NEAR, or bought with credit) until it has planted it."],
+    ["Selling back", "Comes out of the vault: the sale record's storage, and the rest to the seller, in NEAR, or as credit to a colony that has not attached NEAR. A NEAR sale must be large enough to pay for a refund's records too; if its transfer fails, the NEAR becomes pending for the seller. House colonies never sell, and neither does a colony holding kept PETRI (what it earned before its first NEAR, or bought with credit) until it has planted it."],
     ["A specimen slide", "Its storage, from the colony's credit first and then from attached NEAR; attached NEAR left over is sent back. Its PETRI price is burned, and none of its NEAR reaches the vault."],
     [
       "Paying with any token",
-      "On mainnet, wNEAR that NEAR Intents delivers is unwrapped and joins or buys for the account it names, exactly as attached NEAR. It is never refunded: the whole amount first becomes pending NEAR for that account with its order, less its records' storage, and the order runs in a receipt of its own. An order that cannot run yet waits, and anyone can complete it later with settle_pending; the account can instead take the NEAR back with claim_pending. An amount too small even for its records goes to the vault with a Dust entry.",
+      "On mainnet, wNEAR that NEAR Intents delivers is unwrapped and joins or buys for the account it names, exactly as attached NEAR. wNEAR that pays for its own records is never refunded: the whole amount first becomes pending NEAR for that account with its order, less its records' storage, and the order runs in a receipt of its own. An order that cannot run yet waits, and anyone can complete it later with settle_pending; the account can instead take the NEAR back with claim_pending. An amount no larger than what its records cost is returned whole and writes nothing, so dust cannot grow the dish's storage.",
     ],
     [
       "Sponsoring",
@@ -106,10 +106,10 @@ export function TidesSection() {
                 a replay works them out from the ledger, and a <code className={s.code}>tide</code> event logs them.
               </p>
               <p>
-                A colony that has attached NEAR of its own wins NEAR. It waits under the colony&rsquo;s name until it calls{" "}
+                A colony that has attached NEAR of its own (at least 0.01 NEAR in one call) and holds no kept PETRI wins NEAR. It waits under the colony&rsquo;s name until it calls{" "}
                 <code className={s.code}>claim</code>, and goes to the account it named with{" "}
-                <code className={s.code}>set_payout</code> if it set one. A colony that has never attached NEAR, such as a
-                free-play guest, is paid its share of the vault as credit instead, and so is the bounty of a tide its call runs.
+                <code className={s.code}>set_payout</code> if it set one. Any other colony, such as a
+                free-play guest or one holding kept PETRI, is paid its share of the vault as credit instead, and so is the bounty of a tide its call runs; with kept PETRI, a claim brings only PETRI and the NEAR stays owed.
                 Credit won is spendable in the dish at once, needs no claim, is spent before sponsored credit and can never be
                 withdrawn. Each tide that runs also reopens the buy-back allowance: the agar may pay up to{" "}
                 {r.sell_cap_bps / 100}% of the vault for PETRI before the next tide.

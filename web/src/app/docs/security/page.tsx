@@ -27,7 +27,7 @@ const THREATS: Threat[] = [
     threat: "The testnet relayer pays gas for guests. An attacker sends it calls that make it pay deposits, gas for failing calls, or the same action twice.",
     defense: (
       <>
-        <C>/api/relay</C> checks, before paying anything, what NEAR would check: the sender matches <C>g-[0-9a-f]{"{10}"}.&lt;relayer&gt;</C>; the receiver is the dish; exactly one function call, in the allow-list <C>join buy plant sell claim advance mint_slide settle_pending</C>; zero deposit; at most 250 TGas; a valid ed25519 signature over the delegate action; not expired; the key exists on the account with a fresh nonce. A nonce relayed in the last five minutes is refused. A guest may relay 6 calls a minute and the relayer 120 a minute. Guests pay every deposit from credit the contract holds, so the relayer never attaches NEAR to a relayed call.
+        <C>/api/relay</C> checks, before paying anything, what NEAR would check: the sender matches <C>g-[0-9a-f]{"{10}"}.&lt;relayer&gt;</C>; the receiver is the dish; one function call in the allow-list <C>join buy plant sell claim advance mint_slide settle_pending pact_offer pact_accept pact_cancel</C>, which may be preceded by up to three <C>advance</C> calls (the site&rsquo;s way of catching a lagging dish up in the same transaction); zero deposit; at most 300 TGas in all; a valid ed25519 signature over the delegate action; not expired; the key exists on the account with a fresh nonce. A nonce relayed in the last five minutes is refused. A guest may relay 6 calls a minute and the relayer 120 a minute. Guests pay every deposit from credit the contract holds, so the relayer never attaches NEAR to a relayed call.
       </>
     ),
     tests: ["sponsored_credit_pays_for_joining_and_planting_and_cannot_leave", "credit_cannot_be_overspent"],
@@ -99,7 +99,7 @@ const THREATS: Threat[] = [
     threat: "Collect the 2% keeper share without doing useful work, or keep others from collecting it.",
     defense: (
       <>
-        The pot goes only to the account whose call stepped at least one generation, which is exactly the work it pays for (any of <C>plant</C>, <C>buy</C>, <C>join</C>, <C>sell</C>, <C>claim</C>, <C>advance</C>, <C>mint_slide</C>, or a wNEAR order settled for an account), only if that account can hold PETRI, and never to one of the dish&rsquo;s own accounts (a house strain or a keeper). Anyone may make such a call, so the pot is a race, and racing costs gas. Before v6.1 only <C>advance</C> paid it, and it could pile up for days when nobody advanced: 1,480 PETRI stood in it after a week on a young simulated dish.
+        The pot goes only to the account whose call stepped at least one generation, which is exactly the work it pays for (any of <C>plant</C>, <C>buy</C>, <C>join</C> (only one that attaches at least 0.01 NEAR itself runs the clock), <C>sell</C>, <C>claim</C>, <C>advance</C>, <C>mint_slide</C>, or a wNEAR order settled for an account), only if that account can hold PETRI, and never to one of the dish&rsquo;s own accounts (a house strain or a keeper). Anyone may make such a call, so the pot is a race, and racing costs gas. Before v6.1 only <C>advance</C> paid it, and it could pile up for days when nobody advanced: 1,480 PETRI stood in it after a week on a young simulated dish.
       </>
     ),
     tests: ["the_keeper_pot_goes_to_whoever_advances_the_clock", "any_call_that_runs_a_generation_takes_the_keeper_pot", "a_keeper_takes_no_keeper_pot"],
@@ -139,10 +139,10 @@ const THREATS: Threat[] = [
     threat: "Make the contract pay for data: long notes, many records, tides with no winners, empty pending records, slides passed around to long account names, failed payouts.",
     defense: (
       <>
-        Every move pays the storage of what it writes, measured after the write: plantings by <C>plant_deposit</C> (with room for a first hot-table row and, under a licence, the holder&rsquo;s PETRI registration), slides by <C>slide_deposit</C> with a reserve for later owners, approvals by their granter, sponsorships by their sponsor (with the later <C>Unsponsor</C> entry set aside), pending records and <C>Dust</C> entries from the amount they hold, sale and claim records from the proceeds, tide records from the vault. A NEAR sale or claim must also cover the records a refund would need, so a failed payout pays for its own <C>Refund</C> entry; NEAR winnings too small for that stay owed until they grow. A forced unregistration pays its <C>Burn</C> entry from its refund. Idle tides write nothing. A dish nobody touches for two hours writes one Skip entry instead of hours of catch-up.
+        Every move pays the storage of what it writes, measured after the write: plantings by <C>plant_deposit</C> (with room for a first hot-table row and, under a licence, the holder&rsquo;s PETRI registration), slides by <C>slide_deposit</C> with a reserve for later owners, approvals by their granter, sponsorships by their sponsor (with the later <C>Unsponsor</C> entry set aside), pending records from the amount they hold (an amount too small to pay for them is refunded and writes nothing), what <C>rename</C> and <C>set_payout</C> add from the attached NEAR, sale and claim records from the proceeds, tide records from the vault. A NEAR sale or claim must also cover the records a refund would need, so a failed payout pays for its own <C>Refund</C> entry; NEAR winnings too small for that stay owed until they grow. A forced unregistration pays its <C>Burn</C> entry from its refund. Idle tides write nothing. A dish nobody touches for two hours writes one Skip entry instead of hours of catch-up.
       </>
     ),
-    tests: ["the_planting_deposit_covers_its_storage_without_overcharging", "a_slide_pays_for_its_storage", "an_approval_pays_for_its_storage", "transfers_never_outgrow_the_storage_a_slide_paid_for", "winnings_too_small_for_a_claims_records_wait", "dust_too_small_for_a_record_goes_to_the_vault", "an_idle_dish_runs_no_tides_and_keeps_its_vault", "an_untended_dish_skips_ahead_instead_of_piling_up_work"],
+    tests: ["the_planting_deposit_covers_its_storage_without_overcharging", "a_slide_pays_for_its_storage", "an_approval_pays_for_its_storage", "transfers_never_outgrow_the_storage_a_slide_paid_for", "winnings_too_small_for_a_claims_records_wait", "dust_wnear_is_refunded", "an_idle_dish_runs_no_tides_and_keeps_its_vault", "an_untended_dish_skips_ahead_instead_of_piling_up_work"],
     limit: "Skip entries and the board's growth during a catch-up are paid by the contract's own surplus. In the simulator's empty 30-day dish, skipping idle tides took the contract's own storage bill from 1.95 NEAR to zero.",
   },
   {
@@ -163,10 +163,10 @@ const THREATS: Threat[] = [
     threat: "Turn free testnet play, or self-sponsored accounts on any network, into NEAR someone can withdraw.",
     defense: (
       <>
-        A colony that never attached NEAR is paid every tide share, sale and bounty as won credit, which is spendable only in the dish and which no sponsor can take back. Only a colony that attached NEAR may set a payout account, and never to the dish itself. A guest&rsquo;s function-call key cannot attach or transfer NEAR or PETRI. Sponsored credit goes to the credit pool, which pays only credit, and a sponsor can take back only its own unspent grant.
+        A colony that has not attached NEAR is paid every tide share, sale and bounty as won credit, which is spendable only in the dish and which no sponsor can take back. A colony attaches NEAR only when one join, buy or planting puts at least <C>min_join</C> (0.01 NEAR), net of storage, into the vault, so a yoctoNEAR on a call paid from credit changes nothing (<C>one_yocto_does_not_turn_credit_into_near</C>). Only a colony that attached NEAR may set a payout account, and never to the dish itself. A guest&rsquo;s function-call key cannot attach or transfer NEAR or PETRI. Sponsored credit goes to the credit pool, which pays only credit, and a sponsor can take back only its own unspent grant.
       </>
     ),
-    tests: ["a_guest_wins_credit_where_a_wallet_wins_near", "a_guest_cannot_send_winnings_to_a_wallet", "a_guest_sale_pays_credit", "a_guest_that_runs_a_tide_is_paid_its_bounty_as_credit", "sponsored_credit_pays_for_joining_and_planting_and_cannot_leave"],
+    tests: ["a_guest_wins_credit_where_a_wallet_wins_near", "a_guest_cannot_send_winnings_to_a_wallet", "a_guest_sale_pays_credit", "a_guest_that_runs_a_tide_is_paid_its_bounty_as_credit", "one_yocto_does_not_turn_credit_into_near", "sponsored_credit_pays_for_joining_and_planting_and_cannot_leave"],
     limit: "A SelfSponsor (one operator sponsoring 10 of its own full-access accounts) lost 0.33 to 0.47 NEAR a week in the simulator: the only NEAR it gets back is its own unused sponsorship.",
   },
   {
@@ -174,15 +174,15 @@ const THREATS: Threat[] = [
     title: "Free play farmed into vault NEAR",
     threat: (
       <>
-        Found by the v6 simulator. A guest earns PETRI for free. Before v6.1 an operator could turn it into vault NEAR in two ways: its guests <C>ft_transfer</C> their PETRI to one wallet that sells it back to the agar, or each guest attaches a little NEAR (which makes it no longer a guest) and sells what it had farmed.
+        Found by the v6 simulator. A guest earns PETRI for free. Before v6.1 an operator could turn it into vault NEAR in two ways: its guests <C>ft_transfer</C> their PETRI to one wallet that sells it back to the agar, or each guest attaches a little NEAR (which makes it no longer a guest) and sells what it had farmed. The fifth review round found two more holes in v6.1: a single yoctoNEAR on a credit-paid call counted as attaching NEAR, and a colony holding kept PETRI was still paid its tide shares and claims in NEAR.
       </>
     ),
     defense: (
       <>
-        PETRI earned before a colony&rsquo;s first NEAR is <strong>kept</strong>. A colony that has never attached NEAR cannot <C>ft_transfer</C> or <C>ft_transfer_call</C> PETRI at all. Every colony has a <C>kept</C> amount: a guest&rsquo;s claims, purchases (all credit) and royalties received; its unclaimed earnings when it first attaches NEAR; and PETRI anyone buys with credit (<C>credit_share</C>). Plantings and slides spend it first. While a colony holds any, it cannot sell for NEAR, send PETRI or pay into a pact. Guests take no keeper pot, and a guest&rsquo;s slide royalty goes to the agar. Transfers are not ledger entries (an entry would let anyone grow the contract&rsquo;s storage at 1 yoctoNEAR a call), so the replays argue it from three facts: no transfer changes <C>kept</C>; every colony&rsquo;s <C>kept</C> is rebuilt from the ledger alone and must equal the colony view; and the contract refuses every transfer by a guest or by a colony with kept above zero. A sale for NEAR, or a PETRI pact, by a colony whose replayed <C>kept</C> is above zero fails the <C>kept</C> check in both replays.
+        PETRI earned before a colony&rsquo;s first NEAR is <strong>kept</strong>. A colony that has never attached NEAR cannot <C>ft_transfer</C> or <C>ft_transfer_call</C> PETRI at all. Every colony has a <C>kept</C> amount: a guest&rsquo;s claims, purchases (all credit) and royalties received; its unclaimed earnings when it first attaches NEAR; and PETRI anyone buys with credit (<C>credit_share</C>). Plantings and slides spend it first. While a colony holds any, it cannot sell for NEAR, send PETRI or pay into a pact. Guests take no keeper pot. While a colony holds any kept PETRI it is also paid in credit, not NEAR: its tide share and bounty are credit, and <C>claim</C> pays out only PETRI while its NEAR stays owed. A royalty from a guest, or from a planter whose kept PETRI is more than the planting costs, goes to the agar. Transfers are not ledger entries (an entry would let anyone grow the contract&rsquo;s storage at 1 yoctoNEAR a call), so the replays argue it from three facts: no transfer changes <C>kept</C>; every colony&rsquo;s <C>kept</C> is rebuilt from the ledger alone and must equal the colony view; and the contract refuses every transfer by a guest or by a colony with kept above zero. A sale for NEAR, a claim, or a PETRI pact, by a colony whose replayed <C>kept</C> is above zero fails the <C>kept</C> check in both replays.
       </>
     ),
-    tests: ["guest_cannot_transfer_free_petri", "guest_that_attaches_cannot_sell_what_it_farmed", "attached_player_sells_what_it_earned_after", "kept_petri_can_still_be_planted", "petri_bought_with_credit_is_kept", "sybil_guests_that_attach_reach_no_vault_near", "a_guest_cannot_send_winnings_to_a_wallet"],
+    tests: ["guest_cannot_transfer_free_petri", "guest_that_attaches_cannot_sell_what_it_farmed", "attached_player_sells_what_it_earned_after", "kept_petri_can_still_be_planted", "petri_bought_with_credit_is_kept", "sybil_guests_that_attach_reach_no_vault_near", "a_guest_cannot_send_winnings_to_a_wallet", "kept_petri_is_paid_in_credit_and_claims_no_near", "kept_petri_pays_its_royalty_to_the_agar"],
     limit: (
       <>
         In the simulator (testnet, 150 players plus 3 operators of each attack, 7 days, 6 seeds) the transfer attack moved 476.9 PETRI and drew +0.0470 NEAR a week per operator from the vault without the rule and 0 with it; the attach-and-sell attack drew +0.0008 without it and 0 with it (82 sales refused per operator). Across every colony in the run, vault NEAR paid for farmed PETRI went from 0.1674 to 0. The cost to honest players is that a former guest plants its kept PETRI before it can sell any. Every sybil operator loses with the rule (SybilAttach −0.0550, SybilTransfer −0.0417 a week); without it SybilTransfer made −0.0030 at the median and +0.0138 in its best seed. See <Doc to="economy" hash="kept">Kept PETRI</Doc>.
@@ -194,16 +194,16 @@ const THREATS: Threat[] = [
     title: "Breaking, forging or farming pacts",
     threat: (
       <>
-        A pact is PETRI in escrow for a promise not to plant near. Ways to cheat: plant near the payer anyway; take the PETRI and leave; offer a pact to move house PETRI to a player or free-play PETRI to a seller; fill the dish with pacts to grow its storage; end a pact early.
+        A pact is PETRI in escrow for a promise not to plant near. Ways to cheat: plant near the payer anyway; take the PETRI and leave; offer a pact to move house PETRI to a player or free-play PETRI to a seller; fill the dish with pacts to grow its storage, or fill another colony&rsquo;s pact slots with offers nobody asked for; end a pact early.
       </>
     ),
     defense: (
       <>
-        The contract refuses a bound colony&rsquo;s planting within <C>pact_radius</C> (8) cells of the payer&rsquo;s living cells until <C>until</C>, so the promise needs no trust, and nobody can end an accepted pact early. The PETRI is in the dish&rsquo;s escrow (<C>pact_escrow</C>, part of the dish&rsquo;s own holding) until the promisor accepts, and goes back to the payer if the offer is withdrawn, declined or expires, so a promisor gets paid only by accepting what binds it. A guest or a colony holding kept PETRI can offer pacts with 0 PETRI only, so a pact cannot carry farmed PETRI to a seller; a house colony&rsquo;s pact with a player carries no PETRI. Each colony is party to at most 8 pacts that have not ended, with one open offer per pair, and each offer pays for its own storage plus a reserve for its accept and end entries. Every pact is a ledger entry (<C>PactOffer</C>, <C>PactAccept</C>, <C>PactEnd</C>); both replays rebuild them and check the rules, the escrow, and every planting against the pacts binding its planter.
+        The contract refuses a bound colony&rsquo;s planting within <C>pact_radius</C> (8) cells of the payer&rsquo;s living cells until <C>until</C>, so the promise needs no trust, and nobody can end an accepted pact early. The PETRI is in the dish&rsquo;s escrow (<C>pact_escrow</C>, part of the dish&rsquo;s own holding) until the promisor accepts, and goes back to the payer if the offer is withdrawn, declined or expires, so a promisor gets paid only by accepting what binds it. Every offer carries at least 1 PETRI, except between two house colonies, so guests, colonies holding kept PETRI and the house towards players cannot offer a pact, and a pact cannot carry farmed PETRI to a seller. Each colony is party to at most 8 pacts, counting only accepted pacts and the offers it made, so offers sent to it cannot fill its slots; offers waiting for a colony have their own cap of 16, which it empties by declining. There is one open offer per pair, and each offer pays for its own storage plus a reserve for its accept and end entries. Every pact is a ledger entry (<C>PactOffer</C>, <C>PactAccept</C>, <C>PactEnd</C>); both replays rebuild them and check the rules, the escrow, and every planting against the pacts binding its planter.
       </>
     ),
-    tests: ["pact_refuses_breaking_planting", "pact_expires_and_planting_is_allowed", "unaccepted_offer_refunds", "kept_petri_cannot_pay_a_pact", "house_pact_stays_in_house", "a_colony_is_party_to_at_most_eight_pacts", "pacts_gas_at_scale"],
-    limit: "A pact covers a radius, not a promise of peace: a promisor can still aim a glider at the payer from beyond 8 cells. The agents score that as broken faith and show it to the next council; the contract cannot stop it. With 30,000 colonies a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. In the simulator a pact at a naive price (2 PETRI a tide window to the nearest raider) did not pay the builder (cash −0.2223 against −0.1865).",
+    tests: ["pact_refuses_breaking_planting", "pact_expires_and_planting_is_allowed", "unaccepted_offer_refunds", "kept_petri_cannot_pay_a_pact", "house_pact_stays_in_house", "a_colony_is_party_to_at_most_eight_pacts", "offers_cannot_jam_a_colonys_pacts", "pacts_gas_at_scale"],
+    limit: "A pact covers a radius, not a promise of peace: a promisor can still aim a glider at the payer from beyond 8 cells. The agents score that as broken faith and show it to the next council; the contract cannot stop it. The protected ground is the payer&rsquo;s living cells as the board stands at each planting, including cells it plants after the pact was accepted: a promise to stay away from a colony, not from a place. With 30,000 colonies a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. In the simulator a pact at a naive price (2 PETRI a tide window to the nearest raider) did not pay the builder (cash −0.2223 against −0.1865).",
   },
   {
     id: "t-gas",
@@ -247,11 +247,11 @@ const THREATS: Threat[] = [
     ),
     defense: (
       <>
-        wNEAR is never refunded. Any amount becomes pending NEAR for the account the message names (or the sender), less its record and its <C>Pending</C> entry; an amount too small even for those goes into the vault for the players with a <C>Dust</C> entry. The view <C>intent_minimum(what, account_id)</C> says what a payment must deliver for its order to run, and <C>/api/intents/quote</C> refuses any quote, dry or real, whose guaranteed output is below it.
+        wNEAR that pays for its own records is never refunded: it becomes pending NEAR for the account the message names (or the sender), less its record and its <C>Pending</C> entry. An amount no larger than what those two records can cost is refunded whole and writes nothing, so dust cannot grow the dish&rsquo;s storage; v6.1 put it in the vault with a <C>Dust</C> entry. The view <C>intent_minimum(what, account_id)</C> says what a payment must deliver for its order to run, and <C>/api/intents/quote</C> refuses any quote, dry or real, whose guaranteed output is below it.
       </>
     ),
-    tests: ["an_intent_below_the_minimum_is_kept_for_its_account_not_refunded", "dust_too_small_for_a_record_goes_to_the_vault", "the_dish_tells_1click_the_least_a_payment_needs"],
-    limit: "Dust too small to pay for its own record goes to the vault rather than to its payer. The quote route's check is server code with no automated test.",
+    tests: ["an_intent_below_the_minimum_is_kept_for_its_account_not_refunded", "dust_wnear_is_refunded", "the_dish_tells_1click_the_least_a_payment_needs"],
+    limit: "The quote route's check is server code with no automated test. A join delivered at exactly the least intent_minimum asks for nets under min_join after the join's own storage, so it does not attach NEAR: that colony is a guest until it buys 0.01 NEAR net.",
   },
   {
     id: "t-names",
@@ -295,7 +295,7 @@ const THREATS: Threat[] = [
     ),
     defense: (
       <>
-        The ledger now has an entry for every movement: <C>Sponsor</C>, <C>Unsponsor</C>, <C>Claim</C>, <C>Pending</C>, <C>Unpend</C>, <C>Dust</C> and <C>Burn</C>; a <C>Refund</C> names the kind and the index (<C>of</C>) of the payout it refunds, and purchases, plantings and slides carry the credit they took (<C>spent</C>). Both replays, <C>scripts/verify.mjs</C> and the browser&rsquo;s <C>/verify</C>, recompute every solvency term from the ledger alone (the vault, the credit pool, credit given, won, sold, spent and reclaimed, NEAR owed and pending), compare each with the contract&rsquo;s counter, and check each refund against the payout it names, once.
+        The ledger now has an entry for every movement: <C>Sponsor</C>, <C>Unsponsor</C>, <C>Claim</C>, <C>Pending</C>, <C>Unpend</C>, <C>Dust</C> (written by v6.1, none since v6.2) and <C>Burn</C>; a <C>Refund</C> names the kind and the index (<C>of</C>) of the payout it refunds, and purchases, plantings and slides carry the credit they took (<C>spent</C>). Both replays, <C>scripts/verify.mjs</C> and the browser&rsquo;s <C>/verify</C>, recompute every solvency term from the ledger alone (the vault, the credit pool, credit given, won, sold, spent and reclaimed, NEAR owed and pending), compare each with the contract&rsquo;s counter, and check each refund against the payout it names, once.
       </>
     ),
     tests: ["replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault"],
@@ -341,7 +341,7 @@ const THREATS: Threat[] = [
     ),
     defense: (
       <>
-        A planting under a licence needs a slide that captured at least <C>licence_min_cells</C> (12) cells, so blocks, blinkers, beehives, loaves, gliders, lightweight spaceships and small oscillators cannot be licensed. The planting must be exactly the slide&rsquo;s pattern, moved anywhere (wrapping) but not turned (<C>petri_core::fits_slide</C>); it costs <C>slide_discount_bps</C> (25%) less, the same for everyone. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap to take. A planter that does not hold the slide pays its current holder <C>slide_royalty_bps</C> (10%) of the discounted cost in PETRI, unless it has never attached NEAR: then the royalty goes to the agar and the holder gets nothing. Each Plant entry records the slide, its move count, the holder, the royalty and <C>to_agar</C>, and both replays check the shape, the 12-cell minimum, the price and royalty, that the holder is the minter until the slide&rsquo;s first move and one account between moves, and each slide&rsquo;s final owner, moves and royalties against the <C>slides</C> view.
+        A planting under a licence needs a slide that captured at least <C>licence_min_cells</C> (12) cells, so blocks, blinkers, beehives, loaves, gliders, lightweight spaceships and small oscillators cannot be licensed. The planting must be exactly the slide&rsquo;s pattern, moved anywhere (wrapping) but not turned (<C>petri_core::fits_slide</C>); it costs <C>slide_discount_bps</C> (25%) less, the same for everyone. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap to take. A planter that does not hold the slide pays its current holder <C>slide_royalty_bps</C> (10%) of the discounted cost in PETRI, unless it has not attached NEAR or holds more kept PETRI than the planting costs: then the whole royalty goes to the agar and the holder gets nothing. Each Plant entry records the slide, its move count, the holder, the royalty and <C>to_agar</C>, and both replays check the shape, the 12-cell minimum, the price and royalty, that the holder is the minter until the slide&rsquo;s first move and one account between moves, and each slide&rsquo;s final owner, moves and royalties against the <C>slides</C> view.
       </>
     ),
     tests: ["the_holder_plants_its_slide_at_the_licence_discount", "a_stranger_plants_a_slide_and_pays_its_holder_a_royalty", "a_small_slide_is_a_keepsake_not_a_licence", "a_guest_pays_its_royalty_to_the_agar", "a_planting_of_another_shape_is_not_licensed", "a_turned_slide_is_not_licensed", "after_a_transfer_royalties_go_to_the_new_holder", "the_house_pays_no_royalty_to_players", "a_slide_licence_is_the_same_shape_anywhere (core)"],
@@ -361,13 +361,13 @@ const THREATS: Threat[] = [
   {
     id: "t-relaunch",
     title: "Restarting a dish that players use",
-    threat: "v6 has a method that deletes a dish's state and starts over. Used on a running dish, it would wipe the players' colonies, PETRI and NEAR owed.",
+    threat: "The contract has a method that deletes a dish's state and starts over. Used on a running dish, it would wipe the players' colonies, PETRI and NEAR owed.",
     defense: (
       <>
-        <C>relaunch(rules, accounts)</C> is <C>#[private]</C> and <C>#[init(ignore_state)]</C>: only a transaction from the contract account itself, signed with its full-access key, can run it. It clears only what v6 stored, refuses an account with no v6 dish (&ldquo;no v6 dish here&rdquo;) and one that already runs v6.1 (&ldquo;this account already runs v6.1&rdquo;), and logs any pending NEAR v6 still owed. It was used to start <C>petri-dish.near</C> from generation 0 when v6 was deployed there, and again on both dishes when v6.1 was.
+        <C>relaunch(rules, accounts)</C> is <C>#[private]</C> and <C>#[init(ignore_state)]</C>: only a transaction from the contract account itself, signed with its full-access key, can run it. It clears only what v6.1 stored, refuses an account with no v6.1 dish (&ldquo;no v6.1 dish here&rdquo;) and one that already runs v6.2 (&ldquo;this account already runs v6.2&rdquo;), and logs any pending NEAR v6.1 still owed. It was used to start <C>petri-dish.near</C> from generation 0 when v6 was deployed there, and again on both dishes when v6.1 and v6.2 were.
       </>
     ),
-    tests: ["relaunch_leaves_nothing_of_v6", "relaunch_refuses_an_account_without_a_v6_dish", "relaunch_refuses_a_dish_that_runs_v6_1"],
+    tests: ["relaunch_leaves_nothing_of_v6_1", "relaunch_refuses_an_account_without_a_v6_1_dish", "relaunch_refuses_a_dish_that_runs_v6_2"],
     limit: "While the full-access key exists, its holder could deploy different code anyway; once it is deleted, nobody can call relaunch or deploy.",
   },
 ];
@@ -381,7 +381,7 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          The rules are fixed for a dish&rsquo;s life: there is no admin method, no parameter setter, no mint, no code-deploy method. The one privileged method, <C>relaunch</C>, can only be run by the contract account itself and refuses a dish that already runs v6 (<a href="#t-relaunch">below</a>).
+          The rules are fixed for a dish&rsquo;s life: there is no admin method, no parameter setter, no mint, no code-deploy method. The one privileged method, <C>relaunch</C>, can only be run by the contract account itself and refuses a dish that already runs v6.2 (<a href="#t-relaunch">below</a>).
         </li>
         <li>Every NEAR and PETRI movement is in the ledger, and the replay recomputes every solvency term from it.</li>
         <li>Every record is paid for by whoever writes it.</li>
@@ -420,7 +420,7 @@ export default function Page() {
       <H2 id="limits">Known limits</H2>
       <ul>
         <li>
-          <strong>The code is not locked yet.</strong> Each contract account has one full-access key. Until it is deleted, the owner could deploy different code or run <C>relaunch</C> on a v6 account; after it is deleted, nobody can fix a bug.
+          <strong>The code is not locked yet.</strong> Each contract account has one full-access key. Until it is deleted, the owner could deploy different code or run <C>relaunch</C> on a v6.1 account; after it is deleted, nobody can fix a bug.
         </li>
         <li>
           <strong>Most players lose NEAR.</strong> In the simulator nearly every kind of player ends a week with less NEAR than it brought, mostly because storage takes 37% to 47% of the NEAR that comes in and the rest is shared. Petri is a game with a live economy, not an investment. See <Doc to="simulations" hash="losses">What loses money</Doc>.

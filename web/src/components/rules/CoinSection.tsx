@@ -186,7 +186,7 @@ export function CoinSection() {
                 rest buys PETRI from the agar. After that, <code className={s.codePaper}>buy</code> spends NEAR the same way. Every
                 purchase is in the ledger with the NEAR and credit paid and the PETRI received; attached NEAR goes to the tide
                 vault and credit to the credit pool.{" "}
-                {net.freePlay ? "" : "On mainnet a purchase can also arrive as wNEAR through NEAR Intents, which the contract unwraps and treats as attached NEAR. It never refunds wNEAR: an amount that cannot join or buy at once waits as pending NEAR for its account, with its order."}
+                {net.freePlay ? "" : "On mainnet a purchase can also arrive as wNEAR through NEAR Intents, which the contract unwraps and treats as attached NEAR. It never refunds wNEAR that pays for its own records: an amount that cannot join or buy at once waits as pending NEAR for its account, with its order (an amount too small for its records is returned and writes nothing). A colony attaches NEAR only if what reaches the vault, net of storage, is at least 0.01 NEAR in that one call."}
               </p>
               <pre className={s.formulaPaper}>
                 {`price of one PETRI = ${nearPer(launchPrice)} NEAR × ${int(maxPetri)} ÷ PETRI in the agar
@@ -283,7 +283,7 @@ export function CoinSection() {
                 <code className={s.codePaper}>sell(petri)</code> hands PETRI back to the agar for NEAR from the tide vault, at{" "}
                 {r.sell_bps / 100}% of the curve&rsquo;s price, and never more than those units&rsquo; pro-rata share of the vault.
                 Between two tides the agar buys back at most {r.sell_cap_bps / 100}% of the vault, first come first served, and
-                nothing before the first tide. A round trip through the agar always loses. A colony that has never attached NEAR
+                nothing before the first tide. A round trip through the agar always loses. A colony that has not attached NEAR
                 (a free-play guest) is paid for its PETRI in credit it can spend in the dish, never in NEAR. House colonies never
                 sell: the vault is the players&rsquo;.
               </p>
@@ -459,7 +459,7 @@ export function CoinSection() {
                     <code className={s.codePaper}>ft_resolve_transfer</code>), <code className={s.codePaper}>ft_balance_of</code> and{" "}
                     <code className={s.codePaper}>ft_total_supply</code>. Transfers attach exactly 1 yoctoNEAR. PETRI refunded to a
                     sender that has unregistered meanwhile is burned. House accounts (the strains and the keepers) can send PETRI
-                    only to other house accounts. A colony that has never attached NEAR cannot send PETRI at all, and neither can
+                    only to other house accounts. A colony that has not attached NEAR cannot send PETRI at all, and neither can
                     one holding kept PETRI (PETRI earned before its first NEAR, or bought with credit, until it has been planted).
                   </li>
                   <li>

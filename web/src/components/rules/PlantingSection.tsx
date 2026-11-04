@@ -186,7 +186,7 @@ export function PlantingSection() {
                   keepsake). Plant exactly a slide&rsquo;s cells, moved anywhere on the dish but not
                   turned or flipped, and name the slide: the planting costs {r.slide_discount_bps / 100}% less, for anyone. A
                   planter that does not hold the slide also pays its holder {r.slide_royalty_bps / 100}% of that discounted cost in
-                  PETRI, or the agar, if the planter has never attached NEAR. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.
+                  PETRI, or the agar, if the planter has not attached NEAR or holds more kept PETRI than the planting costs. The siege surcharge still applies in full, so a licence never makes a rival&rsquo;s ground cheap.
                 </p>
               </li>
               <li className={s.limit}>

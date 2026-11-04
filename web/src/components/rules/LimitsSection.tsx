@@ -17,8 +17,8 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
     body: (
       <>
         No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over,{" "}
-        <code className={s.code}>relaunch</code>, is private (only the contract account itself can call it), clears a v6 dish
-        and refuses an account with no v6 dish and one that already runs v6.1. But <ContractLink /> still has one full-access key that could deploy other
+        <code className={s.code}>relaunch</code>, is private (only the contract account itself can call it), clears a v6.1 dish
+        and refuses an account with no v6.1 dish and one that already runs v6.2. But <ContractLink /> still has one full-access key that could deploy other
         code or relaunch. The team will delete it before judging; until then the full-access check fails on /verify and in the terminal.
       </>
     ),
