@@ -187,6 +187,7 @@ async function maybeFossilize(s, world, me, balance) {
   const deposit = await view("slide_deposit", { w: SLIDE_SIDE, h: SLIDE_SIDE, title_bytes: Buffer.byteLength(title) });
   try {
     const args = { x: win.x, y: win.y, w: SLIDE_SIDE, h: SLIDE_SIDE, title };
+    await catchUp(s.account);
     const r = await callDish(s.account, "mint_slide", args, 300, BigInt(deposit), attaches(s));
     log(s.name, `fossilized ${win.n} cells at ${win.x}, ${win.y}`, r.hash);
   } catch (e) {
@@ -344,6 +345,7 @@ async function actOn(s, world) {
     return;
   }
   try {
+    await catchUp(s.account);
     const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
     const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 300, BigInt(deposit), attaches(s));
     log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", note, r.hash);
@@ -478,6 +480,17 @@ async function keep() {
     } catch (e) {
       log("keeper refused:", e instanceof Error ? e.message : e);
     }
+  }
+}
+
+/** A planting needs the stored board within max_catchup of the clock; on a slow dish the strain advances it first. */
+async function catchUp(accountId) {
+  for (let i = 0; i < 6; i++) {
+    const st = await view("state");
+    const behind = Number(st.due_generation) - Number(st.generation);
+    if (behind <= 120) return; // rules.max_catchup on both dishes
+    const r = await callDish(accountId, "advance", {}, 300);
+    log(accountId, "advanced the dish first:", behind, "generations behind", r.hash);
   }
 }
 
