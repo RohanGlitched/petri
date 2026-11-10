@@ -5,6 +5,7 @@
 //   node purse.mjs seal <holder> <token>             prepay the factory and send it the slide (nft_transfer_call)
 //   node purse.mjs wake <token> [near]               the holder has the purse join the dish (default 0.02 NEAR)
 //   node purse.mjs plant <token>                     the holder has the purse plant its slide's pattern under licence
+//   node purse.mjs replant <token>                   as the run loop does it: advance, claim/buy if short, plant (capped)
 //   node purse.mjs claim <token>                     the purse claims its feed and tides
 //   node purse.mjs transfer <token> <to>             nft_transfer of the purse's own token
 //   node purse.mjs withdraw <token> [yocto]          NEAR to the holder
@@ -20,8 +21,12 @@
 // the slide's holder with its own key; a holder whose key may only call the dish (a function-call key) cannot drive a
 // purse, and a holder whose key is not on this machine is skipped with a note.
 
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { actions } from "near-api-js";
-import { account, callDish, CALL_TGAS, CONTRACT, failureText, liveDish, log, NETWORK, rpc, view } from "./lib.mjs";
+import { account, callDish, CALL_TGAS, CONTRACT, failureText, liveDish, log, NETWORK, rpc, tokensBurnt, view } from "./lib.mjs";
+import { replant } from "./tend.mjs";
 
 export { actions };
 
@@ -85,7 +90,7 @@ export async function send(signer, receiver, method, args, deposit = 0n, tgas = 
     }
   }
   const logs = (res.receipts_outcome ?? []).flatMap((r) => r.outcome.logs);
-  return { hash: res.transaction.hash, value, failed: fail ? failureText(fail) : null, logs };
+  return { hash: res.transaction.hash, value, failed: fail ? failureText(fail) : null, logs, burnt: tokensBurnt(res) };
 }
 
 /** Prepay the factory if needed, then send it the slide: it creates the purse and moves the slide in. */
@@ -155,13 +160,58 @@ export async function plantSlide(holder, token, { pay = "attach" } = {}) {
 
 const lastTend = new Map();
 const TEND_EVERY_MS = Number(process.env.PETRI_PURSE_EVERY_MIN ?? "30") * 60_000;
+// The most NEAR a holder spends on one purse in any 24 hours: deposits it attaches and the gas its calls burn.
+const DAY_CAP = BigInt(Math.round(Number(process.env.PETRI_PURSE_DAY_NEAR ?? "0.03") * 1e6)) * 10n ** 18n;
 
 const noKey = new Set();
 
+// Each purse's tending record (failures in a row, when it may be tried again, what was spent today), kept across
+// restarts beside the runner's log.
+const TEND_FILE = path.join(process.env.PETRI_LOG_DIR ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "log"), `purse-tend-${NETWORK}.json`);
+let tending = null;
+function tendRecord(token) {
+  if (!tending) {
+    try {
+      tending = JSON.parse(fs.readFileSync(TEND_FILE, "utf8"));
+    } catch {
+      tending = {};
+    }
+  }
+  return (tending[token] ??= { failures: 0, nextAt: 0, spend: [] });
+}
+function saveTending() {
+  try {
+    fs.mkdirSync(path.dirname(TEND_FILE), { recursive: true });
+    fs.writeFileSync(TEND_FILE, JSON.stringify(tending, null, 1));
+  } catch {
+    /* the record still holds for this run */
+  }
+}
+
+/** The chain calls replant() makes for holder `holder` and slide `token`. */
+function tendDeps(holder, token, name) {
+  return {
+    view,
+    advance: () => callDish(holder, "advance", {}, CALL_TGAS),
+    act: (method, args, deposit) => act(holder, token, method, args, deposit),
+    place: async (colonyId, slide) => {
+      const world = await liveDish();
+      try {
+        return placeSlide(world, colonyId, slide);
+      } finally {
+        world.engine.free();
+      }
+    },
+    log: (...a) => log(name, ...a),
+  };
+}
+
 /**
  * For the run loop: each account given (the team bench) that holds a living slide keeps it alive. When the purse's
- * colony has no living cells it replants the slide's pattern; when it has NEAR from the tides waiting, it claims. One
- * pass per holder per PETRI_PURSE_EVERY_MIN minutes at most. A holder whose key is not on this machine is skipped.
+ * colony has no living cells it replants the slide's pattern (tend.mjs: advance the dish if it is too far behind,
+ * claim and buy PETRI if the purse is short, within a daily NEAR cap per purse, backing off after a failure); when it
+ * has NEAR from the tides waiting, it claims. One pass per holder per PETRI_PURSE_EVERY_MIN minutes at most. A holder
+ * whose key is not on this machine is skipped.
  */
 export async function tendPurses(holders) {
   for (const s of holders) {
@@ -197,16 +247,8 @@ export async function tendPurses(holders) {
         world.engine.free();
         if (alive === 0 && (st.colony.last_plant_generation === null || Number(st.colony.last_plant_generation) < due)) {
           // The holder attaches the planting's NEAR: the purse has no sponsored credit of its own.
-          // A planting needs the stored board within max_catchup of the clock; on a sleeping dish the holder advances
-          // it first (one call: the contract skips what is too far behind and steps the rest).
-          const st0 = await view("state");
-          const rules0 = await view("rules");
-          if (Number(st0.due_generation) - Number(st0.generation) > Number(rules0.max_catchup)) {
-            const a = await callDish(s.account, "advance", {}, CALL_TGAS).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-            log(s.name, `advanced the dish before replanting living slide ${token}`, a.hash ?? a.error);
-          }
-          const r = await plantSlide(s.account, token);
-          log(s.name, `living slide ${token} replanted its pattern`, r.failed ?? "", r.hash);
+          await replant(token, tendRecord(token), tendDeps(s.account, token, s.name), { purse: st.purse, everyMs: TEND_EVERY_MS, capYocto: DAY_CAP });
+          saveTending();
         } else if (BigInt(st.claimable.near) > 0n) {
           const r = await act(s.account, token, "claim", {}, 0n);
           log(s.name, `living slide ${token} claimed its tides`, r.failed ?? "", r.hash);
@@ -245,6 +287,13 @@ async function main() {
     }
     case "plant":
       return out(await plantSlide(await who(), token));
+    case "replant": {
+      // What the run loop does for a purse with no living cells: advance, claim/buy if short, plant, within the cap.
+      const holder = await who();
+      const r = await replant(token, tendRecord(token), tendDeps(holder, token, holder.slice(0, 12)), { purse, everyMs: TEND_EVERY_MS, capYocto: DAY_CAP });
+      saveTending();
+      return out(r);
+    }
     case "claim":
       return out(await act(await who(), token, "claim", {}, 0n));
     case "transfer":
