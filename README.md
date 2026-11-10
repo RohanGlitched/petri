@@ -2,10 +2,13 @@
   <img src="docs/cover.png" alt="Petri Dish: a memecoin that is alive. Conway's Life with owners, run by a NEAR contract." width="100%" />
 </p>
 
+> **Judges: start at the [judge desk](https://www.playpetri.xyz/judges)**: every claim checked live against both dishes, each track's prompt line by line, a trade feed and one button per mechanic. Then [try to break it](https://www.playpetri.xyz/break), read [every mint and burn](https://www.playpetri.xyz/coin), or watch [a week in a minute](https://www.playpetri.xyz/sim).
+
 <p align="center">
   <a href="https://www.playpetri.xyz"><img alt="Live site" src="https://img.shields.io/badge/live-playpetri.xyz-f2b45a?style=flat-square&labelColor=120a05" /></a>
   <a href="https://nearblocks.io/address/petri-dish.near"><img alt="Mainnet contract" src="https://img.shields.io/badge/mainnet-petri--dish.near-9fd8a8?style=flat-square&labelColor=120a05" /></a>
   <a href="https://testnet.nearblocks.io/address/petri-v6.testnet"><img alt="Testnet contract" src="https://img.shields.io/badge/testnet-petri--v6.testnet-9fd8a8?style=flat-square&labelColor=120a05" /></a>
+  <a href="https://github.com/RohanGlitched/petri/actions/workflows/live.yml"><img alt="Live dishes replayed every 6 hours" src="https://github.com/RohanGlitched/petri/actions/workflows/live.yml/badge.svg" /></a>
   <img alt="Tests" src="https://img.shields.io/badge/tests-180-9fd8a8?style=flat-square&labelColor=120a05" />
   <img alt="Rust" src="https://img.shields.io/badge/rust-near--sdk%205.29.1-e2d5c3?style=flat-square&labelColor=120a05" />
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/licence-MIT-e2d5c3?style=flat-square&labelColor=120a05" /></a>

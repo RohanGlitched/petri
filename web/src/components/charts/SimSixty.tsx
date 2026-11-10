@@ -26,7 +26,7 @@ type Scenario = {
   vault_out_by_day: Band[];
 };
 
-const SCEN = (sim as { scenarios: Scenario[] }).scenarios;
+const SCEN = (sim as unknown as { scenarios: Scenario[] }).scenarios;
 const k = (v: number) => (v >= 1000 ? `${Math.round(v / 1000).toLocaleString("en-US")}k` : Math.round(v).toLocaleString("en-US"));
 const pct = (v: number) => `${(100 * v).toFixed(1)}%`;
 const names: Record<string, string> = { Whale: "2-NEAR whale", SplitWhale: "10-colony split whale", Locker: "Lattice locker" };

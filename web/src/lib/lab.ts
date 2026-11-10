@@ -1,0 +1,134 @@
+"use client";
+// Calls for the judge desk's mechanics and the break-it lab, on the free-play dish. The lab signs, with this browser's
+// guest key, calls the contract is meant to refuse, and sends them through the relayer marked `lab`, so the refusal is
+// a real failed transaction with a hash. The guest key is the one wallet.ts made (petri.guest.v1).
+
+import { Account, JsonRpcProvider, actions, encodeSignedDelegate, type KeyPairString } from "near-api-js";
+import { pattern_cells, type Engine, type PatternName } from "@/engine";
+import { getRules, getState, type Rules } from "./chain";
+import { CONTRACT, RPC_URLS } from "./config";
+
+const STORE = "petri.guest.v1";
+
+export function savedGuest(): { accountId: string; secretKey: KeyPairString } | null {
+  try {
+    const raw = localStorage.getItem(STORE);
+    return raw ? (JSON.parse(raw) as { accountId: string; secretKey: KeyPairString }) : null;
+  } catch {
+    return null;
+  }
+}
+
+export type Step = { method: string; args: Record<string, unknown>; tgas: number };
+export type Sent = { hash?: string; error?: string; raw?: string; ok: boolean };
+
+let rulesOnce: Promise<Rules> | null = null;
+
+/** One `advance` ahead of the steps when the stored dish is more than a catch-up behind the clock. */
+async function withCatchUp(steps: Step[]): Promise<Step[]> {
+  try {
+    rulesOnce ??= getRules();
+    const [rules, state] = await Promise.all([rulesOnce, getState()]);
+    const lag = Number(state.due_generation) - Number(state.generation) + 4;
+    if (lag <= rules.max_catchup) return steps;
+    return [{ method: "advance", args: { max: rules.max_catchup }, tgas: 60 }, ...steps];
+  } catch {
+    return steps;
+  }
+}
+
+/** Sign `steps` as one delegate action with the guest key and have the relayer submit it. */
+export async function relaySteps(steps: Step[], lab: string | null, catchUp = true): Promise<Sent> {
+  const g = savedGuest();
+  if (!g) return { ok: false, error: "Make a guest colony first." };
+  const all = catchUp ? await withCatchUp(steps) : steps;
+  const total = all.reduce((a, s) => a + s.tgas, 0);
+  if (total > 300) {
+    const scale = 300 / total;
+    all.forEach((s) => (s.tgas = Math.floor(s.tgas * scale)));
+  }
+  const acct = new Account(g.accountId, new JsonRpcProvider({ url: RPC_URLS[0] }), g.secretKey);
+  const { signedDelegate } = await acct.createSignedMetaTransaction({
+    receiverId: CONTRACT,
+    actions: all.map((s) => actions.functionCall(s.method, s.args, BigInt(s.tgas) * 10n ** 12n, 0n)),
+    blockHeightTtl: 120,
+  });
+  const bytes = encodeSignedDelegate(signedDelegate);
+  let bin = "";
+  bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  const res = await fetch("/api/relay", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ signedDelegate: btoa(bin), ...(lab ? { lab } : {}) }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.ok && body.hash) return { ok: true, hash: body.hash };
+  return { ok: false, hash: body.hash, error: body.error ?? `The relayer answered ${res.status}.`, raw: body.raw };
+}
+
+/** A place for `pattern` where the contract would accept a planting by `colony`: on open ground, or (siege) only
+ * inside a rival's buffer. Returns the cells, or null after `tries` random places. */
+export function findSpot(e: Engine, rules: Rules, colony: number, pattern: PatternName, want: "open" | "siege", tries = 1500): number[] | null {
+  const { width: w, height: h } = rules;
+  for (let i = 0; i < tries; i++) {
+    const x = Math.floor(Math.random() * w);
+    const y = Math.floor(Math.random() * h);
+    const cells = Array.from(pattern_cells(pattern, x, y, w, h, Math.floor(Math.random() * 4), false));
+    const r = e.check_plant(colony, new Uint32Array(cells), rules.buffer, rules.max_plant_cells);
+    if (want === "open" && r === "") return cells;
+    if (want === "siege" && r.startsWith("siege:")) return cells;
+  }
+  return null;
+}
+
+/** `offsets` (cells relative to a corner) placed at some legal open spot. */
+export function findSpotFor(e: Engine, rules: Rules, colony: number, offsets: [number, number][], tries = 2000): number[] | null {
+  const { width: w, height: h } = rules;
+  for (let i = 0; i < tries; i++) {
+    const x = Math.floor(Math.random() * w);
+    const y = Math.floor(Math.random() * h);
+    const cells = offsets.map(([dx, dy]) => ((y + dy) % h) * w + ((x + dx) % w));
+    if (e.check_plant(colony, new Uint32Array(cells), rules.buffer, rules.max_plant_cells) === "") return cells;
+  }
+  return null;
+}
+
+/** A living cell of some colony other than `colony` (and the cells of its rectangle around it), for the lab. */
+export function rivalCell(e: Engine, rules: Rules, colony: number): { index: number; owner: number } | null {
+  const cells = e.cells();
+  const start = Math.floor(Math.random() * cells.length);
+  for (let k = 0; k < cells.length; k++) {
+    const i = (start + k) % cells.length;
+    if (cells[i] !== 0 && cells[i] !== colony) return { index: i, owner: cells[i] };
+  }
+  return null;
+}
+
+/** The w × h rectangle (at most 12 a side) holding the most of `colony`'s living cells, if it holds at least `min`. */
+export function ownRect(e: Engine, rules: Rules, colony: number, min: number): { x: number; y: number; w: number; h: number; n: number } | null {
+  const cells = e.cells();
+  const { width: W, height: H } = rules;
+  const mine: [number, number][] = [];
+  for (let i = 0; i < cells.length; i++) if (cells[i] === colony) mine.push([i % W, Math.floor(i / W)]);
+  let best: { x: number; y: number; w: number; h: number; n: number } | null = null;
+  const side = 12;
+  for (const [cx, cy] of mine) {
+    const x = (cx - 3 + W) % W;
+    const y = (cy - 3 + H) % H;
+    let n = 0;
+    for (const [mx, my] of mine) {
+      const dx = (mx - x + W) % W;
+      const dy = (my - y + H) % H;
+      if (dx < side && dy < side) n++;
+    }
+    if (!best || n > best.n) best = { x, y, w: side, h: side, n };
+  }
+  return best && best.n >= min ? best : null;
+}
+
+/** A slide's cells as offsets from its corner (its bitmap, row by row). */
+export function slideOffsets(bitmap: Uint8Array, w: number, h: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i < w * h; i++) if (bitmap[i >> 3] & (1 << (i & 7))) out.push([i % w, Math.floor(i / w)]);
+  return out;
+}

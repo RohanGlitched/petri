@@ -555,7 +555,11 @@ for (const [name, want, got] of checks) {
 }
 // The team keeps one full-access key on purpose, so a bug can be fixed with new code and `relaunch` (README, The lock).
 // It is disclosed here, not counted as a difference: new code would show above as a changed code hash.
-if (!DUMP) console.log(`  note    ${"Full-access keys".padEnd(44)} ${fullKeys}${fullKeys > 0 ? ` (team-held, see The lock${keyUse})` : ""}`);
+// With none left, nobody can deploy other code or relaunch: that is a pass, printed as one.
+if (!DUMP) {
+  if (fullKeys === 0) console.log(`  PASS    ${"Full-access keys".padEnd(44)} 0 (nobody can deploy other code or relaunch)`);
+  else console.log(`  note    ${"Full-access keys".padEnd(44)} ${fullKeys}${fullKeys > 0 ? ` (team-held, see The lock${keyUse})` : ""}`);
+}
 for (const c of earnedBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmt(earnings[c.id - 1])}, replay ${fmt(e.earned_of(c.id))}`);
 for (const c of wonBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmtNear(winnings[c.id - 1])} NEAR won, replay ${fmtNear(wonOf(c.id).toString())}`);
 for (const c of keptBad.slice(0, 10)) console.log(`  ${c.name}: contract ${fmt(c.kept ?? 0)} kept PETRI, replay ${fmt(keptOf(c.id))}`);

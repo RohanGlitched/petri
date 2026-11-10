@@ -26,10 +26,14 @@ export const LINKS: Item[] = [
   { href: "/rules", label: "How it works", note: "The rules and the coin", group: "learn", rank: 1 },
   { href: "/strains", label: "AI strains", note: "Five AI colonies, their moves and their pacts", group: "play", rank: 2 },
   { href: "/specimens", label: "Specimens", note: "Living cells fixed onto slides, as NFTs", group: "play", rank: 3 },
+  { href: "/judges", label: "Judges", note: "Every claim checked live, track by track", group: "learn", rank: 1 },
   { href: "/verify", label: "Verify", note: "Replay the dish from generation zero", group: "learn", rank: 2 },
   { href: "docs", label: "Docs", note: "Guides and the contract API", group: "learn", rank: 3 },
   { href: "/colonies", label: "Colonies", note: "Every colony, its cells and its PETRI", group: "play", rank: 0 },
   { href: "/records", label: "Records", note: "The dish's high scores, from its ledger", group: "play", rank: 0 },
+  { href: "/coin", label: "The coin", note: "Every mint and burn of PETRI since genesis", group: "learn", rank: 0 },
+  { href: "/break", label: "Try to break it", note: "Attacks the contract refuses, live", group: "learn", rank: 0 },
+  { href: "/sim", label: "A week in a minute", note: "Seven days simulated with the real rules", group: "play", rank: 0 },
 ];
 
 const HOME: Item = { href: "/", label: "Home", note: "", group: "play", rank: 1 };

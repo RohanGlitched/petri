@@ -1,0 +1,47 @@
+# Replays both live dishes from generation zero against the contract every six hours and on every push, and reports
+# the mainnet contract account's full-access keys. The badge in the README is this workflow's status.
+name: Live dishes
+
+on:
+  push:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Replay ${{ matrix.network }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [mainnet, testnet]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Replay the dish and compare every check
+        run: node scripts/verify.mjs --network ${{ matrix.network }}
+
+  keys:
+    name: Full-access keys on petri-dish.near
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Count them with view_access_key_list
+        run: |
+          set -euo pipefail
+          for rpc in https://rpc.mainnet.fastnear.com https://rpc.mainnet.near.org; do
+            body=$(curl -sf -m 20 "$rpc" -H 'content-type: application/json' \
+              -d '{"jsonrpc":"2.0","id":"ci","method":"query","params":{"request_type":"view_access_key_list","finality":"final","account_id":"petri-dish.near"}}') && break
+          done
+          full=$(echo "$body" | jq '[.result.keys[] | select(.access_key.permission == "FullAccess")] | length')
+          total=$(echo "$body" | jq '.result.keys | length')
+          echo "petri-dish.near: $full full-access key(s) of $total"
+          echo "### petri-dish.near: $full full-access key(s) of $total" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$full" = "0" ]; then echo "PASS: nobody can deploy other code or relaunch the mainnet dish"; else echo "NOTE: the team still holds $full full-access key(s); deleted after the final verify on 14 November"; fi
