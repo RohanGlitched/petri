@@ -10,27 +10,43 @@
 //   node purse.mjs withdraw <token> [yocto]          NEAR to the holder
 //   node purse.mjs ft-withdraw <token> <units>       PETRI to the holder
 //   node purse.mjs list <token> <yocto> | unlist <token>
+//   node purse.mjs payout <token> [yocto]            how a sale splits now (v2 purses: 5% to the slide's minter)
 //   node purse.mjs buy <token> <buyer> [nonce]       buy at the listed price, pinned to the nonce
 //   node purse.mjs license <token> <planter>         another colony plants the slide's pattern under licence: its
 //                                                    royalty is paid into the purse
 //   node purse.mjs as <account> <cmd> ...            run withdraw/ft-withdraw/act as another account (to show a refusal)
 //
-// The run loop calls `tendPurses` for the house strains when PETRI_LIVING_SLIDES=1. Every call here is signed by the
-// slide's holder with its own key; a holder whose key may only call the dish (a function-call key) cannot drive a
-// purse, and is skipped with a note.
+// The run loop calls `tendPurses` for the team bench accounts when PETRI_LIVING_SLIDES=1. Every call here is signed by
+// the slide's holder with its own key; a holder whose key may only call the dish (a function-call key) cannot drive a
+// purse, and a holder whose key is not on this machine is skipped with a note.
 
 import { actions } from "near-api-js";
 import { account, CONTRACT, failureText, liveDish, log, NETWORK, rpc, view } from "./lib.mjs";
 
 export { actions };
 
-// The account purses live under. On testnet it is the factory (`seal` goes through it); on mainnet there is no factory
-// and petri-dish.near made its living slide by hand (scripts/purse-mainnet.mjs), so `seal` does not apply there.
-export const FACTORY = process.env.PETRI_SLIDES_FACTORY ?? (NETWORK === "mainnet" ? "petri-dish.near" : "petri-slides.testnet");
+// The accounts purses live under, newest first. The first is the keyless v2 factory `slides.<dish>` (its purses pay
+// the slide's minter 5% of every sale), which `seal` goes through. The others made the v1 purses: petri-slides.testnet
+// (a factory with a key) and, on mainnet, petri-dish.near itself, which made living slide 14 by hand
+// (scripts/purse-mainnet.mjs). PETRI_SLIDES_PARENTS overrides the list (comma-separated).
+export const PARENTS = (process.env.PETRI_SLIDES_PARENTS ?? (NETWORK === "mainnet" ? "slides.petri-dish.near,petri-dish.near" : "slides.petri-v6.testnet,petri-slides.testnet")).split(",").map((s) => s.trim()).filter(Boolean);
+export const FACTORY = process.env.PETRI_SLIDES_FACTORY ?? PARENTS[0];
 const YOCTO = 10n ** 24n;
 const TGAS = 10n ** 12n;
+// A purse's calls to the dish run within this: 150 TGas holds back 0.15 NEAR of the holder's while it runs.
+const ACT_TGAS = 150n;
 
-export const purseOf = (token) => `slide-${token}.${FACTORY}`;
+/** The account slide `token`'s purse lives at under `parent` (the v2 factory by default). */
+export const purseOf = (token, parent = FACTORY) => `slide-${token}.${parent}`;
+
+/** Whether `owner` (the slide's owner on the dish) is the slide's own purse, under any of this network's parents. */
+export const isPurseOf = (token, owner) => PARENTS.some((p) => owner === purseOf(token, p));
+
+/** Slide `token`'s purse: the parent account it was sealed under, read from the dish (the v2 factory if not sealed). */
+export async function purseFor(token) {
+  const slide = await view("slide", { token_id: String(token) });
+  return slide && isPurseOf(token, slide.owner_id) ? slide.owner_id : purseOf(token);
+}
 
 export async function viewAt(contract, method, args = {}) {
   const r = await rpc("query", {
@@ -85,12 +101,12 @@ export async function seal(holder, token) {
 }
 
 /** Have the purse call the dish (one of its whitelisted calls), as its holder. */
-export function act(holder, token, method, args = {}, deposit = 0n, tgas = 300n) {
-  return send(holder, purseOf(token), "act", { method, args }, deposit, tgas);
+export async function act(holder, token, method, args = {}, deposit = 0n, tgas = ACT_TGAS) {
+  return send(holder, await purseFor(token), "act", { method, args }, deposit, tgas);
 }
 
 export async function status(token) {
-  const purse = purseOf(token);
+  const purse = await purseFor(token);
   const [info, history, keys, colony, petri, claimable, slide] = await Promise.all([
     viewAt(purse, "purse"),
     viewAt(purse, "history"),
@@ -120,7 +136,7 @@ function placeSlide(world, colonyId, slide, tries = 200) {
 
 /** The purse's colony plants its own slide's pattern, under the licence it holds (no royalty, the licence discount). */
 export async function plantSlide(holder, token, { pay = "attach" } = {}) {
-  const purse = purseOf(token);
+  const purse = await purseFor(token);
   const [colony, slide] = await Promise.all([view("colony_of", { account_id: purse }), view("slide", { token_id: String(token) })]);
   if (!colony) throw new Error("the purse has not joined the dish: wake it first");
   const world = await liveDish();
@@ -130,8 +146,8 @@ export async function plantSlide(holder, token, { pay = "attach" } = {}) {
     const note = `Living slide ${token} plants its own specimen.`;
     const deposit = BigInt(await view("plant_deposit", { cells: cells.length, note_bytes: Buffer.byteLength(note), slide: String(token) }));
     const args = { cells, note, slide: String(token) };
-    if (pay === "credit") return await act(holder, token, "plant", { ...args, credit: deposit.toString() }, 0n, 300n);
-    return await act(holder, token, "plant", args, deposit, 300n);
+    if (pay === "credit") return await act(holder, token, "plant", { ...args, credit: deposit.toString() }, 0n);
+    return await act(holder, token, "plant", args, deposit);
   } finally {
     world.engine.free();
   }
@@ -140,22 +156,31 @@ export async function plantSlide(holder, token, { pay = "attach" } = {}) {
 const lastTend = new Map();
 const TEND_EVERY_MS = Number(process.env.PETRI_PURSE_EVERY_MIN ?? "30") * 60_000;
 
+const noKey = new Set();
+
 /**
- * For the run loop: each house strain that holds a living slide keeps it alive. When the purse's colony has no living
- * cells it replants the slide's pattern; when it has NEAR from the tides waiting, it claims. One call per strain per
- * PETRI_PURSE_EVERY_MIN minutes at most.
+ * For the run loop: each account given (the team bench) that holds a living slide keeps it alive. When the purse's
+ * colony has no living cells it replants the slide's pattern; when it has NEAR from the tides waiting, it claims. One
+ * pass per holder per PETRI_PURSE_EVERY_MIN minutes at most. A holder whose key is not on this machine is skipped.
  */
-export async function tendPurses(strains) {
-  for (const s of strains) {
+export async function tendPurses(holders) {
+  for (const s of holders) {
     if (Date.now() - (lastTend.get(s.account) ?? 0) < TEND_EVERY_MS) continue;
     lastTend.set(s.account, Date.now());
+    try {
+      account(s.account);
+    } catch {
+      if (!noKey.has(s.account)) log(s.name, "living slides: no key for", s.account, "on this machine; not tending its purses");
+      noKey.add(s.account);
+      continue;
+    }
     let held = [];
     try {
-      // Purses this strain holds: the house's slides are few, so read every purse the factory could have made.
+      // Purses this holder holds: slides are few, so read every slide and keep those its own purse owns.
       const slides = await view("slides", { from: 0, limit: 500 });
       for (const sl of slides) {
-        if (sl.owner_id !== purseOf(sl.token_id)) continue;
-        const info = await viewAt(purseOf(sl.token_id), "purse").catch(() => null);
+        if (!isPurseOf(sl.token_id, sl.owner_id)) continue;
+        const info = await viewAt(sl.owner_id, "purse").catch(() => null);
         if (info?.holder === s.account && info.price === null && info.approvals === 0) held.push(sl.token_id);
       }
     } catch (e) {
@@ -175,7 +200,7 @@ export async function tendPurses(strains) {
           const r = await plantSlide(s.account, token);
           log(s.name, `living slide ${token} replanted its pattern`, r.failed ?? "", r.hash);
         } else if (BigInt(st.claimable.near) > 0n) {
-          const r = await act(s.account, token, "claim", {}, 0n, 200n);
+          const r = await act(s.account, token, "claim", {}, 0n);
           log(s.name, `living slide ${token} claimed its tides`, r.failed ?? "", r.hash);
         }
       } catch (e) {
@@ -186,7 +211,7 @@ export async function tendPurses(strains) {
 }
 
 async function holderOf(token) {
-  return (await viewAt(purseOf(token), "purse")).holder;
+  return (await viewAt(await purseFor(token), "purse")).holder;
 }
 
 async function main() {
@@ -199,6 +224,7 @@ async function main() {
   const out = (x) => console.log(JSON.stringify(x, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2));
   const token = rest[0];
   const who = async () => as ?? (await holderOf(token));
+  const purse = token && /^[1-9]\d*$/.test(token) ? await purseFor(token) : null;
   switch (cmd) {
     case "status":
       return out(await status(token));
@@ -207,26 +233,28 @@ async function main() {
     case "wake": {
       const near = rest[1] ? BigInt(Math.round(Number(rest[1]) * 1e6)) * 10n ** 18n : (YOCTO * 2n) / 100n;
       const slide = await view("slide", { token_id: String(token) });
-      return out(await act(await who(), token, "join", { name: `Living slide ${token}`, color: slide.color }, near, 300n));
+      return out(await act(await who(), token, "join", { name: `Living slide ${token}`, color: slide.color }, near));
     }
     case "plant":
       return out(await plantSlide(await who(), token));
     case "claim":
-      return out(await act(await who(), token, "claim", {}, 0n, 300n));
+      return out(await act(await who(), token, "claim", {}, 0n));
     case "transfer":
-      return out(await send(await who(), purseOf(token), "nft_transfer", { receiver_id: rest[1], token_id: String(token) }, 1n, 30n));
+      return out(await send(await who(), purse, "nft_transfer", { receiver_id: rest[1], token_id: String(token) }, 1n, 30n));
     case "withdraw":
-      return out(await send(await who(), purseOf(token), "withdraw", rest[1] ? { amount: rest[1] } : {}, 1n, 60n));
+      return out(await send(await who(), purse, "withdraw", rest[1] ? { amount: rest[1] } : {}, 1n, 60n));
     case "ft-withdraw":
-      return out(await send(await who(), purseOf(token), "ft_withdraw", { amount: rest[1] }, 1n, 80n));
+      return out(await send(await who(), purse, "ft_withdraw", { amount: rest[1] }, 1n, 80n));
     case "list":
-      return out(await send(await who(), purseOf(token), "list", { price: rest[1] }, 1n, 30n));
+      return out(await send(await who(), purse, "list", { price: rest[1] }, 1n, 30n));
     case "unlist":
-      return out(await send(await who(), purseOf(token), "unlist", {}, 1n, 30n));
+      return out(await send(await who(), purse, "unlist", {}, 1n, 30n));
+    case "payout":
+      return out(await viewAt(purse, "nft_payout", { token_id: String(token), balance: rest[1] ?? "10000", max_len_payout: 2 }));
     case "buy": {
-      const info = await viewAt(purseOf(token), "purse");
+      const info = await viewAt(purse, "purse");
       const nonce = rest[2] !== undefined ? Number(rest[2]) : info.nonce;
-      return out(await send(rest[1], purseOf(token), "buy", { nonce }, BigInt(info.price ?? 0), 60n));
+      return out(await send(rest[1], purse, "buy", { nonce }, BigInt(info.price ?? 0), 60n));
     }
     case "license": {
       const planter = rest[1];
@@ -240,7 +268,7 @@ async function main() {
       return out(await send(planter, CONTRACT, "plant", { cells, note, slide: String(token) }, deposit, 300n));
     }
     case "act":
-      return out(await act(await who(), token, rest[1], JSON.parse(rest[2] ?? "{}"), BigInt(rest[3] ?? 0), 300n));
+      return out(await act(await who(), token, rest[1], JSON.parse(rest[2] ?? "{}"), BigInt(rest[3] ?? 0)));
     default:
       console.log("usage: see the top of purse.mjs");
   }

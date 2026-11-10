@@ -65,6 +65,13 @@ export const BENCH = [
 ];
 
 const LIVING_SLIDES = process.env.PETRI_LIVING_SLIDES === "1";
+// The team bench account that holds the living slides (scripts/purse-mainnet-v2.mjs): an ordinary account outside the
+// house, with a full-access key and its own NEAR, so it can drive its purses and attach what their plantings cost. It
+// is tended only where its key is on this machine (PETRI_KEYS_DIR/<account>.json).
+const SLIDE_BENCH = {
+  account: process.env.PETRI_SLIDE_BENCH ?? (MAINNET ? "58135f2e727a40755df38f1d231aca159ea4ab138260b8d0d9419da63f999932" : "9e0f14b0b58c9760dd95af218cdd98a4417cd37d316e01cbff178d41ac5b7c5e"),
+  name: "Team bench",
+};
 const KEEPER = process.env.PETRI_KEEPER ?? acct("keeper");
 // The bench only plays on testnet; on mainnet the players are real.
 const PLAYERS = MAINNET ? STRAINS : [...STRAINS, ...BENCH];
@@ -824,10 +831,11 @@ async function mainLoopHouse(due, tick, rules) {
       nextAt.set(s.account, at);
     }
   }
-  // Living slides (purse.mjs): a colony we run that holds one keeps its slide's colony alive and collects its tides.
-  // Off unless PETRI_LIVING_SLIDES=1. Driving a purse needs a key that can call it and attach NEAR: the strains'
-  // keys may call only the dish, so on testnet the team bench (full keys, own NEAR) holds and tends the living slides.
-  if (LIVING_SLIDES) await tendPurses(MAINNET ? STRAINS : BENCH).catch((e) => log("living slides error", e.message));
+  // Living slides (purse.mjs): a team bench account that holds one keeps its slide's colony alive and collects its
+  // tides. Off unless PETRI_LIVING_SLIDES=1. Driving a purse needs a key that can call it and attach NEAR: the strains'
+  // keys may call only the dish, and no house account holds a living slide, so the team bench (full keys, own NEAR)
+  // holds and tends them, on mainnet as on testnet.
+  if (LIVING_SLIDES) await tendPurses(MAINNET ? [SLIDE_BENCH] : [...BENCH, SLIDE_BENCH]).catch((e) => log("living slides error", e.message));
   if ((tick + 1) % 60 === 0) await health();
   if ((tick + 1) % 4 === 0) {
     const colonies = await view("colonies", { from: 0, limit: 500 });

@@ -11,7 +11,7 @@
 
 import { createHash } from "node:crypto";
 import { account, failureText } from "../agents/lib.mjs";
-import { accessKeys, act, actions, purseOf, send, status, viewAt } from "../agents/purse.mjs";
+import { accessKeys, act, actions, purseFor, send, status, viewAt } from "../agents/purse.mjs";
 
 const T = 10n ** 12n;
 const rows = [];
@@ -46,10 +46,10 @@ async function outcome(hash, signer) {
 }
 
 const [cmd, token, ...rest] = process.argv.slice(2);
-const purse = purseOf(token);
+const purse = token ? await purseFor(token) : null;
 
 if (cmd === "keys") {
-  for (const t of [token, ...rest]) console.log(purseOf(t), "access keys:", (await accessKeys(purseOf(t))).length);
+  for (const t of [token, ...rest]) console.log(await purseFor(t), "access keys:", (await accessKeys(await purseFor(t))).length);
 } else if (cmd === "midpayout") {
   const to = rest[0];
   const holder = (await viewAt(purse, "purse")).holder;
