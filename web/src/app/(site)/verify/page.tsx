@@ -15,18 +15,23 @@ export default function VerifyPage() {
         <header className={s.head}>
           <h1 className={s.title}>Rebuild the dish from nothing</h1>
           <p className="lede">
-            The contract keeps one ordered ledger: every colony that joined, every purchase and sale, every planting, specimen
-            slide and tide, every clock skip and refund, with the PETRI, NEAR and credit each moved. That is all anyone needs:
-            Life is deterministic, so replaying the ledger from an empty dish must land on exactly the board, the history chain,
-            the PETRI balances, the NEAR vault and the credit pool the contract holds. This page does it now, in your browser, with the same Rust code the contract runs, reading
-            everything from one final block.
-          </p>
-          <p className="muted small" style={{ maxWidth: "60ch", margin: "-12px 0 0" }}>
-            The replay stops at the generation the contract last stored. The live dish elsewhere on this site runs a few
-            generations ahead of that in your browser, by the same rules, until someone advances the contract.
+            Your browser is replaying the contract&rsquo;s whole ledger from an empty dish, right now, with the same Rust code
+            the contract runs, and checking that it lands exactly where the contract is.
           </p>
         </header>
         <VerifyRun />
+        <div className={s.why}>
+          <p>
+            The contract keeps one ordered ledger: every colony that joined, every purchase and sale, every planting, specimen
+            slide and tide, every clock skip and refund, with the PETRI, NEAR and credit each moved. That is all anyone needs:
+            Life is deterministic, so replaying the ledger from an empty dish must land on exactly the board, the history chain,
+            the PETRI balances, the NEAR vault and the credit pool the contract holds. Everything is read from one final block.
+          </p>
+          <p className="muted small">
+            The replay stops at the generation the contract last stored. The live dish elsewhere on this site runs a few
+            generations ahead of that in your browser, by the same rules, until someone advances the contract.
+          </p>
+        </div>
       </section>
 
       <section id="chain" data-section="How the history chain is built" className="band band-paper" aria-labelledby="chain-title">

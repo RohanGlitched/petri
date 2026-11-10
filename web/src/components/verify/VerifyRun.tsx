@@ -7,6 +7,7 @@ import { loadEngine } from "@/engine";
 import { getAllColonies, getAllEarnings, getAllLedger, getAllSlides, getAllTideWinnings, getLock, getRules, getState, pinFinalBlock } from "@/lib/chain";
 import { Replayer, type Check } from "@/lib/replay";
 import { CONTRACT, NETWORK, REPO, accountUrl } from "@/lib/config";
+import { VERIFY } from "@/lib/facts";
 import s from "./verify.module.css";
 
 type Phase = "idle" | "fetching" | "replaying" | "done" | "error";
@@ -107,10 +108,45 @@ export function VerifyRun() {
   const allOk = replayOk && (!lock || lock.ok === true);
   const pct = target > 0 ? Math.min(100, (100 * gen) / target) : 0;
   const checkpointLog = useMemo(() => log.filter((l) => l.text.startsWith("Tide")).reverse(), [log]);
+  const real = checks.filter((c) => c.id !== "lock");
+  const passed = real.filter((c) => c.ok).length;
+  const total = real.length || VERIFY.checks;
+
+  // The verdict leads the page: waiting while the replay runs, then the answer, beside the dish on a desktop and above it
+  // on a phone.
+  const verdict =
+    phase === "done" ? (
+      <div className={`${s.verdict} ${allOk ? s.good : replayOk ? s.warnV : s.badV}`}>
+        <b>{allOk ? "Everything matches." : replayOk ? "The whole history matches." : "Something differs."}</b>
+        <span className={s.verdictCount}>
+          <span className="num">{passed}</span> of <span className="num">{total}</span> checks match
+          {lock ? <>, plus {VERIFY.notes === 1 ? "one note" : `${VERIFY.notes} notes`} on the contract&rsquo;s key</> : null}
+        </span>
+        <span>
+          {replayOk
+            ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${allOk ? "" : " The contract account has one full-access key, held by the team so a bug can be fixed; it is disclosed in the last row."}`
+            : "A value below came out differently. That is either a bug or tampering, and either way it is worth reporting."}
+        </span>
+      </div>
+    ) : phase === "error" ? (
+      <div className={`${s.verdict} ${s.badV}`}>
+        <b>The replay could not finish.</b>
+        <span>{msg}</span>
+      </div>
+    ) : (
+      <div className={`${s.verdict} ${s.pendingV}`} aria-busy="true">
+        <b>{phase === "replaying" ? `Replaying… ${Math.floor(pct)}%` : "Reading the ledger…"}</b>
+        <span className={s.verdictCount}>
+          {total} checks waiting for the replay{VERIFY.notes ? `, and ${VERIFY.notes === 1 ? "one note" : `${VERIFY.notes} notes`}` : ""}
+        </span>
+        <span className={s.verdictTrack} aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
+      </div>
+    );
 
   return (
     <section className={s.run} aria-labelledby="run-title">
       <div className={s.stage}>
+        <div className={s.verdictSlot} aria-live="polite">{verdict}</div>
         <div className={s.dish}>
           <Culture
             width={128}
@@ -152,16 +188,6 @@ export function VerifyRun() {
               <span className="num">{counts.checkpoints}</span> {counts.checkpoints === 1 ? "checkpoint" : "checkpoints"} ({counts.checkpoints === 1 ? "generation zero; no tide yet" : "generation zero and every tide"}) read from{" "}
               <a href={accountUrl(CONTRACT)}>{CONTRACT}</a> on NEAR {NETWORK}.
             </p>
-          )}
-          {phase === "done" && (
-            <div className={`${s.verdict} ${allOk ? s.good : replayOk ? s.warnV : s.badV}`}>
-              <b>{allOk ? "Everything matches." : replayOk ? "The whole history matches." : "Something differs."}</b>
-              <span>
-                {replayOk
-                  ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${allOk ? "" : " The contract account has one full-access key, held by the team so a bug can be fixed; it is disclosed in the last row."}`
-                  : "A value below came out differently. That is either a bug or tampering, and either way it is worth reporting."}
-              </span>
-            </div>
           )}
           <div className={s.actions}>
             <button className="btn btn-amber" onClick={run} disabled={phase === "fetching" || phase === "replaying"}>

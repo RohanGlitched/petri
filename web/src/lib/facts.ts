@@ -28,7 +28,9 @@ export const EVENT_VERSION = `${CONTRACT_VERSION.slice(1)}.0`;
 /** `cargo test -p petri-contract` and `cargo test -p petri-core` at BUILD_COMMIT. */
 export const TESTS = { contract: 152, core: 37, total: 152 + 37 };
 
-/** What /verify shows: its checks, plus one disclosed note (the team-held full-access key). */
-export const VERIFY = { checks: 44, notes: 1 };
-/** Rows `node scripts/verify.mjs` prints: the same ground, some split finer, plus the key note. */
-export const VERIFY_CLI_ROWS = 45;
+/** What /verify shows (web/src/lib/replay.ts, counted on a live run): 43 checks, the code hash among them, plus one
+ * disclosed note (the team-held full-access key). */
+export const VERIFY = { checks: 43, notes: 1 };
+/** What `node scripts/verify.mjs` prints: the same ground with some rows split finer, 44 checks, then the key note. */
+export const VERIFY_CLI_CHECKS = 44;
+export const VERIFY_CLI_ROWS = VERIFY_CLI_CHECKS + 1;

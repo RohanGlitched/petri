@@ -21,6 +21,7 @@ const pick = (re, what) => {
 const version = pick(/CONTRACT_VERSION = "v(\d+\.\d+)"/, "CONTRACT_VERSION");
 const tests = { contract: +pick(/contract: (\d+)/, "TESTS.contract"), core: +pick(/core: (\d+)/, "TESTS.core") };
 const checks = +pick(/checks: (\d+)/, "VERIFY.checks");
+const cliChecks = +pick(/VERIFY_CLI_CHECKS = (\d+)/, "VERIFY_CLI_CHECKS");
 const [major, minor] = version.split(".").map(Number);
 
 /** Figures that are wrong wherever they appear. */
@@ -31,7 +32,6 @@ const STALE = [
   [/sslip\.io/i, "old temporary host"],
   [/changing hosts/i, "old hosting note"],
   [/without the code hash|code hash is not among them/i, "/verify checks the code hash"],
-  [/\b4[0-3] checks\b/i, `/verify shows ${checks} checks`],
   [/\bContract v\d+\.\d+/, "the version belongs in lib/facts.ts"],
 ];
 
@@ -62,6 +62,9 @@ for (const f of FILES) {
     .forEach((line, i) => {
       const at = `${relative(root, join(root, f)).replaceAll("\\", "/")}:${i + 1}`;
       for (const [re, why] of STALE) if (re.test(line)) hits.push(`${at}  ${why}: ${line.trim().slice(0, 140)}`);
+      // A count of checks written out must be one of today's: /verify's or the terminal script's.
+      for (const m of line.matchAll(/\b(\d{2}) checks\b/g))
+        if (+m[1] !== checks && +m[1] !== cliChecks) hits.push(`${at}  /verify shows ${checks} checks, verify.mjs ${cliChecks}: ${line.trim().slice(0, 140)}`);
       if (OLDER.test(line) && NOW.test(line) && !CURRENT.test(line)) hits.push(`${at}  an older version stated as current: ${line.trim().slice(0, 140)}`);
       const ev = line.match(EVENT);
       if (ev) {

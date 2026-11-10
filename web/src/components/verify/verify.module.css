@@ -1,5 +1,5 @@
 .head {
-  padding: 72px 0 40px;
+  padding: 64px 0 32px;
 }
 .title {
   font-family: var(--display);
@@ -11,11 +11,21 @@
   max-width: 18ch;
 }
 .run { padding-bottom: 40px; }
+/* The dish on the left; the verdict at the top right, the live readout under it. On a phone the verdict leads, above
+   the dish. */
 .stage {
   display: grid;
   grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
-  gap: 40px 64px;
-  align-items: center;
+  grid-template-areas: "dish verdict" "dish readout";
+  grid-template-rows: auto 1fr;
+  gap: 28px 64px;
+  align-items: start;
+}
+.stage > .dish { grid-area: dish; align-self: center; }
+.verdictSlot { grid-area: verdict; }
+.stage > .readout { grid-area: readout; align-content: start; }
+@media (max-width: 900px) {
+  .stage { grid-template-columns: minmax(0, 1fr); grid-template-areas: "verdict" "dish" "readout"; grid-template-rows: auto; }
 }
 .dish {
   position: relative;
@@ -189,3 +199,11 @@
   .steps { grid-template-columns: 1fr; }
   .head { padding-top: 48px; }
 }
+
+.verdictCount { font-weight: 600; color: var(--bone) !important; }
+.pendingV { background: rgba(243, 233, 218, 0.04); box-shadow: inset 0 0 0 1px var(--line-2); }
+.pendingV b { color: var(--amber); }
+.verdictTrack { display: block; height: 3px; margin-top: 8px; border-radius: 999px; background: rgba(243, 233, 218, 0.1); overflow: hidden; }
+.verdictTrack i { display: block; height: 100%; background: var(--amber); transition: width 0.12s linear; }
+.why { max-width: 68ch; margin: 8px 0 0; display: grid; gap: 10px; color: var(--text-2); }
+.why p { margin: 0; }
