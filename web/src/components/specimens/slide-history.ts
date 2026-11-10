@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { getSlideRoyalties, type Entry } from "@/lib/chain";
-import { CONTRACT, NETWORK } from "@/lib/config";
+import { NETWORK } from "@/lib/config";
 
 export type Minted = { generation: number; colony: number; cells: number; cost: bigint; spent: bigint | null; index: number };
 export type Licensed = { generation: number; colony: number; cells: number; cost: bigint; royalty: bigint; holder: string | null; toAgar: boolean; moves: number; index: number };
@@ -65,7 +65,6 @@ export function useSlideRoyalties(token: string, key: unknown): bigint | null {
   return v;
 }
 
-const NEARBLOCKS_API = NETWORK === "mainnet" ? "https://api.nearblocks.io" : "https://api-testnet.nearblocks.io";
 
 type NbTxn = { affected_account_id: string; involved_account_id: string | null; cause: string; delta_amount: number; transaction_hash: string; block_timestamp: string };
 
@@ -77,7 +76,8 @@ export function useSlideMoves(token: string, moves: number): Moved[] | null | "u
     let stop = false;
     (async () => {
       try {
-        const r = await fetch(`${NEARBLOCKS_API}/v1/nfts/${CONTRACT}/tokens/${encodeURIComponent(token)}/txns?per_page=100&order=asc`, { signal: AbortSignal.timeout(9000) });
+        // Through the site's one-minute cache (/api/slide-moves), so visitors share one NearBlocks request per slide.
+        const r = await fetch(`/api/slide-moves?net=${NETWORK}&token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(9000) });
         if (!r.ok) throw new Error(String(r.status));
         const body = (await r.json()) as { txns?: NbTxn[] };
         // A transfer is two rows, one per side; the row that adds the token names the new holder.

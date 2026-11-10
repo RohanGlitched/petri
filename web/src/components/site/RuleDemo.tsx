@@ -45,8 +45,19 @@ export function RuleDemo({ width, height, seeds, loop, colors, bufferFor, refuse
   const cb = useRef(onGeneration);
   cb.current = onGeneration;
   const palette = useMemo(() => new Map(Object.entries(colors).map(([k, v]) => [Number(k), v])), [colors]);
+  // Nothing is set up (no WebGL context, no engine) until the dish is within a screen of the viewport: the home page's
+  // three demos used to cost a long task during hydration while the reader was still on the hero.
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([en]) => en.isIntersecting && (setNear(true), io.disconnect()), { rootMargin: "100% 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   useEffect(() => {
+    if (!near) return;
     let timer: ReturnType<typeof setInterval> | null = null;
     let visible = false;
     let stopped = false;
@@ -95,7 +106,7 @@ export function RuleDemo({ width, height, seeds, loop, colors, bufferFor, refuse
     };
     // The scene is fixed for the component's life.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [near]);
 
   const overlay = useMemo(() => {
     if (!frame || (!bufferFor && !refused)) return undefined;
@@ -117,6 +128,7 @@ export function RuleDemo({ width, height, seeds, loop, colors, bufferFor, refuse
 
   return (
     <div ref={box} style={{ width: "100%", height: "100%" }}>
+      {near && (
       <Culture
         width={width}
         height={height}
@@ -131,6 +143,7 @@ export function RuleDemo({ width, height, seeds, loop, colors, bufferFor, refuse
         maxDpr={1.5}
         label={label}
       />
+      )}
     </div>
   );
 }

@@ -56,11 +56,16 @@ export async function GET(req: Request) {
       s = await p;
       cache.set(net, s);
     }
-    const body = head ? JSON.stringify({ net, at: s.at, state: (JSON.parse(s.body) as { state: unknown }).state }) : s.body;
+    const state = (JSON.parse(s.body) as { state: { generation: string; ledger: string; colonies: number; now_ms: string } }).state;
+    // The head poll's ETag names what it reports: while the stored dish has not moved, a browser revalidating gets an
+    // empty 304 and keeps the answer it has (its clock runs on locally).
+    const etag = `W/"${net}-${state.generation}-${state.ledger}-${state.colonies}${head ? "-h" : `-${s.at}`}"`;
+    if (head && req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: { etag, "cache-control": "public, max-age=0, s-maxage=4, stale-while-revalidate=6" } });
+    const body = head ? JSON.stringify({ net, at: s.at, state }) : s.body;
     // `servedAt` lets the browser carry the chain's clock forward by however long the snapshot sat in this cache; the
     // CDN keeps it a few seconds more and says so in its Age header.
     return new Response(body.slice(0, -1) + `,"servedAt":${Date.now()}}`, {
-      headers: { "content-type": "application/json", "cache-control": "public, max-age=0, s-maxage=4, stale-while-revalidate=6" },
+      headers: { "content-type": "application/json", etag, "cache-control": "public, max-age=0, s-maxage=4, stale-while-revalidate=6" },
     });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502, headers: { "cache-control": "no-store" } });
