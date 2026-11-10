@@ -43,7 +43,7 @@ export function ProofBand() {
     <section id="proof" data-section="Replay it yourself" className="band" aria-labelledby="proof-title">
       <div className="wrap">
         <div className={s.proof}>
-          <div>
+          <div className={s.proofLead}>
             <h2 id="proof-title" className="h2">Don&rsquo;t trust this page. Replay it.</h2>
             <ReadMore lines={4}>
               <p className="lede">
@@ -59,6 +59,15 @@ export function ProofBand() {
             <p style={{ marginTop: 24 }}>
               <Link className="btn btn-amber" href="/verify">Replay from genesis</Link>
             </p>
+            {/* The same replay without this site: the script needs nothing installed and reads NEAR RPC directly. */}
+            <div className={s.term}>
+              <span className="muted small">Or from a terminal, with nothing of ours in between</span>
+              <pre>
+                <code>{`git clone ${REPO}
+cd petri && node scripts/verify.mjs --network ${net.network}`}</code>
+              </pre>
+              <span className="muted small">It reads the dish at one final block, replays every generation with the same engine and exits 0 when every check matches.</span>
+            </div>
           </div>
           <PhoneMore label="The five parts, and where each one lives">
           <ul className={s.parts}>

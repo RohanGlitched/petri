@@ -136,11 +136,29 @@ export function HeroDelight() {
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
   }, []);
+  // On a phone the corner is hidden (it would float over the headline); HeroTools, in the hero's own flow, opens this
+  // cinema through an event.
+  const show = cinema.show;
+  useEffect(() => {
+    const open = () => show();
+    window.addEventListener("petri:cinema", open);
+    return () => window.removeEventListener("petri:cinema", open);
+  }, [show]);
   return (
     <div className={`${s.heroDock} ${away ? s.away : ""}`}>
       <SoundToggle compact />
       {cinemaButton(() => cinema.show(), "Watch in cinema")}
       {cinema.node}
     </div>
+  );
+}
+
+/** The phone's hero tools, in the flow under the numbers: cinema and sound, beside "Skip the zoom". */
+export function HeroTools() {
+  return (
+    <span className={s.heroTools}>
+      {cinemaButton(() => window.dispatchEvent(new Event("petri:cinema")), "Cinema")}
+      <SoundToggle compact />
+    </span>
   );
 }

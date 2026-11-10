@@ -374,7 +374,9 @@
   .title, .steps { text-shadow: 0 1px 14px rgba(18, 10, 5, 0.9), 0 0 2px rgba(18, 10, 5, 0.8); }
   /* The numbers arrive with the rest of the copy, so no empty band sits above the skip button while they fade in. */
   .stats, .statsHead { animation-delay: 0s; animation-duration: 0.5s; }
-  .cue { margin-top: 10px; }
+  /* The tools row (cinema, sound, skip) stands apart from the numbers above it. */
+  .cue { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .cueText { display: none; }
   /* The three steps are the phone's whole lede; the badge and the switch already name both dishes. */
   .dishes { display: none; }
   .steps { font-size: 15px; line-height: 1.45; }

@@ -32,7 +32,8 @@ export function SpecimenDetail({ id }: { id: string }) {
 
   if (one.status === "loading")
     return (
-      <section className="wrap" style={{ paddingBottom: 96 }}>
+      // Holds about the page's height while the slide is read, so the footer does not sit in view and then jump away.
+      <section className="wrap" style={{ paddingBottom: 96, minHeight: "180vh" }}>
         <p className={s.crumb}><Link href="/specimens">Specimens</Link> / No. {id}</p>
         <SlideGlass src={null} size="large" id={id} placeholder="Reading the slide…" />
       </section>
@@ -66,7 +67,21 @@ export function SpecimenDetail({ id }: { id: string }) {
       <section id="slide" data-section="The slide" className="wrap">
         <p className={s.crumb}><Link href="/specimens">Specimens</Link> / No. {sl.id}</p>
         <div className={s.detailTop}>
-          <SlideGlass size="large" src={pictureOf(sl, c?.color)} id={sl.id} title={sl.title} colony={c} generation={sl.generation} count={sl.count} />
+          <SlideGlass
+            size="large"
+            src={pictureOf(sl, c?.color)}
+            id={sl.id}
+            title={sl.title}
+            colony={c}
+            generation={sl.generation}
+            count={sl.count}
+            lines={[
+              sl.rect ? `Frame ${sl.rect.w} × ${sl.rect.h} at ${sl.rect.x}, ${sl.rect.y}` : "",
+              sl.owner ? `Held by ${shortAccount(sl.owner, 26)}` : "",
+              sl.minted ? `Mounted ${new Date(sl.minted).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}` : "",
+              `${net.contract}, ${net.network}`,
+            ].filter(Boolean)}
+          />
           <div className={s.detailHead}>
             <div>
               <h1 className={s.detailTitle}>{title}</h1>

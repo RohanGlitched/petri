@@ -281,3 +281,17 @@
   .dot { animation: none; }
   .bars::before, .bars::after { animation: none; }
 }
+
+/* A soft dark pool behind the slate and the caption, so beads passing under the type never cut through it (the fast
+   cut moves cells under the text every frame). */
+.slate::before,
+.caption::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -28px -56px -28px -40px;
+  border-radius: 40px;
+  background: radial-gradient(ellipse at 30% 50%, rgba(8, 4, 2, 0.78) 0%, rgba(8, 4, 2, 0.6) 45%, rgba(8, 4, 2, 0) 78%);
+  pointer-events: none;
+}
+.caption::before { inset: -36px -80px -40px -56px; }

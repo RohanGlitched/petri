@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { Culture, type CultureHandle } from "@/components/Culture";
 import { Loupe } from "@/components/site/Loupe";
 import { LiveBadge } from "./LiveBadge";
-import { HeroDelight } from "@/components/delight/Delight";
+import { HeroDelight, HeroTools } from "@/components/delight/Delight";
 import { NetTag } from "@/components/site/NetTag";
 import { useNet } from "@/lib/use-net";
 import { useLive, int, petri, hex } from "@/lib/live";
@@ -244,6 +244,7 @@ export function HeroScene() {
             <div><dt>Next generation in</dt><dd className="num">{ready ? `${secs}s` : skel}</dd></div>
           </dl>
           <p className={s.cue}>
+            <HeroTools />
             <span className={s.cueText} aria-hidden="true">Scroll to pull back</span>
             <button
               type="button"

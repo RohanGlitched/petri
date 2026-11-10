@@ -105,9 +105,11 @@
   align-items: center;
 }
 .heroDock .pill { background: rgba(18, 10, 5, 0.66); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+/* Phones: the corner would float over the headline, so the same buttons sit in the hero's flow (HeroTools). */
+.heroTools { display: none; }
 @media (max-width: 899px) {
-  .heroDock { top: 80px; bottom: auto; right: 12px; }
-  .heroDock .hideNarrow { display: none; }
+  .heroDock { display: none; }
+  .heroTools { display: inline-flex; gap: 8px; align-items: center; }
 }
 
 /* A spinner for while a lazy piece loads. */

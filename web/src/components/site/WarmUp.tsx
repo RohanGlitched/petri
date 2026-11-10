@@ -16,13 +16,16 @@ export function WarmUp({ tone = "dark", className = "", compact = false }: { ton
     const note = `Below ${int(floor)} counted cells the agar releases that share of its ration; each cell still earns the full per-cell rate.`;
     return (
       <p className={`${s.mini} ${className}`} role="status" title={note}>
-        <span className={s.tag}>{d.counted === 0 ? "Not feeding yet" : "Warming up"}</span>
-        <Term k="counted" place="below">
-          <b className="num">
-            {int(d.counted)}&nbsp;/&nbsp;{int(floor)}
-          </b>{" "}
-          counted
-        </Term>
+        <span className={s.tag}>{d.counted === 0 ? "Not feeding yet" : "Young dish"}</span>
+        {d.counted === 0 ? (
+          <Term k="counted" place="below">
+            <b className="num">0&nbsp;/&nbsp;{int(floor)}</b> counted
+          </Term>
+        ) : (
+          <Term k="feeding" place="below">
+            feeding at <b className="num">{Math.max(1, Math.floor(pct))}%</b>
+          </Term>
+        )}
         <span className={s.miniTrack} aria-hidden="true">
           <i style={{ width: `${pct}%` }} />
         </span>
@@ -40,7 +43,7 @@ export function WarmUp({ tone = "dark", className = "", compact = false }: { ton
           </>
         ) : (
           <>
-            <span className={s.tag}>Warming up</span> <Term k="feeding" place="below">Feeding at {Math.max(1, Math.floor(pct))}%</Term> until {int(floor)}{" "}
+            <span className={s.tag}>Young dish</span> <Term k="feeding" place="below">Feeding at {Math.max(1, Math.floor(pct))}%</Term> until {int(floor)}{" "}
             <Term k="counted" place="below">cells are counted</Term>:{" "}
           </>
         )}
