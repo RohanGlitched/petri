@@ -5,7 +5,7 @@
 
 import { Account, JsonRpcProvider, KeyPair, KeyPairSigner, actions, encodeSignedDelegate, type KeyPairString } from "near-api-js";
 import { pattern_cells, type Engine, type PatternName } from "@/engine";
-import { getRules, getState, type Rules } from "./chain";
+import { getColonyOf, getRules, getState, type Colony, type Rules } from "./chain";
 import { CONTRACT, RPC_URLS } from "./config";
 
 const STORE = "petri.guest.v1";
@@ -49,8 +49,15 @@ export async function relaySteps(steps: Step[], lab: string | null, current = tr
 }
 
 async function relayOne(step: Step, lab: string | null): Promise<Sent> {
+  const signed = await signOne(step);
+  if (!signed) return { ok: false, error: "Make a guest colony first." };
+  return sendSigned(signed, lab);
+}
+
+/** One call signed as a delegate action by the guest key, base64, ready for the relayer (null without a guest). */
+export async function signOne(step: Step): Promise<string | null> {
   const g = savedGuest();
-  if (!g) return { ok: false, error: "Make a guest colony first." };
+  if (!g) return null;
   const kp = KeyPair.fromString(g.secretKey);
   const acct = new Account(g.accountId, new JsonRpcProvider({ url: RPC_URLS[0] }), g.secretKey);
   const da = await acct.createMetaTransaction({
@@ -66,10 +73,15 @@ async function relayOne(step: Step, lab: string | null): Promise<Sent> {
   const bytes = encodeSignedDelegate(signedDelegate);
   let bin = "";
   bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  return btoa(bin);
+}
+
+/** Hand a signed delegate action to the relayer. */
+export async function sendSigned(signed: string, lab: string | null): Promise<Sent> {
   const res = await fetch("/api/relay", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ signedDelegate: btoa(bin), ...(lab ? { lab } : {}) }),
+    body: JSON.stringify({ signedDelegate: signed, ...(lab ? { lab } : {}) }),
   });
   const body = await res.json().catch(() => ({}));
   if (res.ok && body.hash) return { ok: true, hash: body.hash };
@@ -141,4 +153,16 @@ export function slideOffsets(bitmap: Uint8Array, w: number, h: number): [number,
   const out: [number, number][] = [];
   for (let i = 0; i < w * h; i++) if (bitmap[i >> 3] & (1 << (i & 7))) out.push([i % w, Math.floor(i / w)]);
   return out;
+}
+
+/** The guest's colony, asking RPC up to three times (a public provider sometimes drops a read). */
+export async function colonyWithRetry(account: string): Promise<Colony | null> {
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await getColonyOf(account);
+    } catch {
+      await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+    }
+  }
+  return null;
 }

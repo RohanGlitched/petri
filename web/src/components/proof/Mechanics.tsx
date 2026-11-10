@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { getColonyOf, getPlantDeposit, getSlideDeposit, getSlides, getState, slideBits, type Colony } from "@/lib/chain";
 import { EXPLORERS, FREE_PLAY } from "@/lib/config";
 import { currentEngine, refreshDish, useDish } from "@/lib/dish-store";
-import { findSpot, findSpotFor, ownRect, relaySteps, savedGuest, slideOffsets, type Sent } from "@/lib/lab";
+import { colonyWithRetry, findSpot, findSpotFor, ownRect, relaySteps, savedGuest, slideOffsets, type Sent } from "@/lib/lab";
 import { ORIGINS } from "@/lib/intents";
 import { createGuest, JOIN_NEAR } from "@/lib/wallet";
 import s from "./proof.module.css";
@@ -25,7 +25,7 @@ export function Mechanics() {
   const look = async () => {
     const g = savedGuest();
     if (!g) return setMe(null);
-    const colony = await getColonyOf(g.accountId).catch(() => null);
+    const colony = await colonyWithRetry(g.accountId);
     setMe({ account: g.accountId, colony });
   };
   useEffect(() => {

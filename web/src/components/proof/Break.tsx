@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { PACT_DEPOSIT, getColonyOf, getPact, getPlantDeposit, getRules, getState, type Colony } from "@/lib/chain";
 import { CONTRACT, EXPLORERS, FREE_PLAY, REPO } from "@/lib/config";
 import { currentEngine, refreshDish, useDish } from "@/lib/dish-store";
-import { findSpot, ownRect, relaySteps, rivalCell, savedGuest, type Sent, type Step } from "@/lib/lab";
+import { colonyWithRetry, findSpot, ownRect, relaySteps, rivalCell, savedGuest, sendSigned, signOne, type Sent, type Step } from "@/lib/lab";
 import { createGuest, JOIN_NEAR } from "@/lib/wallet";
 import s from "./proof.module.css";
 
@@ -51,7 +51,7 @@ export function Break() {
   const look = async () => {
     const g = savedGuest();
     if (!g) return setMe(null);
-    setMe({ account: g.accountId, colony: await getColonyOf(g.accountId).catch(() => null) });
+    setMe({ account: g.accountId, colony: await colonyWithRetry(g.accountId) });
   };
   const loadTally = () =>
     fetch("/api/lab", { cache: "no-store" })
@@ -133,10 +133,14 @@ export function Break() {
         if (!a || !b) return "No open ground for two blinkers right now; try again.";
         const da = await getPlantDeposit(a.length, null);
         const db = await getPlantDeposit(b.length, null);
-        // The first is a real planting; the second is the attempt.
-        const first = await relaySteps([{ method: "plant", args: { cells: a, note: null, credit: da }, tgas: 240 }], null);
+        // Both are signed first, so the second leaves the moment the first lands. The first is a real planting; the
+        // second is the attempt.
+        const s1 = await signOne({ method: "plant", args: { cells: a, note: null, credit: da }, tgas: 240 });
+        const s2 = await signOne({ method: "plant", args: { cells: b, note: null, credit: db }, tgas: 240 });
+        if (!s1 || !s2) return "Make a guest colony first.";
+        const first = await sendSigned(s1, null);
         if (!first.ok) return `The first planting did not go through (${first.error}); try again.`;
-        return [{ method: "plant", args: { cells: b, note: null, credit: db }, tgas: 240 }];
+        return s2;
       },
     },
     {
@@ -206,8 +210,10 @@ export function Break() {
     setRes((r) => ({ ...r, [a.id]: { busy: true } }));
     try {
       const steps = await a.build();
-      if (typeof steps === "string") return setRes((r) => ({ ...r, [a.id]: { busy: false, note: steps } }));
-      const sent = await relaySteps(steps, a.id, a.id === "oversell" || a.id === "occupied" || a.id === "rival-slide");
+      // The double planting hands back its second action already signed.
+      const presigned = a.id === "twice" && typeof steps === "string" && !steps.includes(" ");
+      if (typeof steps === "string" && !presigned) return setRes((r) => ({ ...r, [a.id]: { busy: false, note: steps } }));
+      const sent = presigned ? await sendSigned(steps as string, a.id) : await relaySteps(steps as Step[], a.id, a.id === "oversell" || a.id === "occupied" || a.id === "rival-slide");
       // Two plantings both land only when the generation turned between them: that is the rule working, not a break.
       if (a.id === "twice" && sent.ok) setRes((r) => ({ ...r, [a.id]: { busy: false, note: "Both landed: the 15-second generation turned between them, so each was the first of its generation. Try again." } }));
       else setRes((r) => ({ ...r, [a.id]: { busy: false, sent } }));

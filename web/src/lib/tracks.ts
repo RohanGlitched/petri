@@ -125,6 +125,12 @@ export const TRACKS: Track[] = [
         status: "met",
       },
       {
+        need: "Earn on resale too",
+        where: "Since v6.5 slides answer NEP-199 nft_payout and nft_transfer_payout: a marketplace that sells a slide pays 5% of the price to the colony that minted it.",
+        links: [{ label: "slides.rs (NEP-199)", href: code("contract/src/slides.rs") }],
+        status: "met",
+      },
+      {
         need: "Each NFT maps to its own sub-account holding money",
         where: "Not in the deployed build: a slide's royalties are paid to its holder's PETRI balance, not into an account of its own.",
         links: [],
