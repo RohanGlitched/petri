@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { Culture, type CultureHandle } from "@/components/Culture";
 import { Loupe } from "@/components/site/Loupe";
 import { LiveBadge } from "./LiveBadge";
+import { HeroDelight } from "@/components/delight/Delight";
 import { NetTag } from "@/components/site/NetTag";
 import { useNet } from "@/lib/use-net";
 import { useLive, int, petri, hex } from "@/lib/live";
@@ -285,6 +286,7 @@ export function HeroScene() {
           <Loupe target={lens} width={w} height={h} cells={d.cells} prevCells={d.prevCells} changedAt={d.changedAt} palette={palette} className={s.loupeLens} />
           <p>The whole dish. The frame shows where you are looking.</p>
         </div>
+        <HeroDelight />
       </div>
     </div>
   );

@@ -31,6 +31,7 @@ import { Goals } from "./Goals";
 import { MyPacts, PickedColony, pactLines, pactsOn, zoneColonies, type PactActions } from "./Pacts";
 import s from "./dish.module.css";
 import { NetTag } from "@/components/site/NetTag";
+import { DishDelight } from "@/components/delight/Delight";
 
 type Cell = { x: number; y: number };
 
@@ -1988,6 +1989,7 @@ export function DishStage() {
           className={s.loupe}
           onPick={(x, y) => lens.current?.centerOn(x, y)}
         />
+        <DishDelight mine={me?.id ?? null} ear={() => lens.current?.camera().cx} />
         <div className={s.zoom}>
           <button onClick={() => lens.current?.zoomBy(1.5)} aria-label="Look closer">+</button>
           <button onClick={() => lens.current?.zoomBy(1 / 1.5)} aria-label="Look wider">−</button>
