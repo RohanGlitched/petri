@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { callDish, CALL_TGAS, liveDish, log, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
 import { candidates, makeRng } from "./strategies.mjs";
-import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally } from "./model.mjs";
+import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally , teeTally } from "./model.mjs";
 import { forecast, forecastText, boxOf } from "./forecast.mjs";
 import { loadMemory, saveMemory, rememberMove, measureOutcomes, bootstrapFromChain, memoryText, movesOf, OUTCOME_GENS } from "./memory.mjs";
 import { runCouncil, pactsFor, pactGens, chainPacts } from "./council.mjs";
@@ -461,6 +461,7 @@ async function actOn(s, world) {
       model: pick ? pick.model : null,
       chat_id: pick?.chatId ?? null,
       signature: pick?.signature ?? null,
+      tee: pick?.tee ?? null,
       usage: pick?.usage ?? null,
       forecast: chosen.forecast ?? null,
       forecast_ms: fc?.ms ?? null,
@@ -565,7 +566,7 @@ async function health() {
       out[a] = null;
     }
   }
-  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)), modelCalls: modelTally() };
+  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)), modelCalls: modelTally(), tee: { ...teeTally } };
   fs.writeFileSync(path.join(LOG_DIR, "health.json"), JSON.stringify(lastHealth, null, 1));
   const low = Object.entries(out).filter(([, v]) => v !== null && v < 0.5);
   if (low.length) log("LOW GAS:", low.map(([a, v]) => `${a} ${v}`).join(", "));

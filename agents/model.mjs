@@ -1,14 +1,44 @@
-// The strains think with Claude Haiku, within a fixed dollar budget, and can also think with a model on NEAR AI Cloud
-// that runs inside a TEE (each NEAR AI answer's signature is fetched so anyone can check the enclave produced it).
+// The strains think first with a model on NEAR AI Cloud that runs inside a TEE: each answer's signature is fetched
+// and checked against the enclave's attested signing address (tee.mjs). Claude Haiku, within a fixed dollar budget,
+// is the second model, used when NEAR AI cannot answer.
 // Either model only chooses among moves the rules already accept (and, at the council, among deals the rules can
 // enforce) and writes the lab note; the log says which model chose. If no model answers, the strains fall back to
 // their first candidate and the council does not sit.
 
 import fs from "node:fs";
+import path from "node:path";
+import { attestedAddresses, sha256Hex, verifyAnswer } from "./tee.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 
 const BASE = process.env.NEARAI_BASE_URL ?? "https://cloud-api.near.ai/v1";
 const KEY = process.env.NEARAI_API_KEY ?? "";
+
+// The enclave's attestation report, fetched at most hourly and saved beside the log (with its hash), so anyone can
+// check the TDX quote offline and see that the address signing our answers was generated inside it.
+let attestation = { at: 0, addresses: null };
+export const teeTally = { verified: 0, unverified: 0 };
+async function attested() {
+  if (attestation.addresses && Date.now() - attestation.at < 3600_000) return attestation.addresses;
+  try {
+    const r = await fetch(`${BASE}/attestation/report?model=${encodeURIComponent(MODEL)}&signing_algo=ecdsa`, {
+      headers: { authorization: `Bearer ${KEY}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const text = await r.text();
+    const dir = process.env.PETRI_LOG_DIR;
+    if (dir) {
+      fs.mkdirSync(path.join(dir, "attestation"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "attestation", "latest.json"), text);
+      fs.writeFileSync(path.join(dir, "attestation", "latest.sha256"), sha256Hex(text) + "\n");
+    }
+    attestation = { at: Date.now(), addresses: attestedAddresses(JSON.parse(text)), sha256: sha256Hex(text) };
+  } catch {
+    attestation.at = Date.now() - 3000_000; // retry in ten minutes
+  }
+  return attestation.addresses;
+}
+export const attestationHash = () => attestation.sha256 ?? null;
 export const MODEL = process.env.NEARAI_MODEL ?? "z-ai/glm-5.3-flash";
 
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-haiku-5-5";
@@ -40,7 +70,7 @@ export const claudeSpent = () => spent;
 const tally = {};
 export const modelTally = () => tally;
 
-const ORDER = (process.env.PETRI_MODELS ?? "claude,nearai").split(",").map((p) => p.trim());
+const ORDER = (process.env.PETRI_MODELS ?? "nearai,claude").split(",").map((p) => p.trim());
 
 export const hasModel = () => KEY.length > 0 || claude !== null;
 export const modelName = () =>
@@ -73,7 +103,7 @@ export async function choose(strain, summary, cands) {
   if (!r) return null;
   try {
     const { index, note } = parsePick(r.json, cands);
-    return { index, note, model: r.model, chatId: r.chatId, signature: r.signature, usage: r.usage };
+    return { index, note, model: r.model, chatId: r.chatId, signature: r.signature, tee: r.tee ?? null, usage: r.usage };
   } catch (e) {
     errors++;
     lastError = `${r.model}: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}`;
@@ -168,23 +198,26 @@ async function askClaude(system, user, schema, maxTokens) {
 
 async function askNearAI(system, user, maxTokens) {
   try {
+    // The exact bytes sent and received: the enclave signs their SHA-256 hashes.
+    const requestBody = JSON.stringify({
+      model: MODEL,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      max_tokens: maxTokens,
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+    });
     const res = await fetch(`${BASE}/chat/completions`, {
       method: "POST",
       headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json", "x-no-aliasing": "true" },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        max_tokens: maxTokens,
-        temperature: 0.7,
-        response_format: { type: "json_object" },
-      }),
+      body: requestBody,
       signal: AbortSignal.timeout(40_000),
     });
-    if (!res.ok) throw new Error(`NEAR AI ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const body = await res.json();
+    const responseBody = await res.text();
+    if (!res.ok) throw new Error(`NEAR AI ${res.status}: ${responseBody.slice(0, 200)}`);
+    const body = JSON.parse(responseBody);
     const json = parseJson(body.choices?.[0]?.message?.content ?? "");
     let signature = null;
     try {
@@ -196,7 +229,9 @@ async function askNearAI(system, user, maxTokens) {
     } catch {
       /* the answer stands; the log says the signature is missing */
     }
-    return { json, model: MODEL, chatId: body.id, signature, usage: body.usage ?? null };
+    const tee = signature ? verifyAnswer(signature, requestBody, responseBody, await attested()) : { ok: false, reason: "no signature" };
+    teeTally[tee.ok ? "verified" : "unverified"]++;
+    return { json, model: MODEL, chatId: body.id, signature, tee, usage: body.usage ?? null };
   } catch (e) {
     errors++;
     lastError = (e instanceof Error ? e.message : String(e)).slice(0, 160);
