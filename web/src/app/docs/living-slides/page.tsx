@@ -28,7 +28,10 @@ const THREATS: [string, string, string, string][] = [
   ["T10", "Strand the purse (send its token to itself, the factory, the dish or an invalid id)", "Transfers to those are refused.", "nobody_can_be_made_holder_who_could_not_use_it"],
   ["T11", "Grief its storage", "At most 4 approvals, each paid by its grantor; a 12-entry history ring; withdraw never takes the storage headroom; only the dish's own slides are accepted.", "storage_stays_bounded, withdraw_pays_the_holder_and_keeps_storage_paid"],
   ["T12", "Race the callbacks (reentrancy)", "Each callback checks predecessor == current account and trusts nothing it is passed beyond writing the history and freeing the flight.", "transfer_call_returns_the_token_when_the_receiver_refuses"],
+  ["T13", "Sell a v2 purse without paying the slide's minter, or name themselves the minter when sealing", "nft_payout and nft_transfer_payout name the minter's 5% beside the seller, a market paying fewer accounts is refused, and buy pays the minter itself. The factory reads the minter from the dish's own nft_payout, and init runs once.", "every_sale_pays_the_minter_its_royalty, the_purse_is_made_with_the_minter_the_dish_names"],
 ];
+const PURSE_V2_HASH = "CDyvfMn9zQJyArwxrY3ASaASoEHH8JTp5S7uC8ShziCe";
+const FACTORY_V2_HASH = "5QTHyZ64eudxyGctrqdwbKiUvZK8oMnpWELzdyD2SG2N";
 
 export default function Page() {
   return (
@@ -181,6 +184,41 @@ export default function Page() {
 # "keys":[]`}</Code>
       </Callout>
 
+      <H2 id="v2">Purse v2: the minter&rsquo;s royalty and a keyless factory</H2>
+      <p>
+        Purses sealed since 10 November pay the colony account that minted the slide <strong>5% of every sale</strong>, the dish&rsquo;s own NEP-199 rule for its slides: <C>nft_payout</C> and <C>nft_transfer_payout</C> split a marketplace&rsquo;s price that way, the purse&rsquo;s own <C>buy</C> pays the same split, and a minter that sells keeps the whole price. The minter is not the sealer&rsquo;s to choose: the factory asks the dish&rsquo;s <C>nft_payout</C> while it holds the slide and passes the answer to <C>init</C>. The factory itself has no key: its parent created it, funded it, deployed it and called <C>new</C> in one transaction with no <C>AddKey</C>, so nobody can change how it makes purses. Purse code hash <C>{PURSE_V2_HASH}</C> (30,879 bytes), factory <C>{FACTORY_V2_HASH}</C> (46,071 bytes).
+      </p>
+      <Table caption="Testnet, 10 November 2026: the same script that will run on mainnet">
+        <thead>
+          <tr>
+            <th>Step</th>
+            <th>Transaction</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><C>petri-v6.testnet</C> creates <C>slides.petri-v6.testnet</C>: create, fund 0.470710 NEAR, deploy, <C>new</C>; no key</td>
+            <td>{tx("testnet", "DtPaL8KvN4ssssNn7M49WsS6BuJWwrP393qCB8MrL5qR")}</td>
+          </tr>
+          <tr>
+            <td>A team bench outside the house joins attached, plants an 18-cell still life (a dead spark coil) and mints slide 24</td>
+            <td>{tx("testnet", "DyUUEVnVcReraANNpGeCbqmNMxbkbHb3J9JvAEJkaUTU")} {tx("testnet", "42TUnr8GRKsirwns3TkHr1v83FmFWUa7otDtcjrCqHbK")} {tx("testnet", "FFT1ZmwmKivC5h4rPT91YaGtBZocdqoMeYmhEA8og57E")}</td>
+          </tr>
+          <tr>
+            <td>It seals slide 24: the factory reads the minter from the dish and creates <C>slide-24.slides.petri-v6.testnet</C> (0 keys)</td>
+            <td>{tx("testnet", "Fy2XHptDhpB8yfWPaVNk6jkNyqYs2TK8vN3RQnCNqY9E")}</td>
+          </tr>
+          <tr>
+            <td>The purse joins attached, plants its own pattern under its licence, and claims the feed it earned (1.338192 PETRI)</td>
+            <td>{tx("testnet", "vMpUkHDNJGQyZGk1tbkUz2EM2fuKxgP1oScxskERjqr")} {tx("testnet", "DguacUfafmPtmzPMJ3Bo3ynQB6fss9kQ6Hus86UTd6wk")} {tx("testnet", "49KfuUoVmNQEPznF28mkvSo9UePu8cKnNVJkLzZh61af")}</td>
+          </tr>
+          <tr>
+            <td>A sale for 0.02 NEAR pays the minter 0.001 and the seller 0.019</td>
+            <td>{tx("testnet", "5LGNe5aP2peH1CCBtktnoqqhfWoimUuUbTWCCUUpGVHF")}</td>
+          </tr>
+        </tbody>
+      </Table>
+
       <H2 id="mainnet">Mainnet: slide 14</H2>
       <p>
         Mainnet has no factory. <C>{DISH.mainnet.contract}</C> made one purse itself, with <C>scripts/purse-mainnet.mjs</C>, on 10 November 2026: one transaction created <C>slide-14.petri-dish.near</C>, funded its storage, deployed the purse and called <C>init</C> with Congo Red as holder, with no <C>AddKey</C> action. Congo Red then sent slide 14, its 45-cell specimen from generation 3,817, into the purse; the purse joined the dish as its own colony (&ldquo;Living slide 14&rdquo;) and planted its slide&rsquo;s pattern under its licence. Alone on an empty dish the engine keeps that pattern at 45 living cells for at least 1,000 generations.
@@ -222,7 +260,7 @@ export default function Page() {
         </tbody>
       </Table>
       <p>
-        <C>slide-14.petri-dish.near</C> has 0 access keys, the dish&rsquo;s <C>slide</C> view names it as slide 14&rsquo;s owner, and the purse&rsquo;s own <C>nft_token(&quot;14&quot;)</C> names <C>congo.petri-dish.near</C> as the holder. The mainnet house strains tend it: they replant its pattern if its colony dies and claim for it.
+        <C>slide-14.petri-dish.near</C> has 0 access keys, the dish&rsquo;s <C>slide</C> view names it as slide 14&rsquo;s owner, and the purse&rsquo;s own <C>nft_token(&quot;14&quot;)</C> names <C>congo.petri-dish.near</C> as the holder. The strains sign with keys that may call only the dish, so they cannot drive a purse: nobody tends slide 14 until the v2 run below hands it to the team bench.
       </p>
       <Callout kind="warn" title="What slide 14 earns on mainnet">
         <p>
@@ -235,6 +273,12 @@ export default function Page() {
 # "keys":[]`}</Code>
       </Callout>
 
+      <Callout kind="warn" title="Mainnet v2: pending until run">
+        <p>
+          Not done yet. <C>scripts/purse-mainnet-v2.mjs</C> will have <C>petri-dish.near</C> create the keyless factory <C>slides.petri-dish.near</C> in one transaction; a team bench outside the house (an implicit account) join attached, plant a dead spark coil, mint and seal it into <C>slide-&lt;id&gt;.slides.petri-dish.near</C>; the purse join attached and plant its own pattern; and Congo Red hand slide 14&rsquo;s purse to the bench, so no house account holds a fed colony. Its read-only plan puts the cost at about 0.9 NEAR, funded by the keeper. The transactions will be listed here once it has run.
+        </p>
+      </Callout>
+
       <H2 id="buyer">What a buyer should check</H2>
       <p>These are encumbrances that are visible, not hidden:</p>
       <ul>
@@ -245,7 +289,7 @@ export default function Page() {
       </ul>
 
       <H2 id="build">Build, test and cost</H2>
-      <Code lang="sh">{`cd purse && cargo test                    # 16 purse + 5 factory + 2 JSON tests
+      <Code lang="sh">{`cd purse && cargo test                    # 18 purse + 6 factory + 2 JSON tests
 WASM_OPT=<binaryen wasm-opt> ./build.sh   # res/petri_purse.wasm, res/petri_purse_factory.wasm`}</Code>
       <p>
         The purse is written without near-sdk, against NEAR&rsquo;s host functions, to keep its code small: every purse carries its own copy, and storage costs 1 NEAR per 100 KB. Native tests run the contract&rsquo;s own code against a mock chain (<C>purse/kit/src/mock.rs</C>) in which a failed call rolls back as it would on chain.
@@ -259,16 +303,16 @@ WASM_OPT=<binaryen wasm-opt> ./build.sh   # res/petri_purse.wasm, res/petri_purs
         </thead>
         <tbody>
           <tr>
-            <td>One purse: its code (29,404 bytes) and state, locked in the purse as storage</td>
-            <td className="n">0.316</td>
+            <td>One v2 purse: its code (30,879 bytes) and state, locked in the purse as storage (v1: 29,404 bytes, 0.316)</td>
+            <td className="n">0.331</td>
           </tr>
           <tr>
-            <td>The factory, once (42,459 bytes with the purse embedded)</td>
-            <td className="n">about 0.43</td>
+            <td>The v2 factory, once (46,071 bytes with the purse embedded), plus about 0.008 of gas to deploy it</td>
+            <td className="n">0.471</td>
           </tr>
           <tr>
-            <td>Joining the dish and planting the slide</td>
-            <td className="n">about 0.02</td>
+            <td>Joining the dish attached and planting the slide</td>
+            <td className="n">about 0.03</td>
           </tr>
         </tbody>
       </Table>
@@ -280,8 +324,10 @@ WASM_OPT=<binaryen wasm-opt> ./build.sh   # res/petri_purse.wasm, res/petri_purs
       <ul>
         <li>A slide sent by plain <C>nft_transfer</C> to a purse address that does not exist yet ends up owned by an account nobody controls. Sealing always goes through <C>nft_transfer_call</C> to the factory, which the site does.</li>
         <li>The purse&rsquo;s code is immutable: a bug in it cannot be patched in place, and new purses get new code only from a new factory.</li>
-        <li>The testnet factory keeps its key. Existing purses never depend on the factory.</li>
-        <li>On mainnet there is one living slide, made without a factory, and it earns kept PETRI and credit rather than NEAR (above).</li>
+        <li>The v1 testnet factory <C>petri-slides.testnet</C> keeps its key; the v2 factories never had one. Existing purses never depend on the factory.</li>
+        <li>v1 purses (slide 14 on mainnet, slides 1 and 2 on testnet) pay no minter&rsquo;s royalty: their code is immutable.</li>
+        <li>A plain <C>nft_transfer</C> with the price paid elsewhere skips the minter&rsquo;s royalty, as it skips any NEP-199 royalty.</li>
+        <li>On mainnet there is one living slide so far, made without a factory, and it earns kept PETRI and credit rather than NEAR (above).</li>
       </ul>
     </DocPage>
   );

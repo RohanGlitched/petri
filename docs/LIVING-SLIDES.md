@@ -15,6 +15,10 @@ generation. **Sealing** a slide moves it into a keyless NEAR account of its own,
   payouts, one-token NEP-181). Its token's id is the slide's id. Whoever holds that token is the only account that can
   make the purse act. Sell it and the account, its NEAR, its PETRI, its colony and its slide all go to the buyer at
   once.
+- **It pays its minter.** Purses sealed through the v2 factory pay the colony account that minted the slide 5% of every
+  sale, as the dish's own NEP-199 payouts do for its slides: through a marketplace (`nft_payout`,
+  `nft_transfer_payout`) and on the purse's own market (`buy`). The minter is fixed when the slide is sealed, read from
+  the dish. A minter that sells keeps the whole price.
 
 The dish contract is untouched: the purse and its factory are separate contracts in `purse/`.
 
@@ -34,6 +38,8 @@ cannot go stale. On top of that:
   leaves it. Every change bumps its `nonce`, and `buy(nonce)` fails if the purse changed since the buyer looked.
 - **Nothing in flight.** While a call the purse made is still on its way, the token cannot move.
 - **Approvals do not survive a transfer.** Every transfer clears them and refunds their storage to the old holder.
+- **The minter is the dish's, not the seller's.** The v2 factory asks the dish's own `nft_payout` who minted the slide
+  while it holds the slide, and names that account at `init`. No method changes it afterwards.
 
 The full threat model, written before the code, is in [SLIDES-THREAT-MODEL.md](SLIDES-THREAT-MODEL.md). It lists every
 way a seller could try to keep the money, the rule that stops it and the test that checks it.
@@ -78,8 +84,62 @@ On testnet, the house strains Methylene Blue and Congo Red hold the two living s
 house's colonies: it is fed and shares the tides like any player's colony.
 
 Reproduce these with `node scripts/purse-testnet.mjs keys|midpayout|handover|sale|whitelist …` and
-`node agents/purse.mjs …`. The darkroom's door is tested with real NEP-413 signatures by `node agents/darkroom-test.mjs`.
+`node agents/purse.mjs …` (`payout <token>` shows how a sale splits now). The darkroom's door is tested with real NEP-413 signatures by `node agents/darkroom-test.mjs`.
 The holder is admitted; another account and a tampered message are refused.
+
+## Purse v2: the minter's royalty and a keyless factory
+
+Two changes, made before the dish's full-access key is deleted on 14 November, and nothing else in the purse changed:
+
+1. **The minter's royalty.** `init` takes a third account, `minter`. `nft_payout` and `nft_transfer_payout` split a
+   sale's `balance` as the dish splits its own slides' sales: `balance / 20` (500 bps, rounded down as the dish rounds
+   it) to the minter, the rest to the holder who sells, and all of it to the holder when that is the minter or the cut
+   rounds to nothing. A marketplace that pays fewer accounts than the split names (`max_len_payout`) is refused. The
+   purse's own `buy` pays the same split. The `purse` view shows `minter` and `royalty_bps`.
+2. **A factory with no key.** The factory's `new` may now be called by its parent account as well as by itself, so the
+   parent can create `slides.<dish>`, fund it, deploy the factory and set it up in **one transaction with no
+   `AddKey`**. Nobody can then change how it makes purses. When a slide arrives (`nft_transfer_call`), the factory asks
+   the dish's `nft_payout` for the slide (it owns the slide at that moment, so the split names the minter beside the
+   factory), then creates `slide-<id>.slides.<dish>` with `init { dish, holder, minter }` exactly as before: create,
+   fund, deploy, `init`, no key. The prepayment is charged only once the dish has answered; if the answer fails or
+   names nobody else, the slide goes back and nothing is charged.
+
+| Build (binaryen version_117, `-Oz`) | Bytes | SHA-256 | NEAR code hash (base58) |
+|---|---|---|---|
+| `purse/res/petri_purse.wasm` | 30,879 | `a6c3e43447a3367875cdda5b08412ff0673f337648682a361400dc4c938e9aaf` | `CDyvfMn9zQJyArwxrY3ASaASoEHH8JTp5S7uC8ShziCe` |
+| `purse/res/petri_purse_factory.wasm` (purse embedded) | 46,071 | `4170d5e59a1812f0c4284f5cfaa1eab0a2fa74d385ef8ef4965cd77251ec8ee3` | `5QTHyZ64eudxyGctrqdwbKiUvZK8oMnpWELzdyD2SG2N` |
+
+A clean build in a fresh target directory gives the same bytes. The v1 purses (`slide-1`, `slide-2.petri-slides.testnet`
+and `slide-14.petri-dish.near`, code `HRSkpLzD…`) keep their code: a purse's code is immutable, and they pay a sale's
+whole price to the seller.
+
+### Proof on testnet, 10 November 2026
+
+The same script that will run on mainnet, `node scripts/purse-mainnet-v2.mjs send --network testnet`. The factory
+`slides.petri-v6.testnet` and the purse `slide-24.slides.petri-v6.testnet` both report **0 access keys**, and their code
+hashes are the two above. The team bench here is the implicit account `9e0f14b0…c5b7c5e`, which is not a house account.
+`petri-guests.testnet` stands in for the mainnet keeper as the funder.
+
+| Step | Signer | Transaction | NEAR spent |
+|---|---|---|---|
+| The funder moves the factory's storage and gas to the dish account (moved, not spent) | `petri-guests.testnet` | `F1rz32GEbREVdki45Rdzg6RbcRaVjKeJEVtEqJrsvjM8` | 0.000044 |
+| `petri-v6.testnet` creates `slides.petri-v6.testnet`: create, fund 0.470710 NEAR, deploy the factory, `new`; no key | `petri-v6.testnet` | `DtPaL8KvN4ssssNn7M49WsS6BuJWwrP393qCB8MrL5qR` | 0.478481 |
+| The bench joins the dish with 0.023820 NEAR (intent_minimum + 0.002): colony 42, **attached** | bench | `DyUUEVnVcReraANNpGeCbqmNMxbkbHb3J9JvAEJkaUTU` | 0.025377 |
+| The bench plants a dead spark coil (18 cells, a still life) | bench | `42TUnr8GRKsirwns3TkHr1v83FmFWUa7otDtcjrCqHbK` | 0.007208 |
+| The bench mints slide 24 of it (18 cells) | bench | `FFT1ZmwmKivC5h4rPT91YaGtBZocdqoMeYmhEA8og57E` | 0.008049 |
+| The bench prepays the factory's `create_cost` (0.330790 NEAR) | bench | `6vsaTM87ywSpc56nxk7Pya5VVn1BY1vvwSnrP7ewQHtj` | 0.330935 |
+| The bench seals slide 24: the factory reads the minter from the dish and creates `slide-24.slides.petri-v6.testnet`, holder and minter the bench | bench | `Fy2XHptDhpB8yfWPaVNk6jkNyqYs2TK8vN3RQnCNqY9E` | 0.009389 |
+| The purse joins with 0.022220 NEAR: colony 43 "Living slide 24", **attached** | bench | `vMpUkHDNJGQyZGk1tbkUz2EM2fuKxgP1oScxskERjqr` | 0.023265 |
+| The purse plants its slide's 18 cells under its licence | bench | `DguacUfafmPtmzPMJ3Bo3ynQB6fss9kQ6Hus86UTd6wk` | 0.007822 |
+| The purse claims the feed its cells earned: 1.338192 PETRI into the purse | bench | `49KfuUoVmNQEPznF28mkvSo9UePu8cKnNVJkLzZh61af` | 0.001238 |
+| **The minter's royalty:** the bench passes the purse to Bench A | bench | `DbKu55eXmptbetkqtzWJE2iJuywuWPUmBBhcUrdwPGbe` | |
+| Bench A lists it at 0.02 NEAR (`nft_payout` now names the bench 0.001, Bench A 0.019) | `petri-bench-a.testnet` | `2od6RP3aUtKt7xMfpaAi25cghJttUxzZeksHUsE2ECdM` | |
+| Bench B buys it: the purse pays **0.001 NEAR to the minter** and 0.019 to the seller | `petri-bench-b.testnet` | `5LGNe5aP2peH1CCBtktnoqqhfWoimUuUbTWCCUUpGVHF` | |
+| Bench B passes it back to the team bench | `petri-bench-b.testnet` | `DhkmytoMFFUH6mQbStLgCFkxZFNbUavLtaK1zMzFAinR` | |
+
+The four NEAR moves from the funder to the bench (0.09, 0.01, 0.25, 0.19 NEAR) are left out of the table. Spent in
+all: 0.893915 NEAR, of which 0.801500 is storage now locked in the factory and the purse. Both colonies kept 18 living
+cells. Run `node scripts/purse-mainnet-v2.mjs status --network testnet` to read them live.
 
 ## Mainnet: one living slide, made without a factory
 
@@ -102,9 +162,10 @@ it at 45 living cells through generations 250, 500, 750 and 1,000: the pattern l
 
 **Expected cost:** storage 0.316 + join 0.015 + planting 0.011 + gas under 0.01, about 0.35 NEAR in all.
 
-On mainnet the site uses `petri-dish.near` as the parent account, so a mainnet slide counts as living once
-`slide-<id>.petri-dish.near` owns it. The mainnet house strains tend it (`tendPurses`, with `PETRI_LIVING_SLIDES=1`):
-they replant its pattern if its colony dies, and claim its tides.
+The site counts a mainnet slide as living once `slide-<id>.petri-dish.near` (or, since v2,
+`slide-<id>.slides.petri-dish.near`) owns it. Until the v2 run below, slide 14's holder is Congo Red, a house strain.
+The strains sign with keys that may call only the dish, so they cannot drive a purse: in practice nobody tends slide 14
+until the v2 run hands it to the team bench, which has a full-access key.
 
 Proof, 10 November 2026 (mainnet; every account below can be checked on any explorer):
 
@@ -127,10 +188,45 @@ what it earns is kept PETRI, its tide shares are credit, it wins no NEAR, and it
 (a colony that has never attached cannot send PETRI). The testnet purses `slide-1` and `slide-2.petri-slides.testnet`
 are attached and earn normally.
 
+## Mainnet v2: pending until run
+
+**Pending: nothing in this section has happened on mainnet yet.** It is what `scripts/purse-mainnet-v2.mjs send` will
+do, after `plan` (read-only) shows every step, signer and cost. The lead runs it; the script signs nothing without
+`send`.
+
+1. `keeper.petri-dish.near` moves the factory's storage and gas (0.480710 NEAR) into `petri-dish.near`, so the dish's
+   own NEAR is not used.
+2. `petri-dish.near` creates **`slides.petri-dish.near`** in one transaction: create, fund 0.470710 NEAR, deploy
+   `purse/res/petri_purse_factory.wasm`, `new { dish: "petri-dish.near" }`. No `AddKey`: the factory never has a key.
+3. The team bench, the implicit account `58135f2e727a40755df38f1d231aca159ea4ab138260b8d0d9419da63f999932` (not a house
+   account), joins the dish as "Team bench" with `intent_minimum` + 0.002 NEAR (0.023820 NEAR today), so its colony
+   is **attached**, and plants a dead spark coil: an 18-cell still life (`licence_min_cells` is 12) that the engine keeps
+   at 18 cells for 1,000 generations alone.
+4. The bench mints a slide of it, prepays the factory's `create_cost` (0.330790 NEAR) and seals it with
+   `nft_transfer_call`: the factory creates the keyless purse `slide-<id>.slides.petri-dish.near`, holder and minter
+   the bench.
+5. The purse joins with `intent_minimum` + 0.002 NEAR (0.022320 NEAR today), so it is **attached**, and plants its own
+   slide's pattern under its licence. A keyless account then earns feed, tide NEAR and royalties on mainnet.
+6. Congo Red hands `slide-14.petri-dish.near` to the bench with the purse's own `nft_transfer`, so no house account holds
+   a fed colony's purse.
+
+The keeper funds the bench as each step needs it. The script stops before any step that would take the NEAR spent past
+1.4, leave the keeper under 0.9 NEAR, the bench under 0.02 or another signer under 0.05. It prints every
+transaction's hash and cost, the access keys of the factory and both purses (0 each), and `petri-dish.near`'s key
+nonce afterwards.
+
+**Expected cost** (the `plan` output on 10 November): about 0.898 NEAR spent: the factory's storage 0.4707 and the
+deploy's gas (about 0.008), the purse's storage 0.3308, two joins (0.0238 and 0.0223), two plantings (about 0.0065
+each), the slide (about 0.0066) and gas. About 0.48 NEAR moves to `petri-dish.near` and up to about 0.56 to the bench,
+whose peak need includes the 0.2 NEAR a 200 TGas seal holds back while it runs; it keeps roughly 0.2 NEAR afterwards for
+tending.
+
+The transactions will be listed here once the run has happened.
+
 ## Build and test
 
 ```
-cd purse && cargo test                                         # 16 purse + 5 factory + 2 JSON tests
+cd purse && cargo test                                         # 18 purse + 6 factory + 2 JSON tests
 WASM_OPT=<binaryen wasm-opt> ./build.sh                        # res/petri_purse.wasm, res/petri_purse_factory.wasm
 ```
 
@@ -142,12 +238,13 @@ own copy, and mainnet storage costs 1 NEAR per 100 KB. Native tests run the cont
 
 | Item | NEAR |
 |---|---|
-| One purse: its code (29,404 bytes) and state, locked in the purse as storage (`create_cost`) | 0.316 |
-| The factory: its code (42,459 bytes, purse embedded) and state, once | about 0.43 |
-| The purse joins the dish (`min_join`) and plants its slide (`plant_deposit`, about 0.01) | about 0.02 |
+| One v2 purse: its code (30,879 bytes) and 2,200 bytes for its record, state and headroom, locked in the purse (`create_cost`) | 0.331 |
+| The v2 factory: its code (46,071 bytes, purse embedded) and 1,000 bytes for its state, once; its deploy burns about 0.008 of gas | 0.471 |
+| The purse joins the dish attached (`intent_minimum`, about 0.022) and plants its slide (`plant_deposit`, about 0.007) | about 0.03 |
 | Gas for the six or so transactions | under 0.01 |
 
-- **Through a factory:** about 0.78 NEAR for the first living slide, and 0.34 for each one after.
+- **Through a factory:** about 0.85 NEAR for the first living slide, and 0.37 for each one after.
+- v1 (slide 14): a purse of 29,404 bytes, `create_cost` 0.316 NEAR.
 - **Without a factory:** the purse checks only that `init` comes from its parent account. A parent account with a key
   (for example `petri-dish.near` before its key is deleted) can create `slide-<id>.<parent>` directly, in one
   transaction (create, fund, deploy, `init`, with no key), and the holder then sends the slide in with a plain
