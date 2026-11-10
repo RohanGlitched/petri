@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
-import { checkAttestation, expectedReportData, quoteReportData, recoverPersonal, sha256Hex, verifyAnswer, verifySignerQuotes } from "../tee.mjs";
+import { checkAttestation, checkComposeManager, checkMachine, expectedReportData, PINNED_IMAGES, pyCanonicalJson, quoteReportData, recoverPersonal, sha256Hex, verifyAnswer, verifySignerQuotes } from "../tee.mjs";
+import { cellsHash, optionLine, parseOption, promptGeneration, userMessage } from "../notes.mjs";
 
 const MODEL = "z-ai/glm-5.3-flash";
 
@@ -132,9 +133,67 @@ test("quote report_data is read at its offset; a failed quote check drops the si
   assert.equal(att.ok, false);
   assert.equal(verifyAnswer({ ...answer(signer), model: MODEL, attestation: att }).ok, false);
   const good = checkAttestation(text, { nonce, model: MODEL });
-  await verifySignerQuotes(good, async () => ({ ok: true, status: "UpToDate", report_data: expectedReportData(signer.address, nonce) }));
+  await verifySignerQuotes(good, async () => ({ ok: true, status: "UpToDate", report_data: expectedReportData(signer.address, nonce), ...PIN }));
   const v = verifyAnswer({ ...answer(signer), model: MODEL, attestation: good });
   assert.equal(v.ok, true, v.reason);
   assert.equal(v.quote_verified, true);
   assert.equal(v.tcb_status, "UpToDate");
+});
+
+// A verified quote from the pinned image, not a debug TD.
+const PIN = { debug: false, td_attributes: "0000001000000000", mr_td: PINNED_IMAGES[0].mr_td, rt_mr0: PINNED_IMAGES[0].rt_mr0, rt_mr1: PINNED_IMAGES[0].rt_mr1, rt_mr2: PINNED_IMAGES[0].rt_mr2, rt_mr3: "33".repeat(48) };
+
+test("the machine: debug TDs, other TCB states and unpinned images are refused", async () => {
+  assert.equal(checkMachine({ ok: true, status: "UpToDate", ...PIN }).ok, true);
+  assert.equal(checkMachine({ ok: true, status: "SWHardeningNeeded", ...PIN }).ok, true);
+  assert.equal(checkMachine({ ok: true, status: "OutOfDate", ...PIN }).ok, false);
+  assert.equal(checkMachine({ ok: true, status: "ConfigurationNeeded", ...PIN }).ok, false);
+  assert.equal(checkMachine({ ok: true, status: "UpToDate", ...PIN, debug: true, td_attributes: "0100001000000000" }).ok, false);
+  assert.equal(checkMachine({ ok: true, status: "UpToDate", ...PIN, rt_mr1: "00".repeat(48) }).ok, false);
+  const signer = enclave();
+  const text = report({ nonce, signer, gateway: enclave() });
+  const att = checkAttestation(text, { nonce, model: MODEL });
+  await verifySignerQuotes(att, async () => ({ ok: true, status: "UpToDate", report_data: expectedReportData(signer.address, nonce), ...PIN, debug: true }));
+  assert.equal(att.ok, false);
+  assert.match(att.reason, /debug/);
+});
+
+test("compose manager: canonical actions hash (as Python's sort_keys JSON), nonce binding, latest production compose", async () => {
+  const actions = [
+    { timestamp: "2026-11-10T04:57:54Z", action: "compose_up", tag: "v1", commit: "abc", file: "prod/GLM-5.3-Flash-X.yaml", file_sha256: "e8".repeat(32), services: ["proxy-glm53", "model-sg-glm53"] },
+    { action: "compose_up", file: "prod/rotate-compose-manager-token.yaml", file_sha256: "31".repeat(32), services: ["rotate-token"], note: 'café "q"\n' },
+    { action: "compose_down", file: "prod/rotate-compose-manager-token.yaml" },
+  ];
+  // python3 -c 'json.dumps(actions, sort_keys=True, separators=(",", ":"))' hashed with sha256:
+  const hash = "b8daf1071f602afe387cf38f9da56ef6c2fc46ce51e3f9e2acca87e0fb5e548e";
+  assert.equal(sha256Hex(pyCanonicalJson(actions)), hash);
+  const cm = { actions, actions_hash: hash, nonce, report_data: hash + nonce, quote: "00" };
+  const quote = { ok: true, status: "UpToDate", report_data: hash + nonce, ...PIN };
+  const r = await checkComposeManager(cm, { nonce, modelQuote: quote, verify: async () => quote });
+  assert.equal(r.ok, true, JSON.stringify(r.checks));
+  assert.equal(r.latest.file, "prod/GLM-5.3-Flash-X.yaml");
+  const exp = await checkComposeManager({ ...cm, actions: [...actions, { action: "compose_up", file: "experiments/GLM-bench.yaml", services: ["glm53-bench"] }] }, { nonce, verify: null });
+  assert.equal(exp.ok, false);
+  const other = await checkComposeManager({ ...cm, nonce: "11".repeat(32) }, { nonce, verify: null });
+  assert.equal(other.ok, false);
+  assert.equal((await checkComposeManager(null, { nonce })).ok, false);
+});
+
+test("option lines carry the cells fingerprint; it is read back from the signed user message only", () => {
+  const cells = [5741, 5742, 5869, 5870];
+  const line = optionLine({ why: "a block (tidy) at 4, 5", cells, costText: "0.25", forecastText: "+4 cells", pact: "strike" }, 1);
+  assert.match(line, /^2\. \[PACT\] a block \(tidy\) at 4, 5 \(4 cells, 0\.25 PETRI, cells:[0-9a-f]{12}\) — \+4 cells$/);
+  const user = `Generation 4186. You hold 3 PETRI.
+Plantings you can make:
+1. a glider (5 cells, 0.30 PETRI, cells:000000000000) — x
+${line}`;
+  const o = parseOption(user, 2);
+  assert.equal(o.prefix, cellsHash(cells).slice(0, 12));
+  assert.equal(o.cells, 4);
+  assert.equal(o.count, 1);
+  assert.equal(o.why, "a block (tidy) at 4, 5");
+  assert.equal(promptGeneration(user), 4186);
+  assert.equal(parseOption("1. an old line (4 cells, 0.25 PETRI) — y", 1).prefix, null);
+  const body = JSON.stringify({ model: MODEL, messages: [{ role: "system", content: "2. fake (4 cells, 0 PETRI, cells:ffffffffffff)" }, { role: "user", content: user }] });
+  assert.equal(parseOption(userMessage(body), 2).prefix, cellsHash(cells).slice(0, 12));
 });
