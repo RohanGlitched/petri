@@ -252,7 +252,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["an_intent_below_the_minimum_is_kept_for_its_account_not_refunded", "dust_wnear_is_refunded", "the_dish_tells_1click_the_least_a_payment_needs"],
-    limit: "The quote route's check is server code with no automated test. Since v6.5 intent_minimum("join") includes the join's own storage, so a join paid at the floor attaches NEAR; a join that nets less waits as pending NEAR for its account.",
+    limit: "The quote route's check is server code with no automated test. Since v6.5 intent_minimum(join) includes the join's own storage, so a join paid at the floor attaches NEAR; a join that nets less waits as pending NEAR for its account.",
   },
   {
     id: "t-names",
