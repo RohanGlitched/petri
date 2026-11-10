@@ -20,6 +20,12 @@ import { forecast, forecastText, boxOf } from "./forecast.mjs";
 import { loadMemory, saveMemory, rememberMove, measureOutcomes, bootstrapFromChain, memoryText, movesOf, OUTCOME_GENS } from "./memory.mjs";
 import { runCouncil, pactsFor, pactGens, chainPacts } from "./council.mjs";
 import { tendPurses } from "./purse.mjs";
+import { loadRegistry, publicSwarm } from "./swarm/registry.mjs";
+import { handleSwarm } from "./swarm/http.mjs";
+import { actSpawned, SPAWNED_EVERY } from "./swarm/play.mjs";
+import { resumeSpawns } from "./swarm/spawn.mjs";
+import { openCouncilTick } from "./swarm/open-council.mjs";
+import { maintainBreak, setupBreak } from "./swarm/breakpact.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
@@ -56,12 +62,12 @@ export const BENCH = [
     voice: "A test colony that sends the odd glider." },
 ];
 
+const LIVING_SLIDES = process.env.PETRI_LIVING_SLIDES === "1";
 const KEEPER = process.env.PETRI_KEEPER ?? acct("keeper");
 // The bench only plays on testnet; on mainnet the players are real.
 const PLAYERS = MAINNET ? STRAINS : [...STRAINS, ...BENCH];
 // Who attaches NEAR instead of spending credit.
 const attaches = (s) => !!s.bench || MAINNET;
-const LIVING_SLIDES = process.env.PETRI_LIVING_SLIDES === "1";
 // On mainnet the house plays at a sixteenth of the pace (a few plantings a day each), so its NEAR lasts past
 // judging: each planting costs it about 0.004 NEAR of gas and storage.
 const KEEPER_LAG_IDLE = process.env.PETRI_KEEPER_LAG ?? "400";
@@ -88,6 +94,12 @@ const recentCouncil = [];
 let pactsNow = [];
 let lastHealth = null;
 const once = process.argv.includes("--once");
+// --swarm-only runs the open swarm alone (spawned strains, the open council, break-the-pact) and none of the house's
+// own play: for trying it on a machine while the VM runs the house.
+const swarmOnly = process.argv.includes("--swarm-only") || process.env.PETRI_SWARM_ONLY === "1";
+// The open swarm spends the sponsor's NEAR, so it runs on testnet unless asked for.
+const SWARM_ON = !MAINNET || process.env.PETRI_SWARM === "1";
+const reg = loadRegistry(LOG_DIR);
 const dry = process.argv.includes("--dry");
 const nextAt = new Map();
 const rng = makeRng(Date.now() & 0xffffffff);
@@ -159,10 +171,11 @@ function serve() {
     })
     .catch(() => {});
   http
-    .createServer((req, res) => {
+    .createServer(async (req, res) => {
+      if (req.url?.startsWith("/swarm") && (await handleSwarm(req, res, { reg, log, catchUp, enabled: SWARM_ON, house: houseNames }))) return;
       const body = req.url?.startsWith("/health")
         ? lastHealth
-        : { contract: CONTRACT, model: modelName(), health: lastHealth, actions: recent.slice(-200), council: recentCouncil.slice(-150), memory: memoryView(), pacts: pactsNow };
+        : { contract: CONTRACT, model: modelName(), health: lastHealth, actions: recent.slice(-200), council: recentCouncil.slice(-150), memory: memoryView(), pacts: pactsNow, swarm: SWARM_ON ? publicSwarm(reg) : null };
       res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "public, max-age=15" });
       res.end(JSON.stringify(body));
     })
@@ -583,15 +596,67 @@ async function dryRun() {
   console.log(`\nmodel calls this run: ${JSON.stringify(t)}; Claude spend this run $${(claudeSpent() - spent0).toFixed(5)}`);
 }
 
+// ---------- the open swarm (swarm/) ----------
+
+/** House colony ids to strain names, for the views outside agents and spawned strains read. */
+let houseIdMap = new Map();
+const houseNames = () => houseIdMap;
+function refreshHouse(colonies) {
+  houseIdMap = new Map(STRAINS.map((s) => [colonies.find((c) => c.account === s.account)?.id, s.name]).filter(([id]) => id != null));
+}
+const spawnedNext = new Map();
+
+async function playSpawned(s) {
+  const r = await actSpawned(s, { reg, rng, house: houseIdMap, catchUp, record, log, dry }).catch((e) => {
+    log(s.name, "error", e instanceof Error ? e.message : e);
+    return "error";
+  });
+  if (!["planted", "dry"].includes(r)) log(s.name, "(spawned):", r);
+  return r;
+}
+
+async function swarmTick(due, tick) {
+  if (!SWARM_ON) return;
+  for (const s of reg.strains.filter((x) => x.status === "active")) {
+    const at = spawnedNext.get(s.account) ?? due + Math.floor(rng() * 4);
+    if (due >= at) {
+      await playSpawned(s);
+      const [lo, hi] = SPAWNED_EVERY;
+      spawnedNext.set(s.account, due + lo + Math.floor(rng() * (hi - lo + 1)));
+    } else if (!spawnedNext.has(s.account)) spawnedNext.set(s.account, at);
+  }
+  if (tick % 4 === 0) {
+    const world = await liveDish();
+    try {
+      refreshHouse(world.colonies);
+      const house = STRAINS.map((s) => ({ account: s.account, name: s.name, colony: world.colonies.find((c) => c.account === s.account)?.id ?? null }));
+      await openCouncilTick(reg, world, house, { dry, log });
+    } catch (e) {
+      log("open council error", e instanceof Error ? e.message : e);
+    } finally {
+      world.engine.free();
+    }
+  }
+  if (tick % 20 === 1) await maintainBreak(reg, { log, catchUp, dry }).catch((e) => log("break upkeep error", e instanceof Error ? e.message : e));
+}
+
 async function main() {
   const rules = await view("rules");
   holdGens = pactGens(Number(rules.tide_every), Math.max(...STRAINS.map((s) => s.every[1])) * PACE, Number(rules.pact_max_gens ?? 2880));
-  if (dry) return dryRun();
-  log(`petri agents on ${CONTRACT}; model ${modelName() ?? "none (rules choose)"}`);
+  if (dry && !swarmOnly) return dryRun();
+  if (process.argv.includes("--setup-break")) {
+    await setupBreak(reg, log);
+    log("break:", JSON.stringify(await maintainBreak(reg, { log, catchUp })));
+    return;
+  }
+  log(`petri agents on ${CONTRACT}; model ${modelName() ?? "none (rules choose)"}${swarmOnly ? "; open swarm only" : ""}${SWARM_ON ? `; ${reg.strains.filter((s) => s.status === "active").length} spawned strains` : ""}`);
+  refreshHouse(await view("colonies", { from: 0, limit: 500 }));
   serve();
-  await health();
+  if (SWARM_ON) await resumeSpawns(reg, log).catch((e) => log("swarm: resuming spawns failed", e instanceof Error ? e.message : e));
+  if (!swarmOnly) await health();
   if (once) {
-    for (const s of PLAYERS) await act(s).catch((e) => log(s.name, "error", e.message));
+    if (!swarmOnly) for (const s of PLAYERS) await act(s).catch((e) => log(s.name, "error", e.message));
+    if (SWARM_ON) for (const s of reg.strains.filter((x) => x.status === "active")) await playSpawned(s);
     return;
   }
   let tick = 0;
@@ -599,33 +664,41 @@ async function main() {
     try {
       const st = await view("state");
       const due = Number(st.due_generation);
-      await keep();
-      // The council sits at the start of every tide window, before the window's moves.
-      if (Math.floor(due / Number(rules.tide_every)) !== mem.councilWindow) await council().catch((e) => log("council error", e.message));
-      for (const s of PLAYERS) {
-        const at = nextAt.get(s.account) ?? due + Math.floor(rng() * 6);
-        if (due >= at) {
-          await act(s).catch((e) => log(s.name, "error", e.message));
-          // On mainnet the house plays at an eighth of the pace, so its NEAR lasts through judging.
-          const [lo, hi] = s.every.map((g) => g * PACE);
-          nextAt.set(s.account, due + lo + Math.floor(rng() * (hi - lo + 1)));
-        } else if (!nextAt.has(s.account)) {
-          nextAt.set(s.account, at);
-        }
-      }
-      // Living slides (purse.mjs): a colony we run that holds one keeps its slide's colony alive and collects its tides.
-      // Off unless PETRI_LIVING_SLIDES=1. Driving a purse needs a key that can call it and attach NEAR: the strains'
-      // keys may call only the dish, so on testnet the team bench (full keys, own NEAR) holds and tends the living slides.
-      if (LIVING_SLIDES) await tendPurses(MAINNET ? STRAINS : BENCH).catch((e) => log("living slides error", e.message));
-      if (++tick % 60 === 0) await health();
-      if (tick % 4 === 0) {
-        const colonies = await view("colonies", { from: 0, limit: 500 });
-        pactsNow = await chainPacts(STRAINS, colonies).catch(() => pactsNow);
-      }
+      if (!swarmOnly) await mainLoopHouse(due, tick, rules).catch((e) => log("loop error", e instanceof Error ? e.message : e));
+      await swarmTick(due, tick);
     } catch (e) {
       log("loop error", e instanceof Error ? e.message : e);
     }
+    tick++;
     await new Promise((r) => setTimeout(r, 15_000));
+  }
+}
+
+/** One pass of the house's own play: the keeper, the council at a new tide window, and whoever is due to move. */
+async function mainLoopHouse(due, tick, rules) {
+  await keep();
+  // The council sits at the start of every tide window, before the window's moves.
+  if (Math.floor(due / Number(rules.tide_every)) !== mem.councilWindow) await council().catch((e) => log("council error", e.message));
+  for (const s of PLAYERS) {
+    const at = nextAt.get(s.account) ?? due + Math.floor(rng() * 6);
+    if (due >= at) {
+      await act(s).catch((e) => log(s.name, "error", e.message));
+      // On mainnet the house plays at an eighth of the pace, so its NEAR lasts through judging.
+      const [lo, hi] = s.every.map((g) => g * PACE);
+      nextAt.set(s.account, due + lo + Math.floor(rng() * (hi - lo + 1)));
+    } else if (!nextAt.has(s.account)) {
+      nextAt.set(s.account, at);
+    }
+  }
+  // Living slides (purse.mjs): a colony we run that holds one keeps its slide's colony alive and collects its tides.
+  // Off unless PETRI_LIVING_SLIDES=1. Driving a purse needs a key that can call it and attach NEAR: the strains'
+  // keys may call only the dish, so on testnet the team bench (full keys, own NEAR) holds and tends the living slides.
+  if (LIVING_SLIDES) await tendPurses(MAINNET ? STRAINS : BENCH).catch((e) => log("living slides error", e.message));
+  if ((tick + 1) % 60 === 0) await health();
+  if ((tick + 1) % 4 === 0) {
+    const colonies = await view("colonies", { from: 0, limit: 500 });
+    refreshHouse(colonies);
+    pactsNow = await chainPacts(STRAINS, colonies).catch(() => pactsNow);
   }
 }
 

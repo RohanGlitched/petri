@@ -79,7 +79,13 @@ export async function liveDish() {
 }
 
 const accounts = new Map();
-export function account(accountId, keysDir = KEYS_DIR) {
+// Accounts whose keys live somewhere else than PETRI_KEYS_DIR: the strains visitors spawn keep theirs beside the swarm
+// registry (swarm/registry.mjs).
+const keyDirs = new Map();
+export function useKeysDir(accountId, dir) {
+  keyDirs.set(accountId, dir);
+}
+export function account(accountId, keysDir = keyDirs.get(accountId) ?? KEYS_DIR) {
   const k = `${keysDir}|${accountId}`;
   if (!accounts.has(k)) {
     const file = path.join(keysDir, `${accountId}.json`);
@@ -123,6 +129,17 @@ export async function callDish(accountId, methodName, args, tgas = CALL_TGAS, de
   const fail = res.status?.Failure ?? res.receipts_outcome?.map((r) => r.outcome.status?.Failure).find(Boolean);
   if (fail) throw new Error(failureText(fail));
   return { hash: res.transaction.hash, value: returned(res) };
+}
+
+/**
+ * Sends `actions` to `receiverId` as `accountId` and reports what happened without throwing on a refusal:
+ * { hash, ok, failure (the contract's own words, or null), value }. Used where a refusal is the point (break-the-pact).
+ */
+export async function sendActions(accountId, receiverId, acts) {
+  const a = account(accountId);
+  const res = await a.signAndSendTransaction({ receiverId, actions: acts, waitUntil: "EXECUTED_OPTIMISTIC", throwOnFailure: false });
+  const fail = res.status?.Failure ?? res.receipts_outcome?.map((r) => r.outcome.status?.Failure).find(Boolean);
+  return { hash: res.transaction.hash, ok: !fail, failure: fail ? failureText(fail) : null, value: fail ? null : returned(res) };
 }
 
 /** What a call returned (the first SuccessValue that parses as JSON), or null. */
