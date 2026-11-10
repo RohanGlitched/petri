@@ -112,6 +112,9 @@ export async function strainNearFor({ joinNear = JOIN_NEAR, brain = true } = {})
   return joinNear + (brain ? BRAIN_NEAR : 0n) + ACCOUNT_BYTES * BYTE_COST + reserve + burnt + MARGIN;
 }
 
+/** What a one-action transaction from a strain (a key deletion, a transfer) may be charged before its refund. */
+const reserve1 = (price) => TRANSFER_TGAS * 10n ** 12n * price * PESSIMISTIC;
+
 /** Whether a strain holds enough NEAR to send a planting now (its prepaid gas reserve). */
 export async function canPayGas(accountId) {
   return (await spendable(accountId).catch(() => 0n)) >= playReserve(await gasPrice());
@@ -292,20 +295,34 @@ async function finishSpawn(reg, strain, play, temp, log) {
 }
 
 /**
- * Leaves no full-access key behind a spawn that failed: before the join, the account is deleted and its NEAR returns
- * to the parent; after it, the temporary key is deleted, so the account holds only the play key (the colony stays on
- * the dish, idle, with status "failed"). If even that fails, the temporary key stays on disk and the log says so.
+ * Leaves no full-access key behind a spawn that failed: if the chain has no colony for the account, the account is
+ * deleted and its NEAR returns to the parent; if it has one, the temporary key is deleted, so the account holds only
+ * the play key (the colony stays on the dish, idle, with status "failed"). Whether it joined is read from the dish
+ * (colony_of), never from the local step list, which a crash between the join and its record can leave behind. Before
+ * either, the parent tops the account up to what the transaction can be charged, so a spawn that failed for want of
+ * gas can still be locked. If even that fails, the temporary key stays on disk and the log says so.
  */
 export async function abandonSpawn(reg, strain, temp, log = console.log) {
   const self = new Account(strain.account, new JsonRpcProvider({ url: RPCS[0] }), temp.toString());
   const tempKey = temp.getPublicKey().toString();
+  strain.txs ??= {};
   try {
     const keys = await keysOf(strain.account).catch(() => null);
+    const joined = keys === null ? false : (await view("colony_of", { account_id: strain.account })) != null;
+    if (keys !== null && keys.some((k) => k.public_key === tempKey)) {
+      const need = reserve1(await gasPrice()) + MARGIN;
+      const short = need - (await spendable(strain.account).catch(() => 0n));
+      if (short > 0n) {
+        const r = await account(PARENT).signAndSendTransaction({ receiverId: strain.account, actions: [actions.transfer(short + MARGIN)], waitUntil: "FINAL" });
+        strain.txs.abandon_topup = r.transaction.hash;
+        log(`swarm: ${strain.account} topped up by ${PARENT} to pay for its clean-up`, r.transaction.hash);
+      }
+    }
     if (keys === null) {
       if (!(await exists(strain.account))) strain.status = "reclaimed";
     } else if (!keys.some((k) => k.public_key === tempKey)) {
       strain.locked = keys.every((k) => k.permission !== "FullAccess");
-    } else if (!(strain.done ?? []).includes("join")) {
+    } else if (!joined) {
       const r = await self.signAndSendTransaction({ receiverId: strain.account, actions: [actions.deleteAccount(PARENT)], waitUntil: "FINAL" });
       strain.txs.reclaim = r.transaction.hash;
       strain.status = "reclaimed";
