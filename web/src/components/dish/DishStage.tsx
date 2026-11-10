@@ -461,6 +461,12 @@ export function DishStage() {
     const t = setInterval(loadMe, 8000);
     return () => clearInterval(t);
   }, [loadMe]);
+  // When someone advances the stored board, the browser's pending earnings fold into what the contract says is
+  // claimable: read it at once, so "Earned, unclaimed" never dips to zero while waiting for the next poll.
+  const storedGen = d.state?.generation;
+  useEffect(() => {
+    if (storedGen) loadMe();
+  }, [storedGen, loadMe]);
 
   useEffect(() => {
     setCache(readDishCache(net.network));
@@ -893,6 +899,7 @@ export function DishStage() {
     setError(null);
     setDone(null);
     setBusy("Claiming…");
+    shownEarned.current = { v: 0, at: 0, id: 0 };
     try {
       const r = await claimAll();
       setDone({ text: isWallet ? "Claimed. Your PETRI is in your balance and any NEAR from the tides is on its way to your account." : "Claimed. Your PETRI is in your balance.", hash: r.hash });
@@ -1526,6 +1533,12 @@ export function DishStage() {
   const showJoin = !me && !startFolded && !showProgress && !(player && loadedFor !== player.accountId);
   /** The pinned-spot line, while the stamp is still where Find open agar put it. */
   const pinned = pinNote && target && pinNote.key === stampKey ? pinNote.text : null;
+  // Earnings shown never dip while the stored board catches up with the browser (pending folds into claimable a moment
+  // later); a claim, or twelve seconds, resets the floor.
+  const earnedRaw = claimable.petri + Math.max(0, myPending);
+  const shownEarned = useRef({ v: 0, at: 0, id: 0 });
+  if (!me || shownEarned.current.id !== me.id || earnedRaw >= shownEarned.current.v || Date.now() - shownEarned.current.at > 12_000)
+    shownEarned.current = { v: earnedRaw, at: Date.now(), id: me?.id ?? 0 };
   const earnTick = tick ? (
     <span key={tick.key} className={s.tick} aria-hidden="true">
       {tick.text}
@@ -1739,6 +1752,7 @@ export function DishStage() {
             <p className={`${s.verdict} ${breach ? s.bad : verdict === "" ? s.ok : siege ? s.warn : verdict ? s.bad : ""}`}>
               {pinned && !quiet && verdict === "" ? pinned : quiet ? "Planted. Pick another spot of open agar, or put the stamp down." : !anchor ? (coarse ? "Tap the dish to place, then confirm." : "Point at the dish, then click where it should grow.") : breach ? `Pact ${breach.pact.id} with ${names.get(breach.pact.from) ?? `colony ${breach.pact.from}`}: your colony promised not to plant within ${radius} cells of its living cells until generation ${int(breach.pact.until)}, and this comes that close to its cell at ${breach.at.x}, ${breach.at.y}. The outlined zone is off limits; the dish would refuse it.` : verdict === "" ? `${snapped && target ? "That spot was taken, so the stamp moved to the nearest one that fits: " : "Fits at "}${anchor.x}, ${anchor.y}.${target ? "" : coarse ? " Tap to place it." : " Click to place it."}` : explain(verdict, w, names, rules?.siege_x)}
             </p>
+            {status}
             {fc && <ForecastView f={fc} cost={cost} genMs={genMs} at={anchor} />}
             {custom && licence.live && <LicenceLine licence={licence} cost={licensedCost} licensed={licensed} />}
             {me && (
@@ -1748,7 +1762,6 @@ export function DishStage() {
                 <em className="num">{note.length}/140</em>
               </label>
             )}
-            {status}
             <div className={s.stickyCta}>
             <button className="btn btn-amber" disabled={!me || !target || !legal || !!busy || !canAfford || plantedThisGen} onClick={plant}>
               {!me
@@ -1804,7 +1817,7 @@ export function DishStage() {
                 <dt>Earned, unclaimed</dt>
                 <dd className={`num ${s.earnDd}`}>
                   <span className={s.sign}>+</span>
-                  {petri(claimable.petri + Math.max(0, myPending), 3)}
+                  {petri(shownEarned.current.v, 3)}
                   {earnTick}
                 </dd>
               </div>

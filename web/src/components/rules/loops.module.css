@@ -37,7 +37,7 @@
 .loop :global(.h3) { margin: 0 0 12px; }
 .steps { margin: 0 0 18px; padding-left: 18px; display: grid; gap: 8px; color: var(--text-2); font-size: 15px; line-height: 1.5; }
 .steps li::marker { color: var(--dim); }
-.cta { margin-top: auto; align-self: flex-start; color: var(--amber-2); font-weight: 600; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.cta { gap: 6px; margin-top: auto; align-self: flex-start; color: var(--amber-2); font-weight: 600; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
 .cta:hover { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 900px) {
   .loops { grid-template-columns: 1fr; }

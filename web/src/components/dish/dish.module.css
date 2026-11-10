@@ -1042,3 +1042,5 @@
 
 .aiModel { color: var(--ok); box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.4); }
 .log :global(.term) { text-decoration: none; }
+
+.plantCard .statusInline { margin: 0 0 14px; }
