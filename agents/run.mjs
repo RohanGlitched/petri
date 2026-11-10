@@ -19,6 +19,7 @@ import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, 
 import { forecast, forecastText, boxOf } from "./forecast.mjs";
 import { loadMemory, saveMemory, rememberMove, measureOutcomes, bootstrapFromChain, memoryText, movesOf, OUTCOME_GENS } from "./memory.mjs";
 import { runCouncil, pactsFor, pactGens, chainPacts } from "./council.mjs";
+import { tendPurses } from "./purse.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
@@ -60,6 +61,7 @@ const KEEPER = process.env.PETRI_KEEPER ?? acct("keeper");
 const PLAYERS = MAINNET ? STRAINS : [...STRAINS, ...BENCH];
 // Who attaches NEAR instead of spending credit.
 const attaches = (s) => !!s.bench || MAINNET;
+const LIVING_SLIDES = process.env.PETRI_LIVING_SLIDES === "1";
 // On mainnet the house plays at a sixteenth of the pace (a few plantings a day each), so its NEAR lasts past
 // judging: each planting costs it about 0.004 NEAR of gas and storage.
 const KEEPER_LAG_IDLE = process.env.PETRI_KEEPER_LAG ?? "400";
@@ -611,6 +613,10 @@ async function main() {
           nextAt.set(s.account, at);
         }
       }
+      // Living slides (purse.mjs): a house strain that holds one keeps its colony alive and collects its tides. Off
+      // unless PETRI_LIVING_SLIDES=1, since driving a purse needs a key that can call it (the VM's keys may call only
+      // the dish).
+      if (LIVING_SLIDES) await tendPurses(STRAINS).catch((e) => log("living slides error", e.message));
       if (++tick % 60 === 0) await health();
       if (tick % 4 === 0) {
         const colonies = await view("colonies", { from: 0, limit: 500 });
