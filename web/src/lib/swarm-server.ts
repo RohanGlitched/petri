@@ -1,8 +1,11 @@
-// Server-side calls from the site's API routes to the open swarm on the agents VM (agents/swarm/http.mjs). Reads go
-// straight through. Calls that spend the sponsor's NEAR or a model call (spawn, top up, break-the-pact) are signed:
-// HMAC-SHA256 over "<unix ms>\n<METHOD>\n<path>\n<body>" with PETRI_SWARM_SECRET, which only the site and the VM hold.
+// Server-side calls from the site's API routes to the open swarm on the agents VM (agents/swarm/http.mjs). Every call
+// is signed with PETRI_SWARM_SECRET, which only the site and the VM hold (the VM refuses unsigned calls to the routes
+// that spend the sponsor's NEAR or a model call: spawn, top up, break-the-pact):
+//   x-petri-v: 2, x-petri-ts, x-petri-nonce, x-petri-client (the visitor's address), and x-petri-sig, the hex
+//   HMAC-SHA256 of "v2\n<ts>\n<nonce>\n<METHOD>\n<path and query>\n<client>\n<body>".
+// The VM counts the visitor's address for its rate limits only when it is signed, and accepts each signature once.
 
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 
 const BASE = (process.env.PETRI_SWARM_URL ?? process.env.PETRI_STRAINS_LOG_URL ?? "http://136.64.100.170:8790/").replace(/\/$/, "");
 
@@ -10,14 +13,24 @@ export const swarmConfigured = () => !!process.env.PETRI_SWARM_SECRET;
 
 /** The visitor's address, for rate limits here and on the VM. */
 export function clientIp(req: Request): string {
-  return (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  return (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim().slice(0, 100);
+}
+
+/** The signed headers for one call, or null when this server has no secret. */
+function signed(method: string, pathAndQuery: string, body: string, client: string): Record<string, string> | null {
+  const secret = process.env.PETRI_SWARM_SECRET;
+  if (!secret) return null;
+  const ts = String(Date.now());
+  const nonce = randomBytes(12).toString("hex");
+  const sig = createHmac("sha256", secret).update(`v2\n${ts}\n${nonce}\n${method}\n${pathAndQuery}\n${client}\n${body}`).digest("hex");
+  return { "x-petri-v": "2", "x-petri-ts": ts, "x-petri-nonce": nonce, "x-petri-client": client, "x-petri-sig": sig };
 }
 
 export async function swarmGet(pathAndQuery: string, req?: Request): Promise<Response> {
   try {
     const r = await fetch(`${BASE}${pathAndQuery}`, {
       cache: "no-store",
-      headers: req ? { "x-petri-client": clientIp(req) } : {},
+      headers: signed("GET", pathAndQuery, "", req ? clientIp(req) : "") ?? {},
       signal: AbortSignal.timeout(15_000),
     });
     const body = await r.text();
@@ -27,18 +40,16 @@ export async function swarmGet(pathAndQuery: string, req?: Request): Promise<Res
   }
 }
 
-/** POSTs `body` to the swarm. `signed` adds the site's HMAC (the VM refuses unsigned calls to those routes). */
-export async function swarmPost(path: string, body: unknown, { signed = true, req, timeoutMs = 60_000 }: { signed?: boolean; req?: Request; timeoutMs?: number } = {}): Promise<Response> {
+/**
+ * POSTs `body` to the swarm, signed when this server has the secret. `signed: true` (the default) makes the signature
+ * required: without the secret the call is not sent. Council bids pass `signed: false`: they carry their own NEAR
+ * signature, and are still signed here when possible so the VM can count the visitor's address.
+ */
+export async function swarmPost(path: string, body: unknown, { signed: required = true, req, timeoutMs = 60_000 }: { signed?: boolean; req?: Request; timeoutMs?: number } = {}): Promise<Response> {
   const raw = JSON.stringify(body);
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (req) headers["x-petri-client"] = clientIp(req);
-  if (signed) {
-    const secret = process.env.PETRI_SWARM_SECRET;
-    if (!secret) return Response.json({ error: "The open swarm is not configured on this server." }, { status: 503 });
-    const ts = String(Date.now());
-    headers["x-petri-ts"] = ts;
-    headers["x-petri-sig"] = createHmac("sha256", secret).update(`${ts}\nPOST\n${path}\n${raw}`).digest("hex");
-  }
+  const sig = signed("POST", path, raw, req ? clientIp(req) : "");
+  if (required && !sig) return Response.json({ error: "The open swarm is not configured on this server." }, { status: 503 });
+  const headers: Record<string, string> = { "content-type": "application/json", ...(sig ?? {}) };
   try {
     const r = await fetch(`${BASE}${path}`, { method: "POST", headers, body: raw, cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
     return new Response(await r.text(), { status: r.status, headers: { "content-type": "application/json", "cache-control": "no-store" } });

@@ -1,7 +1,12 @@
 // The swarm's routes on the agents' log window (PETRI_LOG_PORT). Reads are open. Anything that spends the sponsor's
-// NEAR or a model call (spawn, top up, break-the-pact) must come from the site: an HMAC-SHA256 over
-// "<unix ms>\n<METHOD>\n<path>\n<body>" with PETRI_SWARM_SECRET, at most a minute old. Sealed council bids need no HMAC:
-// each carries its own NEAR signature.
+// NEAR or a model call (spawn, top up, break-the-pact) must come from the site, signed with PETRI_SWARM_SECRET:
+//   x-petri-v: 2, x-petri-ts: <unix ms>, x-petri-nonce: <random hex>, x-petri-client: <visitor address>,
+//   x-petri-sig: hex HMAC-SHA256 of "v2\n<ts>\n<nonce>\n<METHOD>\n<path and query>\n<client>\n<body>"
+// at most a minute old and never seen before (a replay cache keeps every signature for two minutes). The visitor
+// address counts for rate limits only when it is signed this way; otherwise the limits key on the connecting address.
+// The site signs its reads too, so its visitors are limited one by one. Sealed council bids need no HMAC: each carries
+// its own NEAR signature. PETRI_SWARM_HMAC_V1=1 also accepts the old "<ts>\n<METHOD>\n<path>\n<body>" form (for the
+// minutes between deploying the VM and the site), without trusting its client header.
 //
 //   GET  /swarm                    the registry as the site shows it (strains, council rounds, deals, break attempts)
 //   GET  /swarm/world?account=     what an outside agent sees (swarm/world.mjs)
@@ -15,23 +20,54 @@
 import crypto from "node:crypto";
 import { publicSwarm } from "./registry.mjs";
 import { spawnStrain, topUp } from "./spawn.mjs";
-import { worldFor } from "./world.mjs";
+import { worldFor, WorldBusy } from "./world.mjs";
 import { councilView, submitBid } from "./open-council.mjs";
 import { breakAttempt, breakChat } from "./breakpact.mjs";
 
 const SECRET = process.env.PETRI_SWARM_SECRET ?? "";
 
-export function signRequest(secret, method, path, body, ts = Date.now()) {
-  return { ts: String(ts), sig: crypto.createHmac("sha256", secret).update(`${ts}\n${method}\n${path}\n${body}`).digest("hex") };
+const LEGACY = process.env.PETRI_SWARM_HMAC_V1 === "1";
+
+/** The headers the site sends: see the top of this file. */
+export function signRequest(secret, method, pathAndQuery, body, { ts = Date.now(), nonce = crypto.randomBytes(12).toString("hex"), client = "" } = {}) {
+  const sig = crypto.createHmac("sha256", secret).update(`v2\n${ts}\n${nonce}\n${method}\n${pathAndQuery}\n${client}\n${body}`).digest("hex");
+  return { "x-petri-v": "2", "x-petri-ts": String(ts), "x-petri-nonce": nonce, "x-petri-client": client, "x-petri-sig": sig };
 }
 
-function authorized(req, path, body) {
-  if (!SECRET) return false;
+// Signatures seen in the last two minutes: a signed request is good once.
+const seen = new Map();
+function fresh(sig) {
+  const now = Date.now();
+  if (seen.size > 2000) for (const [k, t] of seen) if (t < now) seen.delete(k);
+  if ((seen.get(sig) ?? 0) >= now) return false;
+  seen.set(sig, now + 120_000);
+  return true;
+}
+
+const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+
+/**
+ * Checks the site's signature on a request. Returns { ok, client }: client is the visitor address the site signed, or
+ * null when the request is unsigned (or signed the old way). `raw` is the request path with its query, as received.
+ */
+export function authorize(req, raw, body) {
+  const none = { ok: false, client: null };
+  if (!SECRET) return none;
   const ts = Number(req.headers["x-petri-ts"]);
   const sig = String(req.headers["x-petri-sig"] ?? "");
-  if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > 60_000) return false;
-  const want = signRequest(SECRET, req.method, path, body, ts).sig;
-  return sig.length === want.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want));
+  if (!sig || !Number.isFinite(ts) || Math.abs(Date.now() - ts) > 60_000) return none;
+  if (req.headers["x-petri-v"] === "2") {
+    const nonce = String(req.headers["x-petri-nonce"] ?? "");
+    const client = String(req.headers["x-petri-client"] ?? "");
+    if (!/^[0-9a-f]{16,64}$/.test(nonce) || client.length > 100) return none;
+    const want = signRequest(SECRET, req.method, raw, body, { ts, nonce, client })["x-petri-sig"];
+    if (!same(sig, want) || !fresh(sig)) return none;
+    return { ok: true, client: client || null };
+  }
+  if (!LEGACY) return none;
+  const path = raw.split("?")[0];
+  const want = crypto.createHmac("sha256", SECRET).update(`${ts}\n${req.method}\n${path}\n${body}`).digest("hex");
+  return same(sig, want) && fresh(sig) ? { ok: true, client: null } : none;
 }
 
 /** Runs jobs one at a time (each signer's nonces stay in order). */
@@ -79,6 +115,8 @@ export async function handleSwarm(req, res, ctx) {
   const path = url.pathname;
   if (!path.startsWith("/swarm")) return false;
   const { reg, log } = ctx;
+  // Who a rate limit counts: the visitor the site signed for, else whoever connected.
+  const who = (auth) => (auth.ok && auth.client ? `c:${auth.client}` : `ip:${req.socket.remoteAddress}`);
   try {
     if (req.method === "OPTIONS") {
       res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST", "access-control-allow-headers": "content-type" });
@@ -89,10 +127,16 @@ export async function handleSwarm(req, res, ctx) {
       if (path === "/swarm") return send(res, 200, publicSwarm(reg)), true;
       if (path === "/swarm/council") return send(res, 200, councilView(reg, url.searchParams.get("account"))), true;
       if (path === "/swarm/world") {
-        if (limited(`world|${req.headers["x-petri-client"] ?? req.socket.remoteAddress}`, 60, 60_000)) return send(res, 429, { error: "at most 60 world reads a minute" }), true;
+        const auth = authorize(req, req.url ?? "/", "");
+        if (limited(`world|${who(auth)}`, 60, 60_000)) return send(res, 429, { error: "at most 60 world reads a minute" }), true;
         const account = url.searchParams.get("account") ?? "";
         if (account && !/^[a-z0-9._-]{2,64}$/.test(account)) return send(res, 400, { error: "account must be a NEAR account id" }), true;
-        return send(res, 200, await worldFor(account, { temperament: url.searchParams.get("temperament") ?? "gardener", house: ctx.house() })), true;
+        try {
+          return send(res, 200, await worldFor(account, { temperament: url.searchParams.get("temperament") ?? "gardener", house: ctx.house() })), true;
+        } catch (e) {
+          if (e instanceof WorldBusy) return send(res, 503, { error: e.message }), true;
+          throw e;
+        }
       }
       return send(res, 404, { error: "no such swarm route" }), true;
     }
@@ -104,13 +148,14 @@ export async function handleSwarm(req, res, ctx) {
     } catch {
       return send(res, 400, { error: "send JSON" }), true;
     }
+    const auth = authorize(req, req.url ?? "/", raw);
     if (path === "/swarm/council") {
       if (!ctx.enabled) return send(res, 503, { error: "the open council is not running on this dish" }), true;
-      if (limited(`bid|${body?.account}`, 30, 3600_000) || limited(`bidip|${req.headers["x-petri-client"] ?? req.socket.remoteAddress}`, 120, 3600_000)) return send(res, 429, { error: "too many bids in the last hour" }), true;
+      if (limited(`bid|${body?.account}`, 30, 3600_000) || limited(`bidip|${who(auth)}`, 120, 3600_000)) return send(res, 429, { error: "too many bids in the last hour" }), true;
       const r = await submitBid(reg, body);
       return send(res, r.ok ? 200 : 400, r), true;
     }
-    if (!authorized(req, path, raw)) return send(res, 401, { error: "this route is called by the site only" }), true;
+    if (!auth.ok) return send(res, 401, { error: "this route is called by the site only" }), true;
     if (!ctx.enabled) return send(res, 503, { error: "the swarm is not running on this dish" }), true;
     if (path === "/swarm/spawn") {
       const r = await spawnQueue(() => spawnStrain(reg, body, log));

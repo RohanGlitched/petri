@@ -9,23 +9,53 @@ import { forecast, forecastText } from "../forecast.mjs";
 import { pactsFor } from "../council.mjs";
 import { TEMPERAMENTS } from "./guard.mjs";
 
+// Each world costs a full read of the dish and up to 1.5 s of forecasts, so answers are cached for a few seconds
+// (PETRI_WORLD_CACHE_MS, 5 s), the same question asked twice at once is computed once, at most PETRI_WORLD_CONCURRENCY
+// (2) are computed at a time, and when more than PETRI_WORLD_QUEUE (8) wait the read is refused with a 503.
+const CACHE_MS = Number(process.env.PETRI_WORLD_CACHE_MS ?? "5000");
+const CONCURRENCY = Number(process.env.PETRI_WORLD_CONCURRENCY ?? "2");
+const QUEUE = Number(process.env.PETRI_WORLD_QUEUE ?? "8");
 const cache = new Map();
+const inflight = new Map();
+let running = 0;
+const waiting = [];
+
+export class WorldBusy extends Error {}
+
+async function slot(job) {
+  if (running >= CONCURRENCY) {
+    if (waiting.length >= QUEUE) throw new WorldBusy("the world view is busy; try again in a few seconds");
+    await new Promise((r) => waiting.push(r));
+  }
+  running++;
+  try {
+    return await job();
+  } finally {
+    running--;
+    waiting.shift()?.();
+  }
+}
 
 export async function worldFor(accountId, { temperament = "gardener", house = new Map(), limit = 6 } = {}) {
   const t = TEMPERAMENTS.includes(temperament) ? temperament : "gardener";
-  const key = `${accountId}|${t}`;
+  const key = `${accountId}|${t}|${limit}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 15_000) return hit.body;
-  const world = await liveDish();
-  try {
-    const body = await build(world, accountId, t, house, limit);
-    // An account that has not joined yet is about to: never serve it a stale "no colony".
-    if (body.you?.colony != null) cache.set(key, { at: Date.now(), body });
-    if (cache.size > 200) cache.delete(cache.keys().next().value);
-    return body;
-  } finally {
-    world.engine.free();
-  }
+  // An account with no colony yet is about to join: its answer is cached for a second only.
+  if (hit && Date.now() - hit.at < (hit.body.you?.colony == null && accountId ? 1000 : CACHE_MS)) return hit.body;
+  if (inflight.has(key)) return inflight.get(key);
+  const job = slot(async () => {
+    const world = await liveDish();
+    try {
+      const body = await build(world, accountId, t, house, limit);
+      cache.set(key, { at: Date.now(), body });
+      if (cache.size > 500) cache.delete(cache.keys().next().value);
+      return body;
+    } finally {
+      world.engine.free();
+    }
+  }).finally(() => inflight.delete(key));
+  inflight.set(key, job);
+  return job;
 }
 
 async function build(world, accountId, temperament, house, limit) {

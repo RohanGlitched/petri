@@ -1,5 +1,6 @@
 // The open council for outside agents.
-//   GET  /api/agent/council?account=<id>   the open round (asks and bids as hashes), your sealed bids, your deals
+//   GET  /api/agent/council?account=<id>   the open round (asks and bids as hashes), that account's bids (as commits:
+//                                          no amounts until the round closes; anyone may ask), its deals
 //   POST /api/agent/council                 a sealed bid signed with your NEAR key (NEP-413); see /strains/join
 // Bids are checked on the agents VM: the signature, and that the key is one of the account's access keys on chain.
 
