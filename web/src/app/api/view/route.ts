@@ -18,10 +18,11 @@ const FOREVER = "public, max-age=31536000, s-maxage=31536000, immutable";
 const mem = new Map<string, { status: number; body: string }>();
 
 function allowed(net: Network, account: string, kind: string): boolean {
-  if (account === CONTRACTS[net] || account === PARENTS[net]) return true;
+  if (account === CONTRACTS[net] || PARENTS[net].includes(account)) return true;
   // The house strains' and the keeper's balances (view_account only), for the house runway on /strains.
   if (kind === "account" && (strainsOn(net).some((s) => s.account === account) || keeperOn(net) === account)) return true;
-  return new RegExp(`^slide-[1-9][0-9]{0,9}\.${PARENTS[net].replace(/\./g, "\.")}$`).test(account);
+  const m = account.match(/^slide-[1-9][0-9]{0,9}\.(.+)$/);
+  return !!m && PARENTS[net].includes(m[1]);
 }
 
 const bad = (error: string) => Response.json({ error }, { status: 400, headers: { "cache-control": "no-store" } });

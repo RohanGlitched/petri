@@ -368,7 +368,7 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
       <H2 id="limits">What verification does not prove</H2>
       <ul>
         <li>
-          <strong>It trusts the RPC.</strong> Both replays read through public RPC providers (FastNEAR first, then near.org). A dishonest provider could serve consistent lies; run the script against your own node with <C>--contract</C> if that matters, or compare providers.
+          <strong>It trusts the RPC.</strong> Both replays read through public RPC providers (FastNEAR, then dRPC and other keyless providers; the browser&rsquo;s through the site&rsquo;s cache of final blocks). A dishonest provider could serve consistent lies; run the script against your own node with <C>--contract</C> if that matters, or compare providers.
         </li>
         <li>
           <strong>It proves the ledger follows the rules, given the code.</strong> That the ledger records every state change is a property of the contract&rsquo;s code, which is why the code hash and the key check matter.

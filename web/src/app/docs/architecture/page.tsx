@@ -235,7 +235,7 @@ cd web && npm install && npm run dev                 # the site on http://localh
       <H2 id="reads">How the site reads the dish</H2>
       <Steps>
         <li>
-          <C>web/src/lib/chain.ts</C> calls views over JSON-RPC with failover between providers (FastNEAR first, then near.org).
+          <C>web/src/lib/chain.ts</C> calls views over JSON-RPC with failover between keyless providers (FastNEAR, dRPC and others; <C>web/src/lib/rpc.ts</C> backs off on a 429), and reads pinned to a final block through the site&rsquo;s immutable cache (<C>/api/view</C>).
         </li>
         <li>
           <C>web/src/lib/dish-store.ts</C> loads <C>rules</C>, <C>state</C>, <C>colonies</C>, <C>board</C>, <C>stakes</C>, <C>earnings</C> and the latest plantings, puts the stored board into the engine and steps it to the generation the clock says is due. It ticks every 250 ms and polls the chain every 5 seconds; when the plant log grows it reloads the board and steps forward again.
