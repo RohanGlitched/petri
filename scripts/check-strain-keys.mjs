@@ -105,5 +105,5 @@ const orphanOnly = (r) => r.full.length === 1 && ORPHANED.get(r.account) === r.f
 if (argv.includes("--json")) console.log(JSON.stringify(rows, null, 1));
 else for (const r of rows) console.log(`${r.full.length ? (orphanOnly(r) ? "NOTE" : "FAIL") : "PASS"}  ${r.account.padEnd(48)} ${r.exists ? `${r.keys} key(s), ${r.full.length} full-access${r.full.length ? `: ${r.full.join(", ")}${orphanOnly(r) ? " (orphaned: its private key was never saved, so nobody can use it)" : ""}` : ""}` : "deleted"}  [${r.sources.join(", ")}]`);
 const bad = rows.filter((r) => r.full.length && !orphanOnly(r));
-console.log(bad.length ? `\n${bad.length} of ${rows.length} accounts under ${NET.parent} hold a full-access key.` : `\nNone of the ${rows.length} accounts under ${NET.parent} holds a full-access key.`);
+console.log(bad.length ? `\n${bad.length} of ${rows.length} accounts under ${NET.parent} hold a full-access key.` : `\nNone of the ${rows.length} accounts under ${NET.parent} holds a usable full-access key${rows.some(orphanOnly) ? " (one orphaned key, listed above, has no private key anywhere)" : ""}.`);
 process.exit(bad.length ? 1 : 0);
