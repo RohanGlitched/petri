@@ -147,3 +147,7 @@
   .pactWhen, .pactLinks { grid-column: 1 / -1; }
   .offer { padding: 12px 14px; }
 }
+
+@media (pointer: coarse), (max-width: 799px) {
+  .more { min-height: 44px; display: inline-flex; align-items: center; }
+}

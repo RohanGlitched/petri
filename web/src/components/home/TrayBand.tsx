@@ -5,6 +5,7 @@ import { PATTERNS, type PatternInfo } from "@/engine";
 import { Specimen } from "@/components/site/Specimen";
 import { useLive, usePatternOffsets, petri } from "@/lib/live";
 import s from "./bands.module.css";
+import { ReadMore, PhoneMore } from "@/components/site/ReadMore";
 
 const GROUPS: { kind: PatternInfo["kind"][]; title: string; line: string; color: string }[] = [
   { kind: ["still"], title: "Earn", line: "Still lifes never change, so they earn every generation until something hits them.", color: "#1e8c6e" },
@@ -22,10 +23,12 @@ export function TrayBand() {
       <div className="wrap">
         <div className="section-head">
           <h2 id="tray-title" className="h2">Eleven stamps, four ways to play</h2>
-          <p className="lede">
-            You plant up to {rules?.max_plant_cells ?? 64} cells at a time, once a generation. These are the classic patterns of
-            Life, priced live from the contract&rsquo;s own formula. What you build with them is up to you.
-          </p>
+          <ReadMore lines={4}>
+            <p className="lede">
+              You plant up to {rules?.max_plant_cells ?? 64} cells at a time, once a generation. These are the classic patterns of
+              Life, priced live from the contract&rsquo;s own formula. What you build with them is up to you.
+            </p>
+          </ReadMore>
         </div>
         <div className={s.tray}>
           {GROUPS.map((g) => (

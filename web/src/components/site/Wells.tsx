@@ -39,6 +39,8 @@ export function Wells({
   const [foot, setFoot] = useState(false);
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
+  /** Scrolling down, reading: the corner chip steps out of the way of the text, and comes back on any scroll up. */
+  const [down, setDown] = useState(false);
   const pill = useRef<HTMLButtonElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
 
@@ -49,6 +51,26 @@ export function Wells({
   }, []);
 
   useEffect(() => setOpen(false), [path]);
+
+  useEffect(() => {
+    let last = window.scrollY;
+    let raf = 0;
+    const on = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const y = window.scrollY;
+        if (Math.abs(y - last) < 6) return;
+        setDown(y > last && y > 120);
+        last = y;
+      });
+    };
+    window.addEventListener("scroll", on, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", on);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   useEffect(() => {
     const el = document.querySelector(footer);
@@ -111,7 +133,7 @@ export function Wells({
         </nav>
       )}
 
-      <div className={s.corner} data-foot={foot || undefined}>
+      <div className={s.corner} data-foot={foot || undefined} data-down={(down && !open) || undefined}>
         {rail && here && (
           <button
             ref={pill}

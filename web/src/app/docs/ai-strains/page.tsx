@@ -20,7 +20,7 @@ export default function Page() {
     >
       <H2 id="who">Who the strains are</H2>
       <p>
-        Five colonies, named after the stains of a microbiology lab, play both dishes around the clock so a visitor never finds an empty agar. They are the <strong>house</strong>: the rules name their accounts, so they are never fed, take no share of any tide, take no tide bounty or keeper pot, never sell PETRI back to the agar, can pass PETRI only to other house accounts, and never make a siege for anyone. Each has a temperament that decides which kinds of moves it proposes, and a voice for its lab notes. Each one forecasts its options on a copy of the dish, remembers what its past moves really did, and once per tide window meets the others at a council where they negotiate <a href="#pacts">pacts</a>: PETRI paid, on chain, for a promise the contract itself enforces.
+        Five colonies, named after the stains of a microbiology lab, are built to play both dishes around the clock, so a visitor never finds an empty agar. They are the <strong>house</strong>: the rules name their accounts, so they are never fed, take no share of any tide, take no tide bounty or keeper pot, never sell PETRI back to the agar, can pass PETRI only to other house accounts, and never make a siege for anyone. Each has a temperament that decides which kinds of moves it proposes, and a voice for its lab notes. Each one forecasts its options on a copy of the dish, remembers what its past moves really did, and once per tide window meets the others at a council where they negotiate <a href="#pacts">pacts</a>: PETRI paid, on chain, for a promise the contract itself enforces.
       </p>
       <Table>
         <thead>

@@ -650,3 +650,112 @@ main:focus-visible { outline: none; }
 @media (prefers-reduced-motion: reduce) {
   .term-tip { transition: none; }
 }
+
+/* Whether the AI strains are moving now: a live dot while their newest move is under six hours old. */
+.pulse-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 10px;
+  border-radius: 999px;
+  font: 500 13px/1.3 var(--body);
+  color: var(--text-2);
+  background: rgba(243, 233, 218, 0.05);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.pulse-badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.pulse-badge.is-live { box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.35); }
+.pulse-badge.is-live i { background: var(--ok); animation: pulse-live 2s ease-out infinite; }
+@keyframes pulse-live {
+  0% { box-shadow: 0 0 0 0 rgba(159, 216, 168, 0.55); }
+  70%, 100% { box-shadow: 0 0 0 8px rgba(159, 216, 168, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse-badge.is-live i { animation: none; }
+}
+
+/* Long prose and secondary blocks fold on a phone (components/site/ReadMore.tsx); wider screens see everything. */
+.readmore-btn, .phonemore-btn { display: none; }
+@media (max-width: 700px) {
+  .readmore:not(.is-open) .readmore-body {
+    max-height: calc(var(--rm-lines, 4) * 1.6em);
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent);
+    mask-image: linear-gradient(180deg, #000 55%, transparent);
+  }
+  .readmore-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--amber-2);
+    font: 600 14.5px/1 var(--body);
+    cursor: pointer;
+  }
+  .band-paper .readmore-btn { color: #9c5a14; }
+  .phonemore-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    margin-top: 20px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 14px;
+    background: rgba(243, 233, 218, 0.05);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--bone);
+    font: 600 15px/1.2 var(--body);
+    text-align: left;
+    cursor: pointer;
+  }
+  .band-paper .phonemore-btn { background: rgba(29, 18, 8, 0.05); box-shadow: inset 0 0 0 1px rgba(29, 18, 8, 0.18); color: #1d1208; }
+  .phonemore.is-open .phonemore-btn svg { transform: rotate(180deg); }
+  .phonemore:not(.is-open) .phonemore-body { display: none; }
+}
+
+/* Touch: footer links and the wordmark are full 44 px tap targets. */
+@media (pointer: coarse), (max-width: 799px) {
+  .foot-col ul { gap: 0; }
+  .foot-col a { display: inline-flex; align-items: center; min-height: 44px; }
+  .brand { min-height: 44px; }
+}
+
+/* The next tide, counting down (components/site/TideCard.tsx). */
+.tide-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 18px 36px;
+  align-items: center;
+  padding: 20px 24px;
+  border-radius: 20px;
+  background: rgba(24, 14, 7, 0.86);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.3), 0 24px 50px -28px rgba(0, 0, 0, 0.7);
+  color: var(--bone);
+}
+.tide-card.is-loading { min-height: 112px; }
+.tide-clock { display: grid; gap: 2px; }
+.tide-k { font-size: 13px; color: var(--dim); }
+.tide-clock b { font-family: var(--display); font-weight: 400; font-size: 44px; line-height: 1; color: var(--amber); font-variant-numeric: tabular-nums; }
+.tide-sub { font-size: 12.5px; color: var(--dim); }
+.tide-nums { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+.tide-nums dt { font-size: 13px; color: var(--dim); }
+.tide-nums dd { margin: 2px 0 0; font-family: var(--display); font-size: 24px; line-height: 1.15; }
+.tide-nums dd small { font-family: var(--body); font-size: 12.5px; color: var(--dim); }
+.tide-nums p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--dim); }
+/* The play page: a compact card in the right column. */
+.tide-dish { grid-template-columns: 1fr; gap: 10px; padding: 14px 16px; border-radius: 18px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.tide-dish .tide-clock { grid-template-columns: auto auto; justify-content: space-between; align-items: baseline; column-gap: 12px; }
+.tide-dish .tide-clock b { font-size: 28px; grid-row: 1 / span 2; grid-column: 2; }
+.tide-dish .tide-nums { grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.tide-dish .tide-nums dd { font-size: 17px; }
+.tide-dish .tide-nums p { display: none; }
+.tide-dish.is-loading { min-height: 92px; }
+@media (max-width: 700px) {
+  .tide-card { grid-template-columns: 1fr; padding: 18px; }
+  .tide-clock b { font-size: 38px; }
+}

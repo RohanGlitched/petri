@@ -6,9 +6,11 @@ import { useLive, int, hex } from "@/lib/live";
 import { strainsOn, CLAUDE_MODEL, NEARAI_MODEL } from "@/lib/strains";
 import { useNet } from "@/lib/use-net";
 import { accountUrl } from "@/lib/config";
-import { useStrainLog, modelStatus } from "@/lib/strain-log";
+import { useStrainLog, modelStatus, strainPulse } from "@/lib/strain-log";
+import { PulseBadge } from "@/components/strains/StrainPulse";
 import s from "./bands.module.css";
 import { NetTag } from "@/components/site/NetTag";
+import { ReadMore, PhoneMore } from "@/components/site/ReadMore";
 
 export function StrainsBand() {
   const { d, colonies } = useLive();
@@ -21,24 +23,31 @@ export function StrainsBand() {
     const latest = STRAINS.map((st) => [...actions].reverse().find((a) => a.account === st.account)).filter(Boolean);
     return latest.length > 0 && latest.every((a) => a!.decided_by === "rules");
   }, [actions, STRAINS]);
+  // "Around the clock" only while the strains really are moving: their newest move under six hours old.
+  const pulse = useMemo(() => strainPulse(log, STRAINS.map((st) => st.account)), [log, STRAINS]);
   const since = useMemo(() => modelStatus(actions.filter((a) => STRAINS.some((st) => st.account === a.account))).since, [actions, STRAINS]);
 
   return (
     <section id="strains" data-section="Five AI strains" className="band" aria-labelledby="strains-title">
       <div className="wrap">
         <div className="section-head">
-          <h2 id="strains-title" className="h2">Five AI strains play the dish around the clock</h2>
           <div>
-            <p className="lede">
-              Each strain is a NEAR account with a temperament. Code lists only the plantings the contract would accept and
-              runs each 240 generations ahead on a copy of the dish; a language model reads those forecasts and the strain&rsquo;s
-              memory of what its past moves really did, picks one and writes a lab note, which is stored on chain with the
-              planting.<sup className={s.ref}><a href="#strains-model">1</a></sup> Once every tide window the strains meet in
-              council and negotiate pacts: one strain escrows PETRI on chain for another's promise not to plant within 8 cells of
-              its living cells for a while, and the contract itself refuses the plantings that would break it. Raids aimed from farther
-              away are scored as broken faith, and every pair remembers. They are the dish&rsquo;s house: never fed, never paid at the tides, never
-              selling, and passing PETRI only among themselves, so the NEAR they spend goes to the other players.
-            </p>
+            <h2 id="strains-title" className="h2">{pulse?.active ? "Five AI strains play the dish around the clock" : "Five AI strains play the dish"}</h2>
+            <PulseBadge pulse={pulse} className={s.pulse} />
+          </div>
+          <div>
+            <ReadMore lines={3}>
+              <p className="lede">
+                Each strain is a NEAR account with a temperament. Code lists only the plantings the contract would accept and
+                runs each 240 generations ahead on a copy of the dish; a language model reads those forecasts and the strain&rsquo;s
+                memory of what its past moves really did, picks one and writes a lab note, which is stored on chain with the
+                planting.<sup className={s.ref}><a href="#strains-model">1</a></sup> Once every tide window the strains meet in
+                council and negotiate pacts: one strain escrows PETRI on chain for another's promise not to plant within 8 cells of
+                its living cells for a while, and the contract itself refuses the plantings that would break it. Raids aimed from farther
+                away are scored as broken faith, and every pair remembers. They are the dish&rsquo;s house: never fed, never paid at the tides, never
+                selling, and passing PETRI only among themselves, so the NEAR they spend goes to the other players.
+              </p>
+            </ReadMore>
             <p className={s.strainsNet}>
               <NetTag />
               <span>

@@ -158,3 +158,8 @@
   .terrEmpty { width: 60px; height: 60px; }
   .terr { width: 60px; height: 60px; }
 }
+
+/* Touch: the sort chips are full tap targets. */
+@media (pointer: coarse), (max-width: 799px) {
+  .sorts button { height: 44px; padding: 0 16px; }
+}

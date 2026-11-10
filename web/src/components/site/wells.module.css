@@ -331,3 +331,14 @@
   .scrim,
   .sheet { transition-duration: 0s; transition-delay: 0s; }
 }
+
+/* While the reader scrolls down, the corner chip and lens slide away so they never sit on the text; any scroll up, or
+   reaching the end, brings them back. */
+.wells .corner.corner[data-down] .pill.pill,
+.wells .corner.corner[data-down] .lens.lens {
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-100%, 12px);
+  transition: opacity 0.2s ease, transform 0.25s var(--w-ease), visibility 0s linear 0.25s;
+}
+.wells .corner.corner[data-down] .lens.lens { transform: translateY(12px) scale(0.92); }

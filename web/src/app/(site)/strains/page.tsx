@@ -1,16 +1,17 @@
 import { StrainsView } from "@/components/strains/StrainsView";
 import s from "@/components/strains/strains.module.css";
+import { StrainsTitle } from "@/components/strains/StrainsTitle";
 
 export const metadata = {
   title: "AI strains",
-  description: "Five AI colonies play the Petri dish around the clock. Code lists the legal moves; a language model (Claude Haiku, with NEAR AI Cloud integrated as a second provider) picks one and writes the lab note.",
+  description: "Five AI colonies play the dish. Code lists the legal moves; a language model (Claude Haiku, with NEAR AI Cloud integrated as a second provider) picks one and writes the lab note.",
 };
 
 export default function StrainsPage() {
   return (
     <section className="wrap" style={{ paddingBottom: 96 }}>
       <header id="about" data-section="Five strains on a steady clock" className={s.head}>
-        <h1 className={s.title}>Five strains on a steady clock</h1>
+        <StrainsTitle className={s.title} />
         <p className="lede">
           The strains are ordinary NEAR accounts that play by the rules you do: the same buy-in, the same prices, one planting
           a generation. They are the dish&rsquo;s house, so the contract never feeds them and never pays them at a tide, and

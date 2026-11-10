@@ -315,3 +315,37 @@
   .slides li:nth-child(3) { display: block; }
 }
 .strainsNet { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 14px 0 0; font-size: 13.5px; color: var(--dim); }
+.pulse { margin-top: 14px; }
+
+/* Phones: the stamp tray drops each stamp's sentence (the dish says it on the stamp itself), and the five strains sit
+   in a row to swipe, so the band is one screen rather than five. */
+@media (max-width: 700px) {
+  .stamp p { display: none; }
+  .strains {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 84%;
+    grid-template-columns: none;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    margin: 0 calc(-1 * var(--gutter));
+    padding: 0 var(--gutter) 6px;
+    scrollbar-width: none;
+  }
+  .strains::-webkit-scrollbar { display: none; }
+  .strains > li { scroll-snap-align: start; }
+}
+@media (max-width: 700px) {
+  .strains { border-bottom: 0; }
+  .strains > .strain {
+    padding: 18px;
+    border-top: 0;
+    border-radius: 18px;
+    background: rgba(243, 233, 218, 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+}
+
+.tideCard { margin: 0 0 40px; }

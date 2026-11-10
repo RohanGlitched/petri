@@ -188,3 +188,9 @@
 }
 .pace { max-width: 64ch; margin: 12px 0 0; font-size: 15px; color: var(--dim); }
 .netLine { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; font-size: 13px; color: var(--dim); }
+.head :global(.pulse-badge) { margin: 0 0 18px; }
+
+/* Touch: the note toggle is a full tap target. */
+@media (pointer: coarse), (max-width: 799px) {
+  .more { min-height: 44px; display: inline-flex; align-items: center; }
+}

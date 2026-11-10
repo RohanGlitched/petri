@@ -45,7 +45,9 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Darkest behind the headline and steps (bottom left), so no bead ever sits under the type. */
   background:
+    linear-gradient(90deg, rgba(18, 10, 5, 0.74) 0%, rgba(18, 10, 5, 0.62) 38%, rgba(18, 10, 5, 0.18) 62%, rgba(18, 10, 5, 0) 78%),
     linear-gradient(180deg, rgba(18, 10, 5, 0.75) 0%, rgba(18, 10, 5, 0) 16%),
     linear-gradient(0deg, rgba(18, 10, 5, 0.96) 0%, rgba(18, 10, 5, 0.82) 32%, rgba(18, 10, 5, 0.1) 64%, rgba(18, 10, 5, 0) 100%);
 }
@@ -82,12 +84,12 @@
   letter-spacing: -0.02em;
   margin: 0 0 22px;
 }
+/* The three steps, then the way in right under them, then the line about the two dishes. */
 .row {
-  display: flex;
-  gap: 24px 48px;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  display: grid;
+  justify-items: start;
+  gap: 18px;
+  max-width: 62ch;
   margin-bottom: 28px;
 }
 .lede {
@@ -390,4 +392,23 @@
 @media (pointer: coarse), (max-width: 799px) {
   .liveGo { min-height: 44px; padding: 0 14px; }
   .skip { height: auto; min-height: 44px; padding: 0 16px; }
+}
+
+/* A quiet second line under a live number. */
+.statSub {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.title { text-shadow: 0 2px 30px rgba(18, 10, 5, 0.7); }
+@media (max-width: 900px) {
+  .statSub { font-size: 12px; }
+}
+@media (max-width: 600px) {
+  /* Both ways in on one row under the steps, so the badge above the headline stays clear of the bar. */
+  .row { gap: 14px; margin-bottom: 18px; }
+  .actions { flex-wrap: nowrap; gap: 8px; }
+  .actions :global(.btn) { padding: 0 16px; font-size: 14.5px; white-space: nowrap; }
+  .stats div:nth-child(3) .statSub { display: none; }
 }

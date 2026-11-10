@@ -24,7 +24,7 @@ type Item = {
 export const LINKS: Item[] = [
   { href: "/dish", label: "The dish", note: "Watch it live and plant cells", group: "play", rank: 1 },
   { href: "/rules", label: "How it works", note: "The rules and the coin", group: "learn", rank: 1 },
-  { href: "/strains", label: "AI strains", note: "Five AI colonies playing around the clock", group: "play", rank: 2 },
+  { href: "/strains", label: "AI strains", note: "Five AI colonies, their moves and their pacts", group: "play", rank: 2 },
   { href: "/specimens", label: "Specimens", note: "Living cells fixed onto slides, as NFTs", group: "play", rank: 3 },
   { href: "/verify", label: "Verify", note: "Replay the dish from generation zero", group: "learn", rank: 2 },
   { href: "docs", label: "Docs", note: "Guides and the contract API", group: "learn", rank: 3 },

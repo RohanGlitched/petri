@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SpecimenCard, useSpecimenRows } from "@/components/specimens/Gallery";
 import { SlideGlass } from "@/components/specimens/SlideGlass";
 import s from "./bands.module.css";
+import { ReadMore, PhoneMore } from "@/components/site/ReadMore";
 
 export function SpecimensBand() {
   const { all, rows } = useSpecimenRows();
@@ -13,12 +14,14 @@ export function SpecimensBand() {
       <div className="wrap">
         <div className="section-head">
           <h2 id="specimens-title" className="h2">Fossils of a living coin</h2>
-          <p className="lede">
-            Cells die; a specimen stays. A colony can fix a patch of its own living cells onto a slide, minted by the contract as a
-            NEAR token with a picture it drew itself. The same replay that checks the dish proves those cells were alive. A
-            slide of 12 or more cells is also a licence: anyone may plant its exact pattern elsewhere for 25% less, and pays its
-            holder 10% of that in PETRI.
-          </p>
+          <ReadMore lines={4}>
+            <p className="lede">
+              Cells die; a specimen stays. A colony can fix a patch of its own living cells onto a slide, minted by the contract as a
+              NEAR token with a picture it drew itself. The same replay that checks the dish proves those cells were alive. A
+              slide of 12 or more cells is also a licence: anyone may plant its exact pattern elsewhere for 25% less, and pays its
+              holder 10% of that in PETRI.
+            </p>
+          </ReadMore>
         </div>
         <ul className={s.slides}>
           {latest.length > 0

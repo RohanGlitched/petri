@@ -6,6 +6,7 @@ import { REPO } from "@/lib/config";
 import { TESTS } from "@/lib/facts";
 import { useNet } from "@/lib/use-net";
 import s from "./bands.module.css";
+import { ReadMore, PhoneMore } from "@/components/site/ReadMore";
 
 const PARTS = [
   {
@@ -44,11 +45,13 @@ export function ProofBand() {
         <div className={s.proof}>
           <div>
             <h2 id="proof-title" className="h2">Don&rsquo;t trust this page. Replay it.</h2>
-            <p className="lede">
-              Every sixteenth generation the contract folds the board into a history chain. Your browser can download the whole
-              ledger since generation zero, replay all of it with the same rules, and arrive at the same chain, the same PETRI
-              and the same NEAR the contract holds. If one cell were out of place, the hashes would differ.
-            </p>
+            <ReadMore lines={4}>
+              <p className="lede">
+                Every sixteenth generation the contract folds the board into a history chain. Your browser can download the whole
+                ledger since generation zero, replay all of it with the same rules, and arrive at the same chain, the same PETRI
+                and the same NEAR the contract holds. If one cell were out of place, the hashes would differ.
+              </p>
+            </ReadMore>
             <div className={s.chainCard}>
               <span className="muted small">At generation {ready ? int(d.generation) : "—"} the chain reads</span>
               <code>{d.chain || "reading the dish…"}</code>
@@ -57,6 +60,7 @@ export function ProofBand() {
               <Link className="btn btn-amber" href="/verify">Replay from genesis</Link>
             </p>
           </div>
+          <PhoneMore label="The five parts, and where each one lives">
           <ul className={s.parts}>
             {PARTS.map((p) => (
               <li key={p.name}>
@@ -71,6 +75,7 @@ export function ProofBand() {
               <p className="muted">Contract, engine, simulator, agents and this site. {TESTS.total} tests ({TESTS.contract} for the contract, {TESTS.core} for the engine), including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI and every yoctoNEAR.</p>
             </li>
           </ul>
+          </PhoneMore>
         </div>
       </div>
     </section>

@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useLive, petri, int, near } from "@/lib/live";
 import { WarmUp } from "@/components/site/WarmUp";
 import s from "./bands.module.css";
+import { ReadMore, PhoneMore } from "@/components/site/ReadMore";
+import { TideCard } from "@/components/site/TideCard";
 
 function useMotion() {
   const [motion, setMotion] = useState(false);
@@ -133,15 +135,18 @@ export function CoinBand() {
       <div className="wrap">
         <div className="section-head">
           <h2 id="coin-title" className="h2">The coin is the nutrient</h2>
-          <p className="lede">
-            All {rules ? petri(max) : "1,000,000"} PETRI were made once and put in the agar. Nobody can mint more. You buy PETRI
-            from the agar with NEAR, at a price that rises as it empties. Living cells are fed from the agar every generation
-            (a young dish feeds only part of the ration until {rules ? rules.live_floor.toLocaleString("en-US") : "1,000"} players&rsquo;
-            cells are counted); planting feeds it back and burns as much again. And the NEAR you pay does not go to anyone running the dish: past
-            the storage it pays for, it collects in the tide vault, and every hour a share of the vault is paid out to the
-            colonies that earned.
-          </p>
+          <ReadMore lines={3}>
+            <p className="lede">
+              All {rules ? petri(max) : "1,000,000"} PETRI were made once and put in the agar. Nobody can mint more. You buy PETRI
+              from the agar with NEAR, at a price that rises as it empties. Living cells are fed from the agar every generation
+              (a young dish feeds only part of the ration until {rules ? rules.live_floor.toLocaleString("en-US") : "1,000"} players&rsquo;
+              cells are counted); planting feeds it back and burns as much again. And the NEAR you pay does not go to anyone running the dish: past
+              the storage it pays for, it collects in the tide vault, and every hour a share of the vault is paid out to the
+              colonies that earned.
+            </p>
+          </ReadMore>
         </div>
+        <TideCard className={s.tideCard} />
         <div className={s.coinGrid}>
           <div className={s.coinFig}>
             <Cycle
@@ -164,6 +169,7 @@ export function CoinBand() {
           </dl>
         </div>
 
+        <PhoneMore label="The hourly tide, and what a cell costs">
         <div className={s.tides}>
           <div>
             <h3 className="h3">The tide pays NEAR to whoever holds ground</h3>
@@ -216,6 +222,7 @@ export function CoinBand() {
             />
           )}
         </div>
+        </PhoneMore>
       </div>
     </section>
   );

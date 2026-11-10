@@ -4,6 +4,7 @@ import { useState } from "react";
 import { RuleDemo, type Seed } from "@/components/site/RuleDemo";
 import { hex } from "@/lib/live";
 import s from "./bands.module.css";
+import { ReadMore, PhoneMore } from "@/components/site/ReadMore";
 
 const COLORS = { 1: 0xc8431f, 2: 0x1e8c6e, 3: 0x6b2fa0 };
 const NAMES: Record<number, string> = { 1: "Red", 2: "Green", 3: "Violet" };
@@ -103,10 +104,12 @@ export function RulesBand() {
       <div className="wrap">
         <div className="section-head">
           <h2 id="rules-title" className="h2">Three rules, all enforced by the contract</h2>
-          <p className="lede">
-            These small dishes run the same Rust code as the contract and the big dish, compiled to WebAssembly. Nothing here
-            is an animation someone drew; it is the rules playing out.
-          </p>
+          <ReadMore lines={4}>
+            <p className="lede">
+              These small dishes run the same Rust code as the contract and the big dish, compiled to WebAssembly. Nothing here
+              is an animation someone drew; it is the rules playing out.
+            </p>
+          </ReadMore>
         </div>
         <div className={s.demos}>
           {SCENES.map((sc) => (

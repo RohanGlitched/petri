@@ -8,6 +8,7 @@ import { LiveBadge } from "./LiveBadge";
 import { NetTag } from "@/components/site/NetTag";
 import { useNet } from "@/lib/use-net";
 import { useLive, int, petri, hex } from "@/lib/live";
+import { Term } from "@/components/site/Term";
 import s from "./hero.module.css";
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -49,7 +50,9 @@ export function HeroScene() {
   const rim = useRef<HTMLDivElement>(null);
   const layers = useRef<(HTMLElement | null)[]>([]);
   const centred = useRef(false);
-  const floor = rules?.live_floor ?? 1000;
+  // PETRI the agar has paid the living since the dish started (fed at the stored board plus what the browser has stepped
+  // since): it only grows.
+  const fed = (d.state ? Number(d.state.fed) : 0) + d.pending.reduce((a, b) => a + Math.max(0, b), 0);
   const alive = colonies.filter((c) => c.live > 0);
   const lead = alive[0];
 
@@ -101,7 +104,9 @@ export function HeroScene() {
       const k = Math.exp(Math.log(close) * (1 - ease(z)));
       L.setZoomFit(k);
       const W = window.innerWidth;
-      const H = el.querySelector<HTMLElement>(`.${s.stage}`)!.clientHeight;
+      const stage = el.querySelector<HTMLElement>(`.${s.stage}`);
+      if (!stage) return;
+      const H = stage.clientHeight;
       const NAV = 68;
       const full = Math.hypot(W, H) / 2 + 4;
       // Where the pulled-back dish comes to rest: clear of the nav, and clear of the "One dish" caption.
@@ -141,10 +146,11 @@ export function HeroScene() {
         rim.current.style.opacity = String(band(p, 0.72, 0.9));
       }
       const first = 1 - band(p, 0.06, 0.2);
-      const show = [first, band(p, 0.26, 0.36) * (1 - band(p, 0.56, 0.64)), band(p, 0.82, 0.92), first];
+      // The loupe (a map of the whole dish) waits for the first scroll: the opening screen is the headline and the dish.
+      const show = [first, band(p, 0.26, 0.36) * (1 - band(p, 0.56, 0.64)), band(p, 0.82, 0.92), band(p, 0.08, 0.2) * (1 - band(p, 0.8, 0.9))];
       layers.current.forEach((n, i) => {
         if (!n) return;
-        const o = reduce ? (i === 0 ? 1 : 0) : show[i];
+        const o = reduce ? (i === 0 ? 1 : i === 3 ? show[3] : 0) : show[i];
         n.style.opacity = String(o);
         n.style.transform = `translateY(${(1 - o) * 14}px)`;
         n.style.visibility = o < 0.02 ? "hidden" : "visible";
@@ -194,25 +200,23 @@ export function HeroScene() {
           <LiveBadge />
           <h1 id="hero-title" className={s.title}>A memecoin that is alive.</h1>
           <div className={s.row}>
-            <div className={s.ledeBox}>
-              <ol className={s.steps} aria-label="How to play">
-                <li><span><b>Plant a pattern</b> on the one shared dish.</span></li>
-                <li><span><b>It lives by Conway&rsquo;s rules,</b> a generation every fifteen seconds.</span></li>
-                <li><span><b>Living cells earn PETRI,</b> and the hourly tide pays out NEAR.</span></li>
-              </ol>
-              <p className={s.dishes}>
-                Every bead here is a living cell on NEAR, owned by a real account. Two dishes run the same contract:{" "}
-                <b>mainnet</b>, with real NEAR, and <b>testnet</b>, free with a guest account in one click.
-              </p>
-            </div>
+            <ol className={s.steps} aria-label="How to play">
+              <li><span><b>Plant a pattern</b> on the one shared dish.</span></li>
+              <li><span><b>It lives by Conway&rsquo;s rules,</b> a generation every fifteen seconds.</span></li>
+              <li><span><b>Living cells earn PETRI,</b> and the hourly <Term k="tide" place="below" align="start">tide</Term> pays out NEAR.</span></li>
+            </ol>
             <div className={s.actions}>
               {net.freePlay ? (
-                <Link className="btn btn-amber" href="/dish">Play free on testnet</Link>
+                <Link className="btn btn-amber" href="/dish">Play free, no wallet</Link>
               ) : (
                 <Link className="btn btn-amber" href="/dish">Start a colony</Link>
               )}
               <Link className="btn btn-ghost" href="/rules">How the coin works</Link>
             </div>
+            <p className={s.dishes}>
+              Every bead here is a living cell on NEAR, owned by a real account. Two dishes run the same contract:{" "}
+              <b>mainnet</b>, with real NEAR, and <b>testnet</b>, free with a guest account in one click.
+            </p>
           </div>
           <p className={s.statsHead}>
             <NetTag />
@@ -220,21 +224,22 @@ export function HeroScene() {
           </p>
           <dl className={s.stats} aria-live="polite" aria-busy={!ready}>
             <div><dt>Living cells</dt><dd className="num">{ready ? int(d.totalLive) : skel}</dd></div>
-            {ready && warming ? (
-              // A young dish feeds a fraction of the ration (none at all before a player cell is counted), so the
-              // first screen shows how far it has to go rather than a rate nobody is being paid yet.
-              <div title={`Counted cells are players' living cells, each colony up to its reach. Until ${int(floor)} are counted the agar releases that fraction of its ration; the house strains are never counted.`}>
-                <dt>{d.counted === 0 ? `Not feeding yet: full feed at ${int(floor)} counted cells` : `Feeding in part: full at ${int(floor)} counted cells`}</dt>
-                <dd className="num">{int(d.counted)} <small className={s.of}>/ {int(floor)}</small></dd>
-                <span className={s.warmTrack} aria-hidden="true"><i style={{ width: `${Math.max(0.6, warmth * 100)}%` }} /></span>
-              </div>
-            ) : (
-              <div title="What one more living cell would earn each generation at today's feed, before its colony's reach cap">
-                <dt>A new cell would earn, per generation</dt>
-                <dd className="num">{ready ? petri(perCell, 4) : skel}</dd>
-              </div>
-            )}
-            <div><dt>PETRI still in the agar</dt><dd className="num">{ready ? petri(d.agar) : skel}</dd></div>
+            {/* What the living have already been paid: a figure that only grows, never a "not yet". */}
+            <div>
+              <dt><Term k="fed" place="below">PETRI fed to living cells</Term></dt>
+              <dd className="num">{ready && d.state ? petri(fed) : skel}</dd>
+              {ready && d.state && Number(d.state.plants) > 0 && (
+                <span className={s.statSub}>
+                  across {int(Number(d.state.plants))} {Number(d.state.plants) === 1 ? "planting" : "plantings"}
+                  {warming ? <>, feeding at {Math.max(1, Math.floor(warmth * 100))}%</> : null}
+                </span>
+              )}
+            </div>
+            <div>
+              <dt><Term k="agar" place="below">PETRI still in the agar</Term></dt>
+              <dd className="num">{ready ? petri(d.agar) : skel}</dd>
+              {ready && <span className={s.statSub}>a new cell earns {petri(perCell, 4)} a generation</span>}
+            </div>
             <div><dt>Next generation in</dt><dd className="num">{ready ? `${secs}s` : skel}</dd></div>
           </dl>
           <p className={s.cue}>
@@ -276,7 +281,7 @@ export function HeroScene() {
           <Link className="btn btn-amber" href="/dish">Open the dish</Link>
         </aside>
 
-        <div className={s.loupe} ref={(n) => { layers.current[3] = n; }}>
+        <div className={s.loupe} ref={(n) => { layers.current[3] = n; }} style={{ opacity: 0, visibility: "hidden" }}>
           <Loupe target={lens} width={w} height={h} cells={d.cells} prevCells={d.prevCells} changedAt={d.changedAt} palette={palette} className={s.loupeLens} />
           <p>The whole dish. The frame shows where you are looking.</p>
         </div>

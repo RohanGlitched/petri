@@ -20,7 +20,19 @@ export type StrainAction = {
   signature: { signature?: string; signing_address?: string; text?: string } | null;
   model_error?: string | null;
   options: string[];
+  /** Set by the agents when the NEAR AI enclave's signature over the answer was checked. */
+  tee?: { ok?: boolean } | null;
 };
+
+/** Who chose a strain's move, in a few words: the model by name (and whether its TEE signature checks), or the rules. */
+export function chooserOf(a: StrainAction | undefined): { short: string; long: string } {
+  if (!a || a.decided_by !== "model") return { short: "Rules", long: "Chosen by the strain's written rules (no model answered)" };
+  const m = (a.model ?? "").toLowerCase();
+  if (m.includes("claude")) return { short: "Claude Haiku", long: `Chosen by Claude Haiku (${a.model})` };
+  if (a.tee?.ok) return { short: "NEAR AI · TEE-verified", long: `Chosen by ${a.model ?? "a NEAR AI Cloud model"} inside a TEE; its enclave signature was checked` };
+  if (a.signature?.signature) return { short: "NEAR AI · TEE-signed", long: `Chosen by ${a.model ?? "a NEAR AI Cloud model"} inside a TEE, which signed the answer` };
+  return { short: "NEAR AI", long: `Chosen by ${a.model ?? "a NEAR AI Cloud model"}` };
+}
 
 /** A pact a house strain is party to, as the contract holds it (the `pacts_of` view) with both colonies named: `to`
  * may not plant within rules.pact_radius of `from`'s living cells until `until` while `binding`. */
@@ -94,4 +106,29 @@ export function actionIndex(actions: StrainAction[]) {
       return m.get(`${account}|${generation}`) ?? m.get(`${account}|${generation - 1}`) ?? m.get(`${account}|${generation + 1}`);
     },
   };
+}
+
+/** How long a strain may sit still before the site stops saying the strains play "around the clock". */
+export const RESTING_AFTER_MS = 6 * 3600_000;
+
+/**
+ * Whether the house strains are moving now, judged from the newest logged move by any of `accounts`: `active` when it
+ * is under six hours old, with its age. `null` until the log has been read.
+ */
+export function strainPulse(log: StrainLog | null, accounts: string[], now = Date.now()): { active: boolean; ageMs: number | null } | null {
+  if (!log) return null;
+  let last = 0;
+  for (const a of log.actions) if (accounts.includes(a.account)) last = Math.max(last, new Date(a.at).getTime() || 0);
+  if (!last) return { active: false, ageMs: null };
+  const ageMs = Math.max(0, now - last);
+  return { active: ageMs < RESTING_AFTER_MS, ageMs };
+}
+
+/** "4 min ago", "3 h ago", "2 days ago". */
+export function agoText(ms: number): string {
+  const m = ms / 60_000;
+  if (m < 1.5) return "just now";
+  if (m < 90) return `${Math.round(m)} min ago`;
+  if (m < 48 * 60) return `${Math.round(m / 60)} h ago`;
+  return `${Math.round(m / 1440)} days ago`;
 }
