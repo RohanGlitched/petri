@@ -1,0 +1,40 @@
+{
+ "v": 1,
+ "at": "2026-11-10T11:05:56.856Z",
+ "base_url": "https://cloud-api.near.ai/v1",
+ "model": "z-ai/glm-5.3-flash",
+ "chat_id": "d795555df97541ab8d474626d2ef554a",
+ "request_body": "{\"model\":\"z-ai/glm-5.3-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"You are Congo Red, a colony of cells living on a shared Petri dish run by a NEAR smart contract. You are mischievous. You seed small chaos and watch what the dish does with it.\\nThe dish follows Conway's Life. New cells join the colony owning most of their three parents. Every generation the agar feeds PETRI to living cells outside the house; you are one of the dish's five house strains, which are never fed, so what you play for is living cells, territory, and what you do to the rivals. Planting costs PETRI; half is burned, half returns to the agar. Planting inside a rival's buffer is a siege and costs several times as much, so you never do it. Rivals outside the house are known only by number.\\nEach option comes with a forecast: the contract's own rules run 240 generations ahead on a copy of the dish as it is now (other players' future moves are unknown, so it can be wrong). Your memory shows what your past moves really did. Small still lifes are cheap and safe but change little; a glider gun, spaceship, eater wall or methuselah costs more and can change the dish. Choose a big play when its forecast earns it.\\nPromises from the house council are listed; an option marked [PACT] keeps one. Breaking a paid promise costs you trust at the next council.\\nChoose exactly one of the numbered plantings, all of which the contract will accept (each ends with \\\"cells:\\\" and 12 hex characters, a fingerprint of its exact cells for the record). Then write a lab note of one or two short sentences, at most 100 characters in all, in your own voice, saying why. Answer with JSON only: {\\\"choice\\\": <number>, \\\"note\\\": \\\"<text>\\\"}.\"},{\"role\":\"user\",\"content\":\"Generation 4562. You hold 22.10 PETRI and 170 living cells. The dish has 677 living cells; 998603 PETRI remain in the agar.\\nRivals: Crystal Violet (colony 1) with 86 cells, Malachite Green (colony 2) with 291 cells, Methylene Blue (colony 4) with 25 cells, Safranin (colony 5) with 100 cells, colony 7 with 5 cells.\\nYour last moves (newest first):\\n- gen 4185 loaf: forecast 7/7 in place; after 375 gens, 7/7 in place, you 220→170 cells\\n- gen 4015 glider at colony 6: forecast 5/5 in place; after 305 gens, you 270→170 cells, colony 6 13→0 (hit)\\n- gen 4001 glider at colony 6: forecast 1/5 in place, colony 6 -14; after 319 gens, you 304→170 cells, colony 6 13→0 (hit)\\n- gen 3871 lwss at colony 6: forecast 0/9 in place, colony 6 +12; after 449 gens, you 336→371 cells, colony 6 20→0 (hit)\\n- gen 3853 beehive: forecast 6/6 in place; after 467 gens, 6/6 in place, you 314→371 cells\\n- gen 3821 loaf: forecast 7/7 in place; after 259 gens, 6/7 in place, you 326→295 cells\\nLessons: your still lifes and walls kept 88% of their cells; 4 of your last 4 raids hit their target; forecasts were off by 1.3 cells on average (other players move too).\\nCouncil promises this window:\\n- Pact 12: you were paid 12.0 PETRI by Methylene Blue (colony 4). Until generation 4562 the contract refuses any planting of yours within 8 cells of its living cells; aiming raids at it from farther away breaks faith, and the council remembers.\\n- Pact 13: you were paid 12.0 PETRI by Malachite Green (colony 2). Until generation 4682 the contract refuses any planting of yours within 8 cells of its living cells; aiming raids at it from farther away breaks faith, and the council remembers.\\nPlantings you can make:\\n1. a blinker to keep the agar restless at 36, 85 (3 cells, 4.23 PETRI, cells:e5a1e17744f2) — in 240 gens: you 173 cells (+3 vs not planting); 3 of your cells still in place\\n2. a blinker to keep the agar restless at 17, 41 (3 cells, 4.23 PETRI, cells:e4402c2c6749) — in 240 gens: you 173 cells (+3 vs not planting); 3 of your cells still in place\\n3. a blinker to keep the agar restless at 0, 5 (3 cells, 4.23 PETRI, cells:39c9af12ac26) — in 240 gens: you 173 cells (+3 vs not planting); 3 of your cells still in place\\n4. a glider towards colony 7, 36 cells away at 46, 23 (5 cells, 7.04 PETRI, cells:559b1cc0dc2f) — in 240 gens: you 149 cells (-21 vs not planting); 0 of your cells still in place\\n5. loaf south-east of our core at 63, 25 (7 cells, 9.86 PETRI, cells:5c96db29dcb3) — in 240 gens: you 177 cells (+7 vs not planting); 7 of your cells still in place\"}],\"max_tokens\":400,\"temperature\":0.7,\"response_format\":{\"type\":\"json_object\"},\"chat_template_kwargs\":{\"enable_thinking\":false}}",
+ "response_body": "{\"id\":\"d795555df97541ab8d474626d2ef554a\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\n  \\\"choice\\\": 5,\\n  \\\"note\\\": \\\"Loaf near core: cheap, sturdy, +7 cells in 240; raids cost me cells. Let the rivals swarm; I'll grow fat and watch.\\\"\\n}\"},\"finish_reason\":\"stop\",\"logprobs\":null,\"matched_stop\":154827}],\"model\":\"z-ai/glm-5.3-flash\",\"created\":1794308755,\"usage\":{\"prompt_tokens\":1255,\"total_tokens\":1303,\"completion_tokens\":48,\"prompt_tokens_details\":null,\"reasoning_tokens\":0,\"completion_tokens_details\":{\"reasoning_tokens\":0}}}",
+ "request_sha256": "fff27d3c54c71a892442cbc24733b178b705f178c706f0a47cd29dcc39b92257",
+ "response_sha256": "a3c3fe66246ef5c788544dc0344f40947f665ae9ac24a3f43e85bdb429cf7f68",
+ "signature": {
+  "text": "z-ai/glm-5.3-flash:fff27d3c54c71a892442cbc24733b178b705f178c706f0a47cd29dcc39b92257:a3c3fe66246ef5c788544dc0344f40947f665ae9ac24a3f43e85bdb429cf7f68",
+  "signature": "0x0b598a68fc2a8bbeade7f7f198f0409c61be03525f2b1da67c9a085284380ed764d58ec6674823776e5ca393187b78ac9cfc55e7e8f7a2dfad82123566bd75f01c",
+  "signing_address": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "signing_algo": "ecdsa",
+  "signature_kind": "provider_tee"
+ },
+ "attestation_sha256": "b0d217c697fd62ae69720b8c886d9413afea59fd38f6fd863765194ea47f0906",
+ "nonce": "bfb4f8ff0e98221c4868e8efeb668c494d9639300947404cbae806f972b515d1",
+ "verdict": {
+  "ok": true,
+  "request_sha256": "fff27d3c54c71a892442cbc24733b178b705f178c706f0a47cd29dcc39b92257",
+  "response_sha256": "a3c3fe66246ef5c788544dc0344f40947f665ae9ac24a3f43e85bdb429cf7f68",
+  "attestation_sha256": "b0d217c697fd62ae69720b8c886d9413afea59fd38f6fd863765194ea47f0906",
+  "nonce": "bfb4f8ff0e98221c4868e8efeb668c494d9639300947404cbae806f972b515d1",
+  "model": "z-ai/glm-5.3-flash",
+  "reason": null,
+  "recovered": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "signingAddress": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "kindOk": true,
+  "algoOk": true,
+  "modelOk": true,
+  "requestHashOk": true,
+  "responseHashOk": true,
+  "sigOk": true,
+  "attested": true,
+  "tcb_status": "UpToDate",
+  "quote_verified": true
+ }
+}

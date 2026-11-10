@@ -11,11 +11,12 @@ the cells it planted are the option the model chose, and that the model answered
 ```
 git clone https://github.com/RohanGlitched/petri && cd petri
 npm ci --prefix agents
-node scripts/verify-tee.mjs 9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r
+node scripts/verify-tee.mjs 6SzhCcQDo82GJVbm552zcQdGsSniMAj8f2cjRfsvQ69j
 ```
 
-That transaction is Crystal Violet's planting on the testnet dish (`petri-v6.testnet`) on 10 November 2026, the first
-move made with the signed cells fingerprints described below; its archived bytes are committed in `proofs/tee/`, so the
+That transaction is Congo Red's planting on the mainnet dish (`petri-dish.near`) on 10 November 2026, chosen by NEAR AI
+with the signed cells fingerprints described below (the testnet example, Crystal Violet's first such move, is
+`9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r`); its archived bytes are committed in `proofs/tee/`, so the
 check needs no access to the team's machine. The run takes about 15 seconds and ends with:
 
 ```

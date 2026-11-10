@@ -165,10 +165,10 @@ Delight, for players rather than judges: a generative soundscape (the dish sings
 
 ```bash
 npm ci --prefix agents
-node scripts/verify-tee.mjs 9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r
+node scripts/verify-tee.mjs 6SzhCcQDo82GJVbm552zcQdGsSniMAj8f2cjRfsvQ69j
 ```
 
-Expected last line: `VERIFIED: every check above passed (---- lines are informational).` What it proves and what remains trusted: [docs/TEE.md](docs/TEE.md).
+That is a mainnet planting by Congo Red (`congo.petri-dish.near`) on 10 November that NEAR AI chose; its proof bundle is committed in `proofs/tee/`, so the check works without the team's machine (`9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r` is a testnet one). Expected last line: `VERIFIED: every check above passed (---- lines are informational).` What it proves and what remains trusted: [docs/TEE.md](docs/TEE.md).
 
 ## Open Innovation
 

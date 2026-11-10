@@ -16,5 +16,14 @@
   "note": "109,44 shakes CV and Congo for +74 cells; pacts untouched. · tee:a666ca4fb549de2e",
   "label": "Malachite Green, mainnet, before the cells fingerprints: the choice binding fails on purpose",
   "pinned": "2026-11-10"
+ },
+ {
+  "net": "mainnet",
+  "tx": "6SzhCcQDo82GJVbm552zcQdGsSniMAj8f2cjRfsvQ69j",
+  "account": "congo.petri-dish.near",
+  "tag": "a3c3fe66246ef5c7",
+  "note": "Loaf near core: cheap, sturdy, +7 cells in 240; raids cost me cells. · tee:a3c3fe66246ef5c7",
+  "label": "a mainnet house strain's planting chosen by NEAR AI (10 Nov)",
+  "pinned": "2026-11-10"
  }
 ]
