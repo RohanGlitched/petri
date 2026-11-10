@@ -13,7 +13,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { callDish, liveDish, log, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
+import { callDish, CALL_TGAS, liveDish, log, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
 import { candidates, makeRng } from "./strategies.mjs";
 import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally } from "./model.mjs";
 import { forecast, forecastText, boxOf } from "./forecast.mjs";
@@ -211,7 +211,7 @@ async function maybeFossilize(s, world, me, balance) {
   try {
     const args = { x: win.x, y: win.y, w: SLIDE_SIDE, h: SLIDE_SIDE, title };
     await catchUp(s.account);
-    const r = await callDish(s.account, "mint_slide", args, 300, BigInt(deposit), attaches(s));
+    const r = await callDish(s.account, "mint_slide", args, CALL_TGAS, BigInt(deposit), attaches(s));
     log(s.name, `fossilized ${win.n} cells at ${win.x}, ${win.y}`, r.hash);
   } catch (e) {
     log(s.name, "slide refused:", e instanceof Error ? e.message : e);
@@ -226,7 +226,7 @@ async function ensureJoined(s, colonies) {
     return null;
   }
   log(s.name, "joining");
-  await callDish(s.account, "join", { name: s.name, color: s.color }, 300, JOIN_NEAR, attaches(s));
+  await callDish(s.account, "join", { name: s.name, color: s.color }, CALL_TGAS, JOIN_NEAR, attaches(s));
   return (await view("colony_of", { account_id: s.account })) ?? null;
 }
 
@@ -290,7 +290,7 @@ async function actOn(s, world) {
       return;
     } else {
       try {
-        const r = await callDish(s.account, "buy", {}, 300, TOP_UP_NEAR, attaches(s));
+        const r = await callDish(s.account, "buy", {}, CALL_TGAS, TOP_UP_NEAR, attaches(s));
         log(s.name, "bought PETRI from the agar", r.hash);
         balance = Number(await view("ft_balance_of", { account_id: s.account }));
       } catch (e) {
@@ -301,7 +301,7 @@ async function actOn(s, world) {
   // Every few hours a colony collects the NEAR it won at the tides (the bench every hour, so claims show up early).
   if (!dry && Number(waiting.near) > 0 && Date.now() - (lastClaim.get(s.account) ?? 0) > (s.bench ? 3600_000 : 3 * 3600_000)) {
     try {
-      await callDish(s.account, "claim", {}, 300);
+      await callDish(s.account, "claim", {}, CALL_TGAS);
       lastClaim.set(s.account, Date.now());
       log(s.name, "claimed", (Number(waiting.near) / 1e24).toFixed(5), "NEAR from the tides");
     } catch (e) {
@@ -370,7 +370,7 @@ async function actOn(s, world) {
   try {
     await catchUp(s.account);
     const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
-    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, 300, BigInt(deposit), attaches(s));
+    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, CALL_TGAS, BigInt(deposit), attaches(s));
     log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", note, r.hash);
     if (!s.bench) {
       let earnedAt = null;
@@ -498,7 +498,7 @@ async function keep() {
   const due = MAINNET ? behind >= keeperLag() : behind >= 20;
   if (due) {
     try {
-      const r = await callDish(KEEPER, "advance", {}, 300);
+      const r = await callDish(KEEPER, "advance", {}, CALL_TGAS);
       log("keeper advanced", behind, "due generation(s)", r.hash);
     } catch (e) {
       log("keeper refused:", e instanceof Error ? e.message : e);
@@ -512,7 +512,7 @@ async function catchUp(accountId) {
     const st = await view("state");
     const behind = Number(st.due_generation) - Number(st.generation);
     if (behind <= 120) return; // rules.max_catchup on both dishes
-    const r = await callDish(accountId, "advance", {}, 300);
+    const r = await callDish(accountId, "advance", {}, CALL_TGAS);
     log(accountId, "advanced the dish first:", behind, "generations behind", r.hash);
   }
 }

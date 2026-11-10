@@ -103,7 +103,12 @@ export function failureText(f) {
  * TGas by default: unused gas is refunded, and a catch-up on a crowded dish can need well over 150. Returns { hash,
  * value } (what the method returned, parsed) or throws with the contract's own words.
  */
-export async function callDish(accountId, methodName, args, tgas = 300, deposit = 0n, attach = false) {
+// Gas each call attaches. NEAR reserves prepaid gas at a pessimistic price (about 10x the real one) until the refund
+// lands, so 300 TGas locks about 0.3 NEAR per call: a strain holding 0.45 NEAR could then not plant right after it
+// advanced the dish. A planting burns about 5 TGas and an advance of max_catchup (120) generations under 30 TGas.
+export const CALL_TGAS = Number(process.env.PETRI_CALL_TGAS ?? "100");
+
+export async function callDish(accountId, methodName, args, tgas = CALL_TGAS, deposit = 0n, attach = false) {
   const a = account(accountId);
   if (BigInt(deposit) > 0n && !attach) {
     args = { ...args, credit: BigInt(deposit).toString() };

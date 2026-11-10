@@ -7,7 +7,7 @@
 // raids are scored as broken faith and remembered per pair, so the next council prices trust. Outside players appear
 // only as "colony N": no player-written text reaches a model.
 
-import { callDish, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
+import { callDish, CALL_TGAS, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
 import { askJson, trimNote } from "./model.mjs";
 import { movesOf, memoryText, publicMovesText, reputationOf, scorePromise } from "./memory.mjs";
 import { colonyCentres, compass, quadrantOf, wrapDelta } from "./strategies.mjs";
@@ -338,7 +338,7 @@ ${mine.map((p, i) => `${i + 1}. ${p.from} offers ${p.petri} PETRI: ${p.terms}. $
     } else {
       try {
         if (attaches(payer) && (await nearBalance(p.fromAccount)) < MIN_NEAR) throw new Error("payer keeps its last NEAR for gas");
-        const offer = await callDish(p.fromAccount, "pact_offer", args, 300, PACT_DEPOSIT, attaches(payer));
+        const offer = await callDish(p.fromAccount, "pact_offer", args, CALL_TGAS, PACT_DEPOSIT, attaches(payer));
         p.tx = offer.hash;
         p.chainId = Number(offer.value);
         if (!(p.chainId > 0)) throw new Error("pact_offer returned no pact number");
