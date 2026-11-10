@@ -33,8 +33,9 @@ import { Engine, buy_quote, credit_share, licence, pattern_cells, quote, sell_qu
 import type { Colony, DishState, Entry, Rules, SlideView } from "./chain";
 import { entryGeneration } from "./chain";
 
-/** The published reproducible build both dishes run (v6.5, commit 27a5976); rebuild it to check this constant. */
-export const BUILD_HASH = "CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD";
+/** The published reproducible build both dishes run (lib/facts.ts); rebuild it to check this constant. */
+import { CODE_HASH } from "./facts";
+export const BUILD_HASH = CODE_HASH;
 
 export type Check = { id: string; label: string; expected: string; got: string | null; ok: boolean | null };
 
@@ -546,7 +547,7 @@ export class Replayer {
       rule("legal", "Every planting was legal, sieges marked", this.plants, "plantings", this.problems.plant),
       rule("prices", "Every planting paid the formula's price", this.plants, "plantings", this.problems.price),
       rule("fees", "Every planting paid its cell fee", this.plants, "plantings", this.problems.fee),
-      rule("licences", "Every licensed planting was a slide of at least licence_min_cells (12) cells, its pattern, and paid the holder of the day (or the agar, for a planter that never attached NEAR or holds kept PETRI beyond the cost)", this.licensed, "licensed plantings", this.problems.licence),
+      rule("licences", "Every licensed planting was a slide of at least 12 cells (the licence minimum), its pattern, and paid the holder of the day (or the agar, for a planter that never attached NEAR or holds kept PETRI beyond the cost)", this.licensed, "licensed plantings", this.problems.licence),
       rule("buys", "Every purchase followed the agar's curve", this.buys, "purchases", this.problems.buy),
       rule("sells", "Every sale back followed the curve and the allowance, and none was the house's", this.sells, "sales", this.problems.sell),
       {

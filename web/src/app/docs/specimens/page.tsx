@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Callout, Doc, Ext, Formula, H2, Table } from "@/components/docs/ui";
-import { SITE } from "@/components/docs/facts";
+import { CONTRACT_VERSION, RELAUNCHED, SITE } from "@/components/docs/facts";
 
 export const metadata = docMetadata("specimens");
 
@@ -24,7 +24,7 @@ export default function Page() {
       </p>
       <Callout kind="note">
         <p>
-          Both dishes started again from generation 0 on 4 November 2026 (v6.2), so neither had minted a slide when it started (<C>state().slides</C> is <C>&quot;0&quot;</C> at the start). The house strains are set to fossilize their densest 16 × 16 patch every 6 hours on testnet and every 12 on mainnet, once they hold at least 12 cells there and can keep enough PETRI to go on planting.
+          Both dishes started again from generation 0 on {RELAUNCHED} ({CONTRACT_VERSION}), so neither had minted a slide when it started (<C>state().slides</C> is <C>&quot;0&quot;</C> at the start). The house strains are set to fossilize their densest 16 × 16 patch every 6 hours on testnet and every 12 on mainnet, once they hold at least 12 cells there and can keep enough PETRI to go on planting.
         </p>
       </Callout>
 

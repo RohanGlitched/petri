@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C } from "@/components/docs/Code";
 import { Callout, Doc, Ext, H2, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT_SHORT, CODE_HASH, DISH, REPO, SITE, account } from "@/components/docs/facts";
+import { BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, DISH, RELAUNCHED, REPO, SITE, account } from "@/components/docs/facts";
 import { DishSketch } from "@/components/docs/Diagrams";
 import { docHref } from "@/components/docs/nav";
 
@@ -71,7 +71,7 @@ export default function Page() {
 
       <H2 id="dishes">The two dishes</H2>
       <p>
-        The same build, v6.2, runs on both networks. Both contract accounts report the code hash <C>{CODE_HASH}</C>, which is what <C>cargo near build reproducible-wasm</C> produces at commit <Ext href={`${REPO}/tree/${BUILD_COMMIT_SHORT}`}>{BUILD_COMMIT_SHORT}</Ext>. Both dishes were relaunched in place from generation zero on the accounts they ran v6 and v6.1 on: <C>petri-dish.near</C>, and <C>petri-v6.testnet</C>, which v6 started on a new account (<C>petri-v5.testnet</C> is abandoned). The rules differ only in who the house and the keeper are and which wNEAR contract is trusted.
+        The same build, {CONTRACT_VERSION}, runs on both networks. Both contract accounts report the code hash <C>{CODE_HASH}</C>, which is what <C>cargo near build reproducible-wasm</C> produces at commit <Ext href={`${REPO}/tree/${BUILD_COMMIT_SHORT}`}>{BUILD_COMMIT_SHORT}</Ext>. Both dishes were relaunched in place from generation zero on {RELAUNCHED}, on the accounts they have run since v6: <C>petri-dish.near</C>, and <C>petri-v6.testnet</C>, which v6 started on a new account (<C>petri-v5.testnet</C> is abandoned). The rules differ only in who the house and the keeper are and which wNEAR contract is trusted.
       </p>
       <Table caption="The dishes as deployed">
         <thead>

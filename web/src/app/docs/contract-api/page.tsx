@@ -1,6 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Callout, Doc, H2, Table } from "@/components/docs/ui";
+import { CONTRACT_VERSION, EVENT_VERSION, RELAUNCHED } from "@/components/docs/facts";
 
 export const metadata = docMetadata("contract-api");
 
@@ -623,7 +624,7 @@ const LAUNCH: M[] = [
     sig: "#[private]\n#[init(ignore_state)]\npub fn relaunch(rules: Rules, accounts: Vec<AccountId>) -> Self",
     what: (
       <p>
-        Deletes every key the v6.3 layout wrote (the vectors of colonies, the ledger, the plant and tide indexes, slides and lab notes; the balance, colony, name, grant, owned-slide and pending maps for colony accounts, slide owners and <C>accounts</C>; the cold pages, the hot table and the board) and launches a fresh dish with <C>rules</C>, as <C>new</C> does. <C>accounts</C> are the accounts that held a v6.1 PETRI registration, sponsored credit or pending NEAR without a colony or a slide; colony accounts, names and slide owners are read from the v6.1 records. It logs any pending NEAR v6.1 still owed (<C>v6.1 owed {"{n}"} pending NEAR to {"{account}"}</C>). Being private, only a transaction from the contract account itself can run it (each dish account holds one key, a full-access key, at the time of writing); it refuses an account with no v6.3 dish and one that already runs v6.4, and panics with any message of <C>new</C> on bad rules. v6.2 moves the keys a wrong <C>accounts</C> list could leave behind (balances, grants, pending NEAR and the cold pages) to prefixes v6.1 never used, <C>r</C>, <C>e</C>, <C>z</C> and <C>x</C>; everything else keeps its v6.1 key. A key a wrong list leaves behind can therefore never be read as v6.2 state; it only keeps its storage. Its test, <C>relaunch_leaves_nothing_of_v6_1</C>, builds a real v6.1 state with v6.1&rsquo;s frozen code and checks that the result is byte for byte a fresh v6.2 launch. The mainnet dish, <C>petri-dish.near</C>, was relaunched in place this way with <C>contract/launch-rules-mainnet.json</C>, and so was the testnet dish, <C>petri-v6.testnet</C>, with <C>contract/launch-rules.json</C>. Once the full-access key is deleted, nobody can run it.
+        Deletes every key the v6.3 layout wrote (the vectors of colonies, the ledger, the plant and tide indexes, slides and lab notes; the balance, colony, name, grant, owned-slide and pending maps for colony accounts, slide owners and <C>accounts</C>; the cold pages, the hot table and the board) and launches a fresh dish with <C>rules</C>, as <C>new</C> does. <C>accounts</C> are the accounts that held a v6.1 PETRI registration, sponsored credit or pending NEAR without a colony or a slide; colony accounts, names and slide owners are read from the v6.1 records. Being private, only a transaction from the contract account itself can run it (each dish account holds one key, a full-access key the team keeps so a bug can be fixed); it refuses an account with no v6.3 dish and one that already runs v6.4, and panics with any message of <C>new</C> on bad rules. {CONTRACT_VERSION} writes a version marker (<C>v</C>) that v6.3 never wrote, which is how it tells the two apart; the prefixes are otherwise shared, so the deploy must pass every account that holds a balance, grant or pending NEAR without a colony or a slide. Its test, <C>relaunch_leaves_nothing_of_v6_3</C>, builds a real v6.3 state and checks that the result is a fresh launch. The mainnet dish, <C>petri-dish.near</C>, was relaunched in place this way on {RELAUNCHED} with <C>contract/launch-rules-mainnet.json</C>, and so was the testnet dish, <C>petri-v6.testnet</C>, with <C>contract/launch-rules.json</C>.
       </p>
     ),
     errors: ["no v6.3 dish here", "this account already runs v6.4"],
@@ -1058,7 +1059,7 @@ pub enum Entry {
     /// The pact ended: an offer withdrawn, declined or expired (the PETRI back to from), or an accepted pact whose until came.
     PactEnd { generation: U64, pact: u32 },
 }`}</Code>
-      <Code lang="json" title="The first three entries of the v6 petri-dish.near (read from the chain; v6.2 writes the same shapes)">{`[
+      <Code lang="json" title={`The first three entries of the v6 petri-dish.near (read from the chain; ${CONTRACT_VERSION} writes the same shapes)`}>{`[
   { "Join": { "generation": "16", "colony": 1 } },
   { "Buy": { "generation": "16", "colony": 1, "petri": "212027519", "near": "42410000000000000000000",
              "credit": "0", "spent": null } },
@@ -1078,7 +1079,7 @@ pub enum Entry {
 
       <H2 id="events">Events</H2>
       <p>
-        Every event is a log line <C>EVENT_JSON:{"{...}"}</C> per NEP-297. Petri&rsquo;s own use <C>{`"standard": "petri", "version": "6.2.0"`}</C>; the token&rsquo;s use NEP-141 1.0.0 and the slides&rsquo; NEP-171 1.2.0. Each has <C>event</C> and a one-element <C>data</C> array.
+        Every event is a log line <C>EVENT_JSON:{"{...}"}</C> per NEP-297. The dish&rsquo;s own use <C>{`"standard": "petri", "version": "${EVENT_VERSION}"`}</C>; the token&rsquo;s use NEP-141 1.0.0 and the slides&rsquo; NEP-171 1.2.0. Each has <C>event</C> and a one-element <C>data</C> array.
       </p>
       <Table>
         <thead>
@@ -1121,7 +1122,7 @@ pub enum Entry {
           ))}
         </tbody>
       </Table>
-      <Code lang="json" title="A plant event">{`EVENT_JSON:{"standard":"petri","version":"6.2.0","event":"plant","data":[{"colony":1,"generation":"16","cells":7,"cost":"9875040","siege":false,"near":"…","note":"…","slide":null,"royalty":"0"}]}`}</Code>
+      <Code lang="json" title="A plant event">{`EVENT_JSON:{"standard":"petri","version":"${EVENT_VERSION}","event":"plant","data":[{"colony":1,"generation":"16","cells":7,"cost":"9875040","siege":false,"near":"…","note":"…","slide":null,"royalty":"0"}]}`}</Code>
 
       <H2 id="errors">Errors</H2>
       <p>

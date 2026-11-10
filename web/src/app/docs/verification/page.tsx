@@ -2,7 +2,7 @@ import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { NetTabs } from "@/components/docs/NetTabs";
 import { Callout, Doc, Ext, Formula, H2, H3, Steps, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT, BUILD_DIGEST, BUILD_IMAGE, CODE_HASH, NEAR_SDK, REPO, SITE } from "@/components/docs/facts";
+import { BUILD_COMMIT, BUILD_DIGEST, BUILD_IMAGE, CODE_HASH, CONTRACT_VERSION, NEAR_SDK, RELAUNCHED, REPO, SITE } from "@/components/docs/facts";
 
 export const metadata = docMetadata("verification");
 
@@ -35,7 +35,7 @@ const CHECKS: [string, string][] = [
   ["Keeper share", "keeper_pot + keeper_paid equals the replayed 2% of every feed."],
   ["Colony earnings", "Every colony's lifetime PETRI earnings (the earnings view) equal the replay's."],
   ["Vault (NEAR)", "The replayed vault equals state().vault, to the yoctoNEAR."],
-  ["NEAR paid in", "NEAR that reached the vault: attached by players (and, on ledgers written by v6.1, Dust entries; v6.2 writes none)."],
+  ["NEAR paid in", "NEAR that reached the vault: attached by players (and, on ledgers written by v6.1, Dust entries; none have been written since)."],
   ["NEAR paid at tides", "Vault shares paid as claimable NEAR."],
   ["Vault shares, bounties as credit", "Vault shares and bounties paid as credit to colonies that have not attached NEAR or hold kept PETRI."],
   ["Sales paid as credit", "Sales by such colonies, paid as credit."],
@@ -300,7 +300,7 @@ node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
 
       <H2 id="keys">The lock: check the keys</H2>
       <p>
-        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Each contract account has one full-access key, held by the team on purpose. It exists only so a bug can be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 for v6.2, with a fresh ledger anyone can replay. Deleting the key would make the dish unfixable, so it will not be deleted. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
+        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Each contract account has one full-access key, held by the team on purpose. It exists only so a bug can be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 for {CONTRACT_VERSION} on {RELAUNCHED}, with a fresh ledger anyone can replay. Deleting the key would make the dish unfixable, so it will not be deleted. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
       </p>
       <NetTabs
         mainnet={<Code lang="sh" title="mainnet">{`near account list-keys petri-dish.near network-config mainnet now
@@ -316,7 +316,7 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
   "params": { "request_type": "view_access_key_list", "finality": "final", "account_id": "petri-v6.testnet" }
 }' | jq '.result.keys[] | {public_key, permission: .access_key.permission}'`}</Code>}
       />
-      <Table caption="Keys at the time of writing (4 November 2026, after the v6.2 relaunch)">
+      <Table caption={`Keys at the time of writing (${RELAUNCHED}, after the ${CONTRACT_VERSION} relaunch)`}>
         <thead>
           <tr>
             <th>Account</th>

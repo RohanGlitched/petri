@@ -4,6 +4,7 @@ import { useLive, int, near } from "@/lib/live";
 import { REPO, fmtPetri } from "@/lib/config";
 import { LAUNCH, nearPer } from "./shared";
 import s from "./rules.module.css";
+import { CONTRACT_VERSION, RELAUNCHED } from "@/lib/facts";
 
 // sim/out-v5/summary.txt, as written by sim/src/main.rs on the rules in contract/launch-rules.json (7 days; 20 seeds at
 // 15 players, 12 at 150, 10 at 1,500). Cash: NEAR actually withdrawn − NEAR actually paid, gas included, for the kind's
@@ -342,12 +343,12 @@ export function ParamsSection() {
         <div className="section-head">
           <h2 id="params-title" className={s.h2}>How the parameters were chosen</h2>
           <p className="lede">
-            The numbers are set once, when a dish starts, and no method changes them while it runs. The dish now runs v6.2 as
+            The numbers are set once, when a dish starts, and no method changes them while it runs. The dish now runs {CONTRACT_VERSION} as
             petri-v6.testnet and, with the same build, as petri-dish.near on mainnet. Earlier testnet dishes (petri-dish.testnet,
             then petri-v2 to petri-v5) were left behind as reviews found problems; each time the rules were changed, tested, and
             launched on a new contract that started again from an empty board. petri-dish.near ran v5 first and was relaunched in
-            place for v6, and both dishes were relaunched again for v6.1 and then v6.2: the private relaunch method deleted everything the
-            earlier version stored and started again from generation 0.
+            place for v6, and both dishes were relaunched again for each release since, most recently for {CONTRACT_VERSION} on {RELAUNCHED}: the
+            private relaunch method deleted everything the earlier version stored and started again from generation 0.
           </p>
         </div>
 
@@ -363,7 +364,7 @@ export function ParamsSection() {
               published runs predate three launched changes: they paid 10% tides (now 5%), paid guests&rsquo; winnings in NEAR
               their accounts could not move (now credit), and ran tides with nobody to pay (now skipped). It estimates storage
               and gas rather than measuring them on chain. The runs also predate v6, in which a keeper takes no keeper pot and no
-              tide bounty and the house cannot sell (the simulated house never sold), and v6.1; sim/out-v6.1 reruns v6.1's rules against v6's on the same seeds. v6.2 was not simulated again.
+              tide bounty and the house cannot sell (the simulated house never sold), and v6.1; sim/out-v6.1 reruns v6.1's rules against v6's on the same seeds. The later releases were not simulated again.
             </p>
             <h3 className="h3">What the runs show</h3>
             <ul className={s.findings}>

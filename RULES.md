@@ -695,7 +695,7 @@ Replaying from an empty board, a zero chain, a full agar, an empty vault and an 
 generation's entries in order and stepping with `petri-core` in between, reproduces the board, the chain, the agar, the
 vault, the credit pool, every solvency term and every colony's PETRI earnings, NEAR winnings and credit winnings. The
 replay works out every tide's amounts itself. `node scripts/verify.mjs` (`--network mainnet` for the mainnet dish) does it from a terminal with every read pinned to
-one final block and prints 45 checks: history chain, board hash, living cells, every planting legal with its siege
+one final block and prints 44 checks: history chain, board hash, living cells, every planting legal with its siege
 flag, every planting's price, every planting's fee, every licensed planting (the slide's shape and its 12-cell minimum, its price, and the
 royalty to the holder of the day, or to the agar for a planter that had not attached NEAR or held more kept PETRI than the planting cost), every purchase on the curve, every sale on the curve and within the allowance,
 every tide (run exactly when due, its chain, its `bytes` (130 or 175), and the shares, bounty, storage and credit it works out
@@ -707,7 +707,7 @@ credit, every colony's NEAR winnings, the credit pool, credit paid at tides, cre
 owed to colonies, pending NEAR, every colony's credit winnings, every colony's kept PETRI, the sales for NEAR, NEAR claims and pact payments by colonies holding
 none, the pacts kept to the rules and the plantings under them, the PETRI held for pact offers and the number of pacts,
 solvency from the ledger and the deployed code hash. It reports the full-access key as a disclosed note, not a check. It exits 0 when everything matches, 1 on any mismatch and 2 if the dish cannot be read. The site's `/verify`
-runs the same replay in the browser, also pinned to one block, and lists 43 checks (the code hash is not among them).
+runs the same replay in the browser, also pinned to one block, and lists 44 checks (the code hash among them) and the same note on the key.
 `node scripts/verify.mjs --dump <file>` replays a snapshot the contract's replay test writes with `PETRI_DUMP`. The
 contract test
 `replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault` does it in Rust.

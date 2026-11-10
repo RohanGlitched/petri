@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Doc, H2, H3 } from "@/components/docs/ui";
-import { BUILD_COMMIT_SHORT, TESTS } from "@/components/docs/facts";
+import { BUILD_COMMIT_SHORT, CONTRACT_VERSION, TESTS } from "@/components/docs/facts";
 
 export const metadata = docMetadata("faq");
 
@@ -92,7 +92,7 @@ export default function Page() {
       <H2 id="trust">Trust</H2>
       <Q id="q-change" q="Can the team change the rules?">
         <p>
-          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6.3 dish and one that already runs v6.4, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6, then to v6.1 and then to v6.2, and how <C>petri-v6.testnet</C> moved to v6.1 and v6.2. The team keeps one full-access key on each contract account on purpose, so a bug can be fixed with new code plus <C>relaunch</C>; deleting it would make the dish unfixable. New code changes the code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. <Doc to="verification" hash="keys">Check the keys</Doc>.
+          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6.3 dish and one that already runs v6.4, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6 and then release by release to {CONTRACT_VERSION}, and how <C>petri-v6.testnet</C> did the same. The team keeps one full-access key on each contract account on purpose, so a bug can be fixed with new code plus <C>relaunch</C>; deleting it would make the dish unfixable. New code changes the code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. <Doc to="verification" hash="keys">Check the keys</Doc>.
         </p>
       </Q>
       <Q id="q-verify" q="How do I know the board is right?">

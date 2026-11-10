@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BUILD_COMMIT, BUILD_COMMIT_SHORT, DOCS, REPO, blob } from "./facts";
+import { BUILD_COMMIT, BUILD_COMMIT_SHORT, CONTRACT_VERSION, DOCS, PRODUCT, REPO, blob } from "./facts";
 import { docHref, neighbours, pageOf } from "./nav";
 import { Toc } from "./Toc";
 
@@ -63,7 +63,7 @@ export function DocPage({ slug, lede, children, source }: { slug: string; lede?:
           </nav>
           <footer className="d-foot">
             <p>
-              Petri is open source under the MIT licence. These pages describe the contract at commit <a href={`${REPO}/tree/${BUILD_COMMIT}`}>{BUILD_COMMIT_SHORT}</a>, the v6.2 build both dishes run. Where a page and the code disagree, the code is right; say so in an <a href="https://github.com/RohanGlitched/petri/issues">issue</a>.
+              {PRODUCT} is open source under the MIT licence. These pages describe the contract at commit <a href={`${REPO}/tree/${BUILD_COMMIT}`}>{BUILD_COMMIT_SHORT}</a>, the {CONTRACT_VERSION} build both dishes run. Where a page and the code disagree, the code is right; say so in an <a href="https://github.com/RohanGlitched/petri/issues">issue</a>.
             </p>
           </footer>
         </article>

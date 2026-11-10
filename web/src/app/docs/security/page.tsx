@@ -1,6 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Callout, Doc, H2, H3 } from "@/components/docs/ui";
+import { CONTRACT_VERSION, RELAUNCHED, TESTS } from "@/components/docs/facts";
 
 export const metadata = docMetadata("security");
 
@@ -295,7 +296,7 @@ const THREATS: Threat[] = [
     ),
     defense: (
       <>
-        The ledger now has an entry for every movement: <C>Sponsor</C>, <C>Unsponsor</C>, <C>Claim</C>, <C>Pending</C>, <C>Unpend</C>, <C>Dust</C> (written by v6.1, none since v6.2) and <C>Burn</C>; a <C>Refund</C> names the kind and the index (<C>of</C>) of the payout it refunds, and purchases, plantings and slides carry the credit they took (<C>spent</C>). Both replays, <C>scripts/verify.mjs</C> and the browser&rsquo;s <C>/verify</C>, recompute every solvency term from the ledger alone (the vault, the credit pool, credit given, won, sold, spent and reclaimed, NEAR owed and pending), compare each with the contract&rsquo;s counter, and check each refund against the payout it names, once.
+        The ledger now has an entry for every movement: <C>Sponsor</C>, <C>Unsponsor</C>, <C>Claim</C>, <C>Pending</C>, <C>Unpend</C>, <C>Dust</C> (written by v6.1, none since) and <C>Burn</C>; a <C>Refund</C> names the kind and the index (<C>of</C>) of the payout it refunds, and purchases, plantings and slides carry the credit they took (<C>spent</C>). Both replays, <C>scripts/verify.mjs</C> and the browser&rsquo;s <C>/verify</C>, recompute every solvency term from the ledger alone (the vault, the credit pool, credit given, won, sold, spent and reclaimed, NEAR owed and pending), compare each with the contract&rsquo;s counter, and check each refund against the payout it names, once.
       </>
     ),
     tests: ["replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault"],
@@ -364,7 +365,7 @@ const THREATS: Threat[] = [
     threat: "The contract has a method that deletes a dish's state and starts over. Used on a running dish, it would wipe the players' colonies, PETRI and NEAR owed.",
     defense: (
       <>
-        <C>relaunch(rules, accounts)</C> is <C>#[private]</C> and <C>#[init(ignore_state)]</C>: only a transaction from the contract account itself, signed with its full-access key, can run it. It clears only what v6.1 stored, refuses an account with no v6.3 dish (&ldquo;no v6.3 dish here&rdquo;) and one that already runs v6.4 (&ldquo;this account already runs v6.4&rdquo;), and logs any pending NEAR v6.1 still owed. It was used to start <C>petri-dish.near</C> from generation 0 when v6 was deployed there, and again on both dishes when v6.1 and v6.2 were.
+        <C>relaunch(rules, accounts)</C> is <C>#[private]</C> and <C>#[init(ignore_state)]</C>: only a transaction from the contract account itself, signed with its full-access key, can run it. It clears only what a v6.3 dish stored, refuses an account with no v6.3 dish (&ldquo;no v6.3 dish here&rdquo;) and one that already runs v6.4 (&ldquo;this account already runs v6.4&rdquo;). It was used to start <C>petri-dish.near</C> from generation 0 when v6 was deployed there, and again on both dishes for each release since, most recently {CONTRACT_VERSION} on {RELAUNCHED}.
       </>
     ),
     tests: ["relaunch_leaves_nothing_of_v6_1", "relaunch_refuses_an_account_without_a_v6_1_dish", "relaunch_refuses_a_dish_that_runs_v6_2"],
@@ -395,7 +396,7 @@ export default function Page() {
 
       <H2 id="threats">Threats and defenses</H2>
       <p>
-        Test names are the functions in <C>contract/src/tests.rs</C>, or <C>core/src/tests.rs</C> where marked core. Simulator figures are from <C>sim/out-v5</C>, which ran the v5 rules, unless a threat names v6 or v6.1: <C>sim/out-v6.1</C> re-ran v6.1 against v6 on the same seeds. Threats marked &ldquo;found in review before v6&rdquo; were reported against v5 and are fixed in the code both dishes run now.
+        Test names are the functions in <C>contract/src/tests.rs</C>, or <C>core/src/tests.rs</C> where marked core. Simulator figures are from <C>sim/out-v5</C>, which ran the v5 rules, unless a threat names v6 or v6.1: <C>sim/out-v6.1</C> re-ran v6.1 against v6 on the same seeds. Threats marked &ldquo;found in review before v6&rdquo; were reported against v5 and are fixed in the code both dishes run now, {CONTRACT_VERSION}.
       </p>
       {THREATS.map((t) => (
         <section key={t.id}>
@@ -446,7 +447,7 @@ export default function Page() {
       </ul>
 
       <H2 id="tests">Running the tests that cover these</H2>
-      <Code lang="sh" title="Shell, from the repository root">{`# everything: 139 contract tests and 36 core tests
+      <Code lang="sh" title="Shell, from the repository root">{`# everything: ${TESTS.contract} contract tests and ${TESTS.core} core tests
 cargo test -p petri-core -p petri-contract
 
 # one threat at a time

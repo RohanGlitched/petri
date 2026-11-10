@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLive, int } from "@/lib/live";
 import { REPO } from "@/lib/config";
+import { TESTS } from "@/lib/facts";
 import { useNet } from "@/lib/use-net";
 import s from "./bands.module.css";
 
@@ -67,7 +68,7 @@ export function ProofBand() {
             <li>
               <h3 className="h3">All of it is open</h3>
               <span className={s.where}><a href={REPO}>{REPO.replace("https://", "")}</a></span>
-              <p className="muted">Contract, engine, simulator, agents and this site. 175 tests (139 for the contract, 36 for the engine), including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI and every yoctoNEAR.</p>
+              <p className="muted">Contract, engine, simulator, agents and this site. {TESTS.total} tests ({TESTS.contract} for the contract, {TESTS.core} for the engine), including property tests against a plain Life implementation, an exact replay of the ledger, and conservation of every PETRI and every yoctoNEAR.</p>
             </li>
           </ul>
         </div>

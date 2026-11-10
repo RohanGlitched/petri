@@ -215,7 +215,7 @@ const PLACEHOLDER: Check[] = [
   ["legal", "Every planting was legal, sieges marked"],
   ["prices", "Every planting paid the formula's price"],
   ["fees", "Every planting paid its cell fee"],
-  ["licences", "Every licensed planting was a slide of at least licence_min_cells (12) cells, its pattern, and paid the holder of the day (or the agar, for a planter that never attached NEAR or holds kept PETRI beyond the cost)"],
+  ["licences", "Every licensed planting was a slide of at least 12 cells (the licence minimum), its pattern, and paid the holder of the day (or the agar, for a planter that never attached NEAR or holds kept PETRI beyond the cost)"],
   ["buys", "Every purchase followed the agar's curve"],
   ["sells", "Every sale back followed the curve and the allowance, and none was the house's"],
   ["specimens", "Specimens: every slide is its colony's own cells as the dish stood"],

@@ -2,7 +2,7 @@ import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { NetTabs } from "@/components/docs/NetTabs";
 import { Callout, Doc, Ext, H2, H3, Steps, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT, BUILD_COMMIT_SHORT, CODE_HASH, REPO, SITE } from "@/components/docs/facts";
+import { BUILD_COMMIT, BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, REPO, SITE, TESTS, VERIFY_CLI_ROWS } from "@/components/docs/facts";
 
 export const metadata = docMetadata("quickstart");
 
@@ -188,7 +188,7 @@ node scripts/verify.mjs --network mainnet
 node scripts/verify.mjs --network testnet
 echo $?   # 0 when every check matches, 1 on any mismatch, 2 if the dish could not be read`}</Code>
       <p>
-        It prints 45 rows, each <C>match</C> or <C>DIFFERS</C>. A run against mainnet at the time of writing, minutes after v6.2 started the dish again from generation 0, printed (the dish will have moved on by the time you run it):
+        It prints {VERIFY_CLI_ROWS} rows, each <C>match</C> or <C>DIFFERS</C>, then a note on the team-held key. A run against mainnet at the time of writing, shortly after {CONTRACT_VERSION} started the dish again from generation 0, printed (the dish will have moved on by the time you run it):
       </p>
       <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222987157: 19 generations, 15 ledger entries, 5 colonies, 0 tides.
   match   History chain                                328c0669f420809b4da8bd710a7c08937a149fa50badcdb80c52c555c25b884f
@@ -279,13 +279,13 @@ Everything matches.`}</Code>
         </tbody>
       </Table>
       <p>
-        Both counts are of the v6.2 sources, the build both dishes run: <C>139 passed</C> and <C>36 passed</C>. To build the contract and compare its hash, see <Doc to="verification" hash="rebuild">Rebuild the wasm</Doc>.
+        Both counts are of the {CONTRACT_VERSION} sources, the build both dishes run: <C>{TESTS.contract} passed</C> and <C>{TESTS.core} passed</C>. To build the contract and compare its hash, see <Doc to="verification" hash="rebuild">Rebuild the wasm</Doc>.
       </p>
       <H3 id="tests-sim">The simulator</H3>
       <Code lang="sh" title="Shell">{`cd sim   # the simulator reads ../contract/launch-rules.json by default
 cargo run --release -- out-v5 all     # writes out-v5/summary.txt and the CSVs
 cargo run --release -- out-v5 fixes   # writes out-v5/fixes.txt
-cargo run --release -- out-v6.1 all --seeds 8   # the v6.1 rules against v6: out-v6.1/summary.txt and fixes.txt (v6.2 has no run of its own)`}</Code>
+cargo run --release -- out-v6.1 all --seeds 8   # the v6.1 rules against v6: out-v6.1/summary.txt and fixes.txt (later versions have no run of their own)`}</Code>
       <p>
         See <Doc to="simulations">Economics and simulations</Doc> for what it measures.
       </p>

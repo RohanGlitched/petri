@@ -2,7 +2,7 @@ import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Doc, H2, H3, Steps, Table } from "@/components/docs/ui";
 import { ArchitectureFlow } from "@/components/docs/Diagrams";
-import { tree } from "@/components/docs/facts";
+import { CONTRACT_VERSION, EVENT_VERSION, TESTS, tree } from "@/components/docs/facts";
 
 export const metadata = docMetadata("architecture");
 
@@ -33,7 +33,7 @@ export default function Page() {
             <td>The site</td>
             <td>
               A Next.js standalone server behind Caddy (automatic HTTPS) on the agents&rsquo; Google Cloud VM (e2-micro, us-central1) for
-              www.playpetri.xyz and docs.playpetri.xyz; reachable at 136-64-100-170.sslip.io while the domain&rsquo;s DNS moves
+              www.playpetri.xyz and docs.playpetri.xyz
             </td>
             <td>No. Its server holds the testnet relayer key, which sponsors guests and pays their gas</td>
           </tr>
@@ -76,7 +76,7 @@ export default function Page() {
               <C>petri-contract</C> (<C>contract/</C>)
             </td>
             <td>
-              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> 6.2.0): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table of the colonies that play now (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> from v6.1 (<C>relaunch.rs</C>). 139 tests.
+              The NEAR contract (near-sdk 5.29.1, event standard <C>petri</C> {EVENT_VERSION}): state, the clock and catch-up, joins, purchases, sales, plantings, tides, claims and payouts, credit per sponsor, the ledger, each colony&rsquo;s books in cold pages and a hot table of the colonies that play now (<C>books.rs</C>), PETRI (NEP-141/145/148), slides and their licences (NEP-171/177/178/181), NEAR Intents with pending orders, and the one-off <C>relaunch</C> of a v6.3 dish (<C>relaunch.rs</C>). {TESTS.contract} tests.
             </td>
           </tr>
           <tr>
@@ -104,7 +104,7 @@ cd web && npm install && npm run dev                 # the site on http://localh
 
       <H3 id="crates-storage">The contract&rsquo;s storage</H3>
       <p>
-        The keys a wrong account list could leave behind when <C>relaunch</C> clears v6.3 (PETRI balances, sponsored credit, pending NEAR and the cold pages) have prefixes v6.1 never used, <C>r</C>, <C>e</C>, <C>z</C> and <C>x</C>, so none of them can be read as v6.2 state; it only keeps its storage. Everything else keeps its v6.1 key and is cleared by <C>relaunch</C> itself. Each colony&rsquo;s numbers (unclaimed earnings, NEAR won and not claimed, credit won, whether it attached NEAR, its stake, and while it plays its tide window) are in exactly one of two places: a 69-byte slot in a cold page of 32 colonies, or the hot table of the colonies that play now (at most 10,000). A join appends one slot to the last cold page; the feed, tides and decay read and write only the hot table, so no call costs more as more colonies join.
+        <C>relaunch</C> clears every key a v6.3 dish could write and keeps none of them; {CONTRACT_VERSION} adds one key v6.3 never wrote, a version marker, which is how a relaunch tells the two apart. The deploy passes every account that holds a balance, sponsored credit or pending NEAR without a colony or a slide, so nothing of the old dish survives. Each colony&rsquo;s numbers (unclaimed earnings, NEAR won and not claimed, credit won, whether it attached NEAR, its stake, and while it plays its tide window) are in exactly one of two places: a 69-byte slot in a cold page of 32 colonies, or the hot table of the colonies that play now (at most 10,000). A join appends one slot to the last cold page; the feed, tides and decay read and write only the hot table, so no call costs more as more colonies join.
       </p>
       <Table>
         <thead>

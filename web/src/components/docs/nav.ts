@@ -1,6 +1,8 @@
 // The docs' table of contents: every page, its group, and the headings on it. The sidebar, the pager, the search and
 // each page's metadata read this one list. Section ids must match the `id` of a heading on the page.
 
+import { CONTRACT_VERSION } from "@/lib/facts";
+
 export type Section = { id: string; title: string; keywords?: string };
 export type DocMeta = { slug: string; title: string; short?: string; description: string; group: string; sections: Section[] };
 
@@ -11,12 +13,12 @@ export const PAGES: DocMeta[] = [
     slug: "introduction",
     title: "Introduction",
     group: "Start",
-    description: "Petri is a coin that is alive: Conway's Life on a 128 × 128 dish run by one NEAR contract, where every cell belongs to a NEAR account.",
+    description: "Petri Dish is a memecoin that is alive: Conway's Life on a 128 × 128 dish run by one NEAR contract, where every cell belongs to a NEAR account.",
     sections: [
-      { id: "what-it-is", title: "What Petri is" },
+      { id: "what-it-is", title: "What Petri Dish is" },
       { id: "different", title: "What makes it different" },
       { id: "tour", title: "A 60-second tour" },
-      { id: "dishes", title: "The two dishes", keywords: "petri-dish.near petri-v6.testnet mainnet testnet relaunch v6 v6.1 v6.2" },
+      { id: "dishes", title: "The two dishes", keywords: "petri-dish.near petri-v6.testnet mainnet testnet relaunch v6 v6.1 v6.2 v6.3 v6.4" },
       { id: "glossary", title: "Words used in these docs", keywords: "agar vault tide colony stake reach credit house keeper" },
       { id: "next", title: "Where to go next" },
     ],
@@ -116,7 +118,7 @@ export const PAGES: DocMeta[] = [
       { id: "slides-methods", title: "Slides: NEP-171, 177, 178, 181", keywords: "mint_slide nft_transfer nft_approve nft_tokens" },
       { id: "pact-methods", title: "Pacts", keywords: "pact_offer pact_accept pact_cancel pact pacts_of escrow pact_radius" },
       { id: "intents-methods", title: "Intents", keywords: "ft_on_transfer settle_pending claim_pending pending_record intent_minimum unwrap_wnear register_wnear" },
-      { id: "launch-methods", title: "Launch: new and relaunch", keywords: "new relaunch init ignore_state v5 v6 v6.1 v6.2" },
+      { id: "launch-methods", title: "Launch: new and relaunch", keywords: "new relaunch init ignore_state v5 v6 v6.1 v6.2 v6.3 v6.4" },
       { id: "callbacks", title: "Callbacks", keywords: "on_payout on_unwrapped settle_intent ft_resolve_transfer nft_resolve_transfer" },
       { id: "views", title: "Views", keywords: "state rules board ledger colonies quote plant_deposit solvency slide_royalties credit_grants pending_record intent_minimum pact pacts_of" },
       { id: "types", title: "Types", keywords: "Rules Colony DishState Grant Licence PactView PendingView Solvency kept attached" },
@@ -259,8 +261,10 @@ export const PAGES: DocMeta[] = [
     slug: "changelog",
     title: "Changelog",
     group: "More",
-    description: "From the first contract to v6.2, release by release, from the git history.",
+    description: `From the first contract to ${CONTRACT_VERSION}, release by release, from the git history.`,
     sections: [
+      { id: "v6-4", title: "v6.4" },
+      { id: "v6-3", title: "v6.3" },
       { id: "v6-2", title: "v6.2" },
       { id: "v6-1", title: "v6.1" },
       { id: "v6", title: "v6" },
