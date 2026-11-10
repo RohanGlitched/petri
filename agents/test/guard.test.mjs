@@ -66,12 +66,20 @@ for (const t of FINE) {
 
 test("the tee tag fits the contract's 140 characters and round-trips", () => {
   const sha = "0123456789abcdef".repeat(4);
-  const note = chainNote("x".repeat(100), { response_sha256: sha });
+  const note = chainNote("x".repeat(100), { ok: true, response_sha256: sha });
   assert.ok(note.length <= 140);
   assert.equal(teeTagOf(note), sha.slice(0, 16));
   assert.equal(note.replace(TEE_TAG_RE, ""), "x".repeat(100));
   assert.equal(chainNote("plain", null), "plain");
-  assert.equal(chainNote("plain", { response_sha256: "not a hash" }), "plain");
+  assert.equal(chainNote("plain", { ok: true, response_sha256: "not a hash" }), "plain");
+});
+
+test("the tee tag goes on chain only for an answer the runner verified", () => {
+  const sha = "0123456789abcdef".repeat(4);
+  assert.equal(chainNote("plain", { ok: false, reason: "attestation failed", response_sha256: sha }), "plain");
+  assert.equal(chainNote("plain", { response_sha256: sha }), "plain");
+  assert.equal(chainNote("plain", { ok: "yes", response_sha256: sha }), "plain");
+  assert.equal(teeTagOf(chainNote("plain", { ok: true, response_sha256: sha })), sha.slice(0, 16));
 });
 
 // Round 10: a judge's fuzz of safeNote (every line got through before). "alice near" with no separator at all stays

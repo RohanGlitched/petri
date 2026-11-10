@@ -489,7 +489,8 @@ async function actOn(s, world) {
     console.log("  (dry run: not planted)");
     return;
   }
-  // On chain the note ends with the first 16 hex of the NEAR AI answer's response hash, which names its archived bytes.
+  // On chain the note ends with the first 16 hex of the NEAR AI answer's response hash, which names its archived bytes,
+  // only when the runner verified that answer (chainNote): an unverified answer plants with a plain note.
   const onChain = chainNote(note, pick?.tee);
   try {
     await catchUp(s.account);

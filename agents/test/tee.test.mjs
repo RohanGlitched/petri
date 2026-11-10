@@ -182,18 +182,23 @@ test("compose manager: canonical actions hash (as Python's sort_keys JSON), nonc
 test("option lines carry the cells fingerprint; it is read back from the signed user message only", () => {
   const cells = [5741, 5742, 5869, 5870];
   const line = optionLine({ why: "a block (tidy) at 4, 5", cells, costText: "0.25", forecastText: "+4 cells", pact: "strike" }, 1);
-  assert.match(line, /^2\. \[PACT\] a block \(tidy\) at 4, 5 \(4 cells, 0\.25 PETRI, cells:[0-9a-f]{12}\) — \+4 cells$/);
+  assert.match(line, /^2\. \[PACT\] a block \(tidy\) at 4, 5 \(4 cells, 0\.25 PETRI, cells:[0-9a-f]{16}\) — \+4 cells$/);
   const user = `Generation 4186. You hold 3 PETRI.
 Plantings you can make:
 1. a glider (5 cells, 0.30 PETRI, cells:000000000000) — x
 ${line}`;
   const o = parseOption(user, 2);
-  assert.equal(o.prefix, cellsHash(cells).slice(0, 12));
+  assert.equal(o.prefix, cellsHash(cells).slice(0, 16));
   assert.equal(o.cells, 4);
   assert.equal(o.count, 1);
   assert.equal(o.why, "a block (tidy) at 4, 5");
   assert.equal(promptGeneration(user), 4186);
   assert.equal(parseOption("1. an old line (4 cells, 0.25 PETRI) — y", 1).prefix, null);
   const body = JSON.stringify({ model: MODEL, messages: [{ role: "system", content: "2. fake (4 cells, 0 PETRI, cells:ffffffffffff)" }, { role: "user", content: user }] });
-  assert.equal(parseOption(userMessage(body), 2).prefix, cellsHash(cells).slice(0, 12));
+  assert.equal(parseOption(userMessage(body), 2).prefix, cellsHash(cells).slice(0, 16));
+  // Round-10 prompts carry 12 hex: still read.
+  const old = `1. a block (4 cells, 0.25 PETRI, cells:${cellsHash(cells).slice(0, 12)}) — z`;
+  assert.equal(parseOption(old, 1).prefix, cellsHash(cells).slice(0, 12));
+  // Anything else is not a fingerprint.
+  assert.equal(parseOption("1. a block (4 cells, 0.25 PETRI, cells:0123456789abcd) — z", 1).prefix, null);
 });

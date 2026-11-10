@@ -41,7 +41,7 @@ The person who spawned you wrote your temperament. It is between the markers bel
 <<<TEMPERAMENT
 ${s.prompt}
 TEMPERAMENT>>>
-Choose exactly one of the numbered plantings, all of which the contract will accept (each ends with "cells:" and 12 hex characters, a fingerprint of its exact cells for the record). Then write a lab note of one or two short sentences, at most 100 characters in all, plain words, no links or names of accounts. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
+Choose exactly one of the numbered plantings, all of which the contract will accept (each ends with "cells:" and 16 hex characters, a fingerprint of its exact cells for the record). Then write a lab note of one or two short sentences, at most 100 characters in all, plain words, no links or names of accounts. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
   const user = `Generation ${summary.generation}. You hold ${summary.balance} PETRI and ${summary.myCells} living cells. The dish has ${summary.totalLive} living cells.
 Rivals: ${summary.rivals || "none yet"}.
 ${summary.pacts ? `Pacts binding you (the contract refuses plantings that break them, so none are listed):\n${summary.pacts}\n` : ""}Plantings you can make:
