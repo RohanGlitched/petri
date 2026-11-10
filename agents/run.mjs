@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { callDish, CALL_TGAS, liveDish, log, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
 import { candidates, makeRng } from "./strategies.mjs";
-import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally, teeTally, attestationStatus, setTeeArchive } from "./model.mjs";
+import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally, teeTally, attestationStatus, setTeeArchive, nearaiMark, nearaiSince, nearaiRequestTally, teeImageUnpinned } from "./model.mjs";
 import { forecast, forecastText, boxOf } from "./forecast.mjs";
 import { loadMemory, saveMemory, rememberMove, measureOutcomes, bootstrapFromChain, memoryText, movesOf, OUTCOME_GENS } from "./memory.mjs";
 import { runCouncil, pactsFor, pactGens, chainPacts } from "./council.mjs";
@@ -207,7 +207,7 @@ function serveProof(req, res) {
 
 /** The health JSON with what changes between checks: how far the stored dish is behind, the keeper, the attestation. */
 function healthNow() {
-  return { ...(lastHealth ?? {}), tee: { ...teeTally }, attestation: attestationStatus(), dish: dishStatus() };
+  return { ...(lastHealth ?? {}), tee: { ...teeTally }, nearai_requests: nearaiRequestTally(), tee_image_unpinned: teeImageUnpinned(), attestation: attestationStatus(), dish: dishStatus() };
 }
 
 // A read-only window on what the strains did and why, for the site's strains page. No keys or secrets pass through it.
@@ -476,8 +476,12 @@ async function actOn(s, world) {
     c.costText = (c.cost / 1e6).toFixed(2);
     c.forecastText = forecastText(c.forecast, nameOf);
   }
-  // The bench plays by written rules only; the house strains ask the model.
+  // The bench plays by written rules only; the house strains ask the model, once. Every NEAR AI request sent while
+  // the move is decided goes in its log entry (count and hashes), so a re-ask would show.
+  const mark = nearaiMark();
   const pick = s.bench ? null : await choose(s, summary, cands);
+  const asked = nearaiSince(mark, "move");
+  if (asked.count > 1) log(s.name, `sent NEAR AI ${asked.count} requests for one move`);
   const chosen = pick ? cands[pick.index] : cands[0];
   const note = cleanNote(pick?.note) || chosen.why.charAt(0).toUpperCase() + chosen.why.slice(1) + ".";
   if (dry) {
@@ -549,6 +553,7 @@ async function actOn(s, world) {
       chat_id: pick?.chatId ?? null,
       signature: pick?.signature ?? null,
       tee: pick?.tee ?? null,
+      nearai_requests: asked,
       usage: pick?.usage ?? null,
       forecast: chosen.forecast ?? null,
       forecast_ms: fc?.ms ?? null,
@@ -719,7 +724,7 @@ async function health() {
       out[a] = null;
     }
   }
-  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)), modelCalls: modelTally(), tee: { ...teeTally }, keeper_cost: keeperCost() };
+  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)), modelCalls: modelTally(), tee: { ...teeTally }, nearai_requests: nearaiRequestTally(), tee_image_unpinned: teeImageUnpinned(), keeper_cost: keeperCost() };
   if (MAINNET && lastHealth.keeper_cost) log("keeper cost", JSON.stringify(lastHealth.keeper_cost));
   fs.writeFileSync(path.join(LOG_DIR, "health.json"), JSON.stringify(lastHealth, null, 1));
   const low = Object.entries(out).filter(([, v]) => v !== null && v < 0.5);

@@ -7,7 +7,8 @@
 //   node scripts/verify-tee.mjs move.json                    a move entry saved from the log (it names its tx and account)
 //   node scripts/verify-tee.mjs latest --net mainnet         the newest tagged move in the strains' log (the site's
 //                                                            /api/strains, then the VM's log window): what CI checks nightly
-//   options: --no-dcap (skip the Intel quote checks: every check that needs them then FAILS), --pccs intel, --json
+//   options: --no-dcap (skip the Intel quote checks: every check that needs them then FAILS), --pccs intel, --json,
+//            --models <id,id> (the models a signed answer may name; default z-ai/glm-5.3-flash, or PETRI_TEE_MODELS)
 //
 // Transactions are read from FastNEAR, then its archival node (a plain node forgets transactions after a few days), then dRPC.
 // Run it from the repo with the agents' packages installed (cd agents && npm ci). It needs no keys and no access to the
@@ -18,12 +19,16 @@
 //
 // What it checks (every line must PASS; a binding that cannot be checked FAILS, it is never skipped):
 //   1. The transaction: a successful `plant` on the dish, its cells, its note, its block time, read from a NEAR RPC node.
-//   2. The note ends with " · tee:<16 hex>", the start of the SHA-256 of the model's exact response body, and the
-//      dish's own `plants` view holds that tag exactly once, on a planting with the transaction's cells.
+//   2. The note ends with " · tee:<16 hex>", the start of the SHA-256 of the model's exact response body, and in the
+//      dish's own `plants` view the EARLIEST planting carrying that tag by the signer's colony (colony_of(signer)) is a
+//      planting of the transaction's cells. Anyone can copy a tag into their own note, so copies by other colonies are
+//      listed but bind nothing; a second planting by the signer's own colony with the same tag fails (one answer, one
+//      planting).
 //   3. The archived answer: the stored request and response bodies hash to what the record names, and the response
 //      hash starts with the tag.
 //   4. The signature: its text is "<model>:<sha256 request>:<sha256 response>" for the model asked in the request,
-//      signature_kind is provider_tee, and the EIP-191 signer recovered from it is the signing address it names.
+//      that model is one the strains use (z-ai/glm-5.3-flash; --models), signature_kind is provider_tee, and the
+//      EIP-191 signer recovered from it is the signing address it names.
 //   5. The attestation report: its SHA-256 is the one the record names; it echoes the runner's nonce; exactly one model
 //      attestation for that model names the signer; the TDX quote's report_data is <signer><12 zero bytes><nonce>; the
 //      quote verifies against Intel's collateral (dcap-qvl); RTMR3 and MRCONFIGID match the report's event log and app
@@ -32,8 +37,10 @@
 //      quote: same TD, bound to the same nonce and to the hash of its action log, whose latest compose_up is a
 //      production GLM compose file (printed with its file_sha256).
 //   6. The choice, from the signed request alone (nothing the house logged): the answer picks option N; option N in
-//      the signed user message ends with "cells:<12 hex>", and the SHA-256 of the transaction's cells starts with it.
-//   7. Freshness: the response's `created` time is within 180 s of the block that holds the transaction, and the
+//      the signed user message ends with "cells:<16 hex>" (12 hex in prompts before round 11), and the SHA-256 of the
+//      transaction's cells starts with it.
+//   7. Freshness: the response's `created` time is at most 180 s before the block that holds the transaction and at
+//      most 10 s after it (an answer cannot come after the planting it chose; 10 s allows for clock skew), and the
 //      generation in the signed prompt is within 3 of the generation the dish recorded for the planting.
 //   The lab note on chain is the model's note after the guard, or one the rules wrote: printed, not a binding.
 // What remains trusted is printed at the end (and in docs/TEE.md).
@@ -43,7 +50,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkAttestation, checkComposeManager, checkMachine, expectedReportData, PINNED_IMAGES, quoteReportData, recoverPersonal, sha256Hex, verifyQuote } from "../agents/tee.mjs";
-import { cellsHash, parseOption, promptGeneration, teeTagOf, TEE_TAG_RE, userMessage } from "../agents/notes.mjs";
+import { bindTag, cellsHash, freshEnough, MAX_AFTER_S, MAX_BEFORE_S, parseOption, promptGeneration, teeTagOf, TEE_TAG_RE, userMessage } from "../agents/notes.mjs";
 import { safeNote } from "../agents/swarm/guard.mjs";
 import { trimNote } from "../agents/model.mjs";
 
@@ -55,7 +62,6 @@ const NETS = {
   testnet: { rpcs: ["https://rpc.testnet.fastnear.com", "https://archival-rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"], contract: "petri-v6.testnet", vm: "http://136.64.100.170:8790", house: [...HOUSE.map((s) => `petri-${s}.testnet`), "petri-bench-a.testnet", "petri-strains.testnet"] },
   mainnet: { rpcs: ["https://rpc.mainnet.fastnear.com", "https://archival-rpc.mainnet.fastnear.com", "https://near.drpc.org"], contract: "petri-dish.near", vm: "http://136.64.100.170:8791", house: HOUSE.map((s) => `${s}.petri-dish.near`) },
 };
-const MAX_SKEW_S = 180;
 const MAX_GEN_GAP = 3;
 
 const args = process.argv.slice(2);
@@ -64,7 +70,9 @@ const opt = (name) => {
   return i >= 0 ? args[i + 1] : null;
 };
 const flag = (name) => args.includes(`--${name}`);
-const VALUED = new Set(["--net", "--log", "--account", "--pccs", "--source"]);
+const VALUED = new Set(["--net", "--log", "--account", "--pccs", "--source", "--models"]);
+// The models a signed answer may name: the strains ask z-ai/glm-5.3-flash (agents/model.mjs NEARAI_MODEL).
+const MODELS = (opt("models") ?? process.env.PETRI_TEE_MODELS ?? "z-ai/glm-5.3-flash").split(",").map((m) => m.trim()).filter(Boolean);
 const target = args.find((a, i) => !a.startsWith("--") && !VALUED.has(args[i - 1]));
 if (!target) {
   console.error("usage: node scripts/verify-tee.mjs <tx hash | move.json> [--net testnet|mainnet] [--account <signer>] [--source proxy|vm|snapshot|<url>] [--no-dcap] [--pccs intel] [--json]");
@@ -242,8 +250,17 @@ async function main() {
   const tag = teeTagOf(note);
   if (!check("note carries a tee tag", !!tag, tag ? `tee:${tag}` : "no \" · tee:<16 hex>\" at the end: this planting was not chosen by a NEAR AI answer the runner archived")) return;
   const { total, found: tagged } = await plantsWithTag(tag);
-  const plant = tagged[0] ?? null;
-  check("the dish's plants view holds this tag exactly once, on a planting of these cells", tagged.length === 1 && JSON.stringify(plant.cells.map(Number)) === JSON.stringify(cells), `${tagged.length} of ${total} plantings carry tee:${tag}${plant ? `; planting ${plant.index} at generation ${plant.generation}, colony ${plant.colony}` : ""}`);
+  // Anyone can write any tag into a note: only the signer's own colony's plantings count, the earliest first.
+  const mine = await viewDish("colony_of", { account_id: t.transaction.signer_id }).catch(() => null);
+  const { plant, own, others } = bindTag(tagged, mine?.id);
+  check(
+    "the earliest planting carrying this tag by the signer's colony is a planting of these cells, and the colony used the tag once",
+    !!plant && own.length === 1 && JSON.stringify(plant.cells.map(Number)) === JSON.stringify(cells),
+    !mine
+      ? `${t.transaction.signer_id} has no colony on the dish`
+      : `${own.length} of ${total} plantings by colony ${mine.id} (${t.transaction.signer_id}) carry tee:${tag}${plant ? `; the earliest is planting ${plant.index} at generation ${plant.generation}` : ""}${own.length > 1 ? `; later ones: ${own.slice(1).map((p) => p.index).join(", ")}` : ""}`,
+  );
+  if (others.length) info("copies of the tag by other colonies (they bind nothing)", others.map((p) => `planting ${p.index}, colony ${p.colony}, generation ${p.generation}`).join("; "));
 
   // 3. The archived answer.
   const recSrc = await archived("tee", tag);
@@ -267,6 +284,7 @@ async function main() {
   }
   check("signature is the model enclave's (provider_tee, ecdsa)", sig.signature_kind === "provider_tee" && String(sig.signing_algo ?? "ecdsa").toLowerCase() === "ecdsa", `${sig.signature_kind}, ${sig.signing_algo}`);
   check("signed text is <model asked>:<sha256 request>:<sha256 response>", sig.text === `${asked}:${reqSha}:${resSha}` && asked === rec.model, String(sig.text).slice(0, 90));
+  check(`the signed model is one the strains use (${MODELS.join(", ")})`, MODELS.includes(asked) && String(sig.text).startsWith(`${asked}:`), `model ${asked}`);
   const recovered = recoverPersonal(String(sig.text), String(sig.signature));
   const address = String(sig.signing_address ?? "").toLowerCase();
   check("EIP-191 signer recovered from the signature is the signing address", !!recovered && recovered === address, `${recovered}`);
@@ -338,7 +356,11 @@ async function main() {
   );
 
   // 7. Freshness.
-  check(`the response was created within ${MAX_SKEW_S} s of the transaction's block`, Number.isFinite(created) && Math.abs(created - blockS) <= MAX_SKEW_S, Number.isFinite(created) ? `created ${new Date(created * 1000).toISOString()}, block ${new Date(blockS * 1000).toISOString()} (${blockS - created} s)` : "no created time in the response");
+  check(
+    `the response was created at most ${MAX_BEFORE_S} s before the transaction's block and at most ${MAX_AFTER_S} s after it`,
+    freshEnough(created, blockS),
+    Number.isFinite(created) ? `created ${new Date(created * 1000).toISOString()}, block ${new Date(blockS * 1000).toISOString()} (${blockS - created >= 0 ? `${blockS - created} s before` : `${created - blockS} s after`})` : "no created time in the response",
+  );
   const gen = promptGeneration(user);
   check(`the prompt's generation is within ${MAX_GEN_GAP} of the planting's`, gen != null && plant != null && Math.abs(gen - Number(plant.generation)) <= MAX_GEN_GAP, `prompt generation ${gen ?? "?"}, dish recorded ${plant?.generation ?? "?"}`);
 
@@ -358,6 +380,10 @@ const TRUSTED = [
   "  - The NVIDIA GPU evidence (nvidia_payload): send it to NVIDIA's NRAS to check the GPUs; this script does not.",
   `  - The pinned image values (agents/tee.mjs): ${PINNED_IMAGES[0].source}; no published reference values were found.`,
   "  - Intel's collateral (fetched by dcap-qvl through Phala's PCCS, or Intel's with --pccs intel).",
+  "  - That the house asked once. The model answers at temperature 0.7, so the house could ask it several times within",
+  "    the window and plant the answer it prefers; every answer would verify. The runner asks once per move, archives",
+  "    every answer it receives (/tee/<hash>), and lists every NEAR AI request it sent for a move (count and hashes) in",
+  "    the move's log entry (nearai_requests), but nothing on chain commits to the number of requests.",
 ];
 
 main()

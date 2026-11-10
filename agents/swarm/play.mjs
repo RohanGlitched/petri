@@ -10,7 +10,7 @@
 import { callDish, liveDish, view, CONTRACT, NETWORK } from "../lib.mjs";
 import { candidates } from "../strategies.mjs";
 import { forecast, forecastText } from "../forecast.mjs";
-import { askJson, lastModelError } from "../model.mjs";
+import { askJson, lastModelError, nearaiMark, nearaiSince } from "../model.mjs";
 import { pactsFor } from "../council.mjs";
 import { saveRegistry } from "./registry.mjs";
 import { brainLeft, canPayGas, DECISION_FEE, onCurrentDish, SWARM_TGAS } from "./spawn.mjs";
@@ -107,7 +107,10 @@ export async function actSpawned(s, deps) {
     const rivals = world.colonies.filter((c) => c.id !== me.id && (counts[c.id] ?? 0) > 0).map((c) => `${nameOf(c.id)} with ${counts[c.id]} cells`).join(", ");
     const summary = { generation: world.due, balance: (balance / 1e6).toFixed(2), myCells: counts[me.id] ?? 0, totalLive: world.engine.total_live(), rivals, forecastGens: 240, pacts: pacts.lines.join("\n") };
     const { system, user } = prompt(s, summary, cands);
+    const mark = nearaiMark();
     const r = await askJson({ system, user, schema: PICK_SCHEMA, maxTokens: 300, purpose: "spawned" });
+    // Every NEAR AI request sent for this move, in its log entry: a re-ask would show.
+    const asked = nearaiSince(mark, "spawned");
     let index = 0;
     let note = null;
     let noteReview = null;
@@ -183,6 +186,7 @@ export async function actSpawned(s, deps) {
         chat_id: decision.chat_id,
         signature: r?.signature ?? null,
         tee: r?.tee ?? null,
+        nearai_requests: asked,
         usage: r?.usage ?? null,
         brain_fee: decision.fee,
         brain_left: brainLeft(s).toString(),

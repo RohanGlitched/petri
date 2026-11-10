@@ -1,8 +1,10 @@
-# Every night: checks the newest AI move on each dish with scripts/verify-tee.mjs (the move is found in the strains'
-# log; its archived bytes come from the site's proxy, then the VM; the chain from public RPC), and the pinned example
-# moves in proofs/tee from the committed snapshot. Intel's collateral is fetched by dcap-qvl on every run: the quote,
-# machine and compose-manager checks run in full (no --no-dcap). If the collateral service is down the run fails and
-# says so; it is never skipped.
+# Every night: checks the pinned example moves in proofs/tee from the committed snapshot (BLOCKING: the run fails if
+# they do not verify), and the newest AI move on each dish with scripts/verify-tee.mjs (INFORMATIONAL: the move is
+# found in the strains' log, its archived bytes come from the site's proxy, then the VM; it can fail for reasons that
+# are not a broken proof, such as NEAR AI rolling a new machine image that is not pinned yet, when moves fail closed
+# and plant with no tag, or the VM being down, so its result is shown but does not fail the run; docs/TEE.md has the
+# runbook). Intel's collateral is fetched by dcap-qvl on every run: the quote, machine and compose-manager checks run
+# in full (no --no-dcap). If the collateral service is down the pinned check fails and says so; it is never skipped.
 name: TEE moves
 
 on:
@@ -20,10 +22,34 @@ permissions:
   contents: read
 
 jobs:
-  latest:
-    name: Newest AI move on ${{ matrix.network }}
+  pinned:
+    name: Pinned move ${{ matrix.tx }} (${{ matrix.network }}, snapshot)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The README's example: a mainnet house strain's planting chosen by NEAR AI (Congo Red, 10 Nov).
+          - network: mainnet
+            tx: 6SzhCcQDo82GJVbm552zcQdGsSniMAj8f2cjRfsvQ69j
+          # The first testnet move with signed cells fingerprints.
+          - network: testnet
+            tx: 9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix agents
+      - name: verify-tee on the pinned move, archive from proofs/tee only
+        run: node scripts/verify-tee.mjs ${{ matrix.tx }} --net ${{ matrix.network }} --source snapshot
+
+  latest:
+    name: Newest AI move on ${{ matrix.network }} (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -36,16 +62,3 @@ jobs:
       - run: npm ci --prefix agents
       - name: verify-tee latest
         run: node scripts/verify-tee.mjs latest --net ${{ matrix.network }}
-
-  pinned:
-    name: Pinned example move (snapshot, testnet)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm ci --prefix agents
-      - name: verify-tee on the pinned testnet move, archive from proofs/tee only
-        run: node scripts/verify-tee.mjs 9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r --net testnet --source snapshot

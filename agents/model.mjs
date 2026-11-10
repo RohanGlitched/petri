@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkAttestation, newNonce, verifyAnswer, verifyQuote, verifySignerQuotes } from "./tee.mjs";
+import { checkAttestation, newNonce, sha256Hex, verifyAnswer, verifyQuote, verifySignerQuotes } from "./tee.mjs";
 import { optionLine } from "./notes.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -34,6 +34,27 @@ const VERIFY_QUOTES = process.env.PETRI_TEE_DCAP !== "0";
 let attestation = null;
 let attestRetryAt = 0;
 export const teeTally = { verified: 0, unverified: 0 };
+
+// Every request sent to NEAR AI, answered or not, in order: { seq, at, purpose, request_sha256, response_sha256 }. The
+// house could ask the model several times for one move (it answers at temperature 0.7) and plant the answer it likes;
+// the runner never does, and to make that visible each move's log entry lists every request sent while the move was
+// being decided (nearaiSince), and the health JSON counts requests by purpose (nearaiRequestTally).
+const nearaiLog = [];
+let nearaiSeq = 0;
+const nearaiCount = {};
+/** A position in the request log: pass it to nearaiSince() once the move is decided. */
+export const nearaiMark = () => nearaiSeq;
+/** The NEAR AI requests sent since `mark` (for `purpose`, if given): { count, requests: [{ request_sha256, response_sha256 }] }. */
+export function nearaiSince(mark, purpose = null) {
+  const list = nearaiLog.filter((e) => e.seq > mark && (!purpose || e.purpose === purpose));
+  return { count: list.length, requests: list.map((e) => ({ request_sha256: e.request_sha256, response_sha256: e.response_sha256 })) };
+}
+export const nearaiRequestTally = () => ({ ...nearaiCount });
+function noteRequest(purpose, requestSha, responseSha) {
+  nearaiLog.push({ seq: ++nearaiSeq, at: new Date().toISOString(), purpose, request_sha256: requestSha, response_sha256: responseSha });
+  if (nearaiLog.length > 500) nearaiLog.shift();
+  nearaiCount[purpose] = (nearaiCount[purpose] ?? 0) + 1;
+}
 
 function archive(sub, name, text) {
   if (!archiveDir) return;
@@ -60,12 +81,16 @@ async function fetchAttestation() {
   // The machine is pinned (no debug TD, TCB UpToDate or SWHardeningNeeded, the pinned OS image) and the compose
   // manager's own quote must say a production GLM compose file is what runs (tee.mjs).
   if (VERIFY_QUOTES) att = await verifySignerQuotes(att, verifyQuote, { composeManager: true });
+  if (att.unpinned?.length) {
+    if (!unpinnedSeen || unpinnedSeen.mr_td !== att.unpinned[0].mr_td || unpinnedSeen.rt_mr2 !== att.unpinned[0].rt_mr2) console.error("TEE ALERT: NEAR AI served an image that is not pinned; moves fail closed until it is reviewed:", JSON.stringify(att.unpinned[0]));
+    unpinnedSeen = { ...att.unpinned[0], seen_at: new Date().toISOString(), report_sha256: att.sha256, report_ok: att.ok };
+  } else if (att.ok) unpinnedSeen = null;
   archive("attestation", `${att.sha256}.json`, text);
   if (archiveDir) {
     try {
       fs.writeFileSync(path.join(archiveDir, "attestation", "latest.json"), text);
       fs.writeFileSync(path.join(archiveDir, "attestation", "latest.sha256"), att.sha256 + "\n");
-      const entry = { sha256: att.sha256, at: new Date().toISOString(), nonce, model: MODEL, ok: att.ok, reason: att.reason, quotes_verified: !!att.quotes_verified, signers: att.signers.map((s) => ({ address: s.address, tcb_status: s.tcb_status ?? null, image: s.image ?? null, compose: s.compose ?? null })), gateway: att.gateway, rejected: att.rejected };
+      const entry = { sha256: att.sha256, at: new Date().toISOString(), nonce, model: MODEL, ok: att.ok, reason: att.reason, quotes_verified: !!att.quotes_verified, signers: att.signers.map((s) => ({ address: s.address, tcb_status: s.tcb_status ?? null, image: s.image ?? null, compose: s.compose ?? null })), gateway: att.gateway, rejected: att.rejected, unpinned: att.unpinned ?? [] };
       fs.appendFileSync(path.join(archiveDir, "attestation", "index.jsonl"), JSON.stringify(entry) + "\n");
     } catch {
       /* the report itself is archived under its hash */
@@ -92,8 +117,14 @@ async function attestationFor(address) {
 /** The attestation report the strains hold now, for the health JSON. */
 export const attestationStatus = () =>
   attestation
-    ? { sha256: attestation.sha256, at: new Date(attestation.at).toISOString(), ok: attestation.ok, reason: attestation.reason ?? null, quotes_verified: !!attestation.quotes_verified, signers: attestation.signers.map((s) => ({ address: s.address, tcb_status: s.tcb_status ?? null })) }
+    ? { sha256: attestation.sha256, at: new Date(attestation.at).toISOString(), ok: attestation.ok, reason: attestation.reason ?? null, quotes_verified: !!attestation.quotes_verified, signers: attestation.signers.map((s) => ({ address: s.address, tcb_status: s.tcb_status ?? null })), unpinned: attestation.unpinned ?? [] }
     : null;
+
+// The newest machine NEAR AI served that verified but matched no pinned image (tee.mjs PINNED_IMAGES), kept until a
+// report passes again: moves fail closed meanwhile, and the health JSON shows it as tee_image_unpinned so a person can
+// review it and add a pin (docs/TEE.md, "A new image").
+let unpinnedSeen = null;
+export const teeImageUnpinned = () => unpinnedSeen;
 
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-haiku-5-5";
 const claude = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
@@ -203,7 +234,7 @@ export async function askJson({ system, user, schema, maxTokens = 400, purpose =
   lastError = null;
   const errs = [];
   for (const p of ORDER) {
-    const r = p === "claude" ? await askClaude(system, user, schema, maxTokens) : p === "nearai" && KEY ? await askNearAI(system, user, maxTokens) : null;
+    const r = p === "claude" ? await askClaude(system, user, schema, maxTokens) : p === "nearai" && KEY ? await askNearAI(system, user, maxTokens, purpose) : null;
     if (r) {
       const t = (tally[purpose] ??= { calls: 0, input: 0, output: 0 });
       t.calls++;
@@ -250,7 +281,9 @@ async function askClaude(system, user, schema, maxTokens) {
   }
 }
 
-async function askNearAI(system, user, maxTokens) {
+async function askNearAI(system, user, maxTokens, purpose = "move") {
+  let requestSha = null;
+  let responseSha = null;
   try {
     // The exact bytes sent and received: the enclave signs their SHA-256 hashes.
     const requestBody = JSON.stringify({
@@ -265,6 +298,7 @@ async function askNearAI(system, user, maxTokens) {
       // GLM thinks before answering by default; a move needs a short JSON answer, so thinking is off (1-2 s, not 10).
       ...(process.env.NEARAI_THINKING === "1" ? {} : { chat_template_kwargs: { enable_thinking: false } }),
     });
+    requestSha = sha256Hex(requestBody);
     const res = await fetch(`${BASE}/chat/completions`, {
       method: "POST",
       headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json", "x-no-aliasing": "true" },
@@ -272,6 +306,7 @@ async function askNearAI(system, user, maxTokens) {
       signal: AbortSignal.timeout(40_000),
     });
     const responseBody = await res.text();
+    responseSha = sha256Hex(responseBody);
     if (!res.ok) throw new Error(`NEAR AI ${res.status}: ${responseBody.slice(0, 200)}`);
     const body = JSON.parse(responseBody);
     const json = parseJson(body.choices?.[0]?.message?.content ?? "");
@@ -308,5 +343,7 @@ async function askNearAI(system, user, maxTokens) {
     lastError = (e instanceof Error ? e.message : String(e)).slice(0, 160);
     console.error("model failed:", lastError);
     return null;
+  } finally {
+    if (requestSha) noteRequest(purpose, requestSha, responseSha);
   }
 }

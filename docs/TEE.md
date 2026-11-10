@@ -2,8 +2,9 @@
 
 The five house strains (and every strain a visitor spawns) choose their plantings with a model on NEAR AI Cloud,
 `z-ai/glm-5.3-flash`, which runs inside an Intel TDX confidential VM with NVIDIA GPUs. Every planting a NEAR AI answer
-chose carries, at the end of its on-chain lab note, ` · tee:` and the first 16 hex characters of the SHA-256 of that
-answer's exact response body. `scripts/verify-tee.mjs` takes the transaction and checks, from public data only, that
+chose, once the runner has verified that answer (signature, attestation, pinned machine), carries at the end of its
+on-chain lab note ` · tee:` and the first 16 hex characters of the SHA-256 of that answer's exact response body. An
+answer that did not verify is still played, with a plain note: the tag on chain only ever marks a verified answer. `scripts/verify-tee.mjs` takes the transaction and checks, from public data only, that
 the cells it planted are the option the model chose, and that the model answered inside an attested enclave.
 
 ## Check an AI move yourself
@@ -33,12 +34,16 @@ data. `proofs/tee/moves.json` lists the pinned moves, including one such older m
 
 1. **The transaction.** A successful `plant` on the dish, its cells and note, and the time of the block that holds it,
    read from public RPC (FastNEAR, its archival node, dRPC).
-2. **The tag, on the dish itself.** The note ends with ` · tee:<16 hex>`, and the dish's own `plants` view holds that
-   tag exactly once, on a planting of exactly those cells.
+2. **The tag, on the dish itself.** The note ends with ` · tee:<16 hex>`. In the dish's own `plants` view, the
+   earliest planting carrying that tag by the signer's colony (`colony_of(signer)`) is a planting of exactly those
+   cells, and that colony carries the tag once (one answer, one planting). Anyone can copy a tag into a note of their
+   own; such copies by other colonies are listed as information and bind nothing, so they cannot break a real move's
+   check.
 3. **The archived answer.** The request and response bodies hash to what the record names, and the response hash
    starts with the tag.
 4. **The signature.** NEAR AI's enclave signs `<model>:<sha256 request>:<sha256 response>` (EIP-191). The signer
-   recovered from the signature is the signing address it names, and the model is the one the request asked for.
+   recovered from the signature is the signing address it names, and the model is the one the request asked for and
+   one the strains use: `z-ai/glm-5.3-flash` (`--models a,b` or `PETRI_TEE_MODELS` to accept others).
 5. **The attestation.** The report was fetched with a fresh nonce of the runner's own. One model attestation for the
    model names the signer; its TDX quote's report_data is `<signer><12 zero bytes><nonce>`; the quote verifies against
    Intel's collateral (dcap-qvl); RTMR3 replays from the event log; MRCONFIGID is the hash of the app compose.
@@ -50,10 +55,12 @@ data. `proofs/tee/moves.json` lists the pinned moves, including one such older m
      the same MRTD and RTMR0-3 as the model's quote, and requires the latest compose_up still running to be a production
      GLM compose file (`prod/…`, starting a `glm53` service); it prints the file and its `file_sha256`.
 6. **The choice, from the signed request alone.** Every option line the model reads ends with `cells:` and the first
-   12 hex characters of the SHA-256 of that option's cells (JSON array of cell indices). The model's answer picks
+   16 hex characters of the SHA-256 of that option's cells (JSON array of cell indices; prompts written before
+   11 November 2026 carry 12, which are still read). The model's answer picks
    option N; option N in the signed user message must be the only line numbered N, and the SHA-256 of the
    transaction's cells must start with its fingerprint. Nothing the house logged is needed.
-7. **Freshness.** The response's `created` time is within 180 seconds of the transaction's block, and the generation
+7. **Freshness.** The response's `created` time is at most 180 seconds before the transaction's block and at most 10
+   seconds after it (an answer cannot come after the planting it chose; 10 s allows for clock skew), and the generation
    in the signed prompt is within 3 of the generation the dish recorded for the planting.
 
 The runner applies the same machine and compose-manager checks to every attestation report it fetches
@@ -75,6 +82,12 @@ fail too.
   machines (`dstack-nvidia-0.5.11` and `-0.5.12` app names, 8 GPUs). A new image fails the check until someone reviews
   it and adds its values.
 - **Intel's collateral**, fetched by dcap-qvl through Phala's PCCS (or Intel's own with `--pccs intel`).
+- **That the house asked once.** The model answers at temperature 0.7, so the house could ask it several times within
+  the freshness window and plant the answer it prefers; every one of those answers would verify. The runner asks once
+  per move. To make a re-ask visible it archives every answer it receives (under its response hash, served at
+  `/tee/<hash>`), lists every NEAR AI request it sent while deciding a move in that move's log entry
+  (`nearai_requests`: the count and each request's and response's SHA-256), and counts requests by purpose in its
+  health JSON. Nothing on chain commits to the number of requests, so this stays a matter of trust.
 
 ## Where the archived bytes come from
 
@@ -87,8 +100,36 @@ fail too.
 3. the snapshot committed in `proofs/tee/` (`scripts/snapshot-tee.mjs <tx> --net <net>` adds one).
 
 `--source proxy|vm|snapshot|<url>` picks one. The bytes are checked by hash, so a source can withhold them but cannot
-alter them unnoticed. A nightly workflow (`.github/workflows/tee.yml`) runs the check on the newest tagged move on each
-dish and on the pinned testnet move from the snapshot alone.
+alter them unnoticed. A nightly workflow (`.github/workflows/tee.yml`) checks the pinned moves (the mainnet example above
+and the testnet one) from the snapshot alone, and fails the run if they do not verify; it also checks the newest tagged
+move on each dish, as information only: that one can fail for reasons that are not a broken proof (the VM is down, or
+NEAR AI is serving a new image that is not pinned yet, below).
+
+## A new image
+
+NEAR AI can roll a new machine image at any time. The checks then fail closed: answers from the new image are not
+verified, so moves are still played (by NEAR AI's choice, or the rules') but plant with a plain note and no tag. The
+runner says so at once:
+
+- its health JSON (`/health` on the log window, and `health.json`) carries `tee_image_unpinned`: the new machine's
+  `mr_td`, `rt_mr0`, `rt_mr1`, `rt_mr2`, `os_image_hash`, app name, TCB status and debug bit, the report's SHA-256 and
+  when it was seen; the attestation index (`/attestation/index.jsonl`) lists it under `unpinned` for every report;
+- its log prints `TEE ALERT: NEAR AI served an image that is not pinned`.
+
+To review and pin it:
+
+1. Fetch the report it names (`/attestation/<sha256>` on the log window) and run the move checks on any answer it
+   signed: `node scripts/verify-tee.mjs <tx> --net <net>` shows exactly which machine check fails.
+2. Check the new image the way the first was checked: the quote verifies against Intel's collateral, the TD is not a
+   debug TD, the TCB status is accepted, RTMR3 replays from the event log, the compose manager's quote comes from the
+   same TD and names a production GLM compose file, and the os_image_hash and app name are a dstack-nvidia release
+   (compare with NEAR AI's and dstack's release notes; there are no published reference values to compare with).
+3. Fetch two or three more reports (`curl` the attestation endpoint with your own nonce, or restart the runner, which
+   fetches one at start) and confirm the new values are stable across machines.
+4. Add an entry to `PINNED_IMAGES` in `agents/tee.mjs` with the five values, the app name and a `source` line that says
+   when and how many reports it was seen in. Keep the old entry: the pinned moves in `proofs/tee` were made on it.
+   Run `cd agents && npm test`, deploy the runner, and check that `tee_image_unpinned` clears and the next move carries
+   a tag that `verify-tee.mjs` passes.
 
 ## The lab note guard
 

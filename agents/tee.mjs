@@ -69,6 +69,19 @@ export function expectedReportData(address, nonce) {
   return lower(address).replace(/^0x/, "") + "00".repeat(12) + lower(nonce);
 }
 
+/** The os_image_hash a model attestation's event log names (the IMR 3 "os-image-hash" event), or null. Not a check. */
+export function osImageHashOf(a) {
+  try {
+    const tcb = typeof a?.info?.tcb_info === "string" ? JSON.parse(a.info.tcb_info) : a?.info?.tcb_info;
+    let events = typeof a?.event_log === "string" ? JSON.parse(a.event_log) : a?.event_log ?? tcb?.event_log ?? [];
+    if (typeof events === "string") events = JSON.parse(events);
+    const e = (events ?? []).find((x) => Number(x.imr) === 3 && x.event === "os-image-hash");
+    return e ? String(e.event_payload ?? "").toLowerCase() : tcb?.os_image_hash ?? a?.info?.os_image_hash ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Checks an attestation report (its exact text) for model `model` and our `nonce`. Returns
  * { ok, reason, sha256, nonce, model, signers: [{ address, algo, model_name, quote }], gateway, rejected: [...] }.
@@ -100,7 +113,7 @@ export function checkAttestation(text, { nonce, model }) {
     if (!rd) why.push("no TDX quote");
     else if (rd !== expectedReportData(address, out.nonce)) why.push("the quote's report_data does not bind this address and our nonce");
     if (why.length) out.rejected.push({ address, model_name: a?.model_name ?? null, why });
-    else out.signers.push({ address, algo: "ecdsa", model_name: a.model_name, quote: a.intel_quote, compose_manager: a.compose_manager_attestation ?? null });
+    else out.signers.push({ address, algo: "ecdsa", model_name: a.model_name, quote: a.intel_quote, compose_manager: a.compose_manager_attestation ?? null, os_image_hash: osImageHashOf(a), app_name: a?.info?.app_name ?? null });
   }
   out.ok = out.signers.length > 0;
   if (!out.ok) out.reason = `no model attestation passed: ${out.rejected.map((r) => r.why.join(", ")).join("; ")}`.slice(0, 300);
@@ -237,6 +250,21 @@ export async function checkComposeManager(cm, { nonce, modelQuote, verify = veri
   return { ok: checks.every((c) => c.ok), latest, checks };
 }
 
+/** What a person needs to review an image the pins do not name, in the shape of a PINNED_IMAGES entry. */
+export function unpinnedImage(signer, q) {
+  return {
+    address: signer.address,
+    app_name: signer.app_name ?? null,
+    os_image_hash: signer.os_image_hash ?? null,
+    mr_td: q.mr_td,
+    rt_mr0: q.rt_mr0,
+    rt_mr1: q.rt_mr1,
+    rt_mr2: q.rt_mr2,
+    tcb_status: q.status,
+    debug: q.debug,
+  };
+}
+
 /**
  * Runs verifyQuote on every signer of a checked attestation and keeps only those whose quote verifies, whose
  * verified report_data is the one we expect, and whose machine passes checkMachine() (no debug TD, an accepted TCB,
@@ -246,9 +274,13 @@ export async function checkComposeManager(cm, { nonce, modelQuote, verify = veri
 export async function verifySignerQuotes(att, verify = verifyQuote, { composeManager = false } = {}) {
   if (!att?.ok) return att;
   const kept = [];
+  att.unpinned = [];
   for (const s of att.signers) {
     const q = await verify(s.quote);
     const machine = q.ok ? checkMachine(q) : null;
+    // A verified, non-debug quote on an accepted TCB whose image is not pinned: NEAR AI may have rolled a new image.
+    // It still fails (closed); its measurements are kept so a person can review them and add a pin (docs/TEE.md).
+    if (q.ok && !machine.image) att.unpinned.push(unpinnedImage(s, q));
     const cm = q.ok && machine.ok && composeManager ? await checkComposeManager(s.compose_manager, { nonce: att.nonce, modelQuote: q, verify }) : null;
     if (cm && !cm.ok) att.rejected.push({ address: s.address, model_name: s.model_name, why: [`compose manager: ${cm.checks.filter((c) => !c.ok).map((c) => `${c.name} (${c.detail})`).join(", ")}`] });
     else if (q.ok && q.report_data === expectedReportData(s.address, att.nonce) && machine.ok)

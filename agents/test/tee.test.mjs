@@ -5,7 +5,7 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { checkAttestation, checkComposeManager, checkMachine, expectedReportData, PINNED_IMAGES, pyCanonicalJson, quoteReportData, recoverPersonal, sha256Hex, verifyAnswer, verifySignerQuotes } from "../tee.mjs";
-import { cellsHash, optionLine, parseOption, promptGeneration, userMessage } from "../notes.mjs";
+import { bindTag, cellsHash, freshEnough, optionLine, parseOption, promptGeneration, userMessage } from "../notes.mjs";
 
 const MODEL = "z-ai/glm-5.3-flash";
 
@@ -201,4 +201,49 @@ ${line}`;
   assert.equal(parseOption(old, 1).prefix, cellsHash(cells).slice(0, 12));
   // Anything else is not a fingerprint.
   assert.equal(parseOption("1. a block (4 cells, 0.25 PETRI, cells:0123456789abcd) — z", 1).prefix, null);
+});
+
+test("a tag binds to the earliest planting by the signer's colony; copies by other colonies bind nothing", () => {
+  const p = (index, colony, cells = [1, 2, 3]) => ({ index, colony, generation: 100 + index, cells });
+  // Rivals copied the tag into their own notes (one even listed earlier): neither binds, so neither breaks the check.
+  const tagged = [p(7, 31, [9, 9]), p(9, 4), p(12, 31, [8])];
+  const b = bindTag(tagged, 4);
+  assert.equal(b.plant.index, 9);
+  assert.equal(b.own.length, 1);
+  assert.deepEqual(b.others.map((x) => x.index), [7, 12]);
+  // The same colony using one answer for two plantings: the earliest binds, and own.length says it was reused.
+  const twice = bindTag([p(15, 4, [5]), p(9, 4)], 4);
+  assert.equal(twice.plant.index, 9);
+  assert.equal(twice.own.length, 2);
+  // A signer with no colony binds nothing.
+  assert.equal(bindTag(tagged, null).plant, null);
+  assert.equal(bindTag(tagged, 99).plant, null);
+});
+
+test("freshness is asymmetric: up to 180 s before the block, up to 10 s after it", () => {
+  const block = 1_000_000;
+  assert.equal(freshEnough(block - 180, block), true);
+  assert.equal(freshEnough(block - 181, block), false);
+  assert.equal(freshEnough(block + 10, block), true);
+  assert.equal(freshEnough(block + 11, block), false);
+  assert.equal(freshEnough(block + 120, block), false);
+  assert.equal(freshEnough(NaN, block), false);
+});
+
+test("an unpinned image fails closed and is reported with its measurements for review", async () => {
+  const signer = enclave();
+  const text = report({ nonce, signer, gateway: enclave() });
+  const att = checkAttestation(text, { nonce, model: MODEL });
+  const fresh = { ...PIN, rt_mr2: "77".repeat(48) };
+  await verifySignerQuotes(att, async () => ({ ok: true, status: "UpToDate", report_data: expectedReportData(signer.address, nonce), ...fresh }));
+  assert.equal(att.ok, false);
+  assert.equal(att.unpinned.length, 1);
+  assert.equal(att.unpinned[0].rt_mr2, "77".repeat(48));
+  assert.equal(att.unpinned[0].mr_td, PIN.mr_td);
+  assert.equal(att.unpinned[0].address, signer.address);
+  // A pinned image reports nothing.
+  const ok = checkAttestation(text, { nonce, model: MODEL });
+  await verifySignerQuotes(ok, async () => ({ ok: true, status: "UpToDate", report_data: expectedReportData(signer.address, nonce), ...PIN }));
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.unpinned, []);
 });

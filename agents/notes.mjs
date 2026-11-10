@@ -74,3 +74,20 @@ export function userMessage(requestBody) {
     return "";
   }
 }
+
+/**
+ * Which planting a tag binds to, from every planting on the dish whose note carries it ({ index, colony, cells, ... }
+ * from the dish's `plants` view) and the colony of the transaction's signer: the earliest planting by that colony.
+ * Anyone can copy a tag into their own note, so plantings by other colonies are returned apart (`others`) and bind
+ * nothing. A verifier also wants `own.length === 1`: one answer, one planting.
+ */
+export function bindTag(tagged, colonyId) {
+  const own = colonyId == null ? [] : tagged.filter((p) => Number(p.colony) === Number(colonyId)).sort((a, b) => Number(a.index) - Number(b.index));
+  return { plant: own[0] ?? null, own, others: tagged.filter((p) => !own.includes(p)) };
+}
+
+// An answer comes before the planting it chose: its `created` time is at most MAX_BEFORE_S before the block holding
+// the transaction, and at most MAX_AFTER_S after it (the two clocks may differ by a few seconds).
+export const MAX_BEFORE_S = 180;
+export const MAX_AFTER_S = 10;
+export const freshEnough = (createdS, blockS) => Number.isFinite(createdS) && Number.isFinite(blockS) && blockS - createdS <= MAX_BEFORE_S && createdS - blockS <= MAX_AFTER_S;
