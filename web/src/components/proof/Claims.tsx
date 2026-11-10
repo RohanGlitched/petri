@@ -8,6 +8,7 @@ import { CONTRACTS, EXPLORERS, REPO, type Network } from "@/lib/config";
 import { readError } from "@/lib/rpc";
 import { forReplay, readDishAt, type AccessKey, type DishRead, type SourceMeta } from "@/lib/netread";
 import { BUILD_HASH, Replayer } from "@/lib/replay";
+import { LOCKED } from "@/lib/facts";
 import { strainOf } from "@/lib/strains";
 import { sideOfAccount } from "@/lib/sides";
 import { useFreeMainnet } from "@/lib/free-mainnet";
@@ -70,23 +71,23 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
   const waiting = !m || !t;
   const out: Row[] = [];
 
-  // 1. The key.
+  // 1. The key. petri-dish.near's only full-access key was deleted on LOCKED.date; the row reads the count live.
   const mk = m?.acct.fullAccess;
   out.push({
     id: "keys",
-    // Until the key is gone this row says when it goes; with 0 keys it turns green by itself.
-    claim: mk === 0 ? "Nobody can change the mainnet contract" : "Mainnet becomes immutable on 14 November",
-    how: "Full-access keys on petri-dish.near, from view_access_key_list. The team keeps one until the final verify on 14 November, then deletes it and the contract has 0 keys; the testnet dish keeps its key for fixes.",
+    claim: mk === undefined || mk === 0 ? `Mainnet is immutable since ${LOCKED.short} (DeleteKey ${LOCKED.tx.slice(0, 6)}…)` : "Mainnet has a full-access key again",
+    how: `Full-access keys on petri-dish.near, from view_access_key_list. The team deleted the only one on ${LOCKED.date} after a final verify (Everything matches), so nobody can deploy other code, relaunch the dish or move its NEAR. The testnet dish keeps its key so a bug there can still be fixed.`,
     value: both((d) => (
       <>
         <span className="num">{d.acct.fullAccess}</span> full-access key{d.acct.fullAccess === 1 ? "" : "s"} on {CONTRACTS[d.dish.net]}
+        {d.dish.net === "testnet" && d.acct.fullAccess > 0 ? <small className="muted"> (kept for fixes)</small> : null}
       </>
     )),
-    status: mk === undefined ? "wait" : mk === 0 ? "pass" : "warn",
-    statusText: mk === undefined ? "reading" : mk === 0 ? "0 keys: locked" : "immutable on 14 Nov",
+    status: mk === undefined ? "wait" : mk === 0 ? "pass" : "fail",
+    statusText: mk === undefined ? "reading" : mk === 0 ? "0 keys: locked" : `${mk} key${mk === 1 ? "" : "s"}`,
     links: [
+      { label: "the DeleteKey transaction", href: LOCKED.url },
       { label: "keys on NearBlocks", href: `${EXPLORERS.mainnet}/address/${CONTRACTS.mainnet}?tab=accesskeys` },
-      { label: "relaunch.rs (what the key could run)", href: code("contract/src/relaunch.rs") },
       { label: "CI prints the count", href: code(".github/workflows/live.yml") },
     ],
   });
@@ -260,12 +261,15 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
 
   // 8. TEE-verified model answers.
   const tee = (d: NetData) => {
-    const acts = (d.log?.actions ?? []) as { tee?: { ok?: boolean } | null; decided_by?: string; model?: string | null }[];
+    const acts = (d.log?.actions ?? []) as { tee?: { ok?: boolean } | null; decided_by?: string; model?: string | null; note?: string; option_cells_sha256?: unknown }[];
     const byModel = acts.filter((a) => a.decided_by === "model");
     const claude = byModel.filter((a) => /claude/i.test(a.model ?? ""));
     const nearAi = byModel.filter((a) => !/claude/i.test(a.model ?? ""));
     return {
       ok: nearAi.filter((a) => a.tee?.ok === true).length,
+      // Signature verified AND tagged on chain AND the signed prompt binds each option to its cells: the moves
+      // scripts/verify-tee.mjs can check end to end from the transaction hash alone.
+      e2e: nearAi.filter((a) => a.tee?.ok === true && a.option_cells_sha256 && / · tee:[0-9a-f]{16}$/.test(a.note ?? "")).length,
       nearAi: nearAi.length,
       // NEAR AI answers logged before the agents tagged each move with its proof carry no TEE record to check.
       untagged: nearAi.filter((a) => !a.tee).length,
@@ -288,7 +292,8 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
           <span className="num">
             {x.ok} of {x.nearAi}
           </span>{" "}
-          NEAR AI moves verified, of the latest {x.all}.
+          NEAR AI moves signature verified, of the latest {x.all}; <span className="num">{x.e2e}</span> tagged and bound to their cells, which
+          verify-tee checks end to end.
           <small className="muted" style={{ display: "block" }}>
             The rest: {x.claude} chosen by Claude Haiku when NEAR AI did not answer (no enclave, nothing to verify)
             {x.rules ? `, ${x.rules} by the written rules` : ""}
@@ -299,9 +304,10 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
       );
     }),
     status: waiting ? "wait" : teeAny ? "pass" : "warn",
-    statusText: waiting ? "reading" : teeM && teeM.nearAi ? `${teeM.ok}/${teeM.nearAi} verified` : teeAny ? "verified on testnet" : "none in the log now",
+    statusText: waiting ? "reading" : teeM && teeM.nearAi ? `${teeM.ok}/${teeM.nearAi} signatures` : teeAny ? "verified on testnet" : "none in the log now",
     links: [
       { label: "agents/tee.mjs", href: code("agents/tee.mjs") },
+      { label: "scripts/verify-tee.mjs", href: code("scripts/verify-tee.mjs") },
       { label: "agents/model.mjs", href: code("agents/model.mjs") },
     ],
   });

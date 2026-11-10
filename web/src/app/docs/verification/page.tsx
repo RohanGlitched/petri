@@ -2,7 +2,8 @@ import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { NetTabs } from "@/components/docs/NetTabs";
 import { Callout, Doc, Ext, Formula, H2, H3, Steps, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT, BUILD_DIGEST, BUILD_IMAGE, CODE_HASH, CONTRACT_VERSION, NEAR_SDK, RELAUNCHED, REPO, SITE, UPGRADED, VERIFY, VERIFY_CLI_CHECKS, VERIFY_CLI_ROWS } from "@/components/docs/facts";
+import { BUILD_COMMIT, BUILD_DIGEST, BUILD_IMAGE, CODE_HASH, CONTRACT_VERSION, NEAR_SDK, RELAUNCHED, REPO, SITE, UPGRADED, VERIFY, VERIFY_CLI_CHECKS, VERIFY_CLI_ROWS, LOCKED } from "@/components/docs/facts";
+import { MAINNET_CAPTURE } from "@/components/docs/verify-capture";
 
 export const metadata = docMetadata("verification");
 
@@ -51,7 +52,7 @@ const CHECKS: [string, string][] = [
   ["Colony kept PETRI", "Every colony's kept PETRI (the colonies view) equals the replay's: a guest's claims, purchases and royalties, a first NEAR's unclaimed earnings, credit-bought PETRI, less what plantings and slides spent first."],
   ["Solvent (NEAR held >= owed, from the ledger)", "The account's balance minus its storage, plus wNEAR held, covers the vault, the credit pool, unspent credit, unclaimed winnings and pending NEAR, every term recomputed from the ledger rather than read from the contract."],
   ["Deployed code hash", "The account's code hash equals the reproducible build's (or --code-hash)."],
-  ["Full-access keys", "Reported as a note, never a failure: the count of full-access keys on the contract account (1, team-held, see The lock). New code would change the code hash, which the row above checks."],
+  ["Full-access keys", "The count of full-access keys on the contract account, never a failure. 0 prints as PASS (mainnet since 10 November 2026: nobody can deploy other code or relaunch); a key prints as a disclosed note (testnet keeps one for fixes), and new code would change the code hash, which the row above checks."],
 ];
 
 export default function Page() {
@@ -85,7 +86,7 @@ export default function Page() {
           <tr>
             <td>Can that code be replaced?</td>
             <td>
-              Only by the one team-held full-access key on the contract account, and any new code changes the code hash this check compares. <a href="#keys">The lock</a>.
+              On mainnet, never: <C>petri-dish.near</C> has had no access key since {LOCKED.date}. On testnet, only by the one full-access key the team keeps for fixes, and new code changes the code hash this check compares. <a href="#keys">The lock</a>.
             </td>
           </tr>
           <tr>
@@ -100,16 +101,16 @@ node scripts/verify.mjs --network testnet           # petri-v6.testnet (the defa
 node scripts/verify.mjs --contract other.testnet --code-hash <base58>   # any dish, any expected hash
 node scripts/verify.mjs --dump <file>               # a snapshot the contract's replay test wrote with PETRI_DUMP`}</Code>
       <p>
-        Exit status 0 means everything matched (the full-access key is a note, not a check), 1 means at least one differed, 2 means the dish could not be read. It needs Node 20 or later. Reads go to FastNEAR first and fail over to dRPC and other keyless public providers, backing off on a 429 as its <C>Retry-After</C> asks; <C>--rpc &lt;url&gt;</C> puts a provider you choose (or several, comma-separated) first. The deprecated <C>rpc.*.near.org</C> endpoints are not used. With <C>--dump</C> it replays a snapshot written by <C>PETRI_DUMP=&lt;file&gt; cargo test -p petri-contract replaying_the_ledger</C> instead of a live dish, and leaves out the two account rows.
+        Exit status 0 means everything matched (a full-access key is a note, not a failed check), 1 means at least one differed, 2 means the dish could not be read. It needs Node 20 or later. Reads go to FastNEAR first and fail over to dRPC and other keyless public providers, backing off on a 429 as its <C>Retry-After</C> asks; <C>--rpc &lt;url&gt;</C> puts a provider you choose (or several, comma-separated) first. The deprecated <C>rpc.*.near.org</C> endpoints are not used. With <C>--dump</C> it replays a snapshot written by <C>PETRI_DUMP=&lt;file&gt; cargo test -p petri-contract replaying_the_ledger</C> instead of a live dish, and leaves out the two account rows.
       </p>
       <Callout kind="note">
         <p>
-          Both dishes exit 0 when everything else matches. The full-access key row prints as a disclosed note, <C>Full-access keys 1 (team-held, see The lock)</C>, and does not count as a difference.
+          Both dishes exit 0 when everything matches. On mainnet the last row reads <C>PASS Full-access keys 0 (nobody can deploy other code or relaunch)</C>. On testnet it prints as a disclosed note on the key the team keeps there, <C>note Full-access keys 1 (team-held, see The lock; …)</C>, and does not count as a difference.
         </p>
       </Callout>
 
       <H2 id="checks">Every check</H2>
-      <p>The {VERIFY_CLI_ROWS} rows <C>scripts/verify.mjs</C> prints, in order: {VERIFY_CLI_CHECKS} that must match and one note. The browser&rsquo;s <C>/verify</C> runs the same replay and shows {VERIFY.checks} checks and the note in its own wording (<a href="#browser">below</a>).</p>
+      <p>The {VERIFY_CLI_ROWS} rows <C>scripts/verify.mjs</C> prints, in order: {VERIFY_CLI_CHECKS} that must match and one on the keys. The browser&rsquo;s <C>/verify</C> runs the same replay and shows {VERIFY.checks} checks and the keys row in its own wording (<a href="#browser">below</a>).</p>
       <Table>
         <thead>
           <tr>
@@ -127,57 +128,9 @@ node scripts/verify.mjs --dump <file>               # a snapshot the contract's 
         </tbody>
       </Table>
       <p>
-        After the rows it prints the NEP-330 source link and build command, how many idle tide generations were skipped, the NEAR owed against the NEAR held, and a line about the full-access key while one exists. For the first colonies whose earnings or winnings differ, and the first slides whose holder or royalties differ, it prints the contract&rsquo;s and the replay&rsquo;s numbers.
+        After the rows it prints the NEP-330 source link and build command, how many idle tide generations were skipped, the NEAR owed against the NEAR held, and the full-access key count (PASS at 0, a note otherwise). For the first colonies whose earnings or winnings differ, and the first slides whose holder or royalties differ, it prints the contract&rsquo;s and the replay&rsquo;s numbers.
       </p>
-      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing (block 222987157, minutes after the relaunch)" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222987157: 19 generations, 15 ledger entries, 5 colonies, 0 tides.
-  match   History chain                                328c0669f420809b4da8bd710a7c08937a149fa50badcdb80c52c555c25b884f
-  match   Board hash                                   19febaa9237ece9984b60a2881f71521e6830ebdf41751419f19c9d0e08bae9e
-  match   Living cells                                 169
-  match   Legal plantings                              5 of 5
-  match   Planting prices                              5 of 5
-  match   Planting fees                                5 of 5
-  match   Licensed plantings: shape, holder, royalty   0 of 0
-  match   Purchases on the curve                       5 of 5
-  match   Sales on the curve and allowance             0 of 0
-  match   Tides                                        0 of 0
-  match   Claims of exactly what was owed              0 of 0
-  match   Refunds tied to their payouts                0 of 0
-  match   Sales for NEAR, NEAR claims and pact payments by colonies holding no kept PETRI 0 of 0
-  match   Pacts kept to the rules and plantings under pacts 0 of 0
-  match   PETRI held for pact offers                   0.000000
-  match   Pacts                                        0
-  match   Specimens                                    0 of 0 match the dish
-  match   Slide holders and royalties                  0 of 0
-  match   Agar                                         999,022.468025
-  match   Sold                                         1,072.002455
-  match   Burned                                       94.470480
-  match   Burned by specimens                          0.000000
-  match   Royalties                                    0.000000
-  match   Returned to the agar                         94.470480
-  match   Bought back                                  0.000000
-  match   Keeper share                                 0.000000
-  match   Colony earnings                              5 of 5
-  match   Vault (NEAR)                                 0.23781
-  match   NEAR paid in                                 0.23781
-  match   NEAR paid at tides                           0
-  match   Vault shares, bounties as credit             0
-  match   Sales paid as credit                         0
-  match   Colony tide winnings                         5 of 5
-  match   Credit pool                                  0
-  match   Credit paid at tides                         0
-  match   Credit sponsored                             0
-  match   Credit spent                                 0
-  match   Credit taken back                            0
-  match   NEAR owed to colonies                        0
-  match   Pending NEAR                                 0
-  match   Colony credit winnings                       5 of 5
-  match   Colony kept PETRI                            5 of 5
-  match   Solvent (NEAR held >= owed, from the ledger) yes
-  match   Deployed code hash                           CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD
-  note    Full-access keys                             1 (team-held, see The lock)
-Source: https://github.com/RohanGlitched/petri/tree/27a59761af835f2278b7cf28676c3acf0fdda538; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
-Owed, from the ledger: 0.23781 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.289504143558987700000003 NEAR.
-Everything matches.`}</Code>
+      <Code lang="text" title="node scripts/verify.mjs --network mainnet, 10 November 2026 (block 223923613, after the key was deleted)" copy={false}>{MAINNET_CAPTURE}</Code>
 
       <H2 id="replay">How the replay works</H2>
       <Steps>
@@ -300,7 +253,7 @@ node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
 
       <H2 id="keys">The lock: check the keys</H2>
       <p>
-        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Each contract account has one full-access key, held by the team, so a bug can be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 on {RELAUNCHED}, with a fresh ledger anyone can replay (the {CONTRACT_VERSION} code-only upgrade on {UPGRADED} kept that state). On mainnet the team holds it only until a final verify on 14 November 2026 and then deletes it, so <C>petri-dish.near</C> is left with no keys at all (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
+        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Until {LOCKED.date} each contract account had one, held by the team so a bug could be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 on {RELAUNCHED}, with a fresh ledger anyone can replay (the {CONTRACT_VERSION} code-only upgrade on {UPGRADED} kept that state). On {LOCKED.date}, after a final verify (Everything matches, 5,016 generations, 4 tides), the team deleted the mainnet key (<a href={LOCKED.url}>the DeleteKey transaction</a>): <C>petri-dish.near</C> has no keys at all, so nobody can deploy other code, relaunch it or move its NEAR, and a bug found there can never be fixed. The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
       </p>
       <NetTabs
         mainnet={<Code lang="sh" title="mainnet">{`near account list-keys petri-dish.near network-config mainnet now
@@ -316,7 +269,7 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
   "params": { "request_type": "view_access_key_list", "finality": "final", "account_id": "petri-v6.testnet" }
 }' | jq '.result.keys[] | {public_key, permission: .access_key.permission}'`}</Code>}
       />
-      <Table caption={`Keys at the time of writing (${RELAUNCHED}, after the ${CONTRACT_VERSION} relaunch)`}>
+      <Table caption={`Keys now (since ${LOCKED.date})`}>
         <thead>
           <tr>
             <th>Account</th>
@@ -330,9 +283,9 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
               <C>petri-dish.near</C>
             </td>
             <td>
-              <C>ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH</C>
+              none (<C>ed25519:FKXWETuBdQcWASjXGsVPHMpug6L9b7ES3LDagVYoNPMH</C> was deleted in <a href={LOCKED.url}>{LOCKED.tx.slice(0, 8)}…</a>)
             </td>
-            <td>full access</td>
+            <td>none: <C>&quot;keys&quot;:[]</C></td>
           </tr>
           <tr>
             <td>
@@ -345,9 +298,9 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
           </tr>
         </tbody>
       </Table>
-      <Callout kind="note" title="What the key can and cannot do">
+      <Callout kind="note" title="What the testnet key can and cannot do">
         <p>
-          The key cannot change anything quietly. New code changes the account&rsquo;s code hash, and <C>scripts/verify.mjs</C> compares that hash with the published reproducible build on every run. The verifier reports the key as a disclosed note, not a failed check. To see the keys yourself, run the commands above and compare them with the table.
+          The testnet key cannot change anything quietly. New code changes the account&rsquo;s code hash, and <C>scripts/verify.mjs</C> compares that hash with the published reproducible build on every run; the verifier reports the key as a disclosed note, not a failed check. On mainnet there is nothing left to report: the verifier prints <C>PASS Full-access keys 0</C>. To see the keys yourself, run the commands above and compare them with the table.
         </p>
       </Callout>
 
@@ -357,11 +310,11 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
       </p>
       <ul>
         <li>
-          It shows {VERIFY.checks} checks and the note in its own wording (listed in <C>web/src/components/verify/VerifyRun.tsx</C>). Next to the CLI it has one row for every PETRI burned, and no rows of their own for the code hash, the credit pool, credit paid at tides, sales and shares paid as credit, or each colony&rsquo;s credit winnings. Its credit, NEAR owed, pending and solvency rows are recomputed from the ledger as the CLI&rsquo;s are.
+          It shows {VERIFY.checks} checks and the note in its own wording (listed in <C>web/src/components/verify/VerifyRun.tsx</C>). Next to the CLI it has one row for every PETRI burned, and no rows of their own for the credit pool, credit paid at tides, sales and shares paid as credit, or each colony&rsquo;s credit winnings. Its credit, NEAR owed, pending and solvency rows are recomputed from the ledger as the CLI&rsquo;s are.
         </li>
-        <li>The lock (full-access keys) is shown apart from the replay, as a disclosed note rather than a failed check: the team holds one key on each contract account on purpose.</li>
+        <li>The lock (full-access keys) is shown apart from the replay: on mainnet as a pass with 0 keys, on testnet as a disclosed note on the key the team keeps there for fixes.</li>
         <li>
-          The page does not compare the code hash with the reproducible build; that check is in <C>scripts/verify.mjs</C>, which carries the expected hash.
+          The page compares the account&rsquo;s code hash with the reproducible build&rsquo;s too; only the terminal script also reads the chain, board and code hash again from a second and third provider.
         </li>
       </ul>
 

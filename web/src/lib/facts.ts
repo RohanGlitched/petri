@@ -28,11 +28,12 @@ export const EVENT_VERSION = `${CONTRACT_VERSION.slice(1)}.0`;
 /** `cargo test -p petri-contract` and `cargo test -p petri-core` at BUILD_COMMIT. */
 export const TESTS = { contract: 152, core: 37, total: 152 + 37 };
 
-/** What /verify shows (web/src/lib/replay.ts, counted on a live run): 43 checks, the code hash among them, plus one
- * disclosed note (the team-held full-access key). */
+/** What /verify shows (web/src/lib/replay.ts, counted on a live run): 43 checks, the code hash among them, plus one row
+ * on the contract's full-access keys (mainnet: 0 since LOCKED; testnet: the one key the team keeps for fixes). */
 export const VERIFY = { checks: 43, notes: 1 };
 /** What `node scripts/verify.mjs` prints: the same ground with some rows split finer, plus the history chain, board hash
- * and code hash read again at the pinned block from FastNEAR and dRPC on their own: 46 checks, then the key note. */
+ * and code hash read again at the pinned block from FastNEAR and dRPC on their own: 46 checks, then the key row
+ * (mainnet: "PASS Full-access keys 0"; testnet: a note on the key the team keeps). */
 export const VERIFY_CLI_CHECKS = 46;
 export const VERIFY_CLI_ROWS = VERIFY_CLI_CHECKS + 1;
 
@@ -40,3 +41,13 @@ export const VERIFY_CLI_ROWS = VERIFY_CLI_CHECKS + 1;
  * The v2 purse every factory-sealed slide runs is PURSE.bytes; the first purses (v1: mainnet slide 14, testnet slides
  * 1 and 2) keep their older, smaller code, PURSE.v1Bytes, since a purse's code is immutable. */
 export const PURSE = { tests: { purse: 18, factory: 6, json: 2, total: 18 + 6 + 2 }, bytes: 30_879, v1Bytes: 29_404 };
+
+/** The mainnet lock: petri-dish.near's only full-access key was deleted on this day, after a final verify (Everything
+ * matches, 5,016 generations, 4 tides). The account has 0 access keys, so its code, rules and NEAR can never change. The
+ * testnet dish keeps its key so a bug there can still be fixed. */
+export const LOCKED = {
+  date: "10 November 2026",
+  short: "10 Nov",
+  tx: "Dsn8BxvX1goYvUAKVpmNPJ98PsVa5mAXgSwA28WQpaeR",
+  url: "https://nearblocks.io/txns/Dsn8BxvX1goYvUAKVpmNPJ98PsVa5mAXgSwA28WQpaeR",
+} as const;

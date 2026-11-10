@@ -619,16 +619,16 @@ export class Replayer {
         got: lock.codeHash,
         ok: lock.codeHash === BUILD_HASH,
       });
-      // The team keeps one full-access key so a bug can be fixed (new code plus relaunch); it is disclosed, and new code
-      // would fail the check above.
+      // The lock. Mainnet's only full-access key was deleted on LOCKED.date, so the row reads 0 and passes; the testnet
+      // dish keeps one key so a bug there can be fixed, disclosed here (new code would fail the code-hash check above).
       out.push({
         id: "lock",
         label:
           lock.fullAccessKeys === 0
-            ? "No full-access key: nobody can deploy other code"
-            : "Disclosed: the team holds a full-access key, so a bug can be fixed; new code would change the hash above",
+            ? "No full-access key: nobody can deploy other code, relaunch the dish or move its NEAR"
+            : "Disclosed: the team keeps a full-access key on this dish so a bug can be fixed; new code would change the hash above",
         expected: `${lock.fullAccessKeys} full-access key${lock.fullAccessKeys === 1 ? "" : "s"} on chain`,
-        got: "disclosed",
+        got: lock.fullAccessKeys === 0 ? "locked" : "disclosed",
         ok: true,
       });
     }

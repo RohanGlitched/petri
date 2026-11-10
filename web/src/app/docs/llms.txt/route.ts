@@ -3,7 +3,7 @@
 
 import { BUILD_COMMIT, CODE_HASH, CONTRACT_VERSION, DISH, DOCS, PRODUCT, RELAUNCHED, REPO, SITE, TESTS, UPGRADED, VERIFY, VERIFY_CLI_ROWS } from "@/components/docs/facts";
 import { GROUPS, PAGES } from "@/components/docs/nav";
-import { PURSE } from "@/lib/facts";
+import { LOCKED, PURSE } from "@/lib/facts";
 
 export const dynamic = "force-static";
 
@@ -20,12 +20,12 @@ export function GET() {
     `- Mainnet dish: ${DISH.mainnet.contract} (rules ${DISH.mainnet.rules}, wNEAR ${DISH.mainnet.wnear})`,
     `- Testnet dish: ${DISH.testnet.contract} (rules ${DISH.testnet.rules}, wNEAR ${DISH.testnet.wnear})`,
     `- Contract ${CONTRACT_VERSION} on both, code hash ${CODE_HASH} (cargo near build reproducible-wasm at ${BUILD_COMMIT}, near-sdk 5.29.1). Both dishes started from generation 0 on ${RELAUNCHED} (v6.4) and took ${CONTRACT_VERSION} on ${UPGRADED} as a code-only upgrade that kept every record.`,
-    "- Keys: until 14 November 2026 the team holds one full-access key on petri-dish.near, deleted that day after a final verify (0 keys from then; check view_access_key_list or the first row of /judges). petri-v6.testnet keeps its key for fixes. No method changes a running dish's parameters, mints PETRI or edits the board; verify.mjs reports any key as a disclosed note and compares the code hash with the published build.",
+    `- Keys: petri-dish.near has 0 access keys. Its only full-access key was deleted on ${LOCKED.date} after a final verify (DeleteKey ${LOCKED.url}), so its code, rules and NEAR can never change; verify.mjs prints "PASS Full-access keys 0". petri-v6.testnet keeps its key for fixes (verify.mjs reports it as a disclosed note). No method changes a running dish's parameters, mints PETRI or edits the board; verify.mjs compares the code hash with the published build.`,
     `- Mainnet RPC: ${DISH.mainnet.rpc}, failing over to https://near.drpc.org (rpc.mainnet.near.org is deprecated); verify.mjs --rpc <url> puts your own first`,
     "",
     "## What to run",
     "",
-    `- node scripts/verify.mjs   (testnet) and node scripts/verify.mjs --network mainnet: Node 20+, nothing to install; replays the dish from generation 0 at one final block, prints ${VERIFY_CLI_ROWS} rows (${VERIFY_CLI_ROWS - 1} checks and a key note), ends "Everything matches." and exits 0 (1 = a row differs, 2 = the dish could not be read). ${SITE}/verify runs ${VERIFY.checks} checks in the browser.`,
+    `- node scripts/verify.mjs   (testnet) and node scripts/verify.mjs --network mainnet: Node 20+, nothing to install; replays the dish from generation 0 at one final block, prints ${VERIFY_CLI_ROWS} rows (${VERIFY_CLI_ROWS - 1} checks and a row on the full-access keys: PASS 0 on mainnet, a note on testnet), ends "Everything matches." and exits 0 (1 = a row differs, 2 = the dish could not be read). ${SITE}/verify runs ${VERIFY.checks} checks in the browser.`,
     `- cargo test -p petri-core -p petri-contract   (${TESTS.core} core + ${TESTS.contract} contract = ${TESTS.total} tests)`,
     `- cd purse && cargo test   (living slides: ${PURSE.tests.purse} purse + ${PURSE.tests.factory} factory + ${PURSE.tests.json} JSON tests)`,
     `- Play: open ${SITE}/dish, type a name, press Start my colony; about 20 seconds later the colony is on petri-v6.testnet with a link to its transaction. No wallet, no gas prompt.`,

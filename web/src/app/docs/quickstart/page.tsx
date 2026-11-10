@@ -2,7 +2,8 @@ import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { NetTabs } from "@/components/docs/NetTabs";
 import { Callout, Doc, Ext, H2, H3, Steps, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT, BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, REPO, SITE, TESTS, VERIFY_CLI_ROWS } from "@/components/docs/facts";
+import { BUILD_COMMIT, BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, LOCKED, REPO, SITE, TESTS, VERIFY_CLI_ROWS } from "@/components/docs/facts";
+import { MAINNET_CAPTURE } from "@/components/docs/verify-capture";
 
 export const metadata = docMetadata("quickstart");
 
@@ -188,60 +189,12 @@ node scripts/verify.mjs --network mainnet
 node scripts/verify.mjs --network testnet
 echo $?   # 0 when every check matches, 1 on any mismatch, 2 if the dish could not be read`}</Code>
       <p>
-        It prints {VERIFY_CLI_ROWS} rows, each <C>match</C> or <C>DIFFERS</C>, then a note on the team-held key. A run against mainnet at the time of writing, shortly after {CONTRACT_VERSION} started the dish again from generation 0, printed (the dish will have moved on by the time you run it):
+        It prints {VERIFY_CLI_ROWS} rows: {VERIFY_CLI_ROWS - 1}, each <C>match</C> or <C>DIFFERS</C>, then one on the contract&rsquo;s full-access keys. A run against mainnet on {LOCKED.date}, after the key was deleted, printed (the dish will have moved on by the time you run it):
       </p>
-      <Code lang="text" title="node scripts/verify.mjs --network mainnet, at the time of writing" copy={false}>{`Replaying petri-dish.near (mainnet) at block 222987157: 19 generations, 15 ledger entries, 5 colonies, 0 tides.
-  match   History chain                                328c0669f420809b4da8bd710a7c08937a149fa50badcdb80c52c555c25b884f
-  match   Board hash                                   19febaa9237ece9984b60a2881f71521e6830ebdf41751419f19c9d0e08bae9e
-  match   Living cells                                 169
-  match   Legal plantings                              5 of 5
-  match   Planting prices                              5 of 5
-  match   Planting fees                                5 of 5
-  match   Licensed plantings: shape, holder, royalty   0 of 0
-  match   Purchases on the curve                       5 of 5
-  match   Sales on the curve and allowance             0 of 0
-  match   Tides                                        0 of 0
-  match   Claims of exactly what was owed              0 of 0
-  match   Refunds tied to their payouts                0 of 0
-  match   Sales for NEAR, NEAR claims and pact payments by colonies holding no kept PETRI 0 of 0
-  match   Pacts kept to the rules and plantings under pacts 0 of 0
-  match   PETRI held for pact offers                   0.000000
-  match   Pacts                                        0
-  match   Specimens                                    0 of 0 match the dish
-  match   Slide holders and royalties                  0 of 0
-  match   Agar                                         999,022.468025
-  match   Sold                                         1,072.002455
-  match   Burned                                       94.470480
-  match   Burned by specimens                          0.000000
-  match   Royalties                                    0.000000
-  match   Returned to the agar                         94.470480
-  match   Bought back                                  0.000000
-  match   Keeper share                                 0.000000
-  match   Colony earnings                              5 of 5
-  match   Vault (NEAR)                                 0.23781
-  match   NEAR paid in                                 0.23781
-  match   NEAR paid at tides                           0
-  match   Vault shares, bounties as credit             0
-  match   Sales paid as credit                         0
-  match   Colony tide winnings                         5 of 5
-  match   Credit pool                                  0
-  match   Credit paid at tides                         0
-  match   Credit sponsored                             0
-  match   Credit spent                                 0
-  match   Credit taken back                            0
-  match   NEAR owed to colonies                        0
-  match   Pending NEAR                                 0
-  match   Colony credit winnings                       5 of 5
-  match   Colony kept PETRI                            5 of 5
-  match   Solvent (NEAR held >= owed, from the ledger) yes
-  match   Deployed code hash                           CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD
-  note    Full-access keys                             1 (team-held, see The lock)
-Source: https://github.com/RohanGlitched/petri/tree/27a59761af835f2278b7cf28676c3acf0fdda538; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
-Owed, from the ledger: 0.23781 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.289504143558987700000003 NEAR.
-Everything matches.`}</Code>
+      <Code lang="text" title="node scripts/verify.mjs --network mainnet, 10 November 2026" copy={false}>{MAINNET_CAPTURE}</Code>
       <Callout kind="note">
         <p>
-          The verifier exits 0 on both networks when everything else matches. Each contract account has one team-held full-access key, shown as a disclosed note and not a failed check. <Doc to="verification" hash="keys">Why it stays</Doc>.
+          The verifier exits 0 on both networks when everything matches. On mainnet the last row is <C>PASS Full-access keys 0</C>: the key was deleted on {LOCKED.date}. On testnet it is a disclosed note on the one key the team keeps there for fixes, not a failed check. <Doc to="verification" hash="keys">The lock</Doc>.
         </p>
       </Callout>
       <p>

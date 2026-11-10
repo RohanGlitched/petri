@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { REPO } from "@/lib/config";
+import { LOCKED } from "@/lib/facts";
 import { CLAUDE_MODEL, NEARAI_MODEL } from "@/lib/strains";
 import { ContractLink, CtaLine, NetLimitBody, NetLimitTitle } from "./NetCopy";
 import s from "./rules.module.css";
@@ -12,14 +13,14 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
     body: <NetLimitBody />,
   },
   {
-    key: "The lock is a plan until the key is gone",
-    title: "The lock is a plan until the key is gone",
+    key: "The mainnet lock cuts both ways",
+    title: "The mainnet lock cuts both ways",
     body: (
       <>
         No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over,{" "}
         <code className={s.code}>relaunch</code>, is private (only the contract account itself can call it), clears a v6.3 dish
-        and refuses an account with no v6.3 dish and one that already runs v6.4. <ContractLink /> has one full-access key, held by the team so a bug can be fixed; it could deploy other
-        code, move the contract&rsquo;s NEAR or relaunch. The verifiers check the code hash and solvency on every run, and the terminal one says whether the key has signed anything since the v6.4 setup.
+        and refuses an account with no v6.3 dish and one that already runs v6.4. On mainnet nobody can call it: <code className={s.code}>petri-dish.near</code> has had no access key since {LOCKED.date} (<a className={s.link} href={LOCKED.url}>DeleteKey</a>), so its code, rules and NEAR can never change, and a bug found there can never be fixed either. The testnet dish keeps one full-access key so a bug can be fixed;
+        it could deploy other code, move that contract&rsquo;s test NEAR or relaunch. The verifiers check the code hash and solvency on every run and print the key count.
       </>
     ),
   },

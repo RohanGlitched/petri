@@ -7,7 +7,7 @@ import { loadEngine } from "@/engine";
 import { forReplay, readDishAt } from "@/lib/netread";
 import { Replayer, type Check } from "@/lib/replay";
 import { CONTRACT, NETWORK, REPO, accountUrl } from "@/lib/config";
-import { VERIFY } from "@/lib/facts";
+import { LOCKED, VERIFY } from "@/lib/facts";
 import s from "./verify.module.css";
 
 type Phase = "idle" | "fetching" | "replaying" | "done" | "error";
@@ -136,11 +136,11 @@ export function VerifyRun() {
         <b>{allOk ? "Everything matches." : replayOk ? "The whole history matches." : "Something differs."}</b>
         <span className={s.verdictCount}>
           <span className="num">{passed}</span> of <span className="num">{total}</span> checks match
-          {lock ? <>, plus {VERIFY.notes === 1 ? "one note" : `${VERIFY.notes} notes`} on the contract&rsquo;s key</> : null}
+          {lock ? (lock.got === "locked" ? <>, and the contract has no full-access key</> : <>, plus one note on the key the team keeps here</>) : null}
         </span>
         <span>
           {replayOk
-            ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${allOk ? "" : " The contract account has one full-access key, held by the team so a bug can be fixed; it is disclosed in the last row."}`
+            ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${lock?.got === "locked" ? ` The contract has had no full-access key since ${LOCKED.date}, so this history can only grow, never be rewritten.` : lock ? " The testnet dish keeps one full-access key so a bug can be fixed; it is disclosed in the last row." : ""}`
             : "A value below came out differently. That is either a bug or tampering, and either way it is worth reporting."}
         </span>
       </div>
@@ -156,7 +156,7 @@ export function VerifyRun() {
       <div className={`${s.verdict} ${s.pendingV}`} aria-busy="true">
         <b>{phase === "replaying" ? `Replaying… ${Math.floor(pct)}%` : "Reading the ledger…"}</b>
         <span className={s.verdictCount}>
-          {total} checks waiting for the replay{VERIFY.notes ? `, and ${VERIFY.notes === 1 ? "one note" : `${VERIFY.notes} notes`}` : ""}
+          {total} checks waiting for the replay, and a row on the contract&rsquo;s keys
         </span>
         <span className={s.verdictTrack} aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
       </div>
@@ -290,5 +290,5 @@ const PLACEHOLDER: Check[] = [
   ["tides_owed", "NEAR won and not yet claimed, from the ledger"],
   ["pending", "Pending NEAR, from the ledger"],
   ["solvent", "The contract's NEAR covers everything it owes, as the ledger counts it"],
-  ["lock", "Nobody can change the contract: no full-access key"],
+  ["lock", "The contract's full-access keys"],
 ].map(([id, label]) => ({ id, label, expected: "", got: null, ok: null }));

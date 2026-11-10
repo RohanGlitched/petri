@@ -34,7 +34,7 @@ export const RECORDED: { title: string; why: string; text: string; hash: string;
   },
   {
     title: "Relaunch from an ordinary account",
-    why: "relaunch would wipe the dish; only the contract account's own key can run it, at a deploy, and that key goes on 14 November for mainnet.",
+    why: "relaunch would wipe the dish; only the contract account's own key can run it, at a deploy, and mainnet has had no such key since 10 November (DeleteKey Dsn8Bx…).",
     text: "Method relaunch is private",
     hash: "GwMj4tp4s9je1jw383Jzgo51etebFb2WuLuMA8gSVCJ3",
     cmd: `near contract call-function as-transaction petri-v6.testnet relaunch json-args '{"rules":{},"accounts":[]}' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' sign-as <your account> network-config testnet sign-with-keychain send`,

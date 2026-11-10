@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C } from "@/components/docs/Code";
 import { Callout, Doc, Ext, H2, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, DISH, RELAUNCHED, REPO, SITE, UPGRADED, account } from "@/components/docs/facts";
+import { BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, DISH, LOCKED, RELAUNCHED, REPO, SITE, UPGRADED, account } from "@/components/docs/facts";
 import { DishSketch } from "@/components/docs/Diagrams";
 import { docHref } from "@/components/docs/nav";
 
@@ -160,7 +160,7 @@ export default function Page() {
       </Table>
       <Callout kind="note">
         <p>
-          Each contract account has one full-access key, held by the team, so a bug can be fixed: new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger anyone can replay. On mainnet the team holds it only until a final verify on 14 November 2026 and then deletes it, so <C>petri-dish.near</C> is left with no keys at all (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there. While a key exists, new code changes the account&rsquo;s code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. The verifier reports it as a note, not a failed check, and exits 0 when everything else matches. <Doc to="verification" hash="keys">Check the keys yourself</Doc>.
+          The mainnet dish, <C>petri-dish.near</C>, has no keys at all: the team deleted its only full-access key on {LOCKED.date} after a final verify (<a href={LOCKED.url}>the DeleteKey transaction</a>), so nobody can deploy other code, relaunch it or move its NEAR, and a bug found there cannot be fixed either (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The verifier prints <C>PASS Full-access keys 0</C> for it. The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there: new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger anyone can replay. New code changes the account&rsquo;s code hash, which the verifier compares with the published build on every run, and the testnet key is reported as a note, not a failed check. <Doc to="verification" hash="keys">Check the keys yourself</Doc>.
         </p>
       </Callout>
 

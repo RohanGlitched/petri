@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Callout, Doc, H2, H3 } from "@/components/docs/ui";
-import { CONTRACT_VERSION, RELAUNCHED, TESTS } from "@/components/docs/facts";
+import { CONTRACT_VERSION, LOCKED, RELAUNCHED, TESTS } from "@/components/docs/facts";
 
 export const metadata = docMetadata("security");
 
@@ -369,7 +369,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["relaunch_leaves_nothing_of_v6_1", "relaunch_refuses_an_account_without_a_v6_1_dish", "relaunch_refuses_a_dish_that_runs_v6_2"],
-    limit: "Until 14 November 2026 the team holds one full-access key on each contract account, so its holder can deploy new code and run relaunch to fix a bug; that restarts the dish from generation 0 with a fresh ledger, and new code changes the code hash that verify compares. The mainnet key is deleted on 14 November after a final verify (0 keys on petri-dish.near from then); the testnet dish keeps its key.",
+    limit: "On mainnet nobody can run it any more: petri-dish.near's only full-access key was deleted on 10 November 2026 after a final verify (DeleteKey Dsn8BxvX…), so the account has 0 keys. The testnet dish keeps its key, so its holder can deploy new code and run relaunch there to fix a bug; that restarts the testnet dish from generation 0 with a fresh ledger, and new code changes the code hash that verify compares.",
   },
 ];
 
@@ -390,7 +390,7 @@ export default function Page() {
       </ul>
       <Callout kind="note">
         <p>
-          Each contract account has one full-access key, held by the team on purpose, so a bug can be fixed with new code plus <C>relaunch</C>. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board, and new code changes the code hash, which <C>node scripts/verify.mjs</C> compares with the published build on every run. It is reported as a disclosed note. <Doc to="verification" hash="keys">Check it</Doc>.
+          <C>petri-dish.near</C> has no access key: the team deleted the only one on {LOCKED.date} after a final verify (<a href={LOCKED.url}>the DeleteKey transaction</a>). No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board, and with no key nobody can deploy other code either. The testnet dish keeps one full-access key so a bug there can be fixed; new code would change its code hash, which <C>node scripts/verify.mjs</C> compares with the published build on every run, and the key is reported as a disclosed note. <Doc to="verification" hash="keys">Check it</Doc>.
         </p>
       </Callout>
 
@@ -421,7 +421,7 @@ export default function Page() {
       <H2 id="limits">Known limits</H2>
       <ul>
         <li>
-          <strong>The team holds a full-access key.</strong> Each contract account has one, on purpose: it exists only so a bug can be fixed with new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger. It cannot change anything quietly, because new code changes the code hash that the verifier checks. On mainnet the team holds it only until a final verify on 14 November 2026 and then deletes it, so <C>petri-dish.near</C> is left with no keys at all (check view_access_key_list, or the first row of the judge desk at playpetri.xyz/judges). The testnet dish, petri-v6.testnet, keeps its key so a bug can still be fixed there. After that the mainnet dish cannot be fixed: a bug found later stays.
+          <strong>The mainnet dish can never be fixed.</strong> The team deleted <C>petri-dish.near</C>&rsquo;s only full-access key on {LOCKED.date} after a final verify, so the account has no keys at all (check view_access_key_list, or the first row of the judge desk at playpetri.xyz/judges): a bug found there now stays. Immutability was chosen over fixability. The testnet dish, petri-v6.testnet, keeps its key so a bug can still be fixed there, with new code plus <C>relaunch</C>; new code changes the code hash that the verifier checks.
         </li>
         <li>
           <strong>Most players lose NEAR.</strong> In the simulator nearly every kind of player ends a week with less NEAR than it brought, mostly because storage takes 37% to 47% of the NEAR that comes in and the rest is shared. Petri Dish is a game with a live economy, not an investment. See <Doc to="simulations" hash="losses">What loses money</Doc>.

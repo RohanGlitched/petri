@@ -57,7 +57,7 @@ export default function Page() {
     >
       <Callout kind="check">
         <p>
-          The rules are fixed when a dish launches (<C>new</C>, or <C>relaunch</C> on an account that ran v6.3) and no method changes them while it runs. Both can be called only through the account&rsquo;s own key: <C>relaunch</C> is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, and it refuses an account with no v6.3 dish and one that already runs v6.4. The team keeps that key on purpose, so a bug can be fixed with new code and <C>relaunch</C>; no method changes a parameter while a dish runs. Read the live values with the <C>rules</C> view, below.
+          The rules are fixed when a dish launches (<C>new</C>, or <C>relaunch</C> on an account that ran v6.3) and no method changes them while it runs. Both can be called only through the account&rsquo;s own key: <C>relaunch</C> is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, and it refuses an account with no v6.3 dish and one that already runs v6.4. On mainnet that key no longer exists: <C>petri-dish.near</C> has had no access key since 10 November 2026, so its rules can never change. The testnet dish keeps its key so a bug can be fixed with new code and <C>relaunch</C>; no method changes a parameter while a dish runs. Read the live values with the <C>rules</C> view, below.
         </p>
       </Callout>
 

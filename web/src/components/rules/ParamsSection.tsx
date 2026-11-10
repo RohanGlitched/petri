@@ -279,7 +279,7 @@ const CHANGES_V3: [string, string][] = [
   ],
   [
     "The contract was not a reproducible build and the account kept a full-access key.",
-    "Built with cargo near build reproducible-wasm, with NEP-330 metadata linking the commit; the team holds the mainnet full-access key only until a final verify on 14 November, then deletes it; until then the verifiers disclose it and check the code hash.",
+    "Built with cargo near build reproducible-wasm, with NEP-330 metadata linking the commit; petri-dish.near has had no access key since 10 November 2026 (deleted after a final verify, tx Dsn8BxvX…), so its code can never change; the testnet dish keeps one for fixes, and the verifiers check the code hash.",
   ],
   [
     "The simulator's claims were ratios of PETRI earned to PETRI spent.",

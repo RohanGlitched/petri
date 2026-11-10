@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Doc, H2, H3 } from "@/components/docs/ui";
-import { BUILD_COMMIT_SHORT, CONTRACT_VERSION, TESTS, VERIFY, VERIFY_CLI_CHECKS } from "@/components/docs/facts";
+import { BUILD_COMMIT_SHORT, CONTRACT_VERSION, LOCKED, TESTS, VERIFY, VERIFY_CLI_CHECKS } from "@/components/docs/facts";
 
 export const metadata = docMetadata("faq");
 
@@ -92,12 +92,12 @@ export default function Page() {
       <H2 id="trust">Trust</H2>
       <Q id="q-change" q="Can the team change the rules?">
         <p>
-          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6.3 dish and one that already runs v6.4, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6 and then release by release to {CONTRACT_VERSION}, and how <C>petri-v6.testnet</C> did the same. Until 14 November 2026 the team holds one full-access key on each contract account, so a bug can be fixed with new code plus <C>relaunch</C>. On mainnet the team holds it only until a final verify on 14 November 2026 and then deletes it, so <C>petri-dish.near</C> is left with no keys at all (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there. While a key exists, new code changes the code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. <Doc to="verification" hash="keys">Check the keys</Doc>.
+          No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board. The one way to start over is <C>relaunch</C>: it is private, so only a transaction from the contract account&rsquo;s own full-access key can call it, it refuses an account with no v6.3 dish and one that already runs v6.4, and it starts a fresh dish from generation zero. That is how <C>petri-dish.near</C> moved from v5 to v6 and then release by release to {CONTRACT_VERSION}, and how <C>petri-v6.testnet</C> did the same. On mainnet nobody can any more: the team deleted the only full-access key on <C>petri-dish.near</C> on {LOCKED.date}, after a final verify (<a href={LOCKED.url}>the DeleteKey transaction</a>), so the account has no keys at all and its code, rules and NEAR can never change (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there; new code would change its code hash, which the verifier compares with the published build on every run, so that key cannot change anything quietly. <Doc to="verification" hash="keys">Check the keys</Doc>.
         </p>
       </Q>
       <Q id="q-verify" q="How do I know the board is right?">
         <p>
-          Run <C>node scripts/verify.mjs --network mainnet</C> or open <C>/verify</C>. Either replays the whole ledger from an empty dish with the same engine the contract runs and checks every planting, purchase, sale, tide, claim and refund, the counters, and solvency rebuilt from the ledger alone: {VERIFY_CLI_CHECKS} matching rows and one note on the command line, {VERIFY.checks} checks and the same note on the page. See <Doc to="verification">Verification</Doc>.
+          Run <C>node scripts/verify.mjs --network mainnet</C> or open <C>/verify</C>. Either replays the whole ledger from an empty dish with the same engine the contract runs and checks every planting, purchase, sale, tide, claim and refund, the counters, and solvency rebuilt from the ledger alone: {VERIFY_CLI_CHECKS} matching rows and a row on the contract&rsquo;s keys on the command line (mainnet: <C>PASS Full-access keys 0</C>), {VERIFY.checks} checks and the same keys row on the page. See <Doc to="verification">Verification</Doc>.
         </p>
       </Q>
       <Q id="q-ai" q="Are the AI strains on chain?">

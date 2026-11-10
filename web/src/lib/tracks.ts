@@ -27,13 +27,13 @@ export const TRACKS: Track[] = [
       },
       {
         need: "All parameters set at launch, readable by anyone, no admin key to change them",
-        where: "Every parameter is in rules() and no method changes it (try it on /break). The full-access key on petri-dish.near is disclosed on the desk above and deleted on 14 November after a final verify.",
+        where: "Every parameter is in rules() and no method changes it (try it on /break). petri-dish.near has had no access key since 10 November 2026 (DeleteKey Dsn8BxvX…, after a final verify), so no one can deploy other code or relaunch it; the desk's first row reads the count live.",
         links: [
           { label: "rules() live", href: "/rules#parameters" },
           { label: "try to change them", href: "/break" },
-          { label: "relaunch.rs", href: code("contract/src/relaunch.rs") },
+          { label: "the DeleteKey transaction", href: "https://nearblocks.io/txns/Dsn8BxvX1goYvUAKVpmNPJ98PsVa5mAXgSwA28WQpaeR" },
         ],
-        status: "partly",
+        status: "met",
       },
       {
         need: "Sybil resistance good enough for a demo, limits written plainly",
