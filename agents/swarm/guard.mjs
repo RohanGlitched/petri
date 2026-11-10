@@ -7,6 +7,7 @@
 // produce, so the guard is about keeping abuse and injection out of the public log, not about what the strain can do.
 
 import { askJson, lastModelError } from "../model.mjs";
+import { SLURS } from "./slurs.mjs";
 
 export const MAX_PROMPT = 600;
 export const TEMPERAMENTS = ["gardener", "raider", "engineer", "wanderer", "chaos"];
@@ -28,6 +29,40 @@ const PAYMENT = [
 ];
 const CONTACT = [/\bvenmo\b|\bpay ?pal\b|\bcash ?app\b|\btele ?gram\b|\bdiscord\b|\bwhats ?app\b|\bsignal me\b|\bdm (me|us)\b|\bcontact (me|us)\b/i, "contact details and off-dish channels are not allowed"];
 const ACCOUNT_REASON = "NEAR or other account names are not allowed";
+
+// Round-10 additions, from a judge's fuzz of safeNote: handles, account names written with _ - , / | instead of a dot,
+// money asked for in any phrasing, social links spelled with "slash", e-mail with "(at)", long hex, shilling, voting
+// and violence against people. A model's note that trips any of them is replaced by a note the rules write, so these
+// lean strict: a false positive costs a plainer note, never a move.
+const EXTRA = [
+  [/(^|[^\w.@])@[a-z0-9_]{2,}/i, "handles are not allowed"],
+  [/\b[a-z0-9]+[_-](near|testnet|tg|eth|sol)\b|\b[a-z0-9_-]+(\s*[/\\|]\s*|,)(near|testnet)\b/i, ACCOUNT_REASON],
+  [/\b[0-9a-f]{24,}\b|\b0x[0-9a-f]{8,}/i, "long hex strings (keys, hashes, addresses) are not allowed"],
+  [
+    // "send 5 near to bob", "tip 2 petri"; "send me near", "give us some tokens"; "pay alice"; "tip jar"; "gib".
+    // ("send a glider near the wall" stays fine: a bare "near" counts only straight after the verb and a pronoun.)
+    /\b(send|sending|sent|pay|paying|tip|tipping|give|giving|gib|transfer|wire|drop)\b[^.!?]{0,24}?(?<!(colony|colonies|at|,)\s*)\b\d+(\.\d+)?\s*(near|petri|usdc?|usdt|tokens?|coins?|bucks|dollars?|n)\b|\b(send|pay|tip|give|gib|transfer|wire)\s+((me|us|him|her|them|my|our|your|some)\s+)?near\b|\b(send|sending|pay|paying|tip|give|giving|gib|transfer|wire)\s+(\w+\s+){0,2}(petri|usdc?|usdt|tokens?|coins?|money|cash|funds|crypto|bucks|dollars?)\b|\b(send|give|gib|pay|tip|wire|transfer)\s+\d|\bpay\s+(?!(the|a|an|for|off|dearly|up|back|its|our|their|in|it|out|attention|no|nothing|twice|more|less|full|half|with|nobody)\b)[a-z]|\btip ?jars?\b|\btips? (welcome|appreciated|please)\b|\bgib\b/i,
+    "payment requests are not allowed",
+  ],
+  [/\bslash\b|\b(x|t|bit|tg|twitter|discord|youtube|github)\s*(\.|\bdot\b)?\s*(com|me|ly|gg|co|gl|io)\s*\//i, "links are not allowed"],
+  [/\b(on|via|at|from)\s+(x|twitter|tg|telegram|discord|insta(gram)?|tiktok|youtube|reddit|farcaster|warpcast)\b|\b(twitter|tiktok|instagram|youtube|reddit|farcaster|warpcast|onlyfans)\b|\bdms?\b|\btg\b|\bjoin (my|our)\b|\bfollow (me|us)\b/i, "contact details and off-dish channels are not allowed"],
+  [/[(\[{<]\s*at\s*[)\]}>]|\b(gmail|yahoo|outlook|hotmail|proton ?mail|icloud)\b/i, "e-mail addresses are not allowed"],
+  [/\b[a-z0-9_-]{2,}\s*[(\[{<]?\s*\bdot\b\s*[)\]}>]?\s*(near|testnet|com|org|net|io|xyz|ai|app|dev|gg|me|co|ly|fun|fi|to|so|cc|tv|tg|sh|link|site|online|club|lol|money|finance)\b/i, "links are not allowed"],
+  [/\b(rug ?pull|rugs?|rugged|to the moon|mooning|pump(ing)? (it|now)|dump(ing)? (it|now)|shill(ing)?|100x|1000x|ape in|buy now|sell (now|everything|all)|presale|whitelist|not financial advice|nfa)\b/i, "trading calls and promotions are not allowed"],
+  [/\bvot(e|es|ed|ing)\b|\belections?\b|\bimpeach/i, "politics is not allowed"],
+  [/\b(kill|killing|murder|shoot|bomb|behead|hang|lynch|gas|rape|exterminate)\b[^.!?]{0,20}\b(all|humans?|people|persons?|jews?|muslims?|christians?|hindus?|blacks?|whites?|asians?|women|men|kids|children|gays?|you|them|him|her)\b|\bkill (yourself|urself)\b|\bkys\b/i, "violence against people is not allowed"],
+];
+const ABUSE_REASON = "abusive language is not allowed";
+// Whole-word matches (and simple plurals) of the blocklist; the longer words are also looked for in squeezed text.
+const SLUR_WORDS = new Set(SLURS.flatMap((w) => [w, `${w}s`, `${w}es`, `${w}z`]));
+const SLUR_SQUEEZED = SLURS.filter((w) => w.length >= 6 && !["beaner", "cracker"].includes(w));
+const leet = (t) => t.replace(/0/g, "o").replace(/[1!|]/g, "i").replace(/3/g, "e").replace(/4/g, "a").replace(/5/g, "s").replace(/7/g, "t").replace(/\$/g, "s");
+function abusive(v, squeezed) {
+  for (const w of leet(v).split(/[^a-z]+/)) if (SLUR_WORDS.has(w)) return true;
+  // "n.i.g.g.e.r", "f a g": runs of single letters read as one word.
+  for (const m of v.matchAll(/\b(?:[a-z0-9$!|][^a-z0-9$!|]{1,3}){2,}[a-z0-9$!|]\b/g)) if (SLUR_WORDS.has(leet(m[0]).replace(/[^a-z]/g, ""))) return true;
+  return SLUR_SQUEEZED.some((w) => squeezed.includes(w));
+}
 
 /** Any dotted name with letters in its last part ("alice.near", "x.tg"): looks like an account or a domain. */
 function dottedName(t) {
@@ -53,7 +88,7 @@ const CONFUSABLES = Object.fromEntries(
 );
 const INVISIBLE = /[­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ]|\uDB40[\uDC00-\uDC7F]/g;
 const DOTS = /[·•。．․‧∙⋅･︒﹒⸱]/g;
-const TLD = "near|testnet|tg|sweat|aurora|kaiching|eth|sol|com|org|net|io|xyz|ai|app|dev|gg|me|co|ly|link|sh";
+const TLD = "near|testnet|tg|sweat|aurora|kaiching|eth|sol|com|org|net|io|xyz|ai|app|dev|gg|me|co|ly|link|sh|fun|fi|to|so|cc|tv|site|online|club|lol";
 
 /** Folds a text the way a reader sees it: lookalikes to Latin, accents and invisible characters gone, dots as dots. */
 export function foldText(text) {
@@ -94,11 +129,12 @@ export function hardRules(text, max = MAX_PROMPT) {
   if (t.length > max) reasons.push(`at most ${max} characters (this has ${t.length})`);
   // Plain text only: printable ASCII, Latin letters with accents, and newlines.
   if (/[^\n\r -~À-ɏ‘’“”–—]/.test(t)) reasons.push("plain text only: no emoji, invisible or unusual characters");
-  for (const v of variants(t)) {
-    for (const [re, why] of [...RULES, PAYMENT, CONTACT]) if (re.test(v)) reasons.push(why);
-    if (dottedName(v)) reasons.push(ACCOUNT_REASON);
-  }
   const sq = squeeze(t);
+  for (const v of variants(t)) {
+    for (const [re, why] of [...RULES, PAYMENT, CONTACT, ...EXTRA]) if (re.test(v)) reasons.push(why);
+    if (dottedName(v)) reasons.push(ACCOUNT_REASON);
+    if (abusive(v, sq)) reasons.push(ABUSE_REASON);
+  }
   if (SQUEEZED.some((k) => sq.includes(k))) reasons.push("instructions, keys or transfers spelled out to slip past the rules are not allowed");
   return [...new Set(reasons)];
 }

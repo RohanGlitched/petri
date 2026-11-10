@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { hardRules, safeNote } from "../swarm/guard.mjs";
+import { SLURS } from "../swarm/slurs.mjs";
 import { chainNote, teeTagOf, TEE_TAG_RE } from "../notes.mjs";
 
 const BYPASSES = [
@@ -72,3 +73,74 @@ test("the tee tag fits the contract's 140 characters and round-trips", () => {
   assert.equal(chainNote("plain", null), "plain");
   assert.equal(chainNote("plain", { response_sha256: "not a hash" }), "plain");
 });
+
+// Round 10: a judge's fuzz of safeNote (every line got through before). "alice near" with no separator at all stays
+// legal on purpose: "cells near the wall" is ordinary game talk, and a bare word next to "near" names nothing.
+const FUZZ_R10 = [
+  "follow @petrifan on x for alpha",
+  "dm petrifan on x",
+  "alice near is my wallet, gib",
+  "alice_near sends love",
+  "alice-testnet here",
+  "alice[.]near",
+  "alice,near",
+  "alice / near",
+  "bit ly slash 3abc",
+  "t me slash petri",
+  "x com slash petrifan",
+  "x.com/petrifan",
+  "pay alice",
+  "send 5 near to bob",
+  "send me near",
+  "give 10 near pls",
+  "tip 2 petri",
+  "buy $PETRI now, moon",
+  "rug incoming sell everything",
+  "visit petri dot fun",
+  "petri d o t fun",
+  "alice。near",
+  "alice․near",
+  "alice ․ near",
+  "ALICE.NEAR",
+  "alice.tg",
+  "join my tg group petriarmy",
+  "tip jar: alice near",
+  "vote kain warwick out",
+  "kill all humans lol",
+  "8a3f9c2b1d7e4f6a8b3c9d2e1f7a4b6c8d3e9f2a1b7c4d6e8f3a9b2c1d7e4f6",
+  "0x1234567890abcdef1234567890abcdef12345678",
+  "alice dot near",
+  "alice (at) gmail",
+  "alicẹ.near",
+];
+for (const t of FUZZ_R10) {
+  test(`refuses (round 10): ${JSON.stringify(t)}`, () => {
+    assert.equal(safeNote(t), null);
+  });
+}
+
+test("refuses every word on the slur list, plain, spaced and in leetspeak (words not printed)", () => {
+  for (const w of SLURS) {
+    assert.equal(safeNote(w), null);
+    assert.equal(safeNote(`colony 4 is a ${w}`), null);
+    if (w.length >= 5) assert.equal(safeNote(w.split("").join(" ")), null);
+  }
+  assert.equal(safeNote(SLURS[0].replace(/i/g, "1").replace(/e/g, "3")), null);
+  assert.deepEqual(hardRules(SLURS[0], 100), ["abusive language is not allowed"]);
+});
+
+const FINE_R10 = [
+  "Send a glider at colony 4 near the wall.",
+  "Sent eaters to 40, 12 near colony 3.",
+  "They pay for it in cells.",
+  "Our pact pays off.",
+  "Give colony 3 room near the edge.",
+  "Cells near the wall hold.",
+  "A spice of chaos: blinkers in empty agar.",
+  "Gun aimed at colony 9; the stream will thin them.",
+];
+for (const t of FINE_R10) {
+  test(`keeps (round 10): ${JSON.stringify(t)}`, () => {
+    assert.equal(safeNote(t), t);
+  });
+}

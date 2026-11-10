@@ -9,7 +9,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkAttestation, newNonce, verifyAnswer, verifySignerQuotes } from "./tee.mjs";
+import { checkAttestation, newNonce, verifyAnswer, verifyQuote, verifySignerQuotes } from "./tee.mjs";
+import { optionLine } from "./notes.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 
 const BASE = process.env.NEARAI_BASE_URL ?? "https://cloud-api.near.ai/v1";
@@ -56,13 +57,15 @@ async function fetchAttestation() {
   if (!r.ok) throw new Error(`attestation report ${r.status}`);
   const text = await r.text();
   let att = checkAttestation(text, { nonce, model: MODEL });
-  if (VERIFY_QUOTES) att = await verifySignerQuotes(att);
+  // The machine is pinned (no debug TD, TCB UpToDate or SWHardeningNeeded, the pinned OS image) and the compose
+  // manager's own quote must say a production GLM compose file is what runs (tee.mjs).
+  if (VERIFY_QUOTES) att = await verifySignerQuotes(att, verifyQuote, { composeManager: true });
   archive("attestation", `${att.sha256}.json`, text);
   if (archiveDir) {
     try {
       fs.writeFileSync(path.join(archiveDir, "attestation", "latest.json"), text);
       fs.writeFileSync(path.join(archiveDir, "attestation", "latest.sha256"), att.sha256 + "\n");
-      const entry = { sha256: att.sha256, at: new Date().toISOString(), nonce, model: MODEL, ok: att.ok, reason: att.reason, quotes_verified: !!att.quotes_verified, signers: att.signers.map((s) => ({ address: s.address, tcb_status: s.tcb_status ?? null })), gateway: att.gateway, rejected: att.rejected };
+      const entry = { sha256: att.sha256, at: new Date().toISOString(), nonce, model: MODEL, ok: att.ok, reason: att.reason, quotes_verified: !!att.quotes_verified, signers: att.signers.map((s) => ({ address: s.address, tcb_status: s.tcb_status ?? null, image: s.image ?? null, compose: s.compose ?? null })), gateway: att.gateway, rejected: att.rejected };
       fs.appendFileSync(path.join(archiveDir, "attestation", "index.jsonl"), JSON.stringify(entry) + "\n");
     } catch {
       /* the report itself is archived under its hash */
@@ -137,12 +140,12 @@ function prompt(strain, summary, cands) {
 The dish follows Conway's Life. New cells join the colony owning most of their three parents. Every generation the agar feeds PETRI to living cells outside the house; you are one of the dish's five house strains, which are never fed, so what you play for is living cells, territory, and what you do to the rivals. Planting costs PETRI; half is burned, half returns to the agar. Planting inside a rival's buffer is a siege and costs several times as much, so you never do it. Rivals outside the house are known only by number.
 Each option comes with a forecast: the contract's own rules run ${summary.forecastGens} generations ahead on a copy of the dish as it is now (other players' future moves are unknown, so it can be wrong). Your memory shows what your past moves really did. Small still lifes are cheap and safe but change little; a glider gun, spaceship, eater wall or methuselah costs more and can change the dish. Choose a big play when its forecast earns it.
 Promises from the house council are listed; an option marked [PACT] keeps one. Breaking a paid promise costs you trust at the next council.
-Choose exactly one of the numbered plantings, all of which the contract will accept. Then write a lab note of one or two short sentences, at most 100 characters in all, in your own voice, saying why. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
+Choose exactly one of the numbered plantings, all of which the contract will accept (each ends with "cells:" and 12 hex characters, a fingerprint of its exact cells for the record). Then write a lab note of one or two short sentences, at most 100 characters in all, in your own voice, saying why. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
   const user = `Generation ${summary.generation}. You hold ${summary.balance} PETRI and ${summary.myCells} living cells. The dish has ${summary.totalLive} living cells; ${summary.agar} PETRI remain in the agar.
 Rivals: ${summary.rivals || "none yet"}.
 ${summary.memory ?? "You have no moves on record yet."}
 ${summary.pacts ? `Council promises this window:\n${summary.pacts}\n` : ""}Plantings you can make:
-${cands.map((c, i) => `${i + 1}. ${c.pact ? "[PACT] " : ""}${c.why} (${c.cells.length} cells, ${c.costText} PETRI) — ${c.forecastText ?? "no forecast"}`).join("\n")}`;
+${cands.map(optionLine).join("\n")}`;
   return { system, user };
 }
 

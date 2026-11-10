@@ -28,3 +28,43 @@ export const cellsHash = (cells) => crypto.createHash("sha256").update(JSON.stri
 
 /** One hash per option, in the order the model saw them. */
 export const optionHashes = (cands) => cands.map((c) => cellsHash(c.cells));
+
+// Each option line in the prompt ends its parenthesis with "cells:<first 12 hex of cellsHash>", so the request the
+// enclave signs names the exact cells of every option: a verifier needs nothing the house logged, only the signed
+// request, to check that the transaction planted the option the model chose.
+export const CELLS_PREFIX = 12;
+export const cellsTag = (cells) => `cells:${cellsHash(cells).slice(0, CELLS_PREFIX)}`;
+
+/** One numbered option as the model reads it (house and spawned strains alike). */
+export function optionLine(c, i) {
+  return `${i + 1}. ${c.pact ? "[PACT] " : ""}${c.why} (${c.cells.length} cells, ${c.costText} PETRI, ${cellsTag(c.cells)}) — ${c.forecastText ?? "no forecast"}`;
+}
+
+/**
+ * Option `n` (1-based) in the user message the runner wrote (never the system message, which for a spawned strain
+ * holds the player's temperament): { line, why, cells, prefix, count } where count is how many lines start "n. "
+ * (a verifier wants exactly one), or null when there is none. Older prompts (no cells tag) give prefix null.
+ */
+export function parseOption(userText, n) {
+  const lines = String(userText ?? "").split("\n").filter((l) => l.startsWith(`${n}. `));
+  if (!lines.length) return null;
+  const line = lines[0];
+  const m = line.match(/^\d+\. (?:\[PACT\] )?(.*) \((\d+) cells, [^)]*?PETRI(?:, cells:([0-9a-f]{12}))?\)/);
+  return { line, count: lines.length, why: m ? m[1] : null, cells: m ? Number(m[2]) : null, prefix: m?.[3] ?? null };
+}
+
+/** The generation a prompt's user message says the dish was at ("Generation 4186."), or null. */
+export function promptGeneration(userText) {
+  const m = String(userText ?? "").match(/^Generation (\d+)\./m);
+  return m ? Number(m[1]) : null;
+}
+
+/** The last user message of a chat request body (the exact JSON string the enclave signed), or "". */
+export function userMessage(requestBody) {
+  try {
+    const msgs = JSON.parse(requestBody).messages ?? [];
+    return String(msgs.filter((m) => m.role === "user").at(-1)?.content ?? "");
+  } catch {
+    return "";
+  }
+}

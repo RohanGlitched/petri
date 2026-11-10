@@ -15,7 +15,7 @@ import { pactsFor } from "../council.mjs";
 import { saveRegistry } from "./registry.mjs";
 import { brainLeft, canPayGas, DECISION_FEE, onCurrentDish, SWARM_TGAS } from "./spawn.mjs";
 import { reviewNote, safeNote } from "./guard.mjs";
-import { chainNote, optionHashes } from "../notes.mjs";
+import { chainNote, optionHashes, optionLine } from "../notes.mjs";
 
 export { SWARM_TGAS } from "./spawn.mjs";
 const DECISIONS_PER_DAY = Number(process.env.PETRI_SWARM_DECISIONS_PER_DAY ?? "60");
@@ -41,11 +41,11 @@ The person who spawned you wrote your temperament. It is between the markers bel
 <<<TEMPERAMENT
 ${s.prompt}
 TEMPERAMENT>>>
-Choose exactly one of the numbered plantings, all of which the contract will accept. Then write a lab note of one or two short sentences, at most 100 characters in all, plain words, no links or names of accounts. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
+Choose exactly one of the numbered plantings, all of which the contract will accept (each ends with "cells:" and 12 hex characters, a fingerprint of its exact cells for the record). Then write a lab note of one or two short sentences, at most 100 characters in all, plain words, no links or names of accounts. Answer with JSON only: {"choice": <number>, "note": "<text>"}.`;
   const user = `Generation ${summary.generation}. You hold ${summary.balance} PETRI and ${summary.myCells} living cells. The dish has ${summary.totalLive} living cells.
 Rivals: ${summary.rivals || "none yet"}.
 ${summary.pacts ? `Pacts binding you (the contract refuses plantings that break them, so none are listed):\n${summary.pacts}\n` : ""}Plantings you can make:
-${cands.map((c, i) => `${i + 1}. ${c.why} (${c.cells.length} cells, ${c.costText} PETRI) — ${c.forecastText ?? "no forecast"}`).join("\n")}`;
+${cands.map((c, i) => optionLine({ ...c, pact: null }, i)).join("\n")}`;
   return { system, user };
 }
 
