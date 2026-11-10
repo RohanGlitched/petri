@@ -9,6 +9,11 @@
 //      the model's chat id; at zero the strain stops thinking and planting until it is topped up.
 //   3. The parent sponsors dish credit for its planting fees, and the temporary key is deleted. From then on the
 //      account has one key, the runner's, and the chain shows it.
+// The NEAR the parent sends is sized from the chain's gas price (strainNearFor). Before each step the account must hold
+// what that step can be charged (NEAR reserves prepaid gas at ten times the gas price until the refund lands, which can
+// be after the previous step is final), so the runner waits for refunds and the parent tops up a small shortfall.
+// A spawn that still fails is not left with a full-access key: before the join the account is deleted and its NEAR
+// goes back to the parent; after it the temporary key is deleted (the colony stays, locked and idle).
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -25,7 +30,21 @@ const near = (s) => {
 };
 export const PARENT = process.env.PETRI_STRAINS_PARENT ?? (NETWORK === "mainnet" ? "strains.petri-dish.near" : "petri-strains.testnet");
 export const BRAIN_ACCOUNT = process.env.PETRI_BRAIN_ACCOUNT ?? "petri-lab.testnet";
-const STRAIN_NEAR = near(process.env.PETRI_SWARM_STRAIN_NEAR ?? "0.1");
+// Unset, the NEAR a new account gets is estimated from the gas price (strainNearFor).
+const STRAIN_NEAR = process.env.PETRI_SWARM_STRAIN_NEAR ? near(process.env.PETRI_SWARM_STRAIN_NEAR) : null;
+const JOIN_TGAS = 30n;
+const TRANSFER_TGAS = 1n;
+// NEAR charges prepaid gas at up to ten times the current price until the unused part is refunded.
+const PESSIMISTIC = 10n;
+const BYTE_COST = 10n ** 19n;
+// An account with a full-access key and the play key (seven method names) uses about 370 bytes; 420 leaves room.
+const ACCOUNT_BYTES = 420n;
+const MARGIN = near("0.004");
+/** Gas each of a spawned strain's calls prepays (the contract keeps 40 TGas of any call for itself). */
+export const SWARM_TGAS = Number(process.env.PETRI_SWARM_TGAS ?? "40");
+// What one planting really burns, in TGas (a planting with its catch-up measured about 8 on testnet).
+const PLANT_BURN_TGAS = BigInt(process.env.PETRI_SWARM_PLANT_BURN_TGAS ?? "10");
+const MAX_TOP_UP = near(process.env.PETRI_SWARM_MAX_TOPUP ?? "0.03");
 const JOIN_NEAR = near(process.env.PETRI_SWARM_JOIN_NEAR ?? "0.03");
 export const BRAIN_NEAR = near(process.env.PETRI_SWARM_BRAIN_NEAR ?? "0.01");
 const CREDIT_NEAR = near(process.env.PETRI_SWARM_CREDIT_NEAR ?? "0.04");
@@ -58,6 +77,46 @@ async function exists(accountId) {
   }
 }
 
+async function gasPrice() {
+  try {
+    return BigInt((await rpc("gas_price", [null])).gas_price);
+  } catch {
+    return 10n ** 8n; // the protocol's minimum on both networks
+  }
+}
+
+/** yoctoNEAR the account may spend now: its balance less the storage its bytes lock. */
+async function spendable(accountId) {
+  const a = await rpc("query", { request_type: "view_account", finality: "optimistic", account_id: accountId });
+  return BigInt(a.amount) - BigInt(a.storage_usage) * BYTE_COST;
+}
+
+/** NEAR a planting needs on hand before it is sent: its prepaid gas at ten times the gas price, refunded after. */
+export const playReserve = (price) => BigInt(SWARM_TGAS) * 10n ** 12n * price * PESSIMISTIC;
+/** NEAR the plantings that `brainNear` of brain pays for will burn in gas. */
+export const playGas = (brainNear, price) => (brainNear / DECISION_FEE) * PLANT_BURN_TGAS * 10n ** 12n * price;
+
+/**
+ * The NEAR a new strain account needs: its join deposit, its brain prepayment, the storage of the account and its two
+ * keys, the reserve each planting must have on hand (prepaid gas at ten times the gas price, more than the join's), the
+ * gas the spawn's steps and every planting its brain pays for will burn, and a small margin. At testnet's minimum gas
+ * price that is about 0.13 NEAR.
+ */
+export async function strainNearFor({ joinNear = JOIN_NEAR, brain = true } = {}) {
+  if (STRAIN_NEAR) return STRAIN_NEAR;
+  const price = await gasPrice();
+  const tgas = 10n ** 12n;
+  const joinReserve = JOIN_TGAS * tgas * price * PESSIMISTIC;
+  const reserve = brain && playReserve(price) > joinReserve ? playReserve(price) : joinReserve;
+  const burnt = (JOIN_TGAS / 2n + 2n * TRANSFER_TGAS) * tgas * price + (brain ? playGas(BRAIN_NEAR, price) : 0n);
+  return joinNear + (brain ? BRAIN_NEAR : 0n) + ACCOUNT_BYTES * BYTE_COST + reserve + burnt + MARGIN;
+}
+
+/** Whether a strain holds enough NEAR to send a planting now (its prepaid gas reserve). */
+export async function canPayGas(accountId) {
+  return (await spendable(accountId).catch(() => 0n)) >= playReserve(await gasPrice());
+}
+
 /** The account's access keys as the chain lists them. */
 export async function keysOf(accountId) {
   const r = await rpc("query", { request_type: "view_access_key_list", finality: "optimistic", account_id: accountId });
@@ -69,9 +128,24 @@ export async function keysOf(accountId) {
  * left is `play` (a function-call key for the dish's play methods). With `brain`, the account also prepays its brain
  * budget to BRAIN_ACCOUNT before the lock. `onStep(step, hash)` hears each transaction.
  */
-export async function createColony({ accountId, name, color, play, temp = KeyPair.fromRandom("ed25519"), brain = false, strainNear = STRAIN_NEAR, joinNear = JOIN_NEAR, creditNear = CREDIT_NEAR, done = [], onStep = () => {} }) {
+export async function createColony({ accountId, name, color, play, temp = KeyPair.fromRandom("ed25519"), brain = false, strainNear = null, joinNear = JOIN_NEAR, creditNear = CREDIT_NEAR, done = [], onStep = () => {} }) {
   const parent = account(PARENT);
   const self = new Account(accountId, new JsonRpcProvider({ url: RPCS[0] }), temp.toString());
+  strainNear ??= await strainNearFor({ joinNear, brain });
+  const price = await gasPrice();
+  /** Waits for gas refunds until the account can pay `need`; the parent sends what is still missing (capped). */
+  const ensure = async (need, step) => {
+    for (let i = 0; i < 15; i++) {
+      if ((await spendable(accountId).catch(() => 0n)) >= need) return;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    const short = need - (await spendable(accountId));
+    if (short <= 0n) return;
+    if (short > MAX_TOP_UP) throw new Error(`${step}: the account is ${yoctoText(short)} NEAR short, more than the parent tops up`);
+    const r = await parent.signAndSendTransaction({ receiverId: accountId, actions: [actions.transfer(short + MARGIN)], waitUntil: "FINAL" });
+    onStep(`topup-${step}`, r.transaction.hash, true);
+  };
+  const reserve = (tg) => tg * 10n ** 12n * price * PESSIMISTIC;
   const send = async (who, receiverId, acts, step) => {
     if (done.includes(step)) return null;
     // FINAL: each step's gas refund has landed before the next spends from the same small balance.
@@ -89,9 +163,12 @@ export async function createColony({ accountId, name, color, play, temp = KeyPai
   ], "create");
   // The new key needs a moment before RPC lets it sign.
   for (let i = 0; i < 12 && !(await keysOf(accountId).catch(() => [])).some((k) => k.public_key === temp.getPublicKey().toString()); i++) await new Promise((r) => setTimeout(r, 800));
-  await send(self, CONTRACT, [actions.functionCall("join", { name, color }, 30n * 10n ** 12n, joinNear)], "join");
+  if (!done.includes("join")) await ensure(joinNear + reserve(JOIN_TGAS), "join");
+  await send(self, CONTRACT, [actions.functionCall("join", { name, color }, JOIN_TGAS * 10n ** 12n, joinNear)], "join");
+  if (brain && !done.includes("brain")) await ensure(BRAIN_NEAR + reserve(TRANSFER_TGAS), "brain");
   if (brain) await send(self, BRAIN_ACCOUNT, [actions.transfer(BRAIN_NEAR)], "brain");
   await send(parent, CONTRACT, [actions.functionCall("sponsor", { account_id: accountId }, 30n * 10n ** 12n, creditNear)], "credit");
+  if (!done.includes("lock")) await ensure(reserve(TRANSFER_TGAS), "lock");
   await send(self, accountId, [actions.deleteKey(temp.getPublicKey())], "lock");
 }
 
@@ -208,6 +285,41 @@ async function finishSpawn(reg, strain, play, temp, log) {
   } catch (e) {
     strain.status = "failed";
     strain.error = (e instanceof Error ? e.message : String(e)).slice(0, 240);
+    saveRegistry(reg);
+    await abandonSpawn(reg, strain, temp, log);
+  }
+  saveRegistry(reg);
+}
+
+/**
+ * Leaves no full-access key behind a spawn that failed: before the join, the account is deleted and its NEAR returns
+ * to the parent; after it, the temporary key is deleted, so the account holds only the play key (the colony stays on
+ * the dish, idle, with status "failed"). If even that fails, the temporary key stays on disk and the log says so.
+ */
+export async function abandonSpawn(reg, strain, temp, log = console.log) {
+  const self = new Account(strain.account, new JsonRpcProvider({ url: RPCS[0] }), temp.toString());
+  const tempKey = temp.getPublicKey().toString();
+  try {
+    const keys = await keysOf(strain.account).catch(() => null);
+    if (keys === null) {
+      if (!(await exists(strain.account))) strain.status = "reclaimed";
+    } else if (!keys.some((k) => k.public_key === tempKey)) {
+      strain.locked = keys.every((k) => k.permission !== "FullAccess");
+    } else if (!(strain.done ?? []).includes("join")) {
+      const r = await self.signAndSendTransaction({ receiverId: strain.account, actions: [actions.deleteAccount(PARENT)], waitUntil: "FINAL" });
+      strain.txs.reclaim = r.transaction.hash;
+      strain.status = "reclaimed";
+      log(`swarm: ${strain.account} deleted, its NEAR back to ${PARENT}`, r.transaction.hash);
+    } else {
+      const r = await self.signAndSendTransaction({ receiverId: strain.account, actions: [actions.deleteKey(temp.getPublicKey())], waitUntil: "FINAL" });
+      strain.txs.lock = r.transaction.hash;
+      strain.locked = true;
+      log(`swarm: ${strain.account} failed after joining; its temporary key is deleted`, r.transaction.hash);
+    }
+    if (strain.status === "reclaimed" || strain.locked) fs.rmSync(path.join(reg.keysDir, `${strain.account}.temp.json`), { force: true });
+  } catch (e) {
+    strain.abandon_error = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+    log(`swarm: ${strain.account} could not be cleaned up; its temporary key stays in ${reg.keysDir}`, strain.abandon_error);
   }
   saveRegistry(reg);
 }
@@ -243,11 +355,14 @@ export async function topUp(reg, { account: accountId, ownerToken }, log = conso
   if ((s.topups ?? 0) >= TOPUPS) return { ok: false, reasons: [`a strain can be topped up ${TOPUPS} times on testnet`] };
   if (s.status === "failed") return { ok: false, reasons: ["this strain failed to start"] };
   const parent = account(PARENT);
+  // More brain means more plantings: the strain also gets the gas they will burn.
+  const gas = playGas(BRAIN_NEAR, await gasPrice());
+  const fuel = await parent.signAndSendTransaction({ receiverId: accountId, actions: [actions.transfer(gas)], waitUntil: "EXECUTED_OPTIMISTIC" });
   const brain = await parent.signAndSendTransaction({ receiverId: BRAIN_ACCOUNT, actions: [actions.transfer(BRAIN_NEAR)], waitUntil: "EXECUTED_OPTIMISTIC" });
   const credit = await parent.signAndSendTransaction({ receiverId: CONTRACT, actions: [actions.functionCall("sponsor", { account_id: accountId }, 30n * 10n ** 12n, CREDIT_NEAR)], waitUntil: "EXECUTED_OPTIMISTIC" });
   s.topups = (s.topups ?? 0) + 1;
   s.brain.budget = (BigInt(s.brain.budget) + BRAIN_NEAR).toString();
-  s.brain.payments.push({ at: new Date().toISOString(), near: BRAIN_NEAR.toString(), tx: brain.transaction.hash, from: PARENT, credit_tx: credit.transaction.hash });
+  s.brain.payments.push({ at: new Date().toISOString(), near: BRAIN_NEAR.toString(), tx: brain.transaction.hash, from: PARENT, credit_tx: credit.transaction.hash, gas_near: gas.toString(), gas_tx: fuel.transaction.hash });
   if (s.status === "sleeping") s.status = "active";
   saveRegistry(reg);
   log(`swarm: topped up ${accountId} (${yoctoText(BRAIN_NEAR)} NEAR of brain)`, brain.transaction.hash, credit.transaction.hash);
