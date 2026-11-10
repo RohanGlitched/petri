@@ -164,8 +164,14 @@
   overflow-y: auto;
   scrollbar-width: thin;
   pointer-events: none;
+  /* A field scrolled into view (the lab note) stops above the sticky Plant button, not under it. */
+  scroll-padding-bottom: 96px;
 }
 .left > * { pointer-events: auto; }
+/* A short window: the loupe gives up some size so the lab log keeps room for its entries. */
+@media (max-height: 940px) and (min-width: 800px) {
+  .loupe { width: 140px; }
+}
 .joinTitle { margin-bottom: 2px !important; }
 .joinHead { display: flex; align-items: center; gap: 10px; }
 .fold {
@@ -286,8 +292,9 @@
   border: 0;
   padding: 0;
   margin: 0 0 16px;
+  min-width: 0;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 6px;
 }
 .stains legend {
@@ -467,7 +474,9 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  /* It takes what the column has left and scrolls inside, but never shrinks below a few entries. */
+  flex: 1 1 auto;
+  min-height: 132px;
 }
 .logHead {
   display: flex;
@@ -486,6 +495,8 @@
   list-style: none;
   margin: 0;
   padding: 0 18px 14px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -1103,3 +1114,75 @@
 .log :global(.term) { text-decoration: none; }
 
 .plantCard .statusInline { margin: 0 0 14px; }
+
+/* A colony's first planting: the card leads with its first earnings. */
+.firstPay {
+  margin: 0 0 14px;
+  padding: 11px 13px 12px;
+  border-radius: 14px;
+  display: grid;
+  gap: 3px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--dim);
+  background: rgba(242, 180, 90, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(242, 180, 90, 0.35);
+}
+.firstPay b { color: var(--bone); font-size: 15px; }
+.firstPayIn { background: rgba(159, 216, 168, 0.1); box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.45); animation: firstPayIn 0.9s cubic-bezier(0.2, 0.7, 0.1, 1) both; }
+.firstPayIn b { color: var(--ok); font-size: 22px; font-family: var(--display, inherit); }
+@keyframes firstPayIn {
+  0% { transform: scale(0.96); box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.9), 0 0 0 0 rgba(159, 216, 168, 0.5); }
+  100% { transform: none; box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.45), 0 0 0 14px rgba(159, 216, 168, 0); }
+}
+/* The same moment in the phone's sticky bar (the card itself is below the dish there). */
+.youBar { display: none; }
+@media (max-width: 799px) {
+  .youBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--bone); }
+  .youBar > span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+  .youBar b { color: var(--ok); }
+  .youBar :global(.btn) { width: auto !important; flex: none; }
+}
+/* The ring and "You" label over a new colony's cells; it moves with the camera. */
+.you {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.you i {
+  position: absolute;
+  left: calc(var(--you-r, 30px) * -1);
+  top: calc(var(--you-r, 30px) * -1);
+  width: calc(var(--you-r, 30px) * 2);
+  height: calc(var(--you-r, 30px) * 2);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--you, #f2b45a), 0 0 22px 2px color-mix(in srgb, var(--you, #f2b45a) 45%, transparent);
+  animation: youPulse 2.4s ease-in-out infinite;
+}
+.you span {
+  position: absolute;
+  left: 0;
+  top: calc(var(--you-r, 30px) * -1 - 30px);
+  transform: translateX(-50%);
+  padding: 3px 10px 4px;
+  border-radius: 999px;
+  font: 700 12.5px/1.2 var(--body, inherit);
+  letter-spacing: 0.04em;
+  color: #120a05;
+  background: #f3e9da;
+  box-shadow: inset 0 0 0 2px var(--you, #f2b45a), 0 6px 16px -6px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+}
+@keyframes youPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .you i, .firstPayIn { animation: none; }
+}

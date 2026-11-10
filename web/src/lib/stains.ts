@@ -72,6 +72,8 @@ function lab(rgb: number): [number, number, number] {
   const z = f((r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883);
   return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
 }
+/** Lighter than CIELAB L* 85: too close to the highlights and the bone text to read as a colony's own colour. */
+export const isPale = (rgb: number) => lab(rgb)[0] > 85;
 const distance = (a: number, b: number) => {
   const p = lab(a);
   const q = lab(b);
@@ -84,7 +86,8 @@ const distance = (a: number, b: number) => {
  * `taken` should hold only the colours of colonies that still have living cells (a dead colony's stain is free).
  */
 export function firstFreeStain(taken: Set<number>): number {
-  const free = PREFERRED.map((n) => STAINS.find((x) => x.name === n)!).filter((s) => !taken.has(s.color));
+  // Pale stains (Calcofluor white, Picric acid) read as highlights, not as a colony: offered on request, never by default.
+  const free = PREFERRED.map((n) => STAINS.find((x) => x.name === n)!).filter((s) => !taken.has(s.color) && !isPale(s.color));
   const clear = free.find((s) => [...taken].every((t) => distance(s.color, t) >= 20));
   return (clear ?? free[0] ?? STAINS.find((x) => x.name === PREFERRED[0])!).color;
 }

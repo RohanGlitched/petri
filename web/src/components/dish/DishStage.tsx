@@ -33,6 +33,7 @@ import { Goals } from "./Goals";
 import { MyPacts, PickedColony, pactLines, pactsOn, zoneColonies, type PactActions } from "./Pacts";
 import s from "./dish.module.css";
 import { NetTag } from "@/components/site/NetTag";
+import { NoteText, splitTee } from "@/components/site/TeeNote";
 import { DishDelight } from "@/components/delight/Delight";
 
 type Cell = { x: number; y: number };
@@ -423,6 +424,11 @@ export function DishStage() {
   const [minted, setMinted] = useState(false);
   /** Where the last focus put its colony on the canvas: the first-earnings note rises from there. */
   const bloomAt = useRef<{ x: number; y: number } | null>(null);
+  /** A ring and a "You" label held over the cells of a colony's first planting (cell coordinates, radius in cells),
+   * until the generation `until`. */
+  const [youMark, setYouMark] = useState<{ x: number; y: number; r: number; until: number } | null>(null);
+  /** A colony's first planting: the colony card leads with its first earnings until they land, then says what they were. */
+  const [firstEarn, setFirstEarn] = useState<{ at: number; gain: string | null } | null>(null);
 
   useEffect(() => {
     // A name is ready on the first visit, so Start works at once; the player may type over it.
@@ -485,11 +491,28 @@ export function DishStage() {
       setLoadedFor(player.accountId);
     }
   }, [player]);
+  // A colony's own numbers change when the ledger moves (its moves, anyone's planting) or the stored board advances, so
+  // they are re-read then, and otherwise every half minute: not six RPC calls every few seconds.
   useEffect(() => {
     loadMe();
-    const t = setInterval(loadMe, 8000);
+    const t = setInterval(loadMe, 30_000);
     return () => clearInterval(t);
   }, [loadMe]);
+  const ledgerNow = d.state?.ledger;
+  useEffect(() => {
+    if (ledgerNow) loadMe();
+  }, [ledgerNow, loadMe]);
+  // The header's button says "My colony" once this browser has one on this dish (Nav reads it).
+  useEffect(() => {
+    if (!player || loadedFor !== player.accountId) return;
+    rememberColony(net.network, me ? me.id : null);
+  }, [me, player, loadedFor, net.network]);
+  // The header's "My colony" pressed while already on the dish: bring the colony into view.
+  useEffect(() => {
+    const go = () => findMine();
+    window.addEventListener("petri:find-mine", go);
+    return () => window.removeEventListener("petri:find-mine", go);
+  });
   // When someone advances the stored board, the browser's pending earnings fold into what the contract says is
   // claimable: read it at once, so "Earned, unclaimed" never dips to zero while waiting for the next poll.
   const storedGen = d.state?.generation;
@@ -895,6 +918,8 @@ export function DishStage() {
     setBusy(`Planting a ${info.label.toLowerCase()}…`);
     const cells = stamp.slice();
     const genAtStart = d.generation;
+    // A colony's first planting gets its own payoff: the stamp is put down, the colony card opens on its first earnings.
+    const first = !!me && Number(me.cells_planted) === 0 && !d.recentPlants.some((p) => p.colony === me.id);
     setPending({ cells, label: info.label, at: Date.now() });
     try {
       const trimmed = note.trim();
@@ -923,8 +948,19 @@ export function DishStage() {
       setQuietKey(cells.join(","));
       // Bring the new cells to the middle of the open agar (on a phone, scroll the page to the dish first) and let a
       // ring bloom over them; their colony's first earnings get a moment of their own when they land.
-      focusCells(cells, { color: myColor });
+      focusCells(cells, { color: myColor, zoom: first ? 6 : undefined });
       reward.current = { at: Date.now(), shown: false };
+      const at = torusCentre(Array.from(cells), w, h);
+      if (at) {
+        const wrapD = (a: number, n: number) => Math.abs(((((a % n) + n + n / 2) % n) - n / 2));
+        const far = Array.from(cells).reduce((m, i) => Math.max(m, wrapD((i % w) - at.x, w), wrapD(((i / w) | 0) - at.y, h)), 0);
+        setYouMark({ x: at.x, y: at.y, r: far + 2.5, until: genAtStart + 40 });
+      }
+      if (first) {
+        setPattern(null);
+        setCustom(null);
+        setFirstEarn({ at: Date.now(), gain: null });
+      }
       if (info.name && PATTERNS.some((p) => p.name === info.name && (p.kind === "ship" || p.kind === "gun"))) setLaunched(true);
       setTarget(null);
       setPinNote(null);
@@ -1177,8 +1213,8 @@ export function DishStage() {
   /** Bring a colony's cells into view: on a phone the page scrolls to the dish first; the view zooms to about three
    * times the whole-dish fit (closer if it already was), centres the colony above the dock (a circular mean, so a colony
    * across an edge stays whole), and its cells pulse for two seconds under a blooming ring. */
-  function focusCells(cells: number[], opt: { color?: string; colony?: number; scroll?: boolean } = {}) {
-    const at = torusCentre(cells, w, h);
+  function focusCells(cells: ArrayLike<number>, opt: { color?: string; colony?: number; scroll?: boolean; zoom?: number } = {}) {
+    const at = torusCentre(Array.from(cells), w, h);
     const L = lens.current;
     const v = L?.view();
     if (!at || !L || !v?.w) return;
@@ -1191,7 +1227,7 @@ export function DishStage() {
       }
     }
     const cur = L.camera().zoom;
-    const z = Math.max(v.roundFit * 3, Math.min(cur, v.roundFit * 6));
+    const z = opt.zoom ? v.roundFit * opt.zoom : Math.max(v.roundFit * 3, Math.min(cur, v.roundFit * 6));
     const spot = centreInFree(at.x, at.y, z);
     const colony = opt.colony ?? me?.id;
     if (colony) setFlash({ colony, until: Date.now() + 2200 });
@@ -1482,13 +1518,29 @@ export function DishStage() {
     const r = reward.current;
     const first = !!r && !r.shown && Date.now() - r.at < 10 * 60_000;
     if (first) r!.shown = true;
-    setTick({ key: Date.now(), text: `+${petri(gain, gain >= 10_000 ? 3 : 4)}`, first });
+    const text = `+${petri(gain, gain >= 10_000 ? 3 : 4)}`;
+    setTick({ key: Date.now(), text, first });
+    if (first) setFirstEarn((f) => (f && !f.gain ? { ...f, gain: text } : f));
   }, [myEarnedNow, me]);
   useEffect(() => {
     if (!tick) return;
     const t = setTimeout(() => setTick(null), tick.first ? 4200 : 1900);
     return () => clearTimeout(t);
   }, [tick]);
+  // The first-earnings moment ends when a stamp is picked again, or three minutes after the earnings landed.
+  useEffect(() => {
+    if (firstEarn && (pattern || custom)) setFirstEarn(null);
+  }, [pattern, custom, firstEarn]);
+  useEffect(() => {
+    if (!firstEarn?.gain) return;
+    const t = setTimeout(() => setFirstEarn(null), 180_000);
+    return () => clearTimeout(t);
+  }, [firstEarn]);
+  // The You ring stays about ten minutes, or until the colony has died out.
+  useEffect(() => {
+    if (!youMark) return;
+    if (d.generation >= youMark.until || (me && d.status === "ready" && d.generation > youMark.until - 36 && !((d.liveCounts[me.id] ?? 0) > 0))) setYouMark(null);
+  }, [d.generation, youMark, me, d.status, d.liveCounts]);
 
   // Another account (a wallet connected, a guest forgotten) gets its own start form back.
   useEffect(() => {
@@ -1651,6 +1703,7 @@ export function DishStage() {
             <i />
           </span>
         )}
+        {youMark && <YouMark lens={lens} mark={youMark} w={w} h={h} color={myColor} />}
         {tick?.first && bloomAt.current && (
           <p key={tick.key} className={s.firstEarn} style={{ left: bloomAt.current.x, top: bloomAt.current.y }} role="status">
             <b className="num">{tick.text} PETRI</b>
@@ -1891,10 +1944,26 @@ export function DishStage() {
 
         {me && !info && !fossilOn && (
           <section className={`${s.card} ${isWallet ? "" : s.guestCard}`}>
-            {myLive === 0 && (
-              <p className={s.firstStep}>
-                <b>First step</b> Pick a stamp below and plant it.
-              </p>
+            {firstEarn ? (
+              <div className={`${s.firstPay} ${firstEarn.gain ? s.firstPayIn : ""}`} role="status">
+                {firstEarn.gain ? (
+                  <>
+                    <b className="num">{firstEarn.gain} PETRI</b>
+                    <span>your colony&rsquo;s first earnings. It earns again every {Math.round(genMs / 1000)} s while its cells live.</span>
+                  </>
+                ) : (
+                  <>
+                    <b>Planted. Your colony is alive.</b>
+                    <span>Its first earnings land at the next generation{ready ? `, in ${secs} s` : ""}. The ringed cells marked You are yours.</span>
+                  </>
+                )}
+              </div>
+            ) : (
+              myLive === 0 && (
+                <p className={s.firstStep}>
+                  <b>First step</b> Pick a stamp below and plant it.
+                </p>
+              )
             )}
             <div className={s.meHead}>
               <i className="swatch" style={{ background: myColor, width: 16, height: 16 }} />
@@ -2004,6 +2073,24 @@ export function DishStage() {
               )}
             </div>
             {me.proxy && isWallet && <Rename current={me.name} busy={!!busy} onRename={rename} />}
+            {firstEarn && (
+              // On a phone the card sits below the dish: the moment rides in the sticky bar, in view over the dish.
+              <div className={`${s.stickyCta} ${s.actionBar} ${s.youBar}`} role="status">
+                <span>
+                  <i className="swatch" style={{ background: myColor, width: 12, height: 12 }} />
+                  {firstEarn.gain ? (
+                    <>
+                      <b className="num">{firstEarn.gain} PETRI</b> first earnings
+                    </>
+                  ) : (
+                    <>Alive. First earnings in {ready ? `${secs} s` : "a moment"}</>
+                  )}
+                </span>
+                <button className="btn btn-amber btn-small" onClick={findMine} disabled={myLive === 0}>
+                  Find my colony
+                </button>
+              </div>
+            )}
           </section>
         )}
 
@@ -2096,12 +2183,16 @@ export function DishStage() {
               {d.recentPlants.slice(0, 12).map((p, i) => {
                 const c = d.colonies.find((x) => x.id === p.colony);
                 const strain = c ? strainOf(c.account) : null;
-                const move = strain && c ? moves.find(c.account, Number(p.generation)) : undefined;
+                // Spawned strains (testnet, *.petri-strains.testnet) get the same badge as the house's.
+                const spawned = !!c && c.account.endsWith(".petri-strains.testnet");
+                const move = (strain || spawned) && c ? moves.find(c.account, Number(p.generation)) : undefined;
                 const who = chooserOf(move);
                 // Hover or tap the badge: who chose the move, the options it weighed and its reasoning.
                 const why = move
-                  ? `${who.long}.${move.options?.length ? ` It weighed ${move.options.length} legal ${move.options.length === 1 ? "option" : "options"}, each forecast 240 generations ahead.` : ""}${move.note ? ` Its reasoning: “${move.note}”` : ""}`
-                  : "A house strain; its move is not in the public log yet.";
+                  ? `${who.long}.${move.options?.length ? ` It weighed ${move.options.length} legal ${move.options.length === 1 ? "option" : "options"}, each forecast 240 generations ahead.` : ""}${move.note ? ` Its reasoning: “${splitTee(move.note).text}”` : ""}`
+                  : splitTee(p.note).tag
+                    ? "Chosen by a NEAR AI model inside a TEE: the chip on its note opens the signed answer."
+                    : `${spawned ? "A spawned strain" : "A house strain"}; its move is not in the public log yet.`;
                 return (
                   <li key={`${p.generation}-${i}`}>
                     <i className="swatch" style={{ background: c ? hex(c.color) : "#888" }} />
@@ -2109,15 +2200,19 @@ export function DishStage() {
                       <p>
                         <b>{c?.name ?? `Colony ${p.colony}`}</b>
                         {c && <BenchTag account={c.account} />}
-                        {strain && (
+                        {(strain || spawned) && (
                           <Term tip={why} place="below" align="end">
-                            <span className={`${s.aiTag} ${move?.decided_by === "model" ? s.aiModel : ""}`}>{move ? who.short : "AI"}</span>
+                            <span className={`${s.aiTag} ${move?.decided_by === "model" || splitTee(p.note).tag ? s.aiModel : ""}`}>{move ? who.short : splitTee(p.note).tag ? "NEAR AI" : "AI"}</span>
                           </Term>
                         )}{" "}
                         planted {p.cells.length} cells{p.siege ? ", a siege" : ""}
                         <span className={`num ${s.gen}`}>gen {int(Number(p.generation))}</span>
                       </p>
-                      {p.note && <q>{p.note}</q>}
+                      {p.note && (
+                        <q>
+                          <NoteText note={p.note} net={net.network} />
+                        </q>
+                      )}
                     </div>
                   </li>
                 );
@@ -2221,6 +2316,56 @@ export function DishStage() {
 }
 
 /** A colony a NEAR Intents payment started for this account carries the payer's name for it until renamed, once. */
+/** Which colony this browser has on each dish, for the header's "My colony" button. */
+function rememberColony(network: string, id: number | null) {
+  try {
+    const key = `petri.colony.${network}`;
+    const was = localStorage.getItem(key);
+    if (id === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, String(id));
+    if (was !== (id === null ? null : String(id))) window.dispatchEvent(new Event("petri:colony"));
+  } catch {
+    /* the header keeps saying Start a colony */
+  }
+}
+
+/** A ring with a "You" label held over a new colony's cells. It follows the camera itself (a frame loop writing its own
+ * transform), so panning and zooming never re-render the dish. */
+function YouMark({ lens, mark, w, h, color }: { lens: React.RefObject<CultureHandle | null>; mark: { x: number; y: number; r: number }; w: number; h: number; color: string }) {
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      const L = lens.current;
+      const box = el.current;
+      if (L && box) {
+        const v = L.view();
+        const c = L.camera();
+        if (v.w) {
+          // The nearest copy of the cell on the wrapping dish.
+          const dx = ((((mark.x + 0.5 - c.cx) % w) + w + w / 2) % w) - w / 2;
+          const dy = ((((mark.y + 0.5 - c.cy) % h) + h + h / 2) % h) - h / 2;
+          const x = (dx * c.zoom + v.w / 2) / v.dpr;
+          const y = (dy * c.zoom + v.h / 2) / v.dpr;
+          const r = Math.max(18, (mark.r * c.zoom) / v.dpr);
+          box.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+          box.style.setProperty("--you-r", `${r.toFixed(1)}px`);
+          box.style.opacity = "1";
+        }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [lens, mark, w, h]);
+  return (
+    <div ref={el} className={s.you} style={{ "--you": color } as React.CSSProperties} aria-hidden="true">
+      <i />
+      <span>You</span>
+    </div>
+  );
+}
+
 function Rename({ current, busy, onRename }: { current: string; busy: boolean; onRename: (name: string) => void }) {
   const [name, setName] = useState("");
   const clean = name.split(/\s+/).filter(Boolean).join(" ");
