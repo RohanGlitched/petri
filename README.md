@@ -55,19 +55,19 @@ cd purse && cargo test                      # living slides: expect 18 (purse), 
 ## What is real, today
 
 <!-- facts-now:start -->
-Read by `node scripts/facts-now.mjs` at mainnet block 223,907,882 and testnet block 277,059,470; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
+Read by `node scripts/facts-now.mjs` at mainnet block 223,907,922 and testnet block 277,059,510; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
 
 | | Mainnet, real NEAR | Testnet, free play |
 |---|---|---|
 | Contract | [`petri-dish.near`](https://nearblocks.io/address/petri-dish.near) | [`petri-v6.testnet`](https://testnet.nearblocks.io/address/petri-v6.testnet) |
 | Full-access keys on the dish | 1, held by the team until the final verify on 14 November, then deleted | 1, kept for fixes |
 | Slide factory | `slides.petri-dish.near`, 0 keys | `slides.petri-v6.testnet`, 0 keys |
-| Generation stored on chain (15 s each) | 4,562 (the clock is at 4,579; the next move catches up) | 34,559 (clock 34,574) |
-| Colonies | 8: 5 house, 1 team bench, 2 other team accounts (2 living slides), 0 outside | 54: 5 house, 4 team bench, 13 other team accounts (3 living slides, 8 spawned strains, 2 test agents), 29 guest (anyone's browser, the team's tests included), 3 outside |
+| Generation stored on chain (15 s each) | 4,562 (the clock is at 4,581; the next move catches up) | 34,574 (clock 34,575) |
+| Colonies | 8: 5 house, 1 team bench, 2 other team accounts (2 living slides), 0 outside | 55: 5 house, 4 team bench, 13 other team accounts (3 living slides, 8 spawned strains, 2 test agents), 30 guest (anyone's browser, the team's tests included), 3 outside |
 | Outside players | none yet | 3 outside wallet colonies, 2 planted |
-| Plantings / under a slide's licence | 71 / 2 | 946 / 18 |
-| PETRI supply (started at 1,000,000) | 998,967.18 (1,032.82 burned) | 994,845.13 (5,154.87 burned) |
-| Hourly tides | 3 tides: 0.0459 NEAR paid as NEAR to colonies that attached NEAR; 0.0201 NEAR of vault shares paid as credit to colonies that never attached NEAR | 90 tides: 0.6634 NEAR paid as NEAR to colonies that attached NEAR; 0.0048 NEAR of vault shares paid as credit to colonies that never attached NEAR |
+| Plantings / under a slide's licence | 71 / 2 | 947 / 18 |
+| PETRI supply (started at 1,000,000) | 998,967.18 (1,032.82 burned) | 994,842.36 (5,157.64 burned) |
+| Hourly tides | 3 tides: 0.0459 NEAR paid as NEAR to colonies that attached NEAR; 0.0201 NEAR of vault shares paid as credit to colonies that never attached NEAR | 91 tides: 0.6794 NEAR paid as NEAR to colonies that attached NEAR; 0.0055 NEAR of vault shares paid as credit to colonies that never attached NEAR |
 | Royalties paid to slide holders | 0.00 PETRI | 36.17 PETRI |
 | Specimen slides (NFTs) | 19 | 25 |
 | Living slides (keyless accounts) | 2: `slide-14.petri-dish.near` (0 keys; colony 6, unattached, no living cells on the stored board); `slide-18.slides.petri-dish.near` (0 keys; colony 8, attached, no living cells on the stored board) | 3: `slide-1.petri-slides.testnet` (0 keys; colony 23, attached, no living cells on the stored board); `slide-2.petri-slides.testnet` (0 keys; colony 24, attached, 12 living cells on the stored board); `slide-24.slides.petri-v6.testnet` (0 keys; colony 43, attached, 20 living cells on the stored board) |
@@ -318,59 +318,61 @@ flowchart LR
 `node scripts/verify.mjs [--network mainnet]` pins one final block, downloads the ledger, replays it with the committed WASM build of petri-core and compares 46 values with the contract (board, history chain, every planting's legality and price, every purchase, sale, tide, claim, refund, slide, royalty, pact, every colony's PETRI, NEAR, credit and kept PETRI, the vault, solvency and the deployed code hash), then notes the full-access keys. `--contract <account>` checks another dish and `--code-hash <base58>` another build.
 
 <details>
-<summary>The mainnet run of 10 November 2026, in full</summary>
+<summary>A mainnet run of 10 November 2026 (evening), in full</summary>
 
 ```
-Replaying petri-dish.near (mainnet) at block 223878202: 3,872 generations, 135 ledger entries, 6 colonies, 0 tides.
-  match   History chain                                5baf354fd2dcaf92a41651d90ed62b2443e4192d036bff0bb88638daf318e511
-  match   Board hash                                   26cf0ca6a50e2e78c1b12d63b60ca0eef97ab5221ff5926fe82e22955d23b999
-  match   Living cells                                 1106
-  match   Legal plantings                              54 of 54
-  match   Planting prices                              54 of 54
-  match   Planting fees                                54 of 54
-  match   Licensed plantings: shape, holder, royalty   1 of 1
-  match   Purchases on the curve                       10 of 10
+Replaying petri-dish.near (mainnet) at block 223907902: 4,562 generations, 165 ledger entries, 8 colonies, 3 tides.
+  match   History chain                                ad2d0724ccbbdf156c046d899ea5fd08d8087c7445b8e809afb520b1f9947b80
+  match   Board hash                                   ff802f327c42f341d57e616c0eb32c9c6e3fc3b113d029828f01be4cd082bc14
+  match   Living cells                                 684
+  match   Legal plantings                              71 of 71
+  match   Planting prices                              71 of 71
+  match   Planting fees                                71 of 71
+  match   Licensed plantings: shape, holder, royalty   2 of 2
+  match   Purchases on the curve                       14 of 14
   match   Sales on the curve and allowance             0 of 0
-  match   Tides                                        0 of 0
+  match   Tides                                        3 of 3
   match   Claims of exactly what was owed              0 of 0
   match   Refunds tied to their payouts                0 of 0
   match   Sales for NEAR, NEAR claims and pact payments by colonies holding no kept PETRI 0 of 0
-  match   Pacts kept to the rules and plantings under pacts 43 of 43
+  match   Pacts kept to the rules and plantings under pacts 53 of 53
   match   PETRI held for pact offers                   0.000000
   match   Pacts                                        14
-  match   Specimens                                    16 of 16 match the dish
-  match   Slide holders and royalties                  16 of 16
-  match   Agar                                         998,892.150468
-  match   Sold                                         1,413.605281
-  match   Burned                                       833.546100
-  match   Burned by specimens                          525.000000
+  match   Specimens                                    19 of 19 match the dish
+  match   Slide holders and royalties                  19 of 19
+  match   Agar                                         998,607.607109
+  match   Sold                                         1,754.382942
+  match   Burned                                       1,032.815460
+  match   Burned by specimens                          645.000000
   match   Royalties                                    0.000000
-  match   Returned to the agar                         308.546100
+  match   Returned to the agar                         387.815460
   match   Bought back                                  0.000000
-  match   Keeper share                                 0.055795
-  match   Colony earnings                              6 of 6
-  match   Vault (NEAR)                                 0.42905
-  match   NEAR paid in                                 0.42905
-  match   NEAR paid at tides                           0
-  match   Vault shares, bounties as credit             0
+  match   Keeper share                                 0.516247
+  match   Colony earnings                              8 of 8
+  match   Vault (NEAR)                                 0.457998761920375000000001
+  match   NEAR paid in                                 0.52872
+  match   NEAR paid at tides                           0.045962738079624999999999
+  match   Vault shares, bounties as credit             0.020186915
   match   Sales paid as credit                         0
-  match   Colony tide winnings                         6 of 6
+  match   Colony tide winnings                         8 of 8
   match   Credit pool                                  0
-  match   Credit paid at tides                         0
+  match   Credit paid at tides                         0.020186915
   match   Credit sponsored                             0
   match   Credit spent                                 0
   match   Credit taken back                            0
-  match   NEAR owed to colonies                        0
+  match   NEAR owed to colonies                        0.045962738079624999999999
   match   Pending NEAR                                 0
-  match   Colony credit winnings                       6 of 6
-  match   Colony kept PETRI                            6 of 6
+  match   Colony credit winnings                       8 of 8
+  match   Colony kept PETRI                            8 of 8
   match   Solvent (NEAR held >= owed, from the ledger) yes
   match   Deployed code hash                           CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD
-  note    Full-access keys                             1 (team-held, see The lock; unused since the v6.5 deploy (nonce 222916366000045))
+  match   Read again from rpc.mainnet.fastnear.com     chain ad2d0724ccbbdf156c046d899ea5fd08d8087c7445b8e809afb520b1f9947b80, board ff802f327c42f341d57e616c0eb32c9c6e3fc3b113d029828f01be4cd082bc14, code CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD
+  match   Read again from near.drpc.org                chain ad2d0724ccbbdf156c046d899ea5fd08d8087c7445b8e809afb520b1f9947b80, board ff802f327c42f341d57e616c0eb32c9c6e3fc3b113d029828f01be4cd082bc14, code CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD
+  note    Full-access keys                             1 (team-held, see The lock; unused since its last setup transaction, creating the keyless slide factory after the v6.5 deploy (nonce 222916366000046))
 Source: https://github.com/RohanGlitched/petri/tree/27a59761af835f2278b7cf28676c3acf0fdda538; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
 16 tide generation(s) had nobody to pay and were skipped, as the rules say.
-Owed, from the ledger: 0.42905 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.576058217680352300000004 NEAR.
-Everything matches. Replay took 56 ms.
+Owed, from the ledger: 0.524148415 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.692724799732849000000006 NEAR.
+Everything matches. Replay took 96 ms.
 ```
 
 </details>
