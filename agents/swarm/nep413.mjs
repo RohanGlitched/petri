@@ -38,7 +38,7 @@ export function signatureBytes(sig) {
  * Checks a signed message: the signature over the NEP-413 hash, and the key on chain for `accountId`. Returns
  * { ok, reason, permission }.
  */
-export async function verifySigned({ accountId, publicKey, signature, message, nonce, recipient }) {
+export async function verifySigned({ accountId, publicKey, signature, message, nonce, recipient, callbackUrl = null }) {
   let pk;
   try {
     pk = PublicKey.fromString(publicKey);
@@ -47,11 +47,12 @@ export async function verifySigned({ accountId, publicKey, signature, message, n
   }
   let good = false;
   try {
-    good = pk.verify(nep413Hash({ message, nonce, recipient }), signatureBytes(signature));
+    // A wallet that was given a callbackUrl signs it too (NEP-413 payload field 4), so it is part of the hash.
+    good = pk.verify(nep413Hash({ message, nonce, recipient, callbackUrl: callbackUrl == null || callbackUrl === "" ? null : String(callbackUrl) }), signatureBytes(signature));
   } catch {
     good = false;
   }
-  if (!good) return { ok: false, reason: "the signature does not match the message and key (NEP-413: tag 2147484061, message, 32-byte nonce, recipient)" };
+  if (!good) return { ok: false, reason: "the signature does not match the message and key (NEP-413: tag 2147484061, message, 32-byte nonce, recipient, callbackUrl if you sent one)" };
   let key;
   try {
     key = await rpc("query", { request_type: "view_access_key", finality: "optimistic", account_id: accountId, public_key: publicKey });

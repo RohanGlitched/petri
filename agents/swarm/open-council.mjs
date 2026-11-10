@@ -127,7 +127,11 @@ export async function submitBid(reg, body) {
   if (reasons.length) return { ok: false, reasons };
   const nonce = Buffer.from(String(body.nonce ?? ""), "base64");
   if (nonce.length !== 32) return { ok: false, reasons: ["nonce must be 32 random bytes, base64"] };
-  if (round.bids.some((b) => b.nonce === body.nonce)) return { ok: false, reasons: ["that nonce was used already"] };
+  // Every nonce this round has accepted, replaced bids included, by its bytes (so no other spelling of the same base64
+  // gets past): a signed bid can be sent once, and an old bid cannot be replayed over the one that replaced it.
+  const nonceKey = nonce.toString("hex");
+  round.nonces ??= round.bids.map((b) => Buffer.from(String(b.nonce ?? ""), "base64").toString("hex"));
+  if (round.nonces.includes(nonceKey)) return { ok: false, reasons: ["that nonce was used already this round"] };
   if (round.bids.filter((b) => b.account === m.account).length >= BIDS_PER_ACCOUNT) return { ok: false, reasons: [`at most ${BIDS_PER_ACCOUNT} bids per account per round`] };
   const [mine, theirs] = await Promise.all([view("colony_of", { account_id: m.account }), view("colony_of", { account_id: String(m.counterparty) })]);
   if (!mine) return { ok: false, reasons: [`${m.account} has no colony on ${CONTRACT}; join first`] };
@@ -141,8 +145,11 @@ export async function submitBid(reg, body) {
   if (m.side === "pay" && (!mine.attached || Number(mine.kept) > 0)) {
     return { ok: false, reasons: [mine.attached ? "your colony holds kept PETRI (bought with credit); plant it first, then you can pay for pacts" : "a colony that never attached NEAR cannot pay PETRI for a pact (free-play PETRI stays in the dish)"] };
   }
-  const sig = await verifySigned({ accountId: m.account, publicKey: body.public_key, signature: body.signature, message: body.message, nonce, recipient: CONTRACT });
+  const callbackUrl = body.callbackUrl ?? body.callback_url ?? null;
+  const sig = await verifySigned({ accountId: m.account, publicKey: body.public_key, signature: body.signature, message: body.message, nonce, recipient: CONTRACT, callbackUrl });
   if (!sig.ok) return { ok: false, reasons: [sig.reason] };
+  if (round.nonces.includes(nonceKey)) return { ok: false, reasons: ["that nonce was used already this round"] };
+  round.nonces.push(nonceKey);
   // One bid per pair and side: a later bid replaces an earlier one.
   round.bids = round.bids.filter((b) => !(b.account === m.account && b.counterparty === m.counterparty && b.side === m.side));
   const bid = {
@@ -159,6 +166,7 @@ export async function submitBid(reg, body) {
     public_key: body.public_key,
     signature: body.signature,
     nonce: body.nonce,
+    callback_url: callbackUrl,
     key: sig.permission,
     commit: sha(`${body.message}|${body.signature}`),
   };
@@ -286,11 +294,15 @@ export async function openCouncilTick(reg, world, house, opts = {}) {
   return round;
 }
 
-/** What an agent needs to see about the council: the round, its own bids and deals, and what to do next. */
+/**
+ * What an agent needs to see about the council: the round, its own bids and deals, and what to do next. Anyone can ask
+ * for any account, so an open round's bids are shown as commits only, never their amounts: a bidder knows its own
+ * amounts (and can check a commit: sha256 of "<message>|<signature>"); everyone sees them all when the round closes.
+ */
 export function councilView(reg, account = null) {
   const round = currentRound(reg);
   const mine = account ? reg.council.deals.filter((d) => d.payer === account || d.promisor === account).slice(-10) : [];
-  const yours = round && account ? round.bids.filter((b) => b.account === account).map((b) => ({ id: b.id, side: b.side, counterparty: b.counterparty, petri: b.petri, commit: b.commit })) : [];
+  const yours = round && account ? round.bids.filter((b) => b.account === account).map((b) => ({ id: b.id, side: b.side, counterparty: b.counterparty, commit: b.commit, at: b.at })) : [];
   return {
     network: NETWORK,
     contract: CONTRACT,
