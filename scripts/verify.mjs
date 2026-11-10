@@ -493,7 +493,7 @@ const keyUse = (() => {
   const base = SETUP_NONCE[CONTRACT];
   if (!fullNonce.length || base === undefined) return "";
   const used = fullNonce.reduce((a, n) => a + (n > base ? n - base : 0n), 0n);
-  return used === 0n ? `; unused since the v6.4 setup (nonce ${base})` : `; signed ${used} transaction(s) since the v6.4 setup (nonce ${base})`;
+  return used === 0n ? `; unused since the v6.5 deploy (nonce ${base})` : `; signed ${used} transaction(s) since the v6.4 setup (nonce ${base})`;
 })();
 // Solvency from the replayed ledger, not from the contract's counters.
 const outstanding = given + creditWon + creditSold - spent - reclaimed;

@@ -53,7 +53,7 @@ What to look at for each track we entered, and what is missing.
 
 ## Two dishes
 
-The same build of the same contract, v6.4, runs twice. Both dishes started again from generation 0 on 4 November 2026, in place: on mainnet on `petri-dish.near`, and on testnet on `petri-v6.testnet` (named for the v6 it first ran; the v5 testnet dish, `petri-v5.testnet`, is no longer played). Each had run v6 to v6.3 for a few hours before v6.4 replaced it. The switch in the site's navigation picks which one you read and play.
+The same build of the same contract, v6.5, runs twice. Both dishes started again from generation 0 on 4 November 2026 on v6.4, in place, and moved to v6.5 on 10 November 2026 as a code-only upgrade that kept every record (a test proves v6.5 reads and writes the v6.4 state byte for byte): on mainnet on `petri-dish.near`, and on testnet on `petri-v6.testnet` (named for the v6 it first ran; the v5 testnet dish, `petri-v5.testnet`, is no longer played). Each had run v6 to v6.3 for a few hours before v6.4 replaced it. The switch in the site's navigation picks which one you read and play.
 
 | | Free play | Real NEAR |
 |---|---|---|
@@ -175,7 +175,7 @@ node scripts/verify.mjs                     # petri-v6.testnet
 node scripts/verify.mjs --network mainnet   # petri-dish.near
 ```
 
-Node 20 or later, nothing to install: the script loads the committed WebAssembly build of petri-core from `web/src/engine/pkg`. It pins every read to one final block, replays the whole ledger and prints 44 checks: those of /verify, some split finer (the burned, specimen, royalty and keeper counters; credit paid at tides and as sales; each colony's credit winnings), including the kept-PETRI and pact rows, plus the deployed code hash against the reproducible build. It exits 0 when all match, 1 on any mismatch and 2 if the dish cannot be read. After the checks it prints a note on the contract account's full-access key: the team keeps one (see [The lock](#the-lock)), and the note says whether the key has signed anything since the v6.4 setup, because its nonce moves with every transaction it signs. A run against mainnet shortly after the v6.4 relaunch, in full:
+Node 20 or later, nothing to install: the script loads the committed WebAssembly build of petri-core from `web/src/engine/pkg`. It pins every read to one final block, replays the whole ledger and prints 44 checks: those of /verify, some split finer (the burned, specimen, royalty and keeper counters; credit paid at tides and as sales; each colony's credit winnings), including the kept-PETRI and pact rows, plus the deployed code hash against the reproducible build. It exits 0 when all match, 1 on any mismatch and 2 if the dish cannot be read. After the checks it prints a note on the contract account's full-access key: the team keeps one (see [The lock](#the-lock)), and the note says whether the key has signed anything since the v6.5 deploy, because its nonce moves with every transaction it signs. A run against mainnet shortly after the v6.4 relaunch, in full:
 
 ```
 Replaying petri-dish.near (mainnet) at block 223008572: 9 generations, 2 ledger entries, 1 colonies, 0 tides.
@@ -222,9 +222,9 @@ Replaying petri-dish.near (mainnet) at block 223008572: 9 generations, 2 ledger 
   match   Colony credit winnings                       1 of 1
   match   Colony kept PETRI                            1 of 1
   match   Solvent (NEAR held >= owed, from the ledger) yes
-  match   Deployed code hash                           Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL
-  note    Full-access keys                             1 (team-held, see The lock; unused since the v6.4 setup (nonce 222916366000043))
-Source: https://github.com/RohanGlitched/petri/tree/749f246465af68dece1a6d02a74995e8956df619; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
+  match   Deployed code hash                           CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD
+  note    Full-access keys                             1 (team-held, see The lock; unused since the v6.5 deploy (nonce 222916366000043))
+Source: https://github.com/RohanGlitched/petri/tree/27a59761af835f2278b7cf28676c3acf0fdda538; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
 Owed, from the ledger: 0.04256 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.139400131483264600000003 NEAR.
 Everything matches. Replay took 15 ms.
 ```
@@ -235,34 +235,34 @@ The **Deployed code hash** row compares the hash the chain reports with the one 
 
 ### Rebuild the contract and compare its hash
 
-Both dishes run one build, made with `cargo near build reproducible-wasm` at commit `749f246`. With [cargo-near](https://github.com/near/cargo-near) 0.22 and Docker:
+Both dishes run one build, made with `cargo near build reproducible-wasm` at commit `27a5976`. With [cargo-near](https://github.com/near/cargo-near) 0.22 and Docker:
 
 ```bash
 git clone https://github.com/RohanGlitched/petri && cd petri
-git checkout 749f246465af68dece1a6d02a74995e8956df619
+git checkout 27a59761af835f2278b7cf28676c3acf0fdda538
 cd contract && cargo near build reproducible-wasm
 ```
 
-It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb` (pinned in `contract/Cargo.toml`), in under a minute once the image is pulled, and ends with (the file is 606,302 bytes):
+It builds inside `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb` (pinned in `contract/Cargo.toml`), in under a minute once the image is pulled, and ends with (the file is 617,238 bytes):
 
 ```
-     - SHA-256 checksum hex : 9dd0c0678209ac3b553814b6ad4da2375a833b27f75fa712c6b0864e5dae82d5
-     - SHA-256 checksum bs58: Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL
+     - SHA-256 checksum hex : a7235140d0156c2567e2e4d85ae9754605dea9c8b5d99125b0e2928c3af3fcd4
+     - SHA-256 checksum bs58: CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD
 ```
  The contract's `contract_source_metadata` (NEP-330) names the same commit and image. Its `build_info.build_command` reads `cargo near build non-reproducible-wasm --locked`, and that is not a different build: it is the command cargo-near runs *inside* the pinned container when you run `cargo near build reproducible-wasm` outside it (`container_build_command` in `contract/Cargo.toml`). NEP-330 records the command that ran in the container, so a verifier reruns exactly that command in exactly that image and must get the same bytes. To read the deployed hash yourself:
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_account","finality":"final","account_id":"petri-dish.near"}}'
-# "code_hash":"Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
+# "code_hash":"CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD"; use https://rpc.testnet.fastnear.com and petri-v6.testnet for testnet
 
 near account view-account-summary petri-dish.near network-config mainnet now
-# near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": 9dd0c0678209ac3b553814b6ad4da2375a833b27f75fa712c6b0864e5dae82d5
+# near-cli-rs shows it in hex, as "Local Contract (SHA-256 checksum hex)": a7235140d0156c2567e2e4d85ae9754605dea9c8b5d99125b0e2928c3af3fcd4
 ```
 
 ### The lock
 
-No method changes a running dish's parameters, mints PETRI or edits the board. The only way to start over is `relaunch`, a private initializer that only a transaction from the contract account itself can run, and that refuses an account with no v6.3 dish and one that already runs v6.4 (it writes a version marker). Parameters are fixed when a dish starts, with `new` or `relaunch`, both callable only through the account's own key. Each contract account has one full-access key, held by the team. We keep it on purpose: if a bug turns up, it is the only way to ship a fix (new code plus `relaunch`), and deleting it would make the dish unfixable. Plainly, that key can deploy code, move the contract's NEAR, or relaunch, and a relaunch starts a new dish from generation 0 and erases every balance, slide and pact on the old one. So it is a trust assumption, and we make every use of it public: `/verify` and `scripts/verify.mjs` compare the deployed code hash with the published reproducible build on every run, check that the contract's NEAR covers everything the ledger says it owes, and `scripts/verify.mjs` reads the key's nonce, which moves with every transaction the key signs, and says whether it has been used since the v6.4 setup (mainnet nonce 222916366000043, testnet 276116858000009, both on 4 November 2026). Both report the key as a disclosed note, not a failed check. Anyone can list the keys:
+No method changes a running dish's parameters, mints PETRI or edits the board. The only way to start over is `relaunch`, a private initializer that only a transaction from the contract account itself can run, and that refuses an account with no v6.3 dish and one that already runs v6.4 (it writes a version marker). Parameters are fixed when a dish starts, with `new` or `relaunch`, both callable only through the account's own key. Each contract account has one full-access key, held by the team. We keep it on purpose: if a bug turns up, it is the only way to ship a fix (new code plus `relaunch`), and deleting it would make the dish unfixable. Plainly, that key can deploy code, move the contract's NEAR, or relaunch, and a relaunch starts a new dish from generation 0 and erases every balance, slide and pact on the old one. So it is a trust assumption, and we make every use of it public: `/verify` and `scripts/verify.mjs` compare the deployed code hash with the published reproducible build on every run, check that the contract's NEAR covers everything the ledger says it owes, and `scripts/verify.mjs` reads the key's nonce, which moves with every transaction the key signs, and says whether it has been used since the v6.5 deploy (mainnet nonce 222916366000043, testnet 276116858000009, both on 4 November 2026). Both report the key as a disclosed note, not a failed check. Anyone can list the keys:
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
@@ -385,7 +385,7 @@ The site reads `NEXT_PUBLIC_NEAR_NETWORK` (the dish a first visit reads, testnet
 ## Limits, honestly
 
 - Free play runs on NEAR testnet: its NEAR and PETRI have no market, and guests play with credit the site sponsors. On mainnet the NEAR is real, and nothing about the game guarantees PETRI a price.
-- Each contract account keeps one full-access key, held by the team so a bug can still be fixed. Whoever holds it could deploy different code, move the contract's NEAR or relaunch the dish (which erases its balances); the verifier shows a changed code hash, any shortfall in solvency, and any use of the key since the v6.4 setup.
+- Each contract account keeps one full-access key, held by the team so a bug can still be fixed. Whoever holds it could deploy different code, move the contract's NEAR or relaunch the dish (which erases its balances); the verifier shows a changed code hash, any shortfall in solvency, and any use of the key since the v6.5 deploy.
 - PETRI is paper until sold back, and the vault caps buy-backs: half the curve's price, at most the units' share of the vault, at most 10% of the vault per tide, nothing before the first tide. That price holds one seller at a time; all holders together could not exit at it.
 - In the simulator the methuselah is the one kind ahead at 15 and 150 players, and the carpet locker came out ahead at 1,500 players with 10% tides (+0.59 NEAR); 5% tides turned that to −0.45 in the fix run.
 - Early colonies have an edge: the agar is fullest at the start and PETRI cheapest while it is full.

@@ -27,7 +27,7 @@ with new code plus `relaunch`; no method changes a parameter of a running dish.
 
 ## Two dishes
 
-The same build (v6.4) runs on two networks. `petri-v6.testnet` is free play: guests, a relayer and sponsored credit.
+The same build (v6.5) runs on two networks. `petri-v6.testnet` is free play: guests, a relayer and sponsored credit.
 `petri-dish.near` is mainnet: real NEAR, wallets only, and payment in other tokens through NEAR Intents. Both ran v6
 and then v6.1 briefly first (hours, not days) and were relaunched in place with `relaunch`, from generation 0; the testnet account kept the
 name it was made with for v6. (v5's `petri-v5.testnet` is no longer played.) Their parameters are
@@ -714,11 +714,11 @@ contract test
 
 ## The lock
 
-Both dishes run one build of v6.4 (606,302 bytes, near-sdk 5.29.1), made with `cargo near build reproducible-wasm` at
-commit `749f246465af68dece1a6d02a74995e8956df619` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
+Both dishes run one build of v6.5 (617,238 bytes, near-sdk 5.29.1), made with `cargo near build reproducible-wasm` at
+commit `27a59761af835f2278b7cf28676c3acf0fdda538` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
 (pinned in `contract/Cargo.toml`). Its NEP-330 `contract_source_metadata` links that commit, so anyone can rebuild it
-and compare the hash with the account's code hash, `Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL` (hex
-`9dd0c0678209ac3b553814b6ad4da2375a833b27f75fa712c6b0864e5dae82d5`). Each account has one full-access key,
+and compare the hash with the account's code hash, `CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD` (hex
+`a7235140d0156c2567e2e4d85ae9754605dea9c8b5d99125b0e2928c3af3fcd4`). Each account has one full-access key,
 held by the team on purpose. It exists only so a bug can be fixed: new code plus `relaunch`, which starts the dish again
 from generation 0 with a fresh ledger anyone can replay. Deleting it would make the dish unfixable, so it will not be
 deleted. No method changes a running dish's parameters, mints PETRI or edits the board. The key cannot change anything
