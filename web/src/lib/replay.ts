@@ -33,8 +33,8 @@ import { Engine, buy_quote, credit_share, licence, pattern_cells, quote, sell_qu
 import type { Colony, DishState, Entry, Rules, SlideView } from "./chain";
 import { entryGeneration } from "./chain";
 
-/** The published reproducible build both dishes run (v6.3, commit 749f246); rebuild it to check this constant. */
-export const BUILD_HASH = "Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL";
+/** The published reproducible build both dishes run (v6.5, commit 27a5976); rebuild it to check this constant. */
+export const BUILD_HASH = "CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD";
 
 export type Check = { id: string; label: string; expected: string; got: string | null; ok: boolean | null };
 

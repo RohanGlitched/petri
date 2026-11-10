@@ -234,9 +234,9 @@ echo $?   # 0 when every check matches, 1 on any mismatch, 2 if the dish could n
   match   Colony credit winnings                       5 of 5
   match   Colony kept PETRI                            5 of 5
   match   Solvent (NEAR held >= owed, from the ledger) yes
-  match   Deployed code hash                           Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL
+  match   Deployed code hash                           CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD
   note    Full-access keys                             1 (team-held, see The lock)
-Source: https://github.com/RohanGlitched/petri/tree/749f246465af68dece1a6d02a74995e8956df619; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
+Source: https://github.com/RohanGlitched/petri/tree/27a59761af835f2278b7cf28676c3acf0fdda538; built with cargo near build non-reproducible-wasm --locked in sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb
 Owed, from the ledger: 0.23781 NEAR (vault, credit pool, unspent credit, unclaimed winnings, pending); held beyond storage: 0.289504143558987700000003 NEAR.
 Everything matches.`}</Code>
       <Callout kind="note">

@@ -11,7 +11,7 @@ import { PhoneFold } from "./PhoneFold";
 
 const CHAIN_EVERY = 16;
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit (as in scripts/verify.mjs). */
-const BUILD_HASH = "Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL";
+const BUILD_HASH = "CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD";
 /** The one full-access key each dish's account still holds, as `view_access_key_list` returns it. */
 const FULL_KEYS: Record<"testnet" | "mainnet", string> = {
   testnet: "ed25519:8kGYoPJ6jVEZRrjjYKGVLfXD7LCyTDDqu41Cxx9UjHUu",
@@ -203,7 +203,7 @@ export function VerifySection() {
                 </p>
                 <p>
                   The code was built with <code className={s.code}>cargo near build reproducible-wasm</code> at commit{" "}
-                  <a className={s.link} href={`${REPO}/tree/749f246465af68dece1a6d02a74995e8956df619`}>749f246</a>; its hash is{" "}
+                  <a className={s.link} href={`${REPO}/tree/27a59761af835f2278b7cf28676c3acf0fdda538`}>27a5976</a>; its hash is{" "}
                   <code className={s.code}>{BUILD_HASH}</code>, and the contract&rsquo;s NEP-330{" "}
                   <code className={s.code}>contract_source_metadata</code> names that{" "}
                   <a className={s.link} href={REPO}>GitHub</a> commit, so anyone can rebuild it and compare.
