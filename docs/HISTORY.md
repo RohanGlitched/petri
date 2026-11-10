@@ -1,4 +1,4 @@
-# Petri: what changed after review
+# Petri Dish: what changed after review
 
 Moved from the README. Each section lists what a review or the simulator found and what the next version changed.
 
@@ -16,13 +16,13 @@ The first dish (`petri-dish.testnet`) gave every colony free PETRI and split the
 | **Keeper pot for nothing.** `advance` on a current dish still paid the pot. | The pot is paid only if the call ran at least one generation. |
 | **Prompt injection through names.** The strains' model read colony names. | Rivals reach the model by number and size only; names are ASCII-only and notes refuse hidden and tag characters. |
 | **No NEAR replay.** The NEAR side was only counters. | Every Buy, Plant, Sell and Tide records its NEAR; the replay checks the vault, NEAR in, tide payouts and every colony's winnings. |
-| **Changeable, unverifiable code.** A full-access key and a non-reproducible build. | `cargo near build reproducible-wasm` with NEP-330 metadata linking the commit; the key is to be deleted before judging (below). |
+| **Changeable, unverifiable code.** A full-access key and a non-reproducible build. | `cargo near build reproducible-wasm` with NEP-330 metadata linking the commit. The team kept the key through the reviews so bugs could be fixed; the mainnet key is deleted on 14 November 2026 after a final verify (see v6.5 below). |
 | **Claims in PETRI.** The simulator reported PETRI earned over PETRI spent. | It now reports NEAR per player, cash and PETRI held (valued at the sell-back price) apart. |
 | **The house ate the agar.** The strains were fed like players; on a quiet dish they drained it. | House colonies are never fed and take no tide share. |
 
 v4 (`petri-v4.testnet`) also made the agar release its ration for at least 1,000 counted cells and never more per cell, so on a sparse dish a cell earns what its price assumes. v5 (`petri-v5.testnet`, and the first `petri-dish.near`) then: put sponsored credit in its own credit pool paid out only as credit, and paid colonies that never attached NEAR in credit, so free play never yields NEAR; made stake decay at each tide, with the reach raised to 8; skipped tides with nobody to pay; kept tide winnings in packed per-colony arrays (the simulator's biggest 1,500-player tide fell from about 104 TGas to about 11); cut tides from 10% to 5%; skipped a long-idle clock ahead; sent failed sale and bounty payouts back to the vault with a `Refund` entry; added the `solvency` view; and added specimen slides, paying with any token and rename. The build pins near-sdk 5.29.1, because 5.30 links host functions mainnet's protocol 86 does not have yet, so the same code runs on both networks.
 
-A fourth round of review, of v5, found nine more problems. v6 fixed each with a regression test named after the attack (v6.1 and then v6.2, the version both dishes run now, are below):
+A fourth round of review, of v5, found nine more problems. v6 fixed each with a regression test named after the attack (v6.1 to v6.5 are below):
 
 | Found | Fixed in v6 |
 |---|---|
@@ -80,3 +80,26 @@ The sixth review found one medium issue: cells a colony planted with sponsored c
 ## What changed after the seventh review (v6.4)
 
 The seventh review confirmed v6.3's stake fix and found what it missed: the first attach reset a colony's stake but not its share of the current tide window, so a colony could play a window on credit, attach just before the tide, spend its kept PETRI and be paid that window in NEAR. v6.4 zeroes the window on the first attach as well (`a_guest_window_wins_no_near_after_it_attaches`), and a planting's stake now counts its cost without the royalty, so a slide held by the planter's own second account buys no stake (`a_royalty_to_a_sybil_holder_buys_no_stake`). `relaunch` now writes a version marker and clears a v6.3 dish (`relaunch_leaves_nothing_of_v6_3`). Both dishes started again from generation 0 on 4 November 2026 on the reproducible build of commit `749f246` (code hash `Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL`, 606,302 bytes; 37 engine and 143 contract tests).
+
+## What changed after the eighth review (v6.5, 10 November 2026)
+
+The eighth review found that v6.4 still let a guest bring its own NEAR while cells it had grown on sponsored credit were alive: those cells then lived on into its paid life, where the stake its first NEAR plantings added paid for them in NEAR. v6.5 also closes two smaller gaps: an Intents join paid at exactly `intent_minimum` did not attach (open since v6.2), and a purchase arriving through Intents could overwrite a join still waiting as pending NEAR.
+
+Both dishes were days old by then and held real play, so v6.5 is the first release that did **not** restart them: it is a code-only upgrade, deployed over the running v6.4 dishes on 10 November 2026. Every fix had to leave the stored layout and the replay unchanged, so each is a refusal or a change to a figure, never a new kind of record:
+
+| Open in v6.4 | Fixed in v6.5 |
+|---|---|
+| **Credit-grown cells earned NEAR after an attach.** | A colony outside the house that has never attached may bring `min_join` of its own NEAR only while none of its cells is alive; otherwise the call is refused and writes nothing (`a_refused_attach_writes_nothing`). Killing the cells, or tagging them on attach, would have changed a success path's state and so the replay; a refusal is the only replay-safe rule. |
+| **An Intents join at the floor did not attach.** | `intent_minimum("join")` includes the join's own storage (`join_bytes`), and running a join needs the same, so a join paid at the floor attaches. |
+| **A waiting join could be overwritten.** | A waiting order is replaced only if it is not a join or the new order is a join too; a purchase's NEAR adds to the waiting join. |
+| **Slides earned nothing on resale.** | NEP-199 `nft_payout` and `nft_transfer_payout`: 5% of a sale to the minting colony, the rest to the seller (`a_slide_sale_pays_its_minter_a_royalty`). |
+
+How the upgrade was proven safe: no stored type changed, and the stored version marker stays "6.4" because it names the layout. `contract/v6_4` is the v6.4 contract (749f246) frozen as a dev-dependency; `v6_5_runs_a_v6_4_dish_exactly_as_v6_4_does` builds a real v6.4 dish with it (joins, a guest that attached with living cells, a slide moved and licensed, credit, pacts, tides, a claim, a sale, a payout account, a waiting Intents join), checks v6.5 reads the state, every record and every view to the same bytes and JSON, then runs 25 further calls on both versions from that state and checks the trie is the same byte for byte. petri-core is unchanged, and `node scripts/verify.mjs` exits 0 on both dishes after the upgrade. Both run the reproducible build of commit `27a5976` (code hash `CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD`, 617,238 bytes; 37 engine and 152 contract tests). Considered and skipped: refusing `advance` from callers with no colony, which 39 tests rely on; the relayer limits it instead.
+
+What came after, without touching the dish contract:
+
+- **NEAR AI first, verified.** The strains ask NEAR AI Cloud first and check each answer's TEE signature against the exact request and response and the enclave's attestation report (`agents/tee.mjs`); Claude Haiku is second.
+- **Living slides.** A slide sealed into a keyless account of its own that is a colony and passes whole to its holder (`purse/`, `docs/LIVING-SLIDES.md`), with its threat model written first (`docs/SLIDES-THREAT-MODEL.md`). One runs on mainnet, `slide-14.petri-dish.near`. Because it joined with less than `min_join` net and its pattern is stable, v6.5's attach rule keeps it unattached: it earns kept PETRI and credit, not NEAR.
+- **Open swarm.** Spawnable strains with play-only keys, an open sealed-bid council with NEP-413 bids, an SDK, an example bot, an MCP server, and a page where a pact-bound strain can be talked into cheating and the contract refuses it.
+- **Proof surfaces.** The judge desk, the mint and burn log, the attack lab, a week in a minute, sixty simulated days with a 1,000-season bench (`sim/out-60d`), and CI replaying both dishes every six hours.
+- **The key.** The team holds the mainnet full-access key until a final verify on 14 November 2026 and then deletes it; the testnet dish keeps its key.

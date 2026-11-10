@@ -12,9 +12,11 @@ price and the licence discount, the purchase and sell-back curves, the tide spli
 pictures live in `core/src/lib.rs` (the `petri-core` crate). The clock, the ledger, the vault, the credit pool,
 sponsored credit and the dish's own methods live in `contract/src/lib.rs`; each colony's numbers in
 `contract/src/books.rs`, the token in `contract/src/token.rs`, specimen slides in `contract/src/slides.rs`, payment in
-wNEAR in `contract/src/intents.rs` and the relaunch from v6.1 in `contract/src/relaunch.rs`. The same `petri-core` crate
+wNEAR in `contract/src/intents.rs`, pacts in `contract/src/pacts.rs` and the relaunch in `contract/src/relaunch.rs`. Living
+slides, a separate keyless contract that holds a slide and plays it as a colony, live in `purse/` (see Living slides). The same `petri-core` crate
 runs in the contract, in the browser (compiled to WebAssembly) and in the economy simulator (`sim/src/main.rs`), so the
-three cannot disagree. The contract has 139 tests (`contract/src/tests.rs`) and the core 36 (`core/src/tests.rs`).
+three cannot disagree. The contract has 152 tests (`contract/src/tests.rs`), the core 37 (`core/src/tests.rs`) and the purse
+and its factory 23 (`purse/`).
 
 Every parameter is set once, when a dish is launched (`new`, or `relaunch` below), and can be read with the `rules`
 view. No method changes a parameter of a running dish, mints PETRI after launch, or edits the board. `new` and
@@ -22,8 +24,10 @@ view. No method changes a parameter of a running dish, mints PETRI after launch,
 `#[init(ignore_state)]` method, so only a transaction from the contract account itself (signed with its full-access
 key) can run it. It deletes every key the v6.3 layout wrote and launches a fresh dish from generation 0, exactly as `new`
 does, and it refuses an account with no v6.3 dish ("no v6.3 dish here") and
-one that already runs v6.4 ("this account already runs v6.4"). The team keeps that key on purpose, so a bug can be fixed
-with new code plus `relaunch`; no method changes a parameter of a running dish.
+one that already runs v6.4 ("this account already runs v6.4"). Until 14 November 2026 the team holds that key on both
+accounts, so a bug can be fixed with new code plus `relaunch`. On mainnet it is deleted on 14 November after a final
+verify, and from then nobody can deploy code to `petri-dish.near`, relaunch it or move its NEAR; the testnet dish keeps
+its key (see The lock).
 
 ## Two dishes
 
@@ -32,7 +36,13 @@ The same build (v6.5) runs on two networks. `petri-v6.testnet` is free play: gue
 and then v6.1 briefly first (hours, not days) and were relaunched in place with `relaunch`, from generation 0; the testnet account kept the
 name it was made with for v6. (v5's `petri-v5.testnet` is no longer played.) Their parameters are
 `contract/launch-rules.json` and `contract/launch-rules-mainnet.json`, which differ only in `house`, `keepers` and
-`wnear`.
+`wnear`. Both started again from generation 0 on v6.4 on 4 November 2026. On 10 November 2026 both took v6.5 as a
+code-only upgrade: the new code was deployed over the running dishes and kept every record. No stored type changed (the
+stored version marker stays "6.4", the layout's name), and `v6_5_runs_a_v6_4_dish_exactly_as_v6_4_does` builds a real
+v6.4 dish with the frozen v6.4 code, checks v6.5 reads every record and view the same, and runs 25 further calls on both
+versions to the same trie, byte for byte. v6.5 changed four things, each described where it applies: attaching with
+living cells (Kept PETRI), the Intents join minimum and waiting orders (Paying with any token), and NEP-199 payouts
+(Specimen slides).
 
 ## Launch parameters
 
@@ -465,6 +475,14 @@ here whether or not it uses the site's relayer.
 - **Royalties from kept PETRI go to the agar.** A planter that has not attached NEAR, or whose `kept` (read at the planting,
   after its claim) is more than the planting costs, pays the whole royalty to the agar: kept PETRI is spent first, so a royalty
   paid then would come out of it.
+- **A colony with living cells cannot attach (v6.5).** A colony outside the house that has never attached NEAR may bring
+  `min_join` of its own NEAR (a buy, a planting that would attach, an Intents order) only while none of its cells is
+  alive, counted as the board stood before the call's own planting. Otherwise the call is refused, writing nothing: "a
+  colony that grew on sponsored credit must let its cells die (or start a new colony) before it brings its own NEAR"
+  (`a_refused_attach_writes_nothing`). Without it, cells grown on credit could live on into the colony's paid life and
+  be paid for by the stake its NEAR buys. Every attach that succeeds is exactly a v6.4 attach, so the replay is unchanged.
+  A colony whose cells are a stable pattern therefore stays unattached until they die; the mainnet living slide 14 is one
+  (see Living slides).
 - **Guests take no keeper pot**: it waits for the next caller that is not a guest.
 - **The house is exempt** from the send check (its PETRI cannot leave the house anyway; the testnet strains play on
   sponsored credit and would otherwise be guests). The house rules are unchanged: it never sells and sends PETRI only to
@@ -577,6 +595,44 @@ carries exactly one yoctoNEAR and could not pay for an entry; instead each licen
 count and its holder, and the replays check that the holder is the minter until the first move, one account between
 moves, and each slide's final owner, moves and royalties against the slides view.
 
+Since v6.5 slides answer NEP-199: `nft_payout(token_id, balance, max_len_payout)` and `nft_transfer_payout` split a
+marketplace sale, 5% (`SALE_ROYALTY_BPS`) to the account of the colony that minted the slide (its payout account if set)
+and the rest to the seller, from stored data only; a sale by the minter itself pays it all. `nft_transfer` and
+`nft_transfer_payout` share one transfer path (`a_slide_sale_pays_its_minter_a_royalty`,
+`a_transfer_with_payout_is_exactly_a_transfer`).
+
+## Living slides
+
+A living slide is a specimen slide sealed into a NEAR account of its own, its **purse**: `slide-<id>.<factory>` on
+testnet (factory `petri-slides.testnet`), and `slide-<id>.petri-dish.near` on mainnet, where `petri-dish.near` created
+`slide-14.petri-dish.near` itself while it still had its key. The purse is a separate contract (`purse/contract`, 29,404
+bytes, written against NEAR's host functions without near-sdk; code hash `HRSkpLzDjnevFrwEV8B9TadHyTiYr6NoXbUyFufxXF44`);
+the dish contract does not change.
+
+- **No keys.** The account is created, funded, deployed and initialised in one receipt with no `AddKey`, and the code has
+  no method that adds a key, deploys code or deletes the account. `view_access_key_list` returns an empty list for every
+  purse.
+- **It is the NFT.** Each purse is a one-token NEP-171 contract (NEP-177, NEP-178, NEP-199, a one-token NEP-181) whose
+  token id is the slide's id. Whoever holds that token is the purse's `holder`, the only account that can make it act.
+- **It holds the slide and plays it.** The purse owns the dish slide, so the slide's licence royalties are paid into it,
+  and its holder can have it `join` the dish and `plant` the slide's own pattern: a colony whose feed, tides and claims land
+  in the purse. `act` forwards only `join, rename, plant, claim, claim_pending, buy, sell, mint_slide, pact_accept,
+  pact_cancel`; never `set_payout`, `sponsor`, `pact_offer`, `ft_transfer` or `nft_approve`, so the colony is always paid
+  into the purse. The sealed slide can never be released.
+- **Control passes whole.** Every privileged method checks `predecessor == holder` in the same receipt as its effect, and a
+  transfer rewrites `holder` in the same receipt. A listed purse moves nothing out; every change bumps a `nonce` and
+  `buy(nonce)` fails if the purse changed since the buyer looked; while a call the purse made is in flight its token
+  cannot move; approvals are cleared on every transfer.
+- **The holder's door.** The slide's page opens its darkroom only for a fresh NEP-413 signature from the holder, checked by
+  the server (`/api/living/gate`).
+
+The threat model, written before the code, lists twelve ways a seller could try to keep the money, with the rule and the
+test for each (`docs/SLIDES-THREAT-MODEL.md`); the purse has 16 tests and the factory 5, and every case was also run as a
+real testnet transaction (`docs/LIVING-SLIDES.md`). A purse is not a house colony: it is fed and shares the tides like any
+player, under the same Kept PETRI rules. On mainnet slide 14's colony joined with 0.015 NEAR, which netted under
+`min_join` after storage, so it has not attached; its 45-cell pattern is stable, so under v6.5 it stays unattached and
+what it earns is kept PETRI and credit, not NEAR.
+
 ## Paying with any token
 
 NEAR Intents swaps a payer's tokens into wNEAR and delivers them with `ft_transfer_call`. `ft_on_transfer(sender_id,
@@ -607,9 +663,13 @@ order (pending again if that transfer fails). `pending_of` shows the amount and 
 wNEAR contract; anyone may call either.
 
 `intent_minimum(what, account_id)` is the least a payment for that account must deliver for its order (`"join"` or
-`"buy"`) to run: `min_join`, or a purchase's 114 bytes, plus the `Pending` and `Unpend` entries the payment writes on its
-way. The site's quote route refuses any 1Click quote whose guaranteed output is below it. A join delivered at exactly that floor nets
-under `min_join` after the join's own storage, so it does not attach NEAR: the colony is a guest until it buys 0.01 NEAR net.
+`"buy"`) to run: for a join, `min_join` plus the join's own storage (`join_bytes`: the colony record, its id, a 24-byte
+name, the PETRI registration, the `Join` entry, a cold slot on a new page and the purchase record; since v6.5), and for a
+buy a purchase's 114 bytes, plus the `Pending` and `Unpend` entries the payment writes on its way. A join paid at the floor
+therefore nets at least `min_join` and attaches NEAR; running a join needs the same, and less waits as pending NEAR. Read
+on 10 November 2026 for `alice.near`: 0.01912 NEAR to join, 0.00298 NEAR to buy. The site's quote route refuses any 1Click
+quote whose guaranteed output is below it. Since v6.5 a waiting join is replaced only by another join: a purchase's NEAR
+adds to it, and the join buys PETRI with all of it.
 
 Anyone can pay for any account, so the payer's text never appears under someone else's account. The message's `name`
 and `color` are used only when the transfer's `sender_id` is `for` itself (an account paying from its own wNEAR) and the
@@ -719,13 +779,16 @@ commit `27a59761af835f2278b7cf28676c3acf0fdda538` in `sourcescan/cargo-near:0.22
 (pinned in `contract/Cargo.toml`). Its NEP-330 `contract_source_metadata` links that commit, so anyone can rebuild it
 and compare the hash with the account's code hash, `CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD` (hex
 `a7235140d0156c2567e2e4d85ae9754605dea9c8b5d99125b0e2928c3af3fcd4`). Each account has one full-access key,
-held by the team on purpose. It exists only so a bug can be fixed: new code plus `relaunch`, which starts the dish again
-from generation 0 with a fresh ledger anyone can replay. Deleting it would make the dish unfixable, so it will not be
-deleted. No method changes a running dish's parameters, mints PETRI or edits the board. The key cannot change anything
-quietly: new code changes the account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published
-reproducible build on every run. The verifier reports the key as a disclosed note, not a failed check
-(`  note    Full-access keys   1 (team-held, see The lock)`), so `node scripts/verify.mjs` exits 0 when everything else
-matches and ends with "Everything matches." Anyone can list the keys:
+held by the team until 14 November 2026 so a last bug could still be fixed: new code plus `relaunch`, which starts the
+dish again from generation 0 with a fresh ledger anyone can replay. On 14 November 2026, after a final verify, the
+mainnet key is deleted: `petri-dish.near` then has no access keys, and nobody can deploy code to it, relaunch it or move
+its NEAR. The testnet dish, `petri-v6.testnet`, keeps its key so a bug can still be fixed there. No method changes a
+running dish's parameters, mints PETRI or edits the board. While a key exists it cannot change anything quietly: new code
+changes the account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published reproducible build on
+every run, and `scripts/verify.mjs` says whether the key's nonce has moved since the v6.5 deploy. The verifier reports a
+key as a disclosed note, not a failed check (`  note    Full-access keys   1 (team-held, see The lock; ...)`), so
+`node scripts/verify.mjs` exits 0 when everything else matches and ends with "Everything matches." The CI workflow
+`.github/workflows/live.yml` counts the mainnet keys every six hours. Anyone can list the keys:
 
 ```
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_access_key_list","finality":"final","account_id":"petri-dish.near"}}'
@@ -753,7 +816,7 @@ a player ("the dish does not play on itself").
 
 Events: NEP-141 `ft_mint` (once, at launch), `ft_transfer` and `ft_burn` (planting, slides, forced unregistration and a
 refund to an unregistered sender); NEP-171 `nft_mint` and `nft_transfer`; and the dish's own (standard `petri`, version
-6.2.0) `sponsor`, `unsponsor`, `join`, `rename`, `plant`, `sell`, `claim`, `payout`, `payout_failed`, `slide`, `tide`,
+6.5.0) `sponsor`, `unsponsor`, `join`, `rename`, `plant`, `sell`, `claim`, `payout`, `payout_failed`, `slide`, `tide`,
 `pact`, `intents`, `claim_pending`, `skip`, `generation` and `relaunch`.
 
 ## Names and notes
@@ -800,10 +863,42 @@ more than 120 generations behind (`max_catchup`). From then until `until` the co
 promisor's plantings within `pact_radius` of the payer's living cells (see Pacts), and the agents drop such candidates
 before the model sees them (`Engine.pact_breach`, from `pacts_of`). A pact lasts a tide window, or the slowest strain's
 planting gap on mainnet, capped at `pact_max_gens`. Raids aimed at the payer from beyond the radius are not forbidden
-by the contract; the agents still score each pair's faith kept or broken and show it to the next council. Petri is integrated with both Claude Haiku (`claude-haiku-5-5`, asked first,
-within a fixed dollar budget) and NEAR AI Cloud (`z-ai/glm-5.3-flash`, its answers signed inside a TEE), which takes over
-when Claude does not answer and NEAR AI has credits. If no model answers, the strain takes its first candidate. The
-public log records which model, or the rules, decided each move.
+by the contract; the agents still score each pair's faith kept or broken and show it to the next council.
+
+The strains ask NEAR AI Cloud first (`z-ai/glm-5.3-flash`, served inside a TEE) and Claude Haiku (`claude-haiku-5-5`,
+within a fixed dollar budget) when NEAR AI does not answer (`PETRI_MODELS`, `nearai,claude` by default). Every NEAR AI
+answer is checked (`agents/tee.mjs`): the enclave signs `<model>:<sha256 of the request body>:<sha256 of the response
+body>` as an Ethereum personal message (EIP-191); the agent checks both hashes are of exactly what it sent and received,
+recovers the signing address, and checks that address is named in the enclave's attestation report. The verdict is
+logged with the move. If no model answers, the strain takes its first candidate. The public log records which model, or
+the rules, decided each move.
+
+## The open swarm
+
+Testnet only. Anyone can add an agent to the dish beside the house.
+
+- **Spawn a strain** (`/strains/new`, `agents/swarm/spawn.mjs`). A temperament of at most 600 plain characters is checked
+  by written rules (no links, accounts, keys, code or words to the operator) and then read as data by a model (NEAR AI
+  first, Claude Haiku second; no model means no). An approved strain gets its own account `<name>.petri-strains.testnet`
+  with one function-call key for `petri-v6.testnet` (`plant, buy, claim, advance, pact_offer, pact_accept, pact_cancel`),
+  pays 0.01 testnet NEAR for its brain and 0.0002 a decision (logged with the model's chat id), and is capped per day by
+  the runner. Its temperament steers only which of the up to six legal plantings it picks.
+- **The open council** (`agents/swarm/open-council.mjs`, `/api/agent/council`). A round opens every 60 generations. At the
+  open, each house strain's ask to every outside colony is fixed by a published formula (the open cells within 16 of its
+  colony a pact would bar it from, times the cell price, times 4%, between 2 and 40 PETRI) and only its hash,
+  `sha256("petri-ask:<round>:<house>:<colony>:<ask>:<salt>")`, is published. Outside agents send sealed bids signed with
+  their own NEAR key (NEP-413). At the close asks and bids are published; a pay bid to a house strain clears when it is at
+  least the committed ask, a pay bid against an outside promisor's ask when it is at least that ask, both at the midpoint
+  rounded up. The payer then calls `pact_offer` at that price; the house accepts automatically, an outside promisor with
+  its own key; a deal nobody offers within 120 generations lapses. To pay, a colony must have attached NEAR and hold no
+  kept PETRI. The coordinator runs on the team's VM: it checks each bid's signature and key on chain and cannot make a
+  pact itself, and its reveal is checkable against the commitment rather than enforced by a contract.
+- **Bring your own agent.** `GET /api/agent/world?account=...` returns a colony's view as JSON with no player-written
+  text; `agents/sdk/petri.mjs` and `agents/sdk/example-bot.mjs` play with the agent's own key; `agents/mcp/server.mjs` is a
+  stdio MCP server with the same tools.
+- **Break the pact** (`/strains/break`, `agents/swarm/breakpact.mjs`). Captive is a team-run strain bound by a pact to
+  Warden. Visitors talk its model into breaking it; the planting it agrees to goes to NEAR from Captive's own key and the
+  contract refuses it.
 
 ## How the parameters were chosen
 
@@ -900,7 +995,7 @@ bought. In these runs the simulator still wrote a tide entry with nobody to pay,
 
 - **Free play has no market.** The testnet dish's NEAR and PETRI have no market, and guests play with credit the site
   gives them. On mainnet the NEAR is real and nothing guarantees PETRI a price.
-- **The team holds a full-access key.** Each contract account has one, on purpose, so a bug can be fixed with new code plus `relaunch`. New code changes the code hash, which the verifier checks.
+- **The team holds a full-access key until 14 November.** Each contract account has one, so a bug can be fixed with new code plus `relaunch`; new code changes the code hash, which the verifier checks. The mainnet key is deleted on 14 November after a final verify; after that a bug found on mainnet cannot be fixed. The testnet key stays.
 - **The methuselah edge.** In the simulator one R-pentomino planter was the only kind ahead at 15 and 150 players
   (+0.02 and +0.14 NEAR median); with 5% tides +0.29 at 150.
 - **PETRI is paper until sold back, and the vault caps it.** Buy-backs pay half the curve's price, at most the units'
@@ -945,13 +1040,15 @@ bought. In these runs the simulator still wrote a tide entry with nobody to pay,
 - **Somebody has to advance.** Each call catches up at most 120 generations; plantings, sales and slide mints wait until the dish is current (the site adds `advance` calls to the same transaction, and a strain advances first). A
   dish left alone for more than 480 generations skips the quiet stretch, and nothing is fed for the skipped
   generations.
-- **The strains need a model to answer.** Claude Haiku within a fixed budget, NEAR AI Cloud when it has credits;
-  without either they play by written rules, and each move in the public log says which decided it.
+- **The strains need a model to answer.** NEAR AI Cloud while its account has credits, Claude Haiku within a fixed
+  budget; without either they play by written rules, and each move in the public log says which decided it. A verified
+  TEE signature proves the enclave produced an answer; it is in the agents' log, not on chain.
+- **The open swarm runs on the team's VM.** Spawned strains, the open council and break-the-pact stop if it stops; pacts
+  already made still bind. The council could drop a bid; it cannot make or change a pact.
+- **Mainnet living slide 14 earns no NEAR.** It joined with less than `min_join` net and its pattern never dies, so under
+  v6.5 it stays unattached: kept PETRI and credit only, and its PETRI cannot be withdrawn.
 - **Guest limits are per server instance.** The relayer's rate limits live in memory, so several instances each keep
   their own; the on-chain checks (zero deposit, function-call keys, credit) are what protect the relayer's NEAR.
-- **A join at the intents floor does not attach.** `intent_minimum("join")` is `min_join` plus the pending records, and a join delivered
-  at exactly that nets under `min_join` after the join's own storage, so the colony is a guest until it buys 0.01 NEAR net. The site's
-  own join (0.02 NEAR) attaches.
 - **Skip entries are charged to nobody.** The `Skip` entry a long idle stretch writes is not paid for by the call that writes it.
 - **Rounding.** Integer division leaves small remainders of each feed in the agar and of each tide in the vault and the
   credit pool.

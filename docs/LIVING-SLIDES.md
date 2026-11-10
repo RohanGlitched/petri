@@ -119,6 +119,14 @@ Proof, 10 November 2026 (mainnet; every account below can be checked on any expl
 
 `slide-14.petri-dish.near` has 0 access keys (`view_access_key_list`), and the dish's `slide` view names it as slide 14's owner.
 
+**What slide 14 earns, honestly.** The purse's join brought 0.015 NEAR, which netted under `min_join` (0.01 NEAR) after
+the join's storage, so its colony has not attached NEAR (`attached: false` in the dish's `colonies` view). Since v6.5 a
+colony outside the house that has never attached can attach only while none of its cells is alive, and slide 14's
+45-cell pattern is stable, so it stays unattached. It plays and is fed like any colony, but under the kept-PETRI rules:
+what it earns is kept PETRI, its tide shares are credit, it wins no NEAR, and its PETRI cannot be withdrawn to the holder
+(a colony that has never attached cannot send PETRI). The testnet purses `slide-1` and `slide-2.petri-slides.testnet`
+are attached and earn normally.
+
 ## Build and test
 
 ```
