@@ -362,7 +362,7 @@ the next call from an account that is neither. The project's keepers (`rules.kee
 is left waiting. Keeping a dish stepped costs gas whoever pays it: on mainnet about 0.000047 NEAR a generation, about
 0.27 NEAR a day, the same however often the keeper runs. So on mainnet the keeper idles until judging: the dish sleeps,
 and the next call (any move) skips ahead as the `max_lag` rule says, paying no feed for the skipped generations. From
-2026-11-14 18:00 UTC to 2026-11-19 00:00 UTC it keeps the mainnet dish within 240 generations of the clock. On testnet
+2026-11-14 18:00 UTC to 2026-11-19 00:00 UTC it keeps the mainnet dish within 100 generations of the clock. On testnet
 it advances when the board is 20 generations behind. It has no powers anyone else lacks, and fewer: it takes no pot
 and no tide bounty.
 
@@ -884,7 +884,7 @@ contract is the same; nothing about it changes for these guests. The site's code
   0.3 NEAR (its floor: it covers NEAR's hold on prepaid gas, bought at ten times the gas price until the refund lands)
   plus 0.1 NEAR for the new guest (its account, its credit and the gas of its 16 relayed moves, about 0.077 NEAR at
   most, measured below); at most 3 per client address a day, and after an 18-bit proof of work bound to the key, as on
-  testnet. With the relayer's 3.1 NEAR that pays for 27 guests, so 27 is the most there will be, not 40.
+  testnet. With the relayer's 3.1 NEAR above its 0.1 NEAR floor that pays for 29 guests, so 29 is the most there will be, not 40; 15 of them are held for judges with a code.
 - **Places for judges.** 25 of the places (`PETRI_MAINNET_JUDGE_PLACES`) open only with a judge code, so a script
   cannot take them all before judges arrive. A code is `petri-<n>-<8 hex>`, the hex the start of
   HMAC-SHA256(secret, "petri-judge:<n>") under `PETRI_JUDGE_CODE_SECRET` on the site's server

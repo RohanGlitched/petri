@@ -393,7 +393,7 @@ curl -s "${SITE}/api/strains?net=mainnet" | jq '.pacts'`}</Code>
           calls <C>unwrap_wnear</C> when the dish holds wNEAR that arrived with too little gas to unwrap, so its owners can claim it;
         </li>
         <li>
-          calls <C>advance</C> on testnet when the dish is 20 or more generations behind. Keeping a dish stepped costs gas whoever pays it: on mainnet about 0.000047 NEAR a generation, about 0.27 NEAR a day, however often the keeper runs. So until judging the mainnet keeper idles: the dish sleeps, and the next move skips ahead under the <C>max_lag</C> rule, paying no feed for the skipped generations. From 2026-11-14 18:00 UTC to 2026-11-19 00:00 UTC it keeps the mainnet dish within 240 generations of the clock.
+          calls <C>advance</C> on testnet when the dish is 20 or more generations behind. Keeping a dish stepped costs gas whoever pays it: on mainnet about 0.000047 NEAR a generation, about 0.27 NEAR a day, however often the keeper runs. So until judging the mainnet keeper idles: the dish sleeps, and the next move skips ahead under the <C>max_lag</C> rule, paying no feed for the skipped generations. From 2026-11-14 18:00 UTC to 2026-11-19 00:00 UTC it keeps the mainnet dish within 100 generations of the clock.
         </li>
       </ul>
       <p>
