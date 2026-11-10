@@ -153,6 +153,8 @@ export function Ledger() {
   const shown = view === "outside" ? outside : rows;
   const outsideAlive = outside.filter((r) => r.live > 0).length;
   const outsideWon = winnings ? outside.reduce((n, r) => n + (winnings[r.id - 1] ?? 0), 0) : null;
+  // Guests never attach NEAR, so what they win at tides is credit (it plants and buys, never leaves the dish).
+  const outsideCredit = outside.reduce((n, r) => n + Number(r.credit_won ?? 0), 0);
   const teamWon = winnings ? rows.filter((r) => sideOf(r.account, r.house) !== "player").reduce((n, r) => n + (winnings[r.id - 1] ?? 0), 0) : null;
   const slides = d.state ? Number(d.state.slides) : null;
   const legend = alive.slice().sort((a, b) => b.live - a.live);
@@ -161,19 +163,21 @@ export function Ledger() {
     <>
       <dl className={s.counters} aria-live="polite">
         <div>
-          <dt>Outside colonies</dt>
-          <dd className="num">{ready ? int(outside.length) : "—"}</dd>
-          <p>{ready ? `${int(outsideAlive)} alive now. Not counted: the house strains${d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the team's bench" : ""} and the team's own test accounts. Guests count: the chain cannot tell whose browser made one.` : "Reading the colonies…"}</p>
+          <dt>Players&rsquo; colonies alive now</dt>
+          <dd className="num">{ready ? int(outsideAlive) : "—"}</dd>
+          <p>{ready ? `Of ${int(outside.length)} started by guests and outside wallets. Not counted: the house strains${d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the team's bench" : ""} and the team's own test accounts. Guests count: the chain cannot tell whose browser made one.` : "Reading the colonies…"}</p>
         </div>
         <div>
-          <dt>NEAR won at tides by outside players</dt>
-          <dd className="num">{outsideWon !== null ? near(outsideWon, 4) : "—"}</dd>
+          <dt>{outsideWon !== null && outsideWon === 0 && outsideCredit > 0 ? "Credit won at tides by players" : "Won at tides by players"}</dt>
+          <dd className="num">
+            {outsideWon === null ? "—" : outsideWon > 0 || outsideCredit === 0 ? `${near(outsideWon, 4)} NEAR` : `${near(outsideCredit, 4)} credit`}
+          </dd>
           <p>
             {outsideWon === null
               ? "Reading the tide winnings…"
-              : teamWon && teamWon > 0
-                ? `Claimed or waiting to be claimed. The bench won ${near(teamWon, 4)} more; the house wins nothing.`
-                : "Claimed or waiting to be claimed. The house strains never win a tide."}
+              : `${outsideWon > 0 && outsideCredit > 0 ? `Plus ${near(outsideCredit, 4)} NEAR of credit to guests, who play on credit and never attach NEAR. ` : outsideWon === 0 && outsideCredit > 0 ? "Guests play on credit, so their tide shares are credit: it plants and buys on the dish and never becomes NEAR. " : ""}${
+                  teamWon && teamWon > 0 ? `The bench won ${near(teamWon, 4)} NEAR more; the house wins nothing.` : "The house strains never win a tide."
+                }`}
           </p>
         </div>
         <div>

@@ -118,3 +118,11 @@
 .pair .holder a { display: none; }
 .slideLink { font-size: 15px; color: var(--amber); }
 .detail a { color: var(--amber); }
+
+/* Phone: the records arrive after a replay of the whole ledger, so each card and the status line keep the room their
+   loaded content takes, and nothing below jumps when the numbers land. */
+@media (max-width: 620px) {
+  .status { min-height: 4.6em; align-content: start; }
+  .board > li { min-height: 236px; }
+  .board > li.feature { min-height: 440px; }
+}

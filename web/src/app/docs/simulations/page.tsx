@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Callout, Doc, H2, H3, Table } from "@/components/docs/ui";
-import { CONTRACT_VERSION, tree } from "@/components/docs/facts";
+import { CONTRACT_VERSION, blob, tree } from "@/components/docs/facts";
 
 export const metadata = docMetadata("simulations");
 
@@ -138,6 +138,11 @@ export default function Page() {
         { label: "sim/out-v6.1/fixes.txt", path: "sim/out-v6.1/fixes.txt" },
       ]}
     >
+      <Callout kind="check">
+        <p>
+          Start with the two documents that answer the judging questions: <a href={tree("sim/out-60d")}>sim/out-60d</a>, sixty days of five scenarios on the launch parameters (supply over time, who wins, the 1,000-season attacker bench), and <a href={blob("docs/ECONOMICS.md")}>docs/ECONOMICS.md</a>, who wins and who pays, with every number and its limits. The rest of this page is the simulator itself and the earlier runs that set the parameters.
+        </p>
+      </Callout>
       <H2 id="what">What the simulator is</H2>
       <p>
         <C>sim/</C> is a Rust program that runs the real rules from <C>petri-core</C> (the Life step, the capped feed on decaying stake, the planting price with the siege surcharge, the purchase and sell-back curves and the tide split) for days of generations, with scripted players including adversaries. It mirrors the contract&rsquo;s book-keeping: the two pools, storage paid from credit first, the tide&rsquo;s bounty and storage, the house, the sell-back cap, the catch-up cap and gas limit, and dormancy. Storage is computed from the borsh layout of what each call writes; gas is estimated from NEAR&rsquo;s fee schedule.

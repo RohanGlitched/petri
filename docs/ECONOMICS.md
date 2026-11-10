@@ -85,6 +85,27 @@ The house is not where the yield comes from. The five strains bring 2.25 to 2.42
 reaches the vault, and they are never paid: **0.78% to 1.71% of everything the vault paid players was the house's
 NEAR; 98.3% to 99.2% was other players'.**
 
+### The storage share is the price of full replay
+
+The third of players' NEAR that goes to storage is a design choice, not a leak. Every planting, purchase, sale, tide,
+claim, slide and pact is written into the contract's own ledger, and each colony's numbers stay in its record, so that
+`scripts/verify.mjs` and `/verify` can rebuild every PETRI and every yoctoNEAR from generation 0 with nothing but NEAR
+RPC: no indexer, no archive node and no trust in the team. NEAR prices that state at 1 NEAR per 100 KB, and the player
+whose move writes the bytes pays for them. A small planting stores about 150 to 400 bytes (its ledger entry of 103 bytes
+plus 2 a cell, its index, its cells on the board and its note; `sim/src/model.rs`), 0.0015 to 0.004 NEAR, which is why
+the share is large while moves are cheap.
+
+**A cheaper design, for later (not built).** Keep in contract state only what the rules need to run: the board, the
+balances, the open pacts and a rolling history hash. Emit every movement as a NEP-297 event instead of storing it, and
+chain each event into the history hash, as the board hash is chained today. A public indexer (or anyone's own, reading
+receipts from an archive node or a NEAR data lake) collects the events, and a verifier replays them and checks that its
+final history hash equals the one the contract holds. Storage per move would drop to a few bytes of counters, roughly
+the third that storage takes now would go back into the vault or stay with players, and every move would still be
+checkable. The price is the property this version was built around: replay would need an archive of receipts, not just
+today's RPC, and the "Everything matches" check would trust whoever serves those receipts until someone cross-checks
+them against the chained hash. Mainnet's contract can no longer change (its key was deleted on 10 November 2026), so this
+would be a new dish, not an upgrade.
+
 ### After the house runs out
 
 The strains reach the NEAR floor they keep for gas on day 6 or 7 (median) and stop buying. Nothing else changes: the

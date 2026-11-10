@@ -21,6 +21,8 @@ export async function GET(req: Request) {
     const body = (await r.json()) as { txns?: unknown[] };
     return Response.json({ txns: body.txns ?? [] }, { headers: { "cache-control": "public, max-age=30, s-maxage=60, stale-while-revalidate=300" } });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502, headers: { "cache-control": "public, max-age=10, s-maxage=15" } });
+    // NearBlocks being down, rate-limited or gone (it has answered 410 for old endpoints) is not this site's error: the
+    // page says the history is unavailable and keeps what the chain itself shows.
+    return Response.json({ txns: [], unavailable: true, error: e instanceof Error ? e.message : String(e) }, { status: 200, headers: { "cache-control": "public, max-age=10, s-maxage=15" } });
   }
 }

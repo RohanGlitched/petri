@@ -81,6 +81,8 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
   const { width, height, cells, prevCells, changedAt, look, round = false, interactive = false } = props;
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** Set when the WebGL context is lost: the dish is drawn again on a new canvas by the 2D renderer. */
+  const [force2d, setForce2d] = useState(false);
   const glRef = useRef<CultureGL | Culture2D | null>(null);
   /** The 2D stand-in: no drift and no transitions, one draw per change. */
   const lite = useRef(false);
@@ -195,11 +197,19 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
 
   useEffect(() => {
     const canvas = canvasRef.current!;
-    // WebGL only on a real GPU; software GL (headless Chrome, remote desktops) gets the 2D renderer.
+    // WebGL only on a real GPU; software GL (headless Chrome, remote desktops) gets the 2D renderer, and so does a page
+    // whose WebGL context was lost (a GPU reset, too many contexts on a phone): a fresh canvas then takes the 2D renderer
+    // rather than leaving the dish blank.
+    let onLost: ((e: Event) => void) | null = null;
     try {
-      if (!fastGL()) throw new Error("software GL");
+      if (force2d || !fastGL()) throw new Error("software GL");
       glRef.current = new CultureGL(canvas, width, height);
       lite.current = false;
+      onLost = (e: Event) => {
+        e.preventDefault();
+        setForce2d(true);
+      };
+      canvas.addEventListener("webglcontextlost", onLost);
     } catch {
       try {
         glRef.current = new Culture2D(canvas, width, height);
@@ -257,13 +267,18 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
       ro.disconnect();
       io.disconnect();
       document.removeEventListener("visibilitychange", onVis);
+      if (onLost) canvas.removeEventListener("webglcontextlost", onLost);
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
-      glRef.current?.dispose();
+      try {
+        glRef.current?.dispose();
+      } catch {
+        /* a lost context has nothing left to free */
+      }
       glRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width, height, round]);
+  }, [width, height, round, force2d]);
 
   useEffect(() => {
     const g = glRef.current;
@@ -419,11 +434,12 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
       canvas.removeEventListener("wheel", wheel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interactive, width, height, round]);
+  }, [interactive, width, height, round, force2d]);
 
   return (
     <div ref={wrapRef} className={props.className} style={{ position: "relative", width: "100%", height: "100%" }}>
       <canvas
+        key={force2d ? "2d" : "gl"}
         ref={canvasRef}
         role="img"
         aria-label={props.label ?? "The live Petri dish"}

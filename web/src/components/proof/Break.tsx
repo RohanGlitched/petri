@@ -269,7 +269,11 @@ export function Break() {
         <div className={s.tile}>
           <dt>Attempts refused</dt>
           <dd className="num">{tally ? refusedOnChain.toLocaleString("en-US") : "—"}</dd>
-          <small>{tally?.shared ? "since the lab opened, every visitor" : "refused on chain, each one listed below with its transaction"}</small>
+          <small>
+            {tally?.shared
+              ? "since the lab opened, every visitor"
+              : `${RECORDED.length} sent from the team's wallet${refusedOnChain > RECORDED.length ? `, ${(refusedOnChain - RECORDED.length).toLocaleString("en-US")} by guests` : ""}, each listed below with its transaction; press any Try it to add yours`}
+          </small>
         </div>
         <div className={s.tile}>
           <dt>Attempts that got through</dt>

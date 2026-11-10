@@ -367,6 +367,13 @@ export function DishStage() {
   const [logOpen, setLogOpen] = useState(true);
   // Below 1025 px the panels share the window with the dish: the log starts closed and the start panel can fold away.
   const [startFolded, setStartFolded] = useState(false);
+  // /dish#start (the footer's "Start a colony"): open the start card and bring it into view.
+  useEffect(() => {
+    if (window.location.hash !== "#start") return;
+    setStartFolded(false);
+    const t = setTimeout(() => document.getElementById("start-panel")?.scrollIntoView({ block: "center", behavior: "smooth" }), 400);
+    return () => clearTimeout(t);
+  }, []);
   /** /dish?tool=fossil reached before the visitor has a colony: the panel says what Fossilize needs. */
   const [fossilAsk, setFossilAsk] = useState(false);
   const [snapped, setSnapped] = useState(false);

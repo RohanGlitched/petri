@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C } from "@/components/docs/Code";
 import { Callout, Doc, Ext, H2, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, DISH, LOCKED, RELAUNCHED, REPO, SITE, UPGRADED, account } from "@/components/docs/facts";
+import { BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, DISH, LOCKED, RELAUNCHED, REPO, SITE, UPGRADED, VERIFY_CLI_CHECKS, account } from "@/components/docs/facts";
 import { DishSketch } from "@/components/docs/Diagrams";
 import { docHref } from "@/components/docs/nav";
 
@@ -46,7 +46,7 @@ export default function Page() {
           <strong>One engine, three places.</strong> The rules live in one <C>no_std</C> Rust crate, <C>petri-core</C>. The contract runs it, the browser runs it compiled to WebAssembly, and the economy simulator runs it natively. The replay cannot drift from the contract because it is the same code.
         </li>
         <li>
-          <strong>Every claim can be checked.</strong> <C>node scripts/verify.mjs</C> reads the contract at one finalized block, replays the whole ledger from generation zero and prints forty-five checks: the history chain, the board hash, every planting&rsquo;s price and licence, every tide&rsquo;s split, every claim and refund, that no colony holding kept PETRI sold for NEAR, every pact, the agar, the vault, every credit counter, every colony&rsquo;s earnings, and that the contract holds the NEAR it owes, each term rebuilt from the ledger alone. See <Doc to="verification">Verification</Doc>.
+          <strong>Every claim can be checked.</strong> <C>node scripts/verify.mjs</C> reads the contract at one finalized block, replays the whole ledger from generation zero and prints {VERIFY_CLI_CHECKS} checks and a row on the contract&rsquo;s keys: the history chain, the board hash, every planting&rsquo;s price and licence, every tide&rsquo;s split, every claim and refund, that no colony holding kept PETRI sold for NEAR, every pact, the agar, the vault, every credit counter, every colony&rsquo;s earnings, and that the contract holds the NEAR it owes, each term rebuilt from the ledger alone. See <Doc to="verification">Verification</Doc>.
         </li>
         <li>
           <strong>Free play cannot leak NEAR.</strong> A guest plays on sponsored credit through a function-call key and a relayer. Whatever it wins comes back as credit that can only be spent in the dish, never as NEAR; a guest cannot send PETRI; and PETRI earned before a colony&rsquo;s first NEAR (or bought with credit) is kept: it cannot be sold for NEAR or sent until it has been planted. See <Doc to="economy" hash="kept">Kept PETRI</Doc> and <Doc to="economy" hash="credit">Credit</Doc>.

@@ -42,6 +42,8 @@ export function GET() {
     `- ${REPO}/blob/main/sim/out-60d/README.md: 60 days x 5 scenarios x 5 seeds, and 1,000 adversarial seasons (0 came out ahead in NEAR)`,
     `- ${REPO}/blob/main/docs/LIVING-SLIDES.md and docs/SLIDES-THREAT-MODEL.md: living slides, threat model, testnet and mainnet transactions`,
     `- ${REPO}/blob/main/agents/tee.mjs: NEAR AI Cloud TEE signature verification`,
+    `- ${REPO}/blob/main/scripts/verify-tee.mjs: check one AI move end to end from its transaction hash (npm ci --prefix agents; node scripts/verify-tee.mjs <tx>); docs/TEE.md says what it proves and what stays trusted`,
+    `- ${REPO}/blob/main/docs/ECONOMICS.md: who wins and who pays, from the simulator's 60-day runs (where players' NEAR goes: vault, storage, gas)`,
     `- ${REPO}/blob/main/.github/workflows/live.yml: CI replaying both dishes every 6 hours and counting mainnet keys`,
     "",
   ];

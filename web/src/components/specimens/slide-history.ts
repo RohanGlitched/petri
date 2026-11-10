@@ -79,7 +79,8 @@ export function useSlideMoves(token: string, moves: number): Moved[] | null | "u
         // Through the site's one-minute cache (/api/slide-moves), so visitors share one NearBlocks request per slide.
         const r = await fetch(`/api/slide-moves?net=${NETWORK}&token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(9000) });
         if (!r.ok) throw new Error(String(r.status));
-        const body = (await r.json()) as { txns?: NbTxn[] };
+        const body = (await r.json()) as { txns?: NbTxn[]; unavailable?: boolean };
+        if (body.unavailable) throw new Error("unavailable");
         // A transfer is two rows, one per side; the row that adds the token names the new holder.
         const rows = (body.txns ?? []).filter((t) => t.delta_amount > 0);
         const list = rows

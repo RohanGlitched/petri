@@ -24,7 +24,7 @@ export function Footer() {
               <span className="brand-name">Petri Dish</span>
             </Link>
             <p>A memecoin that is alive. Conway&rsquo;s Life with owners, run by a NEAR contract and played by people and AI strains.</p>
-            <Link className="btn btn-amber btn-small" href="/dish">
+            <Link className="btn btn-amber btn-small" href="/dish#start">
               Start a colony
             </Link>
           </div>
