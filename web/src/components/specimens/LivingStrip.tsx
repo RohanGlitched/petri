@@ -23,10 +23,11 @@ export function LivingStrip() {
   const net = useNet();
   const all = useAllSlides();
   const other: Network = net.network === "testnet" ? "mainnet" : "testnet";
-  useEffect(() => {
-    if (!FACTORIES[net.network] && FACTORIES[other] && !chosen()) switchNetwork(other);
-  }, [net.network, other]);
   const living = all.data.filter((s) => isLiving(s.id, s.owner, net.network));
+  // A first visit to a dish with no living slide moves to the other dish, which has them.
+  useEffect(() => {
+    if (all.status === "ready" && living.length === 0 && !chosen()) switchNetwork(other);
+  }, [all.status, living.length, other]);
 
   return (
     <div id="living" aria-labelledby="living-title" style={{ margin: "48px 0 56px" }}>
@@ -35,15 +36,15 @@ export function LivingStrip() {
         A slide sealed into an account of its own, with no key. The account owns the slide and collects its royalties, plays on the dish as a colony and keeps what
         it earns, and is itself a collectible: sell it and the account goes with it, everything inside.
       </p>
-      {!FACTORIES[net.network] ? (
-        <div className={l.banner}>
-          <span>Living slides run on the testnet dish for now; the {net.label.chain} factory is not deployed.</span>
-          <button className="btn btn-ghost btn-small" onClick={() => switchNetwork(other)}>See them on testnet</button>
-        </div>
-      ) : all.status === "loading" ? (
+      {all.status === "loading" ? (
         <p className="muted">Reading the slide box…</p>
       ) : living.length === 0 ? (
-        <p className="muted">No slide on this dish has been sealed yet. A slide&rsquo;s holder can seal it from the slide&rsquo;s page.</p>
+        <div className={l.banner}>
+          <span>
+            No slide on this dish has been sealed yet.{FACTORIES[net.network] ? " A slide's holder can seal it from the slide's page." : ""}
+          </span>
+          <button className="btn btn-ghost btn-small" onClick={() => switchNetwork(other)}>See the living slides on {other}</button>
+        </div>
       ) : (
         <div className={l.strip}>
           {living.map((s) => (
@@ -53,7 +54,7 @@ export function LivingStrip() {
               <span>
                 <b>Living slide #{s.id}</b>
                 <span>{s.title ?? s.name ?? "Untitled"}</span>
-                <span>{shortAccount(purseOf(s.id, net.network)!, 32)}</span>
+                <span>{shortAccount(purseOf(s.id, net.network), 32)}</span>
               </span>
             </Link>
           ))}

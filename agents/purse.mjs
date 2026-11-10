@@ -24,7 +24,9 @@ import { account, CONTRACT, failureText, liveDish, log, NETWORK, rpc, view } fro
 
 export { actions };
 
-export const FACTORY = process.env.PETRI_SLIDES_FACTORY ?? (NETWORK === "mainnet" ? "petri-slides.near" : "petri-slides.testnet");
+// The account purses live under. On testnet it is the factory (`seal` goes through it); on mainnet there is no factory
+// and petri-dish.near made its living slide by hand (scripts/purse-mainnet.mjs), so `seal` does not apply there.
+export const FACTORY = process.env.PETRI_SLIDES_FACTORY ?? (NETWORK === "mainnet" ? "petri-dish.near" : "petri-slides.testnet");
 const YOCTO = 10n ** 24n;
 const TGAS = 10n ** 12n;
 

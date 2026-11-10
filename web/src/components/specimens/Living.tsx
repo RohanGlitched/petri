@@ -118,17 +118,18 @@ const LOG_TEXT: Record<string, (a: string, amount: string) => { kind: string; wh
 export function LivingSlideBand({ sl }: { sl: Slide }) {
   const net = useNet();
   const purse = purseOf(sl.id, net.network);
-  const living = !!purse && sl.owner === purse;
+  const living = sl.owner === purse;
   const { data, error, refresh } = usePurse(net, purse, living);
 
-  if (!purse)
+  if (!living && !FACTORIES[net.network])
     return (
-      <section id="living" data-section="A living slide" className="band band-2" aria-labelledby="lv-title">
+      <section id="living" data-section="Living slides" className="band band-2" aria-labelledby="lv-title">
         <div className="wrap">
           <h2 id="lv-title" className="h2">Living slides</h2>
           <p className="lede">
-            On the testnet dish a slide can be sealed into its own keyless account that plays as a colony and keeps what it earns. The factory for {net.label.chain} is
-            not deployed yet, so slides here stay ordinary tokens. <a href="?net=testnet" style={{ color: "var(--amber)" }}>See the living slides on testnet</a>.
+            A living slide is sealed into a keyless account of its own that plays as a colony and keeps what it earns. On {net.label.chain} there is no factory to
+            seal slides through: the dish account made each living slide by hand, in one transaction that added no key. This slide is an ordinary token.{" "}
+            <a href="/specimens#living" style={{ color: "var(--amber)" }}>See the living slides</a>.
           </p>
         </div>
       </section>

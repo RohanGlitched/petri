@@ -5,20 +5,27 @@
 
 import { CONTRACTS, RPCS, type Network } from "./config";
 
-/** The factory each dish's living slides are made by: `slide-<id>.<factory>`. None on mainnet until it is deployed. */
-export const FACTORIES: Record<Network, string | null> = {
+/**
+ * The account each dish's purses live under: `slide-<id>.<parent>`. On testnet the parent is a factory anyone can seal a
+ * slide through (`nft_transfer_call` to it). On mainnet there is no factory: petri-dish.near itself made each purse in
+ * one transaction (create, fund, deploy, init; no key). Either way a slide is living once its purse owns it.
+ */
+export const PARENTS: Record<Network, string> = {
   testnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_TESTNET ?? "petri-slides.testnet",
-  mainnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_MAINNET ?? null,
+  mainnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_MAINNET ?? "petri-dish.near",
+};
+/** Parents that are factories, which seal a slide sent to them; the others made their purses by hand. */
+export const FACTORIES: Record<Network, string | null> = {
+  testnet: PARENTS.testnet,
+  mainnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_MAINNET_FACTORY ?? null,
 };
 
-export const purseOf = (token: string, net: Network): string | null => (FACTORIES[net] ? `slide-${token}.${FACTORIES[net]}` : null);
+export const purseOf = (token: string, net: Network): string => `slide-${token}.${PARENTS[net]}`;
 
 /** The slide id a purse account is named for, if it is one of this network's purses. */
 export function tokenOfPurse(account: string, net: Network): string | null {
-  const f = FACTORIES[net];
-  if (!f) return null;
   const m = account.match(/^slide-([1-9]\d{0,9})\.(.+)$/);
-  return m && m[2] === f ? m[1] : null;
+  return m && m[2] === PARENTS[net] ? m[1] : null;
 }
 
 /** A slide is living when its owner on the dish is its own purse. */

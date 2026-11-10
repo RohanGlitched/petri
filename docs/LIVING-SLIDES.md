@@ -81,6 +81,33 @@ Reproduce these with `node scripts/purse-testnet.mjs keys|midpayout|handover|sal
 `node agents/purse.mjs …`. The darkroom's door is tested with real NEP-413 signatures by `node agents/darkroom-test.mjs`.
 The holder is admitted; another account and a tampered message are refused.
 
+## Mainnet: one living slide, made without a factory
+
+Mainnet has no factory. `petri-dish.near` makes the purse itself, and `scripts/purse-mainnet.mjs` does it in five steps:
+
+1. Three house strains move 0.32 NEAR into `petri-dish.near`, so the dish's own NEAR is never used.
+2. `petri-dish.near` sends **one transaction** to `slide-14.petri-dish.near`: create the account, fund its storage
+   (0.316 NEAR), deploy `purse/res/petri_purse.wasm`, and call `init` with the dish and the holder. There is no
+   `AddKey` action.
+3. The holder, Congo Red, sends slide 14 in with a plain `nft_transfer`.
+4. The purse joins the dish with 0.015 NEAR that Congo Red attaches.
+5. The purse plants the slide's own pattern under its licence.
+
+The script stops before any step that would take the spend past 0.40 NEAR, or leave a strain under 0.30 NEAR. It prints
+each transaction's hash and cost, the purse's access keys, and `petri-dish.near`'s key nonces afterwards.
+
+**The slide.** Slide 14 is Congo Red's 45-cell specimen from generation 3,817. Alone on an empty dish, the engine keeps
+it at 45 living cells through generations 250, 500, 750 and 1,000: the pattern lives on its own. Malachite Green's
+43-cell slide 13, by contrast, falls to 3 cells within 50 generations.
+
+**Expected cost:** storage 0.316 + join 0.015 + planting 0.011 + gas under 0.01, about 0.35 NEAR in all.
+
+On mainnet the site uses `petri-dish.near` as the parent account, so a mainnet slide counts as living once
+`slide-<id>.petri-dish.near` owns it. The mainnet house strains tend it (`tendPurses`, with `PETRI_LIVING_SLIDES=1`):
+they replant its pattern if its colony dies, and claim its tides.
+
+Proof: pending. The transactions are listed here once the script has run.
+
 ## Build and test
 
 ```
