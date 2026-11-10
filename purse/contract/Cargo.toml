@@ -1,0 +1,17 @@
+[package]
+name = "petri-purse"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/RohanGlitched/petri"
+description = "A living slide: a keyless NEAR account that holds one Petri specimen slide, plays as a colony on the dish, keeps what it earns, and is itself a one-token NEP-171 contract whose holder controls it."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+purse-kit = { path = "../kit" }
+
+[package.metadata.near]
+# Built with Rust 1.99: needs the wasm features nearcore enabled at protocol 84 (mainnet and testnet run later ones).
+min_protocol_version = 84

@@ -1,0 +1,9 @@
+[package]
+name = "purse-kit"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "The few NEAR host functions, a JSON scanner and a writer that the living-slide purse and its factory share. A mock chain stands in for the host in native tests."
+
+[lib]
+path = "src/lib.rs"

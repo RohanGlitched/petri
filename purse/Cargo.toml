@@ -1,0 +1,17 @@
+# Living slides: the purse every sealed specimen slide lives in, and the factory that makes them.
+#
+# A workspace of its own, apart from the dish's: the purse is written without near-sdk, against the host functions
+# directly, so its wasm stays a few kilobytes. Mainnet charges 1 NEAR of storage for every 100 KB of code, and every
+# purse carries its own copy.
+[workspace]
+resolver = "2"
+members = ["kit", "contract", "factory"]
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+strip = true

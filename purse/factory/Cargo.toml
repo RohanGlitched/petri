@@ -1,0 +1,18 @@
+[package]
+name = "petri-purse-factory"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/RohanGlitched/petri"
+description = "Seals Petri specimen slides into living slides: send it a slide with nft_transfer_call and it creates slide-<id>.<factory> with the purse code and no access key, moves the slide into it and makes you its holder."
+build = "build.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+purse-kit = { path = "../kit" }
+
+[package.metadata.near]
+# Built with Rust 1.99: needs the wasm features nearcore enabled at protocol 84 (mainnet and testnet run later ones).
+min_protocol_version = 84
