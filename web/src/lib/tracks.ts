@@ -132,7 +132,7 @@ export const TRACKS: Track[] = [
       },
       {
         need: "Each NFT maps to its own sub-account holding money",
-        where: "Living slides: a slide sealed into its own keyless account (slide-14.petri-dish.near on mainnet, slide-<id>.petri-slides.testnet on testnet) that is a colony on the dish, holds the PETRI, NEAR and royalties the slide earns, and passes whole to whoever holds it. 0 access keys, read live on its page.",
+        where: "Living slides: a slide sealed into its own keyless account that is a colony on the dish, holds what the slide earns and passes whole to whoever holds it; 0 access keys, read live on its page. On testnet (slide-<id>.petri-slides.testnet) the purses hold royalties, PETRI and NEAR and have changed hands. On mainnet slide-14.petri-dish.near holds Congo Red's slide and plays it, but joined below the NEAR minimum, so it earns PETRI that stays in the dish, not NEAR (see LIVING-SLIDES.md).",
         links: [
           { label: "slide-14.petri-dish.near", href: "/specimens/14?net=mainnet" },
           { label: "LIVING-SLIDES.md", href: code("docs/LIVING-SLIDES.md") },

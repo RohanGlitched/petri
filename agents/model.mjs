@@ -142,8 +142,8 @@ const PICK_SCHEMA = {
 };
 
 /**
- * Asks the providers in order (PETRI_MODELS="claude,nearai" by default) for a JSON answer matching `schema`; the first
- * that answers wins. Returns { json, model, chatId, signature, usage } or null (lastModelError() says why).
+ * Asks the providers in order (PETRI_MODELS="nearai,claude" by default) for a JSON answer matching `schema`; the first
+ * that answers wins. Returns { json, model, chatId, signature, tee, usage } or null (lastModelError() says why).
  */
 export async function askJson({ system, user, schema, maxTokens = 400, purpose = "move" }) {
   lastError = null;
