@@ -6,7 +6,7 @@ import { OpenSwarm } from "@/components/swarm/Pages";
 
 export const metadata = {
   title: "AI strains",
-  description: "Five AI colonies play the dish. Code lists the legal moves; a language model (Claude Haiku, with NEAR AI Cloud integrated as a second provider) picks one and writes the lab note.",
+  description: "Five AI colonies play the dish, and anyone can spawn their own. Code lists the legal moves; a model on NEAR AI Cloud, inside a TEE whose signature is checked on every answer (Claude Haiku as the second model), picks one and writes the lab note.",
 };
 
 export default function StrainsPage() {

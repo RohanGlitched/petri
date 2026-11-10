@@ -24,8 +24,6 @@ export type StrainAction = {
   /** a move by a strain a visitor spawned (agents/swarm) */
   spawned?: boolean;
   options: string[];
-  /** Set by the agents when the NEAR AI enclave's signature over the answer was checked. */
-  tee?: { ok?: boolean } | null;
 };
 
 /** Who chose a strain's move, in a few words: the model by name (and whether its TEE signature checks), or the rules. */
