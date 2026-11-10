@@ -18,8 +18,8 @@ export const CONTRACT = process.env.PETRI_CONTRACT ?? (process.env.PETRI_NETWORK
 export const NETWORK = process.env.PETRI_NETWORK ?? "testnet";
 export const RPCS =
   NETWORK === "mainnet"
-    ? ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"]
-    : ["https://rpc.testnet.fastnear.com", "https://rpc.testnet.near.org"];
+    ? ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://free.rpc.fastnear.com"]
+    : ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 const KEYS_DIR = process.env.PETRI_KEYS_DIR ?? path.join(process.env.HOME ?? "", ".near-credentials", NETWORK);
 
 let rpcIndex = 0;
