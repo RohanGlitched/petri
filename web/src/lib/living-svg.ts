@@ -1,6 +1,7 @@
 // A living slide's picture: the fossil the slide fixed, beside the colony its purse keeps alive now. When that colony
 // has no living cell the card is stamped EXTINCT; before the purse has joined the dish, DORMANT. Drawn the same way by
-// the server (the token's media URL) and by the slide's page from the live dish.
+// the server (the token's media URL) and by the slide's page, both from the board the contract stores (never the
+// browser's forecast).
 
 export type LivingCard = {
   token: string;
@@ -55,7 +56,7 @@ export function livingSvg(c: LivingCard): string {
   // Two dishes: the fossil and the colony now.
   const size = 260;
   const top = 140;
-  for (const [i, label] of [[0, `Fossil · generation ${c.fossilGeneration}`], [1, `Alive · generation ${c.generation}`]] as const) {
+  for (const [i, label] of [[0, `Fossil · generation ${c.fossilGeneration}`], [1, `On chain · generation ${c.generation}`]] as const) {
     const x = 40 + i * (size + 40);
     s += `<circle cx="${x + size / 2}" cy="${top + size / 2}" r="${size / 2}" fill="#24130a" stroke="#f3e9da" stroke-opacity="0.22"/>`;
     s += `<text x="${x + size / 2}" y="${top + size + 34}" text-anchor="middle" fill="#f3e9da" fill-opacity="0.7" font-size="15" font-family="Helvetica, Arial, sans-serif">${esc(label)}</text>`;
@@ -72,7 +73,7 @@ export function livingSvg(c: LivingCard): string {
   // Facts.
   const rows: [string, string][] = [
     ["Cells on the slide", String(fossil.length)],
-    ["Living cells now", c.live ? String(alive) : "not joined yet"],
+    ["Living cells on chain", c.live ? String(alive) : "not joined yet"],
     ["Held by", short(c.holder)],
     ["Access keys on the account", c.keys === null ? "unknown" : String(c.keys)],
   ];

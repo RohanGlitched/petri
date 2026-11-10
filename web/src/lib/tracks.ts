@@ -132,9 +132,10 @@ export const TRACKS: Track[] = [
       },
       {
         need: "Each NFT maps to its own sub-account holding money",
-        where: "Living slides: a slide sealed into its own keyless account that is a colony on the dish, holds what the slide earns and passes whole to whoever holds it; 0 access keys, read live on its page. On testnet (slide-<id>.petri-slides.testnet) the purses hold royalties, PETRI and NEAR and have changed hands. On mainnet slide-14.petri-dish.near holds Congo Red's slide and plays it, but joined below the NEAR minimum, so it earns PETRI that stays in the dish, not NEAR (see LIVING-SLIDES.md).",
+        where: "Living slides: a slide sealed into its own keyless account that is a colony on the dish, holds what the slide earns and passes whole to whoever holds it; 0 access keys, read live on its page. On mainnet the keyless factory slides.petri-dish.near sealed slide 18 into slide-18.slides.petri-dish.near, which joined attached, so its colony shares the tides in NEAR and its minter takes 5% of a sale. The first mainnet purse, slide-14.petri-dish.near, joined below the NEAR minimum; its cells have since died on chain. Alive or extinct is read from the board the contract stores, on each slide's page. On testnet the purses hold royalties, PETRI and NEAR and have changed hands.",
         links: [
-          { label: "slide-14.petri-dish.near", href: "/specimens/14?net=mainnet" },
+          { label: "slide 18 on mainnet", href: "/specimens/18?net=mainnet" },
+          { label: "slide 14 on mainnet", href: "/specimens/14?net=mainnet" },
           { label: "LIVING-SLIDES.md", href: code("docs/LIVING-SLIDES.md") },
           { label: "purse contract", href: code("purse/contract/src/lib.rs") },
         ],

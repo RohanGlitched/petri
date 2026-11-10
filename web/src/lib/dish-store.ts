@@ -53,6 +53,11 @@ export type Snapshot = {
    * call skips `skipNext` generations (no Life, no feed) before it runs them. */
   asleep: boolean;
   skipNext: number;
+  /** The board exactly as the contract stores it (generation `storedGeneration`), before the browser steps it forward.
+   * What is alive or extinct on chain comes from here; `cells`/`liveCounts` are the browser's projection. */
+  storedGeneration: number;
+  storedCells?: Uint16Array;
+  storedLiveCounts: number[];
 };
 
 const empty: Snapshot = {
@@ -76,6 +81,8 @@ const empty: Snapshot = {
   earnings: [],
   asleep: false,
   skipNext: 0,
+  storedGeneration: 0,
+  storedLiveCounts: [],
 };
 
 let snap: Snapshot = empty;
@@ -127,6 +134,7 @@ function loadStored({ rules, state, colonies, board, stakes }: Inputs) {
   engine?.free();
   engine = e;
   storedGeneration = Number(state.generation);
+  emit({ storedGeneration, storedCells: e.cells(), storedLiveCounts: Array.from(e.live_counts()) });
 }
 
 /** Step the board to where the contract's next catch-up would leave it for the clock's `due` generation. */
@@ -198,8 +206,10 @@ async function sync(first = false) {
   }
 }
 
-/** A snapshot URL that changes every four seconds, so every visitor in those four seconds shares one CDN answer. */
-const snapUrl = (head: boolean) => `/api/snapshot?net=${NETWORK}${head ? "&part=head" : ""}&t=${Math.floor(Date.now() / 4000)}`;
+/** The whole snapshot's URL changes every four seconds, so every visitor in those four seconds shares one CDN answer.
+ * The five-second head poll keeps one URL and revalidates it with its ETag: when the dish has not moved, the answer is
+ * an empty 304. */
+const snapUrl = (head: boolean) => (head ? `/api/snapshot?net=${NETWORK}&part=head` : `/api/snapshot?net=${NETWORK}&t=${Math.floor(Date.now() / 4000)}`);
 
 /** Carry the chain's clock forward by how long the snapshot sat in the server's cache and the CDN, and half the trip. */
 function clockFrom(j: { state: DishState; at: number; servedAt: number }, res: Response, t0: number) {
@@ -231,16 +241,19 @@ async function fromSnapshot(): Promise<boolean> {
 /** The five-second poll: the snapshot's state only, and the whole snapshot when the ledger or the colonies moved. */
 async function pollSnapshot() {
   const t0 = Date.now();
-  const res = await fetch(snapUrl(true), { signal: AbortSignal.timeout(8000) });
+  const res = await fetch(snapUrl(true), { cache: "no-cache", signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`snapshot ${res.status}`);
   const j = await res.json();
   if (j.error || !j.state) throw new Error("no snapshot");
-  clockFrom(j, res, t0);
+  // A 304 hands back the answer this browser already had: its clock reading is old, so the clock is left alone.
+  if (j.servedAt !== lastServedAt) clockFrom(j, res, t0);
+  lastServedAt = j.servedAt;
   const st = j.state as DishState;
   if (`${st.ledger}:${st.colonies}` !== knownPlants && Number(st.ledger) >= Number(snap.state?.ledger ?? 0)) await fromSnapshot();
   else if (Number(st.ledger) >= Number(snap.state?.ledger ?? 0)) emit({ state: st, syncedAt: Date.now() });
 }
 
+let lastServedAt: unknown = null;
 let settled: Promise<void> | null = null;
 /** Resolves once the dish has been read (or failed), or after `maxMs`: other reads wait for it to stay off its path. */
 export function dishSettled(maxMs = 4000): Promise<void> {

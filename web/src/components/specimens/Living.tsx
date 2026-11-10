@@ -143,22 +143,24 @@ function LivingView({ sl, net, purse, data, error, refresh }: { sl: Slide; net: 
   const ledger = useLedger();
   const [all, setAll] = useState(false);
   const colonyId = data?.colony?.id ?? null;
-  const alive = colonyId !== null ? d.liveCounts[colonyId] ?? 0 : null;
+  // Alive or extinct is what the chain stores; the browser's stepped-forward board is only a forecast.
+  const alive = colonyId !== null ? (d.storedCells ? d.storedLiveCounts[colonyId] ?? 0 : null) : null;
+  const forecast = colonyId !== null && d.generation > d.storedGeneration ? d.liveCounts[colonyId] ?? 0 : null;
   const genMs = d.rules ? Number(d.rules.generation_ms) : 15000;
   const epoch = d.state ? Number(d.state.epoch_ms) : 0;
 
   const picture = useMemo(() => {
     if (!sl.bitmap || !sl.rect || !data) return null;
     let live = null;
-    if (data.colony && d.cells && d.rules) {
-      const crop = colonyCrop(d.cells, d.rules.width, d.rules.height, data.colony.id);
+    if (data.colony && d.storedCells && d.rules) {
+      const crop = colonyCrop(d.storedCells, d.rules.width, d.rules.height, data.colony.id);
       live = crop ? { cells: crop.cells, cw: crop.w, ch: crop.h } : { cells: [] as [number, number][], cw: 8, ch: 8 };
     }
     return svgUrl(
-      livingSvg({ token: sl.id, bitmap: sl.bitmap, w: sl.rect.w, h: sl.rect.h, color: sl.color ?? 0xf2b45a, fossilGeneration: sl.generation ?? 0, live, liveColor: data.colony?.color ?? sl.color ?? 0xf2b45a, generation: d.generation, holder: data.info.holder, keys: data.keys }),
+      livingSvg({ token: sl.id, bitmap: sl.bitmap, w: sl.rect.w, h: sl.rect.h, color: sl.color ?? 0xf2b45a, fossilGeneration: sl.generation ?? 0, live, liveColor: data.colony?.color ?? sl.color ?? 0xf2b45a, generation: d.storedGeneration, holder: data.info.holder, keys: data.keys }),
     );
-    // Redrawn each generation the dish steps.
-  }, [sl, data, d.cells, d.rules, d.generation]);
+    // Redrawn whenever the stored board changes.
+  }, [sl, data, d.storedCells, d.rules, d.storedGeneration]);
 
   const led = useMemo(() => fromLedger(ledger.entries, colonyId, purse), [ledger.entries, colonyId, purse]);
 
@@ -196,13 +198,19 @@ function LivingView({ sl, net, purse, data, error, refresh }: { sl: Slide; net: 
             <div>
               <figure className={l.card}>{picture ? <img src={picture} alt={`Living slide ${sl.id}: its fossil beside its colony now, ${alive ?? 0} living cells`} /> : null}</figure>
               <p className={l.cardNote}>
-                Drawn from the live dish, generation {int(d.generation)}. The token&rsquo;s own picture is the same card, <a href={`/api/living/${purse}`} style={{ color: "var(--amber)" }}>served from the stored board</a>.
+                Drawn from the board the contract stores, generation {int(d.storedGeneration)}. The token&rsquo;s own picture is the same card, <a href={`/api/living/${purse}`} style={{ color: "var(--amber)" }}>served by the site from the same board</a>.
+                {forecast !== null && (
+                  <>
+                    {" "}
+                    <span className="muted">Forecast: {forecast === 0 ? "extinct" : `${int(forecast)} living cells`} by generation {int(d.generation)} if nobody plants (this browser steps the rules forward; the chain catches up on the next move).</span>
+                  </>
+                )}
               </p>
             </div>
             <div>
               <p className={l.kicker}>
                 <i className={`${l.pulse} ${alive === 0 ? l.pulseDead : ""}`} />
-                {alive === null ? "Sealed, not playing yet" : alive === 0 ? "Its colony is extinct" : `Alive: ${int(alive)} living cells`}
+                {colonyId === null ? "Sealed, not playing yet" : alive === null ? "Reading the stored board…" : alive === 0 ? `Extinct on chain at generation ${int(d.storedGeneration)}` : `Alive on chain: ${int(alive)} living cells at generation ${int(d.storedGeneration)}`}
               </p>
               <h2 id="lv-title" className="h2">A living slide</h2>
               <p className="lede">
@@ -232,7 +240,7 @@ function LivingView({ sl, net, purse, data, error, refresh }: { sl: Slide; net: 
                 </div>
                 <div>
                   <dt>Living cells</dt>
-                  <dd className="num">{alive === null ? "—" : int(alive)}<small>{data.colony ? `colony ${data.colony.id}, ${int(Number(data.colony.cells_planted))} cells planted` : "not joined yet"}</small></dd>
+                  <dd className="num">{alive === null ? "—" : int(alive)}<small>{data.colony ? `on chain; colony ${data.colony.id}, ${int(Number(data.colony.cells_planted))} cells planted${forecast !== null ? `; forecast ${int(forecast)} at gen ${int(d.generation)}` : ""}` : "not joined yet"}</small></dd>
                 </div>
                 <div>
                   <dt>Earned by its cells</dt>
@@ -628,7 +636,7 @@ function Inside({ sl, net, purse, data, refresh, checkedAt }: { sl: Slide; net: 
               <path d={path} fill="none" stroke="#f2b45a" strokeWidth="2" />
             </svg>
             <div className={l.forecastFacts}>
-              <span><b className="num">{int(d.liveCounts[colonyId] ?? 0)}</b>living now</span>
+              <span><b className="num">{int(d.storedLiveCounts[colonyId] ?? 0)}</b>living on chain (generation {int(d.storedGeneration)})</span>
               <span><b className="num">{int(fc.peak)}</b>at its peak</span>
               <span><b className="num">{fc.diedAt === null ? int(fc.end) : "extinct"}</b>{fc.diedAt === null ? `at generation ${int(fc.from + HORIZON)}` : `by generation ${int(fc.from + fc.diedAt)}`}</span>
             </div>

@@ -484,8 +484,8 @@ here whether or not it uses the site's relayer.
   colony that grew on sponsored credit must let its cells die (or start a new colony) before it brings its own NEAR"
   (`a_refused_attach_writes_nothing`). Without it, cells grown on credit could live on into the colony's paid life and
   be paid for by the stake its NEAR buys. Every attach that succeeds is exactly a v6.4 attach, so the replay is unchanged.
-  A colony whose cells are a stable pattern therefore stays unattached until they die; the mainnet living slide 14 is one
-  (see Living slides).
+  A colony whose cells are a stable pattern therefore stays unattached until they die; the mainnet living slide 14 was
+  one until its cells died on chain (see Living slides).
 - **Guests take no keeper pot**: it waits for the next caller that is not a guest.
 - **The house is exempt** from the send check (its PETRI cannot leave the house anyway; the testnet strains play on
   sponsored credit and would otherwise be guests). The house rules are unchanged: it never sells and sends PETRI only to
@@ -606,11 +606,14 @@ and the rest to the seller, from stored data only; a sale by the minter itself p
 
 ## Living slides
 
-A living slide is a specimen slide sealed into a NEAR account of its own, its **purse**: `slide-<id>.<factory>` on
-testnet (factory `petri-slides.testnet`), and `slide-<id>.petri-dish.near` on mainnet, where `petri-dish.near` created
-`slide-14.petri-dish.near` itself while it still had its key. The purse is a separate contract (`purse/contract`, 29,404
-bytes, written against NEAR's host functions without near-sdk; code hash `HRSkpLzDjnevFrwEV8B9TadHyTiYr6NoXbUyFufxXF44`);
-the dish contract does not change.
+A living slide is a specimen slide sealed into a NEAR account of its own, its **purse**: `slide-<id>.<factory>`. The
+factories are `slides.petri-dish.near` on mainnet and `slides.petri-v6.testnet` on testnet, each with no access key; the
+first purses came before them (testnet `petri-slides.testnet`, and mainnet `slide-14.petri-dish.near`, which
+`petri-dish.near` created itself in one transaction that added no key). The purse is a separate contract
+(`purse/contract`, written against NEAR's host functions without near-sdk): v2, which the factories deploy, is 30,879
+bytes (code hash `CDyvfMn9zQJyArwxrY3ASaASoEHH8JTp5S7uC8ShziCe`) and pays the slide's minter 5% of a sale; the first
+purses keep v1 (29,404 bytes, `HRSkpLzDjnevFrwEV8B9TadHyTiYr6NoXbUyFufxXF44`), since a purse's code is immutable. The
+dish contract does not change.
 
 - **No keys.** The account is created, funded, deployed and initialised in one receipt with no `AddKey`, and the code has
   no method that adds a key, deploys code or deletes the account. `view_access_key_list` returns an empty list for every
@@ -630,11 +633,12 @@ the dish contract does not change.
   the server (`/api/living/gate`).
 
 The threat model, written before the code, lists twelve ways a seller could try to keep the money, with the rule and the
-test for each (`docs/SLIDES-THREAT-MODEL.md`); the purse has 16 tests and the factory 5, and every case was also run as a
+test for each (`docs/SLIDES-THREAT-MODEL.md`); the purse has 18 tests and the factory 6, and every case was also run as a
 real testnet transaction (`docs/LIVING-SLIDES.md`). A purse is not a house colony: it is fed and shares the tides like any
 player, under the same Kept PETRI rules. On mainnet slide 14's colony joined with 0.015 NEAR, which netted under
-`min_join` after storage, so it has not attached; its 45-cell pattern is stable, so under v6.5 it stays unattached and
-what it earns is kept PETRI and credit, not NEAR.
+`min_join` after storage, so it never attached: while its 45-cell pattern lived, what it earned was kept PETRI and
+credit, not NEAR (the first mainnet tide's share went to it as credit). Its cells have since died on chain, so its holder
+may now attach it with NEAR. Slide 18 (`slide-18.slides.petri-dish.near`), sealed through the factory, joined attached.
 
 ## Paying with any token
 
@@ -1101,8 +1105,9 @@ bought. In these runs the simulator still wrote a tide entry with nobody to pay,
   TEE signature proves the enclave produced an answer; it is in the agents' log, not on chain.
 - **The open swarm runs on the team's VM.** Spawned strains, the open council and break-the-pact stop if it stops; pacts
   already made still bind. The council could drop a bid; it cannot make or change a pact.
-- **Mainnet living slide 14 earns no NEAR.** It joined with less than `min_join` net and its pattern never dies, so under
-  v6.5 it stays unattached: kept PETRI and credit only, and its PETRI cannot be withdrawn.
+- **Mainnet living slide 14 earned no NEAR.** It joined with less than `min_join` net, so under v6.5 it stayed
+  unattached while its pattern lived: kept PETRI and credit only, and its PETRI cannot be withdrawn. Its cells have since
+  died on chain. Slide 18, sealed through the factory, joined attached.
 - **Guest limits are per server instance.** The relayer's rate limits live in memory, so several instances each keep
   their own; the on-chain checks (zero deposit, function-call keys, credit) are what protect the relayer's NEAR.
 - **Skip entries are charged to nobody.** The `Skip` entry a long idle stretch writes is not paid for by the call that writes it.
