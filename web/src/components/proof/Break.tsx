@@ -4,7 +4,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PACT_DEPOSIT, getColonyOf, getPact, getPlantDeposit, getRules, getState, type Colony } from "@/lib/chain";
-import { CONTRACT, EXPLORERS, FREE_PLAY, REPO } from "@/lib/config";
+import { EXPLORERS, REPO } from "@/lib/config";
+import { DishName } from "@/components/site/DishName";
 import { currentEngine, refreshDish, useDish } from "@/lib/dish-store";
 import { colonyWithRetry, findSpot, ownRect, relaySteps, rivalCell, savedGuest, sendSigned, signOne, type Sent, type Step } from "@/lib/lab";
 import { createGuest, JOIN_NEAR } from "@/lib/wallet";
@@ -262,14 +263,6 @@ export function Break() {
   // the refused transactions listed on this page, every one a failed transaction on NearBlocks.
   const refusedOnChain = tally?.shared ? tally.total : new Set([...(tally?.recent ?? []).map((x) => x.hash), ...RECORDED.map((r) => r.hash)]).size;
 
-  if (ready && !FREE_PLAY) {
-    return (
-      <p className={s.note}>
-        The lab fires its attempts on the free testnet dish with a guest colony. <a href="?net=testnet">Switch this page to testnet</a> to use it.
-      </p>
-    );
-  }
-
   return (
     <>
       <dl className={s.tiles} style={{ marginBottom: 28 }}>
@@ -362,7 +355,7 @@ export function Break() {
         ))}
       </div>
       <p className={s.note}>
-        Every attempt is a real transaction on {CONTRACT}, signed by your guest key and relayed for free; the relayer allows at most a few dozen lab
+        Every attempt is a real transaction on <DishName />, signed by your guest key and relayed for free; the relayer allows at most a few dozen lab
         attempts a guest a day. The lab&rsquo;s code is <a href={`${REPO}/blob/main/web/src/components/proof/Break.tsx`}>Break.tsx</a>; what the
         relayer accepts is in <a href={`${REPO}/blob/main/web/src/app/api/relay/route.ts`}>the relay route</a>.
       </p>

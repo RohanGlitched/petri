@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { NETWORK, networkInUrl } from "@/lib/config";
+import { NETWORK, wantedNetwork } from "@/lib/config";
 import { useDocsHref } from "@/lib/use-docs";
 import { Mark } from "./Mark";
 import { NetSwitch } from "./NetSwitch";
@@ -46,6 +46,37 @@ const GROUPS = [
 /** The More menu lists what has folded out of the bar first, then what always lives there. */
 const MORE = [...LINKS.filter((l) => l.rank === 2), ...LINKS.filter((l) => l.rank === 3), ...LINKS.filter((l) => l.rank === 0)];
 
+/** The colony this browser has on the dish being read (the dish page remembers it), read after the first render so
+ * the server's HTML and the first client render agree. */
+function useMyColony(): number | null {
+  const [id, setId] = useState<number | null>(null);
+  useEffect(() => {
+    const read = () => {
+      try {
+        const v = Number(localStorage.getItem(`petri.colony.${NETWORK}`));
+        setId(Number.isInteger(v) && v > 0 ? v : null);
+      } catch {
+        setId(null);
+      }
+    };
+    read();
+    window.addEventListener("petri:colony", read);
+    window.addEventListener("storage", read);
+    return () => {
+      window.removeEventListener("petri:colony", read);
+      window.removeEventListener("storage", read);
+    };
+  }, []);
+  return id;
+}
+
+/** "My colony" pressed on the dish itself: no navigation, the dish brings the colony into view. */
+function goMine(e: React.MouseEvent, path: string) {
+  if (path !== "/dish") return;
+  e.preventDefault();
+  window.dispatchEvent(new Event("petri:find-mine"));
+}
+
 export function Nav() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
@@ -53,6 +84,7 @@ export function Nav() {
   const moreBox = useRef<HTMLLIElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
   const docs = useDocsHref();
+  const mine = useMyColony();
   const hrefOf = (h: string) => (h === "docs" ? docs : h);
   const current = (h: string) => h !== "docs" && (path === h || path.startsWith(h + "/"));
 
@@ -68,10 +100,10 @@ export function Nav() {
     setMore(false);
   }, [path]);
 
-  // A link that names the other network in its address reloads into that dish.
+  // Every reader is fixed to one network when the page loads, so a client-side move to a page that wants the other dish
+  // (a link naming ?net=, a testnet-only page, or back from one) reloads into it.
   useEffect(() => {
-    const wanted = networkInUrl();
-    if (wanted && wanted !== NETWORK) window.location.reload();
+    if (wantedNetwork(path) !== NETWORK) window.location.reload();
   }, [path]);
 
   useEffect(() => {
@@ -152,8 +184,8 @@ export function Nav() {
         </nav>
         <div className="nav-end">
           <NetSwitch />
-          <Link className="btn btn-amber btn-small nav-cta" href="/dish">
-            Start a colony
+          <Link className="btn btn-amber btn-small nav-cta" href={mine ? `/dish?colony=${mine}` : "/dish"} onClick={(e) => mine && goMine(e, path)}>
+            {mine ? "My colony" : "Start a colony"}
           </Link>
           <button className="menu-btn" type="button" aria-expanded={open} aria-controls="site-menu" onClick={() => setOpen((o) => !o)}>
             <span className="sr">{open ? "Close menu" : "Open menu"}</span>
@@ -190,8 +222,15 @@ export function Nav() {
               <h2 id="sheet-net" className="sheet-title">Which dish</h2>
               <NetSwitch variant="sheet" />
             </section>
-            <Link className="btn btn-amber" href="/dish" onClick={() => setOpen(false)}>
-              Start a colony
+            <Link
+              className="btn btn-amber"
+              href={mine ? `/dish?colony=${mine}` : "/dish"}
+              onClick={(e) => {
+                setOpen(false);
+                if (mine) goMine(e, path);
+              }}
+            >
+              {mine ? "My colony" : "Start a colony"}
             </Link>
           </div>
         </nav>

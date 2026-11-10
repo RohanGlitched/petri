@@ -8,7 +8,7 @@ import type { Colony, DishState, Rules } from "@/lib/chain";
 import { readDishAt } from "@/lib/netread";
 import { readError } from "@/lib/rpc";
 import { buildCoinBook, type CoinBook, type EventKind } from "@/lib/supply";
-import { CONTRACT, NETWORK, REPO, accountUrl, shortAccount } from "@/lib/config";
+import { NETWORK, REPO, accountUrl, shortAccount } from "@/lib/config";
 import { actionIndex, useStrainLog } from "@/lib/strain-log";
 import { sideOfAccount } from "@/lib/sides";
 
@@ -87,9 +87,10 @@ export function CoinLog() {
 
   if (phase !== "done" || !data) {
     return (
-      <div className={s.sect} aria-live="polite">
+      // Holds about the replayed page's height, so the sections below do not show and then jump down when it lands.
+      <div className={s.sect} aria-live="polite" style={phase === "error" ? undefined : { minHeight: "220vh" }}>
         <p className="lede">
-          {phase === "reading" && <>Reading the whole ledger of {CONTRACT} at one final block…</>}
+          {phase === "reading" && <>Reading the whole ledger of {net.contract} at one final block…</>}
           {phase === "replaying" && <>Replaying PETRI from generation zero with petri-core…</>}
           {phase === "error" && <>The dish could not be read ({err}); it was tried three times. Reload in a minute.</>}
         </p>

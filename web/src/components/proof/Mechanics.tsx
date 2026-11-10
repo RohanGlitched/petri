@@ -155,18 +155,22 @@ export function Mechanics() {
     },
   ];
 
-  if (ready && !FREE_PLAY) {
-    return (
-      <p className={s.note}>
-        The buttons play the free testnet dish with a guest colony. <a href="?net=testnet">Switch this page to testnet</a> to use them.
-      </p>
-    );
-  }
+  // The guest key, the relayer and the lab live on the free testnet dish. A visitor reading mainnet still sees every
+  // mechanic; its button reloads this section on testnet (the mainnet choice is kept for every other page).
+  const onMain = ready && !FREE_PLAY;
+  const toTestnet = () => {
+    const u = new URL(window.location.href);
+    u.searchParams.set("net", "testnet");
+    u.hash = "mechanics";
+    window.location.assign(u.toString());
+  };
 
   return (
     <>
       <p className={s.note} style={{ marginTop: 0, marginBottom: 16 }}>
-        {me ? (
+        {onMain ? (
+          "These buttons sign with a free guest key on the testnet dish, so nothing here costs real NEAR. Pressing one reloads this section on testnet."
+        ) : me ? (
           <>
             This browser&rsquo;s guest: <a href={`${EXPLORERS.testnet}/address/${me.account}`}>{me.account}</a>
             {me.colony ? `, colony ${me.colony.id} “${me.colony.name}”` : ", no colony yet"}.
@@ -183,9 +187,15 @@ export function Mechanics() {
             <article key={m.id} className={s.card}>
               <h3>{m.title}</h3>
               <p>{m.what}</p>
-              <button className="btn btn-amber btn-small" onClick={run(m.id, m.act)} disabled={disabled}>
-                {o?.busy ? "Sending…" : m.id === "intents" ? "Get a quote" : "Send it"}
-              </button>
+              {onMain && m.id !== "intents" ? (
+                <button className="btn btn-ghost btn-small" onClick={toTestnet}>
+                  Send it on the free testnet dish
+                </button>
+              ) : (
+                <button className="btn btn-amber btn-small" onClick={run(m.id, m.act)} disabled={onMain ? !!o?.busy : disabled}>
+                  {o?.busy ? "Sending…" : m.id === "intents" ? "Get a quote" : "Send it"}
+                </button>
+              )}
               {o?.sent && (
                 <div className={`${s.result} ${o.sent.ok ? s.resultOk : s.resultBad}`}>
                   {o.sent.ok ? "Done on chain. " : `${o.sent.error} `}

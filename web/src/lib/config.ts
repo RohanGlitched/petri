@@ -13,7 +13,7 @@ export const CONTRACTS: Record<Network, string> = {
  * 2026). rpc.*.near.org is deprecated and answers 429 to nearly everyone, so it is not here. rpc.ts fails over across
  * them and backs off on 429. */
 export const RPCS: Record<Network, string[]> = {
-  mainnet: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://free.rpc.fastnear.com", "https://rpc.shitzuapes.xyz"],
+  mainnet: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://free.rpc.fastnear.com"],
   testnet: ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"],
 };
 export const EXPLORERS: Record<Network, string> = { mainnet: "https://nearblocks.io", testnet: "https://testnet.nearblocks.io" };
@@ -34,8 +34,30 @@ export function networkInUrl(): Network | null {
   }
 }
 
+/** Pages that only make sense on the free testnet dish (guest keys, the relayer, the open swarm). They read testnet
+ * whatever the visitor chose elsewhere, without changing that choice. */
+const TESTNET_ONLY = /^\/(break|strains\/(new|join|break))\/?$/;
+export function testnetOnly(path: string): boolean {
+  return TESTNET_ONLY.test(path);
+}
+
+/** The dish a page at `path` should read: the page's own (testnet-only pages), else `?net=`, else the saved choice. */
+export function wantedNetwork(path: string): Network {
+  if (testnetOnly(path)) return "testnet";
+  const fromUrl = networkInUrl();
+  if (fromUrl) return fromUrl;
+  try {
+    const saved = localStorage.getItem(NET_STORE);
+    if (isNetwork(saved)) return saved;
+  } catch {
+    /* storage blocked */
+  }
+  return DEFAULT_NETWORK;
+}
+
 function pick(): Network {
   if (typeof window === "undefined") return DEFAULT_NETWORK;
+  if (testnetOnly(window.location.pathname)) return "testnet";
   const fromUrl = networkInUrl();
   if (fromUrl) {
     try {
@@ -70,6 +92,11 @@ export function switchNetwork(to: Network) {
     /* the address carries it instead */
   }
   const url = new URL(window.location.href);
+  // A testnet-only page cannot show mainnet: the choice is kept and the visitor lands on the mainnet dish.
+  if (to !== "testnet" && testnetOnly(url.pathname)) {
+    window.location.assign(`/dish?net=${to}`);
+    return;
+  }
   if (to === DEFAULT_NETWORK && !url.searchParams.has("net")) url.searchParams.delete("net");
   else url.searchParams.set("net", to);
   window.location.assign(url.toString());
