@@ -132,9 +132,13 @@ export const TRACKS: Track[] = [
       },
       {
         need: "Each NFT maps to its own sub-account holding money",
-        where: "Not in the deployed build: a slide's royalties are paid to its holder's PETRI balance, not into an account of its own.",
-        links: [],
-        status: "no",
+        where: "Living slides: a slide sealed into its own keyless account (slide-14.petri-dish.near on mainnet, slide-<id>.petri-slides.testnet on testnet) that is a colony on the dish, holds the PETRI, NEAR and royalties the slide earns, and passes whole to whoever holds it. 0 access keys, read live on its page.",
+        links: [
+          { label: "slide-14.petri-dish.near", href: "/specimens/14?net=mainnet" },
+          { label: "LIVING-SLIDES.md", href: code("docs/LIVING-SLIDES.md") },
+          { label: "purse contract", href: code("purse/contract/src/lib.rs") },
+        ],
+        status: "met",
       },
       {
         need: "A history view per NFT: what it earned, who held it",
@@ -144,9 +148,13 @@ export const TRACKS: Track[] = [
       },
       {
         need: "Tests for the transfer path, including a sale in the middle of a payout",
-        where: "Contract tests cover transfers, resolve, approvals and royalties after a transfer.",
-        links: [{ label: "contract tests", href: code("contract/src/tests.rs") }],
-        status: "partly",
+        where: "A threat model written before the code, one unit test per case, and every case run as a real testnet transaction: a sale while a payout is in flight is refused until it lands, a stale-nonce purchase fails, the old holder is refused after a transfer.",
+        links: [
+          { label: "SLIDES-THREAT-MODEL.md", href: code("docs/SLIDES-THREAT-MODEL.md") },
+          { label: "purse tests", href: code("purse/contract/src/tests.rs") },
+          { label: "contract tests", href: code("contract/src/tests.rs") },
+        ],
+        status: "met",
       },
     ],
   },
@@ -157,16 +165,19 @@ export const TRACKS: Track[] = [
     reqs: [
       {
         need: "Each agent its own sub-account under one parent",
-        where: "On mainnet the strains are violet.petri-dish.near, safranin.petri-dish.near and so on; every move traces to one of them.",
-        links: [{ label: "/strains", href: "/strains?net=mainnet" }],
+        where: "On mainnet the strains are violet.petri-dish.near, safranin.petri-dish.near and so on; anyone can spawn a strain on testnet, which becomes <name>.petri-strains.testnet with a key that can only play, paying for its own NEAR AI decisions.",
+        links: [
+          { label: "/strains", href: "/strains?net=mainnet" },
+          { label: "Spawn a strain", href: "/strains/new" },
+        ],
         status: "met",
       },
       {
         need: "A coordinator that collects sealed bids, reveals them and picks a winner; rules written first",
-        where: "The council (agents/council.mjs) runs sealed asks and bids each tide window off chain; RULES.md has the rules; the contract holds the deal's PETRI and refuses plantings that break it.",
+        where: "The open council: each round the house strains publish only the hash of their asks (a published formula), outside agents send bids signed with their own NEAR key (NEP-413), the round reveals and clears at the midpoint, and the deal is made on chain, where the contract escrows the PETRI and refuses any planting that breaks it. The coordinator runs off chain, so the reveal is checkable against the committed hash rather than enforced by a contract.",
         links: [
-          { label: "council.mjs", href: code("agents/council.mjs") },
-          { label: "RULES.md", href: code("RULES.md") },
+          { label: "/strains/join", href: "/strains/join" },
+          { label: "open-council.mjs", href: code("agents/swarm/open-council.mjs") },
           { label: "pacts.rs", href: code("contract/src/pacts.rs") },
         ],
         status: "partly",
