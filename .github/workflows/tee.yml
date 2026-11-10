@@ -1,0 +1,51 @@
+# Every night: checks the newest AI move on each dish with scripts/verify-tee.mjs (the move is found in the strains'
+# log; its archived bytes come from the site's proxy, then the VM; the chain from public RPC), and the pinned example
+# moves in proofs/tee from the committed snapshot. Intel's collateral is fetched by dcap-qvl on every run: the quote,
+# machine and compose-manager checks run in full (no --no-dcap). If the collateral service is down the run fails and
+# says so; it is never skipped.
+name: TEE moves
+
+on:
+  schedule:
+    - cron: "41 2 * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - "agents/tee.mjs"
+      - "agents/notes.mjs"
+      - "scripts/verify-tee.mjs"
+      - "proofs/tee/**"
+
+permissions:
+  contents: read
+
+jobs:
+  latest:
+    name: Newest AI move on ${{ matrix.network }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [mainnet, testnet]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix agents
+      - name: verify-tee latest
+        run: node scripts/verify-tee.mjs latest --net ${{ matrix.network }}
+
+  pinned:
+    name: Pinned example move (snapshot, testnet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix agents
+      - name: verify-tee on the pinned testnet move, archive from proofs/tee only
+        run: node scripts/verify-tee.mjs 9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r --net testnet --source snapshot

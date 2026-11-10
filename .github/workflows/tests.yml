@@ -43,3 +43,17 @@ jobs:
           node-version: 22
       - name: Lagged dish, the WebAssembly engine against the contract's catch-up
         run: node scripts/projection-test.mjs
+
+  agents:
+    name: Agents (TEE checks, note guard, swarm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the agents' packages
+        run: npm ci --prefix agents
+      - name: node --test
+        run: npm test --prefix agents

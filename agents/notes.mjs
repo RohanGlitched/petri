@@ -3,8 +3,9 @@
 // A planting a NEAR AI answer chose carries, at the end of its on-chain note, " · tee:" and the first 16 hex characters
 // of the SHA-256 of that answer's exact response body. The full answer (request and response bytes, signature,
 // attestation hash) is archived under that hash and served by the log window at /tee/<hash or 16-hex prefix>.
-// The log entry lists every option the model was shown, with the SHA-256 of each option's cells, so the cells in the
-// transaction can be matched to the number the model chose.
+// Each option line in the signed prompt ends with "cells:" and 12 hex characters of its cells' SHA-256 (optionLine), so
+// the cells in the transaction can be matched to the number the model chose from the signed request alone; the log
+// entry's option_cells_sha256 repeats the full hashes for the site.
 
 import crypto from "node:crypto";
 

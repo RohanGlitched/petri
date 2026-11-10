@@ -9,6 +9,7 @@
 //                                                            /api/strains, then the VM's log window): what CI checks nightly
 //   options: --no-dcap (skip the Intel quote checks: every check that needs them then FAILS), --pccs intel, --json
 //
+// Transactions are read from FastNEAR, then its archival node (a plain node forgets transactions after a few days), then dRPC.
 // Run it from the repo with the agents' packages installed (cd agents && npm ci). It needs no keys and no access to the
 // team's machine. The archived answer and attestation report are read from, in order: the site's HTTPS proxy
 // (https://www.playpetri.xyz/api/tee/<hash> and /api/tee/attestation/<sha256>), the runner's own log window on the VM,
@@ -51,8 +52,8 @@ const SNAPSHOT = path.join(here, "..", "proofs", "tee");
 const PROXY = "https://www.playpetri.xyz/api/tee";
 const HOUSE = ["violet", "safranin", "methylene", "malachite", "congo"];
 const NETS = {
-  testnet: { rpcs: ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"], contract: "petri-v6.testnet", vm: "http://136.64.100.170:8790", house: [...HOUSE.map((s) => `petri-${s}.testnet`), "petri-bench-a.testnet", "petri-strains.testnet"] },
-  mainnet: { rpcs: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org"], contract: "petri-dish.near", vm: "http://136.64.100.170:8791", house: HOUSE.map((s) => `${s}.petri-dish.near`) },
+  testnet: { rpcs: ["https://rpc.testnet.fastnear.com", "https://archival-rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"], contract: "petri-v6.testnet", vm: "http://136.64.100.170:8790", house: [...HOUSE.map((s) => `petri-${s}.testnet`), "petri-bench-a.testnet", "petri-strains.testnet"] },
+  mainnet: { rpcs: ["https://rpc.mainnet.fastnear.com", "https://archival-rpc.mainnet.fastnear.com", "https://near.drpc.org"], contract: "petri-dish.near", vm: "http://136.64.100.170:8791", house: HOUSE.map((s) => `${s}.petri-dish.near`) },
 };
 const MAX_SKEW_S = 180;
 const MAX_GEN_GAP = 3;
@@ -95,8 +96,8 @@ async function rpc(method, params, net = NET) {
     try {
       return await rpcOn(url, method, params);
     } catch (e) {
+      // A node that does not know the transaction may only have forgotten it: the archival node is asked next.
       last = e;
-      if (e.rpcError && /UNKNOWN_TRANSACTION|UNKNOWN_ACCOUNT|INVALID_TRANSACTION/.test(JSON.stringify(e.rpcError))) throw e;
     }
   }
   throw last;

@@ -45,3 +45,15 @@ jobs:
           echo "petri-dish.near: $full full-access key(s) of $total"
           echo "### petri-dish.near: $full full-access key(s) of $total" >> "$GITHUB_STEP_SUMMARY"
           if [ "$full" = "0" ]; then echo "PASS: nobody can deploy other code or relaunch the mainnet dish"; else echo "NOTE: the team still holds $full full-access key(s); deleted after the final verify on 14 November"; fi
+
+  strain-keys:
+    name: No full-access key under petri-strains.testnet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Every spawned strain holds only its play key (dish colonies, the swarm registry and NearBlocks)
+        run: node scripts/check-strain-keys.mjs --net testnet --deep
