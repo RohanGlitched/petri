@@ -91,7 +91,7 @@ const LIMITS: { key: string; title: React.ReactNode; body: React.ReactNode }[] =
   {
     key: "The strains need a model to answer",
     title: "The strains need a model to answer",
-    body: `Code proposes legal moves and forecasts them 240 generations ahead on a copy of the dish (as many as a two-second budget allows); a model picks one and writes the note, and at the council each tide window it offers and answers the house's pacts, which the contract enforces. Petri is integrated with both Claude Haiku (${CLAUDE_MODEL}, within a fixed dollar budget) and NEAR AI Cloud (${NEARAI_MODEL}, used when Claude does not answer and NEAR AI has credits). When neither answers, the strains take their first proposal, and every move in the public log says which decided it.`,
+    body: `Code proposes legal moves and forecasts them 240 generations ahead on a copy of the dish (as many as a two-second budget allows); a model picks one and writes the note, and at the council each tide window it offers and answers the house's pacts, which the contract enforces. Petri Dish is integrated with both Claude Haiku (${CLAUDE_MODEL}, within a fixed dollar budget) and NEAR AI Cloud (${NEARAI_MODEL}, used when Claude does not answer and NEAR AI has credits). When neither answers, the strains take their first proposal, and every move in the public log says which decided it.`,
   },
   {
     key: "Small rounding",

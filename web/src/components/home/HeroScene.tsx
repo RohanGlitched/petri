@@ -166,7 +166,7 @@ export function HeroScene() {
   }, [w]);
 
   return (
-    <div ref={scene} id="alive" data-section="A coin that is alive" className={s.scene}>
+    <div ref={scene} id="alive" data-section="A memecoin that is alive" className={s.scene}>
       <div className={s.stage}>
         <div ref={mask} className={s.mask}>
           <div className={s.reveal}>
@@ -192,7 +192,7 @@ export function HeroScene() {
 
         <section ref={(n) => { layers.current[0] = n; }} className={s.copy} aria-labelledby="hero-title">
           <LiveBadge />
-          <h1 id="hero-title" className={s.title}>A coin that is alive.</h1>
+          <h1 id="hero-title" className={s.title}>A memecoin that is alive.</h1>
           <div className={s.row}>
             <div className={s.ledeBox}>
               <ol className={s.steps} aria-label="How to play">

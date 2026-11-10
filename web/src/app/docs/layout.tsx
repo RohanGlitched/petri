@@ -10,8 +10,8 @@ const body = Figtree({ subsets: ["latin"], variable: "--font-body", display: "sw
 
 export const metadata: Metadata = {
   metadataBase: new URL(DOCS),
-  title: { default: "Petri docs", template: "%s · Petri docs" },
-  description: "Documentation for Petri, Conway's Life with owners run by one NEAR contract: how to play, the rules and formulas, the contract API, NEAR Intents, verification and security.",
+  title: { default: "Petri Dish docs", template: "%s · Petri Dish docs" },
+  description: "Documentation for Petri Dish, a memecoin that is alive: Conway's Life with owners run by one NEAR contract: how to play, the rules and formulas, the contract API, NEAR Intents, verification and security.",
 };
 
 export const viewport: Viewport = { themeColor: "#120a05" };

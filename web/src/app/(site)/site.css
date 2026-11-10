@@ -585,3 +585,13 @@ main:focus-visible { outline: none; }
 @media (pointer: coarse), (max-width: 799px) {
   .netseg-opt, .netsheet-opt { min-height: 44px; }
 }
+
+/* The wordmark keeps the header on one line on a phone, beside the dish switch and the menu. */
+.brand-name { white-space: nowrap; }
+@media (max-width: 440px) {
+  .brand { font-size: 20px; gap: 7px; }
+  .brand-mark { width: 21px; height: 21px; }
+}
+@media (max-width: 380px) {
+  .brand { font-size: 18px; gap: 6px; }
+}

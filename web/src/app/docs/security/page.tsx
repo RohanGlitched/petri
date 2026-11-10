@@ -424,7 +424,7 @@ export default function Page() {
           <strong>The team holds a full-access key.</strong> Each contract account has one, on purpose: it exists only so a bug can be fixed with new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger. It cannot change anything quietly, because new code changes the code hash that the verifier checks. Deleting it would make the dish unfixable.
         </li>
         <li>
-          <strong>Most players lose NEAR.</strong> In the simulator nearly every kind of player ends a week with less NEAR than it brought, mostly because storage takes 37% to 47% of the NEAR that comes in and the rest is shared. Petri is a game with a live economy, not an investment. See <Doc to="simulations" hash="losses">What loses money</Doc>.
+          <strong>Most players lose NEAR.</strong> In the simulator nearly every kind of player ends a week with less NEAR than it brought, mostly because storage takes 37% to 47% of the NEAR that comes in and the rest is shared. Petri Dish is a game with a live economy, not an investment. See <Doc to="simulations" hash="losses">What loses money</Doc>.
         </li>
         <li>
           <strong>No external audit.</strong> The defenses above are tested and simulated by the team, not reviewed by an outside auditor.

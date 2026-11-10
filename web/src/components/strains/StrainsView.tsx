@@ -178,7 +178,7 @@ export function StrainsView() {
         <Link className="btn btn-amber" href="/dish">Play against them</Link>
       </p>
       <p id="model-note" className={s.footnote}>
-        <sup>1</sup> Petri is integrated with both Claude Haiku (<code>{CLAUDE_MODEL}</code>, asked first, within a fixed
+        <sup>1</sup> Petri Dish is integrated with both Claude Haiku (<code>{CLAUDE_MODEL}</code>, asked first, within a fixed
         budget) and NEAR AI Cloud (<code>{NEARAI_MODEL}</code>, served from a trusted execution environment), which takes over
         when Claude does not answer and NEAR AI has credits. A NEAR AI answer is signed by the enclave, and the signature is
         shown with the strain&rsquo;s last move. Each move says which model chose it.

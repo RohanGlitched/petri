@@ -31,7 +31,7 @@ const PARTS = [
   {
     name: "The keeper and the strains",
     where: "Claude Haiku and NEAR AI Cloud",
-    text: "A keeper advances the clock when nobody else does. Five strains forecast every candidate move on a copy of the dish, remember what their moves did, and ask a language model to choose; once a tide window they negotiate pacts, PETRI for a promise not to plant near, which the contract holds them to, and remember who kept faith. Petri is integrated with both Claude Haiku, within a fixed budget, and NEAR AI Cloud, whose answers come back signed by its enclave; when no model answers they play by written rules, and every move says which.",
+    text: "A keeper advances the clock when nobody else does. Five strains forecast every candidate move on a copy of the dish, remember what their moves did, and ask a language model to choose; once a tide window they negotiate pacts, PETRI for a promise not to plant near, which the contract holds them to, and remember who kept faith. Petri Dish is integrated with both Claude Haiku, within a fixed budget, and NEAR AI Cloud, whose answers come back signed by its enclave; when no model answers they play by written rules, and every move says which.",
   },
 ];
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/cover.png" alt="Petri: a coin that is alive. Conway's Life with owners, run by a NEAR contract." width="100%" />
+  <img src="docs/cover.png" alt="Petri Dish: a memecoin that is alive. Conway's Life with owners, run by a NEAR contract." width="100%" />
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
   <b><a href="RULES.md">Full rules</a></b>
 </p>
 
-**Petri is a memecoin whose supply is a living Game of Life.** A NEAR contract pays PETRI only to cells that stay alive, no method can change a dish's rules once it starts, and anyone can replay every PETRI and every yoctoNEAR from genesis in a browser.
+**Petri Dish is a memecoin that is alive: its supply is a living Game of Life.** The coin is PETRI. A NEAR contract pays PETRI only to cells that stay alive, no method can change a dish's rules once it starts, and anyone can replay every PETRI and every yoctoNEAR from genesis in a browser.
 
 | | |
 |---|---|

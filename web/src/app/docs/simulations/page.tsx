@@ -711,7 +711,7 @@ cargo run --release -- out-v6.1 all --seeds 8          # the v6.1 rules, 84 s on
       </ul>
       <Callout kind="money">
         <p>
-          Petri is a game whose prizes are paid from what players put in, less storage and gas. Play with NEAR you are happy to spend on it.
+          Petri Dish is a game whose prizes are paid from what players put in, less storage and gas. Play with NEAR you are happy to spend on it.
         </p>
       </Callout>
     </DocPage>

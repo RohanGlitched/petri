@@ -22,7 +22,7 @@ type Scene = {
 const SCENES: Scene[] = [
   {
     title: "Conway’s Life, with owners",
-    body: "Every generation each cell counts its eight neighbours. With two or three it survives; an empty square with exactly three is born. Petri adds one thing: every cell belongs to someone.",
+    body: "Every generation each cell counts its eight neighbours. With two or three it survives; an empty square with exactly three is born. Petri Dish adds one thing: every cell belongs to someone.",
     w: 40,
     h: 22,
     seeds: [

@@ -10,10 +10,10 @@ export function docMetadata(slug: string): Metadata {
   if (!p) return {};
   const url = slug === "introduction" ? `${DOCS}/` : `${DOCS}/${slug}`;
   return {
-    title: slug === "introduction" ? { absolute: "Petri docs" } : p.title,
+    title: slug === "introduction" ? { absolute: "Petri Dish docs" } : p.title,
     description: p.description,
     alternates: { canonical: url },
-    openGraph: { title: `${p.title} · Petri docs`, description: p.description, url, type: "article" },
+    openGraph: { title: `${p.title} · Petri Dish docs`, description: p.description, url, type: "article" },
   };
 }
 

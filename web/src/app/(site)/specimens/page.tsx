@@ -6,7 +6,7 @@ import s from "@/components/specimens/specimens.module.css";
 
 export const metadata = {
   title: "Specimens",
-  description: "Fossils of a living coin: colonies fix patches of their own living cells onto slides, minted by the Petri contract as NEP-171 tokens with on-chain pictures, provable by replaying the dish.",
+  description: "Fossils of a living coin: colonies fix patches of their own living cells onto slides, minted by the Petri Dish contract as NEP-171 tokens with on-chain pictures, provable by replaying the dish.",
 };
 
 export default function SpecimensPage() {

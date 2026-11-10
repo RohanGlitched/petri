@@ -70,7 +70,7 @@ const RULES: { title: string; body: string; cells: number[]; result: number; lab
   },
   {
     title: "Three owners, no birth",
-    body: "If the three parents belong to three different colonies, the birth is contested and nothing grows there. This is the only place Petri differs from Life.",
+    body: "If the three parents belong to three different colonies, the birth is contested and nothing grows there. This is the only place Petri Dish differs from Life.",
     cells: [1, 0, 2, 0, 0, 0, 0, 3, 0],
     result: 0,
     label: "An empty cell with red, green and violet parents stays empty.",

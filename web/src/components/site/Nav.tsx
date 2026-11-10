@@ -108,7 +108,7 @@ export function Nav() {
       <div className="wrap nav-in">
         <Link className="brand" href="/" onClick={() => setOpen(false)}>
           <Mark className="brand-mark" />
-          Petri
+          <span className="brand-name">Petri Dish</span>
         </Link>
         <nav className="nav-main" aria-label="Main">
           <ul className="nav-links">

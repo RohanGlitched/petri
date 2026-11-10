@@ -70,7 +70,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </button>
           <Link href={docHref("introduction")} className="d-brand">
             <Mark className="d-brand-mark" />
-            <span>Petri</span>
+            <span>Petri Dish</span>
             <span className="d-brand-docs">docs</span>
           </Link>
           <button type="button" className="d-search-btn" onClick={() => setSearching(true)}>
@@ -81,7 +81,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <span>Search the docs</span>
             <kbd>Ctrl K</kbd>
           </button>
-          <nav className="d-top-links" aria-label="Petri">
+          <nav className="d-top-links" aria-label="Petri Dish">
             <a href={`${site}/dish`}>Play</a>
             <a href={`${site}/verify`}>Verify</a>
             <a href={REPO}>GitHub</a>

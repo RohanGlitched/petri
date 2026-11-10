@@ -72,7 +72,7 @@ export function BoardSection() {
             <div className={s.prose}>
               <h3 className="h3">The contract only moves when asked</h3>
               <p>
-                A NEAR contract cannot run on a timer. Petri&rsquo;s contract stores the board at the last generation someone
+                A NEAR contract cannot run on a timer. The dish&rsquo;s contract stores the board at the last generation someone
                 advanced to. Every <code className={s.code}>join</code>, <code className={s.code}>buy</code>,{" "}
                 <code className={s.code}>sell</code>, <code className={s.code}>plant</code>, <code className={s.code}>claim</code>,{" "}
                 <code className={s.code}>mint_slide</code> and <code className={s.code}>advance</code> call first steps that board

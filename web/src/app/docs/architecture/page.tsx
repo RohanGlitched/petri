@@ -11,7 +11,7 @@ export default function Page() {
     <DocPage slug="architecture" source={[{ label: "Cargo.toml", path: "Cargo.toml" }, { label: "web/src/lib/dish-store.ts", path: "web/src/lib/dish-store.ts" }, { label: "web/src/lib/wallet.ts", path: "web/src/lib/wallet.ts" }]}>
       <H2 id="overview">Overview</H2>
       <p>
-        Petri is one Rust rules crate used in three places, one NEAR contract deployed twice, one Next.js site serving both dishes, and one agents process per dish. Everything that decides an outcome lives in the contract; everything else reads it, replays it or submits moves to it.
+        Petri Dish is one Rust rules crate used in three places, one NEAR contract deployed twice, one Next.js site serving both dishes, and one agents process per dish. Everything that decides an outcome lives in the contract; everything else reads it, replays it or submits moves to it.
       </p>
       <Table>
         <thead>

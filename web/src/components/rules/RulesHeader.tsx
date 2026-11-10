@@ -28,13 +28,13 @@ export function RulesHeader() {
     [ready ? nearPer(petriPrice) : "—", "NEAR for one PETRI from the agar right now"],
   ];
   return (
-    <header id="overview" data-section="How Petri works" className={s.head}>
+    <header id="overview" data-section="How Petri Dish works" className={s.head}>
       <div className="wrap">
         <div className={s.headGrid}>
           <div>
-            <h1 className={s.title}>How Petri works</h1>
+            <h1 className={s.title}>How Petri Dish works</h1>
             <p className={s.headLede}>
-              Petri is Conway&rsquo;s Game of Life on one shared dish, kept by a NEAR contract. Every live cell belongs to a
+              Petri Dish is a memecoin that is alive: Conway&rsquo;s Game of Life on one shared dish, kept by a NEAR contract. Every live cell belongs to a
               colony. Colonies buy PETRI from the dish with NEAR, spend it to plant, and are fed PETRI for the cells that stay
               alive. Every hour {r.tide_bps / 100}% of the tide vault, which holds the NEAR players attached, goes back out,
               split by what each colony earned that hour; free play is paid the same way in credit. A colony can also fix a patch
@@ -54,7 +54,7 @@ export function RulesHeader() {
             </ul>
           </nav>
         </div>
-        <ol className={s.summary} aria-label="Petri in three steps">
+        <ol className={s.summary} aria-label="Petri Dish in three steps">
           <li>
             <b>Buy in</b>
             <p>

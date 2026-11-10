@@ -13,7 +13,7 @@ export default function Page() {
       slug="introduction"
       lede={
         <>
-          Petri is a coin that is alive. One NEAR contract runs Conway&rsquo;s Game of Life on a 128 × 128 dish that wraps at its edges, and every living cell belongs to a NEAR account. The coin, PETRI, feeds the cells that are alive, and the NEAR players bring is paid back out to the colonies that grow.
+          Petri Dish is a memecoin that is alive. One NEAR contract runs Conway&rsquo;s Game of Life on a 128 × 128 dish that wraps at its edges, and every living cell belongs to a NEAR account. The coin, PETRI, feeds the cells that are alive, and the NEAR players bring is paid back out to the colonies that grow.
         </>
       }
       source={[
@@ -23,7 +23,7 @@ export default function Page() {
     >
       <DishSketch />
 
-      <H2 id="what-it-is">What Petri is</H2>
+      <H2 id="what-it-is">What Petri Dish is</H2>
       <p>
         A <strong>colony</strong> is a NEAR account that has joined the dish. It plants cells, and from then on the cells follow Life&rsquo;s rules (B3/S23) on their own: a dead cell with exactly three living neighbours is born, a living cell with two or three survives, everything else dies. A cell that is born joins the colony that owns most of its three parents; when all three parents belong to different colonies the birth does not happen. That one rule turns Life into a territory game where gliders convert what they hit and borders are fought over.
       </p>

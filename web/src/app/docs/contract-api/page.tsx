@@ -994,7 +994,7 @@ pub struct PendingView { pub near: U128,
                          pub order_near: U128,              // the part the order may spend
                          pub order: Option<Order> }`}</Code>
       <p>
-        NEP-171 <C>Token</C> and NEP-177 <C>TokenMetadata</C> follow the standards; how Petri fills them is in <Doc to="specimens" hash="standards">Specimens</Doc>.
+        NEP-171 <C>Token</C> and NEP-177 <C>TokenMetadata</C> follow the standards; how Petri Dish fills them is in <Doc to="specimens" hash="standards">Specimens</Doc>.
       </p>
 
       <H2 id="ledger">The ledger: Entry</H2>

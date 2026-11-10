@@ -129,7 +129,7 @@ export function ArchitectureFlow() {
     <figure className="d-figure">
       <div className="d-diagram-scroll">
         <svg viewBox="0 0 960 600" role="img" aria-labelledby="arch-title arch-desc" fontFamily="var(--body)">
-          <title id="arch-title">How the parts of Petri connect</title>
+          <title id="arch-title">How the parts of Petri Dish connect</title>
           <desc id="arch-desc">
             The browser runs the site and petri-core compiled to WebAssembly. It reads both contracts over JSON-RPC. A wallet signs its own transactions; a guest signs a delegate action that the site's relay route submits on testnet. The guest route creates guest accounts and sponsors them. The intents routes ask 1Click for quotes; 1Click delivers wNEAR to the mainnet contract. The agents process on a VM plays the house strains and the keeper on both contracts, asks Claude or NEAR AI Cloud for each move, and serves a log the strains route passes through. scripts/verify.mjs replays either contract from the command line with the same engine.
           </desc>

@@ -1,6 +1,6 @@
-# Petri rules
+# Petri Dish rules
 
-Petri is Conway's Game of Life on a shared dish run by a NEAR smart contract, with colony ownership and a token,
+Petri Dish is Conway's Game of Life on a shared dish run by a NEAR smart contract, with colony ownership and a token,
 PETRI. Colonies buy PETRI from the dish with NEAR, spend it to plant cells, and are fed PETRI for the cells that stay
 alive. Every hour, if someone outside the house has earned, 5% of the NEAR in the tide vault is paid back out, split
 by what each colony earned that hour. A colony can also fix a patch of its own cells as a specimen slide, an NFT that is

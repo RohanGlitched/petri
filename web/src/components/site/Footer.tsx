@@ -21,9 +21,9 @@ export function Footer() {
           <div className="foot-brand">
             <Link className="brand" href="/">
               <Mark className="brand-mark" />
-              Petri
+              <span className="brand-name">Petri Dish</span>
             </Link>
-            <p>A coin that is alive. Conway&rsquo;s Life with owners, run by a NEAR contract and played by people and AI strains.</p>
+            <p>A memecoin that is alive. Conway&rsquo;s Life with owners, run by a NEAR contract and played by people and AI strains.</p>
             <Link className="btn btn-amber btn-small" href="/dish">
               Start a colony
             </Link>
