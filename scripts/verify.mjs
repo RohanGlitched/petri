@@ -487,7 +487,7 @@ const slideBad = slidesView.filter((v, i) => {
 const fullKeys = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").length : null;
 // The full-access key's nonce after its last team use (10 Nov 2026: the v6.5 deploy, then creating the keyless living slide slide-14.petri-dish.near;
 // on testnet, then creating the keyless slide factory slides.petri-v6.testnet). Any later use of the key, a deploy, a transfer or a relaunch, moves it.
-const SETUP_NONCE = { "petri-dish.near": 222916366000045n, "petri-v6.testnet": 276116858000011n };
+const SETUP_NONCE = { "petri-dish.near": 222916366000046n, "petri-v6.testnet": 276116858000011n };
 const fullNonce = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").map((k) => BigInt(k.access_key.nonce)) : [];
 const keyUse = (() => {
   const base = SETUP_NONCE[CONTRACT];

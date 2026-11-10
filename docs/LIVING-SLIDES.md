@@ -188,11 +188,13 @@ what it earns is kept PETRI, its tide shares are credit, it wins no NEAR, and it
 (a colony that has never attached cannot send PETRI). The testnet purses `slide-1` and `slide-2.petri-slides.testnet`
 are attached and earn normally.
 
-## Mainnet v2: pending until run
+## Mainnet v2: done on 10 November 2026
 
-**Pending: nothing in this section has happened on mainnet yet.** It is what `scripts/purse-mainnet-v2.mjs send` will
-do, after `plan` (read-only) shows every step, signer and cost. The lead runs it; the script signs nothing without
-`send`.
+`scripts/purse-mainnet-v2.mjs send` ran on mainnet on 10 November 2026, after `plan` (read-only) showed every step,
+signer and cost. It spent 0.392 NEAR (and moved 0.45 NEAR from the keeper to the bench) in 11 transactions. Afterwards:
+`slides.petri-dish.near` (factory), `slide-18.slides.petri-dish.near` (purse) and `slide-14.petri-dish.near` each have
+**0 access keys**; the bench (colony 7, "Team bench") and the purse (colony 8, "Living slide 18") are both **attached**
+with 18 living cells each; the purse's minter royalty is 500 bps; and the mainnet dish paid its first tide.
 
 1. `keeper.petri-dish.near` moves the factory's storage and gas (0.480710 NEAR) into `petri-dish.near`, so the dish's
    own NEAR is not used.
@@ -221,7 +223,26 @@ each), the slide (about 0.0066) and gas. About 0.48 NEAR moves to `petri-dish.ne
 whose peak need includes the 0.2 NEAR a 200 TGas seal holds back while it runs; it keeps roughly 0.2 NEAR afterwards for
 tending.
 
-The transactions will be listed here once the run has happened.
+| Step | Signer | Transaction |
+|---|---|---|
+| Keeper moves 0.480710 NEAR into `petri-dish.near` for the factory | `keeper.petri-dish.near` | `4Vrq6YfEwPnvosWeyjQ9NJBcvUbpZhjaDtqffFWuWTbU` |
+| `petri-dish.near` creates `slides.petri-dish.near`: create, fund, deploy, `new`; no key | `petri-dish.near` | `D7cJhZC4KPLaXPsb7hpbXBqGv3KViZQLqwYsMoyyWta7` |
+| Keeper funds the bench's join (0.01 NEAR) | `keeper.petri-dish.near` | `DA2UE29iWrnPZLZyxQLA4SmELpiK5awi1THQbviBvC9p` |
+| The bench joins attached as "Team bench" (colony 7) | `58135f2e…` | (sent during an RPC timeout; the colony and its join are on chain) |
+| Keeper funds the planting | `keeper.petri-dish.near` | `GHbn6qUzgUobybnRGt4MxJc19oAvGJyhenbBbSaw88wp` |
+| The bench plants the dead spark coil at (15, 33) | `58135f2e…` | `AgrqHiDZ7MYeCYsMR3k6JFQ6HXCmWqXXzfJB119Vt1qG` |
+| Keeper funds the slide | `keeper.petri-dish.near` | `7STpo8fUJnqw3uDki6zifyu9oBKHXRjjxaxV6JEys9MV` |
+| The bench mints slide 18 (18 cells) | `58135f2e…` | `AeysXYGPfuSHnv3xGq3izu5KFGeAWgdgwP6LK8wuTSKb` |
+| Keeper funds the factory's create_cost | `keeper.petri-dish.near` | `Hp8y824n2ARUMcvP5fqJLYztiUXxhawgUyjedFSKErHF` |
+| The bench prepays 0.330790 NEAR to the factory | `58135f2e…` | `C2amuRexrriZEHopZVrBbeVoyKjLd9Fyvqj699KLWbUp` |
+| Keeper funds the gas the seal holds back | `keeper.petri-dish.near` | `DmQMJ16MUGyoodhA6b2tSC7NizyWWjVXqm4prR8wqAF2` |
+| The bench seals slide 18: the factory creates `slide-18.slides.petri-dish.near` (no key) | `58135f2e…` | `5VezJ4smUuLTwu1e1wkrQ23BDZQ2z29fPh6AmQznY7Hd` |
+| The purse joins attached as "Living slide 18" (colony 8) | `58135f2e…` | `HvDfKKnXB389c1izJEUcQSCvb9gADP1BT767GQV1M7aX` |
+| The purse plants its slide's 18 cells under its licence at (92, 63) | `58135f2e…` | `AvxVvFAqmrxPVmwQvbAXjaT1uazFbugcUCFA8882QuZG` |
+| Congo Red hands `slide-14.petri-dish.near` to the bench | `congo.petri-dish.near` | `7SaN9XmYh5inPpZydA9Bxrd71UV2z8c2weNoHyARv39c` |
+
+`petri-dish.near`'s full-access key nonce after the run: 222916366000046 (the baseline `scripts/verify.mjs` reports
+against). Slide 14's colony has no living cells on chain any more, so under v6.5 its holder can now attach it with NEAR.
 
 ## Build and test
 

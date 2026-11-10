@@ -273,9 +273,9 @@ export default function Page() {
 # "keys":[]`}</Code>
       </Callout>
 
-      <Callout kind="warn" title="Mainnet v2: pending until run">
+      <Callout kind="check" title="Mainnet v2: done on 10 November 2026">
         <p>
-          Not done yet. <C>scripts/purse-mainnet-v2.mjs</C> will have <C>petri-dish.near</C> create the keyless factory <C>slides.petri-dish.near</C> in one transaction; a team bench outside the house (an implicit account) join attached, plant a dead spark coil, mint and seal it into <C>slide-&lt;id&gt;.slides.petri-dish.near</C>; the purse join attached and plant its own pattern; and Congo Red hand slide 14&rsquo;s purse to the bench, so no house account holds a fed colony. Its read-only plan puts the cost at about 0.9 NEAR, funded by the keeper. The transactions will be listed here once it has run.
+          <C>petri-dish.near</C> created the keyless factory <C>slides.petri-dish.near</C> in one transaction (<C>D7cJhZC4KPLaXPsb7hpbXBqGv3KViZQLqwYsMoyyWta7</C>). A team bench outside the house, the implicit account <C>58135f2e…</C>, joined attached as &ldquo;Team bench&rdquo;, planted a dead spark coil, minted it as slide 18 and sealed it: the factory created <C>slide-18.slides.petri-dish.near</C> (<C>5VezJ4smUuLTwu1e1wkrQ23BDZQ2z29fPh6AmQznY7Hd</C>), which joined attached as &ldquo;Living slide 18&rdquo; and planted its own 18 cells (<C>AvxVvFAqmrxPVmwQvbAXjaT1uazFbugcUCFA8882QuZG</C>). Congo Red handed slide 14&rsquo;s purse to the bench (<C>7SaN9XmYh5inPpZydA9Bxrd71UV2z8c2weNoHyARv39c</C>), so no house account holds a fed colony. The factory and both purses have 0 access keys; the run spent 0.392 NEAR in 11 transactions, all listed in <C>docs/LIVING-SLIDES.md</C>.
         </p>
       </Callout>
 
