@@ -3,7 +3,7 @@
 // /c/<id> with it. Read-only; cached at the edge for a few minutes.
 
 import { ImageResponse } from "next/og";
-import { colonyCard, colonySvg } from "@/lib/colony-card";
+import { cardAge, cardPetri, colonyCard, colonySvg } from "@/lib/colony-card";
 import type { Network } from "@/lib/config";
 
 export const runtime = "nodejs";
@@ -27,12 +27,14 @@ function font(family: string, weight: number): Promise<ArrayBuffer | null> {
 }
 
 const int = (n: number) => Math.round(n).toLocaleString("en-US");
-const petri = (u: number) => (u / 1e6).toLocaleString("en-US", { maximumFractionDigits: u >= 1e9 ? 0 : 1 });
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const net: Network = new URL(req.url).searchParams.get("net") === "mainnet" ? "mainnet" : "testnet";
-  const [card, display, body, bodyBold] = await Promise.all([colonyCard(net, Number(id), new URL(req.url).origin), font("Gloock", 400), font("Figtree", 400), font("Figtree", 600)]);
+  const q = new URL(req.url).searchParams;
+  const net: Network = q.get("net") === "mainnet" ? "mainnet" : "testnet";
+  // ?g= pins the board to the generation the share page shows, so the image and the page print the same numbers.
+  const g = q.get("g") ? Number(q.get("g")) : undefined;
+  const [card, display, body, bodyBold] = await Promise.all([colonyCard(net, Number(id), new URL(req.url).origin, g), font("Gloock", 400), font("Figtree", 400), font("Figtree", 600)]);
   const families = [
     display && { name: "Gloock", data: display, weight: 400 as const, style: "normal" as const },
     body && { name: "Figtree", data: body, weight: 400 as const, style: "normal" as const },
@@ -60,10 +62,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   }
 
   const svg = colonySvg(card, 540);
-  const age = Math.max(0, card.generation - card.joined);
+  const age = cardAge(card);
   const stats: [string, string][] = [
     ["Living cells", int(card.live)],
-    card.house ? ["Plays for the house, unpaid", "House"] : ["PETRI earned", petri(card.earned)],
+    card.house ? ["Plays for the house, unpaid", "House"] : ["PETRI earned", cardPetri(card.earned)],
     ["Age, in generations", int(age)],
     ["Cells planted", int(card.cellsPlanted)],
   ];

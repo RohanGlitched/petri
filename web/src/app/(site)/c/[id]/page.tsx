@@ -4,7 +4,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { colonyCard } from "@/lib/colony-card";
+import { cardAge, cardPetri, colonyCard } from "@/lib/colony-card";
 import type { Network } from "@/lib/config";
 import { ShareActions } from "@/components/delight/ShareActions";
 import s from "@/components/delight/share.module.css";
@@ -21,17 +21,18 @@ async function origin() {
   return `${h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host.split(",")[0].trim()}`;
 }
 const int = (n: number) => Math.round(n).toLocaleString("en-US");
-const petri = (u: number) => (u / 1e6).toLocaleString("en-US", { maximumFractionDigits: u >= 1e9 ? 0 : 1 });
+/** The account with a break opportunity after each dot, so a long guest account wraps at a dot, not mid-word. */
+const breakable = (a: string) => a.split(".").flatMap((part, i) => (i ? [<wbr key={i} />, "." + part] : [part]));
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { id } = await params;
   const net = netOf((await searchParams).net);
   const card = await colonyCard(net, Number(id), await origin());
   const q = net === "mainnet" ? "?net=mainnet" : "";
-  const image = { url: `/api/og/colony/${id}${q}`, width: 1200, height: 630, alt: card ? `${card.name}, a colony on the Petri dish` : "Petri Dish" };
+  const image = { url: `/api/og/colony/${id}?${card ? `g=${card.boardGeneration}&` : ""}${net === "mainnet" ? "net=mainnet" : ""}`.replace(/[?&]$/, ""), width: 1200, height: 630, alt: card ? `${card.name}, a colony on the Petri dish` : "Petri Dish" };
   const title = card ? `${card.name}, alive on the Petri dish` : "A colony on the Petri dish";
   const description = card
-    ? `${int(card.live)} living cells${card.house ? "" : `, ${petri(card.earned)} PETRI earned`}, first planted ${int(Math.max(0, card.generation - card.joined))} generations ago. Conway's Life on NEAR, where every cell belongs to an account.`
+    ? `${int(card.live)} living cells${card.house ? "" : `, ${cardPetri(card.earned)} PETRI earned`}, joined ${int(cardAge(card))} generations ago. Conway's Life on NEAR, where every cell belongs to an account.`
     : "Conway's Life on NEAR, where every cell belongs to an account.";
   return {
     title,
@@ -62,14 +63,14 @@ export default async function ColonyShare({ params, searchParams }: Props) {
       </section>
     );
   }
-  const age = Math.max(0, card.generation - card.joined);
+  const age = cardAge(card);
   const url = `https://www.playpetri.xyz/c/${card.id}${q}`;
   return (
     <section className={s.page}>
       <div className={s.grid}>
         <figure className={s.figure}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`/api/og/colony/${card.id}${q}`} width={1200} height={630} alt={`${card.name}'s share card: its living cells on the agar and its numbers`} />
+          <img src={`/api/og/colony/${card.id}?g=${card.boardGeneration}${amp}`} width={1200} height={630} alt={`${card.name}'s share card: its living cells on the agar and its numbers`} />
           <figcaption>
             The share card, drawn from the dish at generation {int(card.boardGeneration)}: the board the contract stores, stepped forward by
             the same rules.
@@ -82,13 +83,13 @@ export default async function ColonyShare({ params, searchParams }: Props) {
           </p>
           <h1 className={s.title}>{card.name}</h1>
           <p className={s.lede}>
-            A colony on the Petri dish, owned by <b>{card.account}</b>. Its cells live and die by Conway&rsquo;s rules,
+            A colony on the Petri dish, owned by <b>{breakable(card.account)}</b>. Its cells live and die by Conway&rsquo;s rules,
             a generation every fifteen seconds, and {card.house ? "as a house strain it plays without being paid." : "while they live they earn PETRI, up to what its stake reaches."}
           </p>
           <dl className={s.stats}>
             <div><dt>Living cells</dt><dd>{int(card.live)}</dd></div>
-            {!card.house && <div><dt>PETRI earned</dt><dd>{petri(card.earned)}</dd></div>}
-            <div><dt>Generations old</dt><dd>{int(age)}</dd></div>
+            {!card.house && <div><dt>PETRI earned</dt><dd>{cardPetri(card.earned)}</dd></div>}
+            <div><dt>Age, in generations</dt><dd>{int(age)}</dd></div>
             <div><dt>Cells planted</dt><dd>{int(card.cellsPlanted)}</dd></div>
           </dl>
           <div className={s.actions}>

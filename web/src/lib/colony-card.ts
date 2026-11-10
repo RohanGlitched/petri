@@ -86,18 +86,28 @@ function engineReady(origin: string): Promise<boolean> {
 
 const cache = new Map<string, { at: number; p: Promise<ColonyCard | null> }>();
 
-/** `origin` is this site's own address, where the engine's WASM is served. */
-export function colonyCard(net: Network, id: number, origin: string): Promise<ColonyCard | null> {
-  const key = `${net}:${id}`;
+/** PETRI as the card and its page both print it: two decimals under 10, whole numbers above. */
+export function cardPetri(units: number): string {
+  const v = units / 1e6;
+  return v.toLocaleString("en-US", { minimumFractionDigits: v < 10 ? 2 : 0, maximumFractionDigits: v < 10 ? 2 : 0 });
+}
+/** Generations since the colony joined, at the board the card shows. */
+export const cardAge = (c: ColonyCard) => Math.max(0, c.boardGeneration - c.joined);
+
+/** `origin` is this site's own address, where the engine's WASM is served. `at` pins the board to one generation (the
+ * share page passes the generation it shows, so its card image draws the very same board and numbers). */
+export function colonyCard(net: Network, id: number, origin: string, at?: number): Promise<ColonyCard | null> {
+  const pin = at !== undefined && Number.isInteger(at) && at > 0 ? at : undefined;
+  const key = `${net}:${id}:${pin ?? "now"}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 30_000) return hit.p;
-  const p = read(net, id, origin).catch(() => null);
+  const p = read(net, id, origin, pin).catch(() => null);
   cache.set(key, { at: Date.now(), p });
   if (cache.size > 500) cache.delete(cache.keys().next().value!);
   return p;
 }
 
-async function read(net: Network, id: number, origin: string): Promise<ColonyCard | null> {
+async function read(net: Network, id: number, origin: string, at?: number): Promise<ColonyCard | null> {
   if (!Number.isInteger(id) || id < 1 || id > 65534) return null;
   const [rules, state, board, rows, earned, stakes, ok] = await Promise.all([
     view<RawRules>(net, "rules"),
@@ -128,7 +138,9 @@ async function read(net: Network, id: number, origin: string): Promise<ColonyCar
       e.set_agar(state.agar);
       // A dish asleep (more than max_lag behind) is stepped only as far as the contract's next call would take it:
       // the skipped generations never run (projection.mjs).
-      const to = projectTarget(boardGeneration, generation, rules).target;
+      const due = projectTarget(boardGeneration, generation, rules).target;
+      // A pinned generation between the stored board and now is drawn as asked; anything else falls back to now.
+      const to = at !== undefined && at >= boardGeneration && at <= due ? at : due;
       if (e.load_compact(bytes, boardGeneration, state.chain) && to >= boardGeneration) {
         e.step(to - boardGeneration);
         cells = e.cells();
@@ -191,6 +203,21 @@ export function colonySvg(card: ColonyCard, size: number): string {
   let across = Math.max(22, Math.min(Math.min(w, h), Math.ceil(spread * 4.6 + 6)));
   let fx = mx;
   let fy = my;
+  if (n && across <= 40) {
+    // A small colony is framed close, but wide enough to take in its nearest neighbours (dimmed), so the card shows
+    // where it lives on the dish rather than a lone shape on empty agar.
+    let nearest = Infinity;
+    for (let i = 0; i < cells.length; i++) {
+      const v = cells[i];
+      if (!v || v === id) continue;
+      const x = i % w;
+      const y = (i - x) / w;
+      const dx = Math.abs(((x - mx + w * 1.5) % w) - w / 2);
+      const dy = Math.abs(((y - my + h * 1.5) % h) - h / 2);
+      nearest = Math.min(nearest, Math.max(dx, dy));
+    }
+    if (Number.isFinite(nearest)) across = Math.max(across, Math.min(40, Math.ceil(nearest * 2 + 8)));
+  }
   if (across > 48 && n) {
     // A colony spread over the whole dish (outposts): frame its densest patch instead, so its beads read.
     across = 44;
