@@ -45,6 +45,8 @@ export default function Cinema({ onClose, mine, focus, clean = false, fast = fal
   const lens = useRef<CultureHandle>(null);
   const dof = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"live" | "ff">(fast ? "ff" : "live");
+  // Bumped when the engine becomes readable, so a fast-forward opened before the dish loaded starts by itself.
+  const [engineReady, setEngineReady] = useState(0);
   const [ff, setFf] = useState<FF | null>(null);
   const [captions, setCaptions] = useState(true);
   const [bare, setBare] = useState(clean);
@@ -116,8 +118,7 @@ export default function Cinema({ onClose, mine, focus, clean = false, fast = fal
         if (currentEngine()) {
           clearInterval(p);
           clearTimeout(t);
-          setMode("live");
-          setTimeout(() => setMode("ff"), 0);
+          setEngineReady((n) => n + 1);
         }
       }, 300);
       return () => {
@@ -158,7 +159,7 @@ export default function Cinema({ onClose, mine, focus, clean = false, fast = fal
       director.current.cut();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, engineReady]);
 
   // The camera: a slow, damped glide to each shot, with a breath of drift so the frame is never quite still.
   useEffect(() => {
