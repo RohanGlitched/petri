@@ -194,3 +194,20 @@
 @media (pointer: coarse), (max-width: 799px) {
   .more { min-height: 44px; display: inline-flex; align-items: center; }
 }
+
+/* A phone shows each strain's two newest lab notes, and the rest on a tap, so five strains do not make a page of notes. */
+.moreNotes {
+  display: none;
+  margin: 4px 0 0;
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  color: var(--amber);
+  font: 600 13.5px var(--body);
+  cursor: pointer;
+  text-align: left;
+}
+@media (max-width: 700px) {
+  .notesFold > li:nth-child(n + 3) { display: none; }
+  .moreNotes { display: block; }
+}

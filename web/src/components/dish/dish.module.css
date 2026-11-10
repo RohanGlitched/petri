@@ -1187,3 +1187,16 @@
 @media (prefers-reduced-motion: reduce) {
   .you i, .firstPayIn { animation: none; }
 }
+
+/* The lab log scrolls inside its card: fade its last lines so an entry cut by the card's edge reads as "more below",
+   not as a clipped panel. */
+.log ol {
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - 34px), transparent);
+  mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - 34px), transparent);
+  padding-bottom: 26px;
+}
+
+/* The lab note never sits under the Plant button: focusing it scrolls it clear of the sticky (desktop) or fixed (phone)
+   action bar, and the card keeps room below it. */
+.noteField { margin-bottom: 18px; }
+.noteField input { scroll-margin-bottom: 120px; scroll-margin-top: 80px; }

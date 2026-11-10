@@ -126,3 +126,7 @@
   .board > li { min-height: 236px; }
   .board > li.feature { min-height: 440px; }
 }
+@media (max-width: 620px) {
+  /* "generations, 6.1 days" under the number, not split around a line as tall as the number. */
+  .big small { display: block; margin-top: 6px; line-height: 1.3; }
+}

@@ -404,6 +404,9 @@ export function WeekSim() {
       <div className={s.two} style={{ marginTop: 40 }}>
         <div>
           <h3 className="h3">PETRI price and the agar</h3>
+          {pts.length < 2 ? (
+            <ChartWaiting what="The price on the agar's curve and the PETRI left in it" />
+          ) : (
           <LineChart
             label="Simulated PETRI price and agar over the week"
             x={xs}
@@ -421,9 +424,13 @@ export function WeekSim() {
               { label: "PETRI in the agar", color: "#e2d5c3", values: pts.map((p) => p.agar / P), right: true, dashed: true },
             ]}
           />
+          )}
         </div>
         <div>
           <h3 className="h3">Burned and paid out</h3>
+          {pts.length < 2 ? (
+            <ChartWaiting what="PETRI burned by plantings and NEAR paid at tides" />
+          ) : (
           <LineChart
             label="Simulated PETRI burned and NEAR paid by tides over the week"
             x={xs}
@@ -437,6 +444,7 @@ export function WeekSim() {
               { label: "NEAR paid at tides", color: "#9fd8a8", values: pts.map((p) => p.paid), right: true },
             ]}
           />
+          )}
         </div>
       </div>
 
@@ -459,5 +467,17 @@ export function WeekSim() {
         The players are scripted and simple; the dish, the feed, prices and tides are petri-core&rsquo;s.
       </p>
     </>
+  );
+}
+
+/** Before the week runs there is one point, so a chart would draw every axis label on top of the others: say what will
+ * draw here instead, at the chart's own height so nothing moves when it starts. */
+function ChartWaiting({ what }: { what: string }) {
+  return (
+    <div
+      style={{ height: 300, display: "grid", placeItems: "center", padding: 24, borderRadius: 16, boxShadow: "inset 0 0 0 1px var(--line)", color: "var(--dim)", fontSize: 14.5, textAlign: "center" }}
+    >
+      <p style={{ margin: 0, maxWidth: 340 }}>{what}, day by day, once you press Run the week.</p>
+    </div>
   );
 }

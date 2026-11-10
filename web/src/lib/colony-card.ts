@@ -31,6 +31,8 @@ export type ColonyCard = {
   h: number;
   /** The board's owners (u16 per cell), for drawing the colony's shape. */
   cells: Uint16Array;
+  /** Every colony's colour by id, so its neighbours are drawn in their own colours. */
+  colors: Record<number, number>;
 };
 
 async function view<T>(net: Network, method: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -113,13 +115,15 @@ async function read(net: Network, id: number, origin: string, at?: number): Prom
     view<RawRules>(net, "rules"),
     view<RawState>(net, "state"),
     view<string>(net, "board"),
-    view<RawColony[]>(net, "colonies", { from: id - 1, limit: 1 }),
+    view<RawColony[]>(net, "colonies", { from: 0, limit: 1000 }),
     view<string[]>(net, "earnings", { from: id - 1, limit: 1 }),
     view<string[]>(net, "stakes", { from: 0, limit: 2000 }).catch(() => null),
     engineReady(origin),
   ]);
-  const c = rows[0];
-  if (!c || c.id !== id) return null;
+  const c = rows.find((r) => r.id === id);
+  if (!c) return null;
+  const colors: Record<number, number> = {};
+  for (const r of rows) colors[r.id] = r.color;
   const bytes = new Uint8Array(Buffer.from(board, "base64"));
   const generation = Math.floor((Number(state.now_ms) - Number(state.epoch_ms)) / Number(rules.generation_ms));
   let cells: Uint16Array | null = null;
@@ -173,6 +177,7 @@ async function read(net: Network, id: number, origin: string, at?: number): Prom
     w: rules.width,
     h: rules.height,
     cells,
+    colors,
   };
 }
 
@@ -242,6 +247,7 @@ export function colonySvg(card: ColonyCard, size: number): string {
   const k = size / across;
   const hexc = (c: number) => "#" + c.toString(16).padStart(6, "0");
   const beads: string[] = [];
+  const used = new Set<number>();
   const x0 = fx - across / 2;
   const y0 = fy - across / 2;
   for (let dy = 0; dy <= across; dy++)
@@ -254,8 +260,11 @@ export function colonySvg(card: ColonyCard, size: number): string {
       const py = (gy - y0 + 0.5) * k;
       const r = k * 0.5;
       if ((px - size / 2) ** 2 + (py - size / 2) ** 2 > (size / 2 - r) ** 2) continue;
-      beads.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${r.toFixed(2)}" fill="url(#${v === id ? "m" : "o"})"${v === id ? "" : ' opacity="0.42"'}/>`);
-      if (v === id) beads.push(`<ellipse cx="${(px - r * 0.3).toFixed(1)}" cy="${(py - r * 0.36).toFixed(1)}" rx="${(r * 0.32).toFixed(2)}" ry="${(r * 0.2).toFixed(2)}" fill="#fff" opacity="0.55"/>`);
+      // Neighbours in their own colours, a little softer, so the card shows the colony where it lives.
+      const grad = v === id ? "m" : card.colors?.[v] !== undefined ? `n${v}` : "o";
+      if (grad.startsWith("n")) used.add(v);
+      beads.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${r.toFixed(2)}" fill="url(#${grad})"${v === id ? "" : ' opacity="0.78"'}/>`);
+      beads.push(`<ellipse cx="${(px - r * 0.3).toFixed(1)}" cy="${(py - r * 0.36).toFixed(1)}" rx="${(r * 0.32).toFixed(2)}" ry="${(r * 0.2).toFixed(2)}" fill="#fff" opacity="${v === id ? "0.55" : "0.35"}"/>`);
     }
   const c = hexc(card.color);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
@@ -263,6 +272,7 @@ export function colonySvg(card: ColonyCard, size: number): string {
 <radialGradient id="agar" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#6e3a14"/><stop offset="0.6" stop-color="#3a1c09"/><stop offset="1" stop-color="#1c0d04"/></radialGradient>
 <radialGradient id="m" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="0.35" stop-color="${c}"/><stop offset="1" stop-color="${c}" stop-opacity="0.75"/></radialGradient>
 <radialGradient id="o" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#d8c8b0"/><stop offset="1" stop-color="#6d5a48"/></radialGradient>
+${[...used].map((v) => `<radialGradient id="n${v}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity="0.35"/><stop offset="0.35" stop-color="${hexc(card.colors[v])}"/><stop offset="1" stop-color="${hexc(card.colors[v])}" stop-opacity="0.75"/></radialGradient>`).join("")}
 </defs>
 <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="url(#agar)"/>
 ${beads.join("")}

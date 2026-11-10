@@ -52,7 +52,7 @@ export function FreeMainnetOffer({ onFree, busy }: { onFree: () => void; busy: b
           {st.closesAt ? `, until ${utcWhen(st.closesAt)}` : ""}.
         </p>
         <p className={f.fine}>
-          {cap > 0 ? `Up to ${cap} colonies${judgePlaces > 0 ? `, ${judgePlaces} of them held for judges with a code` : ""}` : "A few colonies"}, each on 0.05 NEAR of credit the site&rsquo;s relayer sponsors: credit you can play with, not withdraw.
+          {cap > 0 ? `Up to ${cap} colonies, as many as the relayer’s budget pays for${judgePlaces > 0 ? `, ${judgePlaces} of them held for judges with a code` : ""}` : "A few colonies"}, each on 0.05 NEAR of credit the site&rsquo;s relayer sponsors: credit you can play with, not withdraw.
         </p>
         <button type="button" className={`btn ${f.cta}`} onClick={() => switchNetwork("testnet")}>
           Try free play on testnet now

@@ -1917,7 +1917,17 @@ export function DishStage() {
             {me && (
               <label className={s.noteField}>
                 <span>Lab note, stored on chain with the planting (optional)</span>
-                <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={140} placeholder="Why here? Anyone reading the dish will see it." />
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  onFocus={(e) => {
+                    const el = e.currentTarget;
+                    // After a phone's keyboard opens, bring the field clear of the Plant bar.
+                    setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 250);
+                  }}
+                  maxLength={140}
+                  placeholder="Why here? Anyone reading the dish will see it."
+                />
                 <em className="num">{note.length}/140</em>
               </label>
             )}

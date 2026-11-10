@@ -34,6 +34,8 @@ export function StrainsView() {
   const KEEPER = keeperOn(net.network);
   const [plants, setPlants] = useState<PlantRecord[]>([]);
   const [plantsRead, setPlantsRead] = useState(false);
+  /** Strains whose lab notes are unfolded on a phone (a phone shows two per strain until asked for more). */
+  const [openNotes, setOpenNotes] = useState<Set<string>>(() => new Set());
 
   const total = d.state ? Number(d.state.plants) : 0;
   // Counts of plantings and notes are only true once they are read: a dish with no plantings is read as soon as its state is.
@@ -132,7 +134,7 @@ export function StrainsView() {
                   )}
                 </div>
               )}
-              <ol className={s.notes}>
+              <ol className={`${s.notes} ${openNotes.has(st.account) ? "" : s.notesFold}`}>
                 {notes.map((p, i) => {
                   const a = index.find(st.account, Number(p.generation));
                   return (
@@ -149,6 +151,23 @@ export function StrainsView() {
                 })}
                 {notes.length === 0 && <li className={s.dim}>{read ? "No lab notes yet." : "Reading the lab notes from NEAR…"}</li>}
               </ol>
+              {notes.length > 2 && (
+                <button
+                  type="button"
+                  className={s.moreNotes}
+                  aria-expanded={openNotes.has(st.account)}
+                  onClick={() =>
+                    setOpenNotes((o) => {
+                      const n = new Set(o);
+                      if (n.has(st.account)) n.delete(st.account);
+                      else n.add(st.account);
+                      return n;
+                    })
+                  }
+                >
+                  {openNotes.has(st.account) ? "Show fewer notes" : `Show ${notes.length - 2} more ${notes.length - 2 === 1 ? "note" : "notes"}`}
+                </button>
+              )}
               <a className={s.acct} href={accountUrl(st.account)}>{st.account}</a>
             </li>
           );

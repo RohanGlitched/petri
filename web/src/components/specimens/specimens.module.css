@@ -443,3 +443,14 @@
 @media (max-width: 620px) {
   .histFacts { grid-template-columns: 1fr; }
 }
+
+/* The label is wide enough for a two-line title and both meta lines ("Methylene Blue", "fixed at gen 35,227"), and a
+   word is never broken across lines: the coverslip is square, so the well had room to spare. */
+.glass { --label-w: 40%; }
+.labelTitle { hyphens: manual; overflow-wrap: normal; word-break: normal; font-size: clamp(12px, 3.5cqi, 18px); }
+.labelMeta { row-gap: 0; }
+.labelMeta > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.mini { --label-w: 40%; }
+@media (max-width: 560px) {
+  .glass { --label-w: 44%; }
+}

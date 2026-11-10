@@ -369,7 +369,7 @@
   .scrim {
     background:
       linear-gradient(180deg, rgba(18, 10, 5, 0.7) 0%, rgba(18, 10, 5, 0) 14%),
-      linear-gradient(0deg, rgba(18, 10, 5, 0.95) 0, rgba(18, 10, 5, 0.86) 30%, rgba(18, 10, 5, 0.58) 58%, rgba(18, 10, 5, 0.38) 100%);
+      linear-gradient(0deg, rgba(18, 10, 5, 0.95) 0, rgba(18, 10, 5, 0.9) 40%, rgba(18, 10, 5, 0.82) 62%, rgba(18, 10, 5, 0.6) 76%, rgba(18, 10, 5, 0.3) 90%, rgba(18, 10, 5, 0.22) 100%);
   }
   .title, .steps { text-shadow: 0 1px 14px rgba(18, 10, 5, 0.9), 0 0 2px rgba(18, 10, 5, 0.8); }
   /* The numbers arrive with the rest of the copy, so no empty band sits above the skip button while they fade in. */
