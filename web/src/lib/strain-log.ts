@@ -60,15 +60,24 @@ export type StrainLog = {
   error?: string;
 };
 
-/** Polls the strains' log every 20 s. `null` until the first answer. */
+/** A log whose runner last reported health this long ago is read again past every cache. */
+const STALE_HEALTH_MS = 10 * 60_000;
+
+/** Polls the strains' log every 20 s. `null` until the first answer. When the answer's `health.at` is more than ten
+ * minutes old (a cache on the way served an old copy), it asks again at once with a cache-buster. */
 export function useStrainLog(): StrainLog | null {
   const [log, setLog] = useState<StrainLog | null>(null);
   useEffect(() => {
     let stop = false;
+    const get = async (bust: boolean) => {
+      const r = await fetch(`/api/strains?net=${NETWORK}${bust ? `&t=${Date.now()}` : ""}`, { cache: "no-store" });
+      return (await r.json()) as StrainLog;
+    };
     const load = async () => {
       try {
-        const r = await fetch(`/api/strains?net=${NETWORK}`, { cache: "no-store" });
-        const body = (await r.json()) as StrainLog;
+        let body = await get(false);
+        const at = body.health?.at ? Date.parse(body.health.at) : NaN;
+        if (Number.isFinite(at) && Date.now() - at > STALE_HEALTH_MS) body = await get(true).catch(() => body);
         if (!stop) setLog({ ...body, actions: body.actions ?? [] });
       } catch {
         if (!stop) setLog({ model: null, health: null, actions: [], error: "The strains' log could not be reached." });

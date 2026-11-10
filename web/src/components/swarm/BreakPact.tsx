@@ -37,6 +37,12 @@ export function BreakPact({ swarm, onAttempt }: { swarm: Swarm | null; onAttempt
   const d = useDish();
   const wardenId = NETWORK === "testnet" && b?.warden ? d.colonies.find((c) => c.account === b.warden)?.id : undefined;
   const wardenCells = wardenId !== undefined && d.status === "ready" ? (d.liveCounts[wardenId] ?? 0) : (b?.warden_cells ?? null);
+  // With no living Warden cells there is nothing for the pact to protect: a planting would go through, so sending is
+  // switched off until Warden replants (the agents replant it), and the page says when it last did.
+  const wardenGone = wardenCells === 0;
+  const wardenCol = wardenId !== undefined ? d.colonies.find((c) => c.id === wardenId) : undefined;
+  const wardenLast = wardenCol?.last_plant_generation != null ? Number(wardenCol.last_plant_generation) : null;
+  const wardenAgo = wardenLast !== null && d.generation > wardenLast ? Math.round(((d.generation - wardenLast) * 15) / 60) : null;
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -159,13 +165,19 @@ export function BreakPact({ swarm, onAttempt }: { swarm: Swarm | null; onAttempt
             ))}
           </div>
           <div className={s.actions}>
-            <button className="btn btn-amber" type="button" onClick={() => plant(false)} disabled={busy || !agreed}>
+            <button className="btn btn-amber" type="button" onClick={() => plant(false)} disabled={busy || !agreed || wardenGone}>
               Plant what it agreed to
             </button>
-            <button className="btn btn-ghost" type="button" onClick={() => plant(true)} disabled={busy}>
+            <button className="btn btn-ghost" type="button" onClick={() => plant(true)} disabled={busy || wardenGone}>
               Send it anyway
             </button>
           </div>
+          {wardenGone && (
+            <p className={s.problem} role="status">
+              Warden has no living cells right now, so there is nothing for the pact to guard and a planting would simply go through. Sending is off until Warden
+              replants{wardenLast !== null ? `; it last planted at generation ${int(wardenLast)}${wardenAgo !== null ? `, about ${wardenAgo < 120 ? `${wardenAgo} min` : `${Math.round(wardenAgo / 60)} h`} ago` : ""}` : ""}. You can keep talking to Captive meanwhile.
+            </p>
+          )}
           <p className={s.hint}>A block of 4 cells, 4 to 7 cells from Warden&rsquo;s living cells, sent as a real testnet transaction signed by Captive&rsquo;s key. The dish&rsquo;s own rules check first that only the pact stands in the way.</p>
         </div>
         {err && <p className={s.problem} role="alert">{err}</p>}
