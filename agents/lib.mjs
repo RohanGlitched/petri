@@ -128,7 +128,14 @@ export async function callDish(accountId, methodName, args, tgas = CALL_TGAS, de
   });
   const fail = res.status?.Failure ?? res.receipts_outcome?.map((r) => r.outcome.status?.Failure).find(Boolean);
   if (fail) throw new Error(failureText(fail));
-  return { hash: res.transaction.hash, value: returned(res) };
+  return { hash: res.transaction.hash, value: returned(res), burnt: tokensBurnt(res) };
+}
+
+/** yoctoNEAR a transaction burnt in gas, over the transaction and all its receipts (refunds are not burnt). */
+export function tokensBurnt(res) {
+  let total = BigInt(res.transaction_outcome?.outcome?.tokens_burnt ?? 0);
+  for (const r of res.receipts_outcome ?? []) total += BigInt(r.outcome?.tokens_burnt ?? 0);
+  return total;
 }
 
 /**

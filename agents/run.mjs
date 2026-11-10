@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { callDish, CALL_TGAS, liveDish, log, nearBalance, view, CONTRACT, NETWORK } from "./lib.mjs";
 import { candidates, makeRng } from "./strategies.mjs";
-import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally , teeTally } from "./model.mjs";
+import { choose, hasModel, modelName, modelErrors, lastModelError, claudeSpent, modelTally, teeTally, attestationStatus, setTeeArchive } from "./model.mjs";
 import { forecast, forecastText, boxOf } from "./forecast.mjs";
 import { loadMemory, saveMemory, rememberMove, measureOutcomes, bootstrapFromChain, memoryText, movesOf, OUTCOME_GENS } from "./memory.mjs";
 import { runCouncil, pactsFor, pactGens, chainPacts } from "./council.mjs";
@@ -26,6 +26,8 @@ import { actSpawned, SPAWNED_EVERY } from "./swarm/play.mjs";
 import { resumeSpawns } from "./swarm/spawn.mjs";
 import { openCouncilTick } from "./swarm/open-council.mjs";
 import { maintainBreak, setupBreak } from "./swarm/breakpact.mjs";
+import { safeNote } from "./swarm/guard.mjs";
+import { chainNote, optionHashes, TEE_TAG_RE } from "./notes.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = process.env.PETRI_LOG_DIR ?? path.join(here, "log");
@@ -70,7 +72,11 @@ const PLAYERS = MAINNET ? STRAINS : [...STRAINS, ...BENCH];
 const attaches = (s) => !!s.bench || MAINNET;
 // On mainnet the house plays at a sixteenth of the pace (a few plantings a day each), so its NEAR lasts past
 // judging: each planting costs it about 0.004 NEAR of gas and storage.
-const KEEPER_LAG_IDLE = process.env.PETRI_KEEPER_LAG ?? "400";
+// The mainnet keeper keeps the stored dish within this many generations of the clock (240, one tide window: an hour
+// at 15 s a generation). One advance steps max_catchup (120) generations, so with 240 the dish stays 120 to 240
+// behind and the keeper advances about 48 times a day; the log and the health JSON estimate what that costs a day
+// from the gas each advance really burnt.
+const KEEPER_LAG_IDLE = process.env.PETRI_KEEPER_LAG ?? "240";
 // During judging (PETRI_JUDGING="from,to" as ISO times) the mainnet keeper keeps the dish within
 // PETRI_KEEPER_LAG_JUDGING generations, so anyone who opens it finds it current; that costs about 0.1 NEAR a day.
 const JUDGING = (process.env.PETRI_JUDGING ?? "").split(",").map((t) => Date.parse(t));
@@ -94,6 +100,8 @@ const recentCouncil = [];
 let pactsNow = [];
 let lastHealth = null;
 const once = process.argv.includes("--once");
+// --once --only=<account or name>: one round for that player alone (for trying a move by hand next to the VM).
+const only = process.argv.find((a) => a.startsWith("--only="))?.slice(7) ?? null;
 // --swarm-only runs the open swarm alone (spawned strains, the open council, break-the-pact) and none of the house's
 // own play: for trying it on a machine while the VM runs the house.
 const swarmOnly = process.argv.includes("--swarm-only") || process.env.PETRI_SWARM_ONLY === "1";
@@ -143,6 +151,58 @@ function memoryView() {
   return { network: NETWORK, strains, reputation, pacts: mem.pacts.slice(-30) };
 }
 
+/**
+ * The archived proof behind each NEAR AI answer, read-only: GET /tee/<sha256 of the response body, or its first 16+ hex>
+ * (request and response bytes, signature, verdict) and GET /attestation/<sha256> (the report exactly as fetched, so its
+ * hash can be recomputed), /attestation/latest.json, /attestation/latest.sha256 and /attestation/index.jsonl (every
+ * report fetched, with its nonce and the signers it named).
+ */
+function serveProof(req, res) {
+  const p = new URL(req.url ?? "/", "http://x").pathname;
+  const reply = (status, body, type = "application/json", cache = "no-store") => {
+    res.writeHead(status, { "content-type": type, "access-control-allow-origin": "*", "cache-control": cache });
+    res.end(body);
+  };
+  if (req.method !== "GET" && req.method !== "HEAD") return reply(405, JSON.stringify({ error: "GET only" }));
+  let file = null;
+  let immutable = false;
+  let m = p.match(/^\/tee\/([0-9a-f]{16,64})(?:\.json)?$/);
+  if (m) {
+    const dir = path.join(LOG_DIR, "tee");
+    const hits = (() => {
+      try {
+        return fs.readdirSync(dir).filter((f) => f.startsWith(m[1]) && /^[0-9a-f]{64}\.json$/.test(f));
+      } catch {
+        return [];
+      }
+    })();
+    if (hits.length > 1) return reply(409, JSON.stringify({ error: "more than one answer has that prefix", answers: hits.map((f) => f.slice(0, 64)) }));
+    if (hits.length === 1) file = path.join(dir, hits[0]);
+    immutable = true;
+  } else if ((m = p.match(/^\/attestation\/([0-9a-f]{64})(?:\.json)?$/))) {
+    file = path.join(LOG_DIR, "attestation", `${m[1]}.json`);
+    immutable = true;
+  } else if ((m = p.match(/^\/attestation\/(latest\.json|latest\.sha256|index\.jsonl)$/))) {
+    file = path.join(LOG_DIR, "attestation", m[1]);
+  } else {
+    return reply(404, JSON.stringify({ error: "GET /tee/<response sha256 or 16+ hex prefix>, /attestation/<sha256>, /attestation/latest.json, /attestation/latest.sha256 or /attestation/index.jsonl" }));
+  }
+  let body;
+  try {
+    body = file ? fs.readFileSync(file) : null;
+  } catch {
+    body = null;
+  }
+  if (!body) return reply(404, JSON.stringify({ error: "not archived here" }));
+  const type = file.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8";
+  return reply(200, body, type, immutable ? "public, max-age=31536000, immutable" : "public, max-age=60");
+}
+
+/** The health JSON with what changes between checks: how far the stored dish is behind, the keeper, the attestation. */
+function healthNow() {
+  return { ...(lastHealth ?? {}), tee: { ...teeTally }, attestation: attestationStatus(), dish: dishStatus() };
+}
+
 // A read-only window on what the strains did and why, for the site's strains page. No keys or secrets pass through it.
 function serve() {
   if (!PORT) return;
@@ -173,9 +233,10 @@ function serve() {
   http
     .createServer(async (req, res) => {
       if (req.url?.startsWith("/swarm") && (await handleSwarm(req, res, { reg, log, catchUp, enabled: SWARM_ON, house: houseNames }))) return;
+      if (/^\/(tee|attestation)(\/|$)/.test(req.url ?? "")) return serveProof(req, res);
       const body = req.url?.startsWith("/health")
-        ? lastHealth
-        : { contract: CONTRACT, model: modelName(), health: lastHealth, actions: recent.slice(-200), council: recentCouncil.slice(-150), memory: memoryView(), pacts: pactsNow, swarm: SWARM_ON ? publicSwarm(reg) : null };
+        ? healthNow()
+        : { contract: CONTRACT, model: modelName(), health: healthNow(), actions: recent.slice(-200), council: recentCouncil.slice(-150), memory: memoryView(), pacts: pactsNow, swarm: SWARM_ON ? publicSwarm(reg) : null };
       res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "public, max-age=15" });
       res.end(JSON.stringify(body));
     })
@@ -421,11 +482,13 @@ async function actOn(s, world) {
     console.log("  (dry run: not planted)");
     return;
   }
+  // On chain the note ends with the first 16 hex of the NEAR AI answer's response hash, which names its archived bytes.
+  const onChain = chainNote(note, pick?.tee);
   try {
     await catchUp(s.account);
-    const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(note) });
-    const r = await callDish(s.account, "plant", { cells: chosen.cells, note }, CALL_TGAS, BigInt(deposit), attaches(s));
-    log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", note, r.hash);
+    const deposit = await view("plant_deposit", { cells: chosen.cells.length, note_bytes: Buffer.byteLength(onChain) });
+    const r = await callDish(s.account, "plant", { cells: chosen.cells, note: onChain }, CALL_TGAS, BigInt(deposit), attaches(s));
+    log(s.name, "planted", chosen.pattern, `(${chosen.cells.length})`, "—", onChain, r.hash);
     if (!s.bench) {
       let earnedAt = null;
       try {
@@ -469,8 +532,9 @@ async function actOn(s, world) {
       ambitious: chosen.ambitious,
       cells: chosen.cells.length,
       cost: chosen.cost,
-      note,
+      note: onChain,
       tx: r.hash,
+      choice: cands.indexOf(chosen) + 1,
       decided_by: pick ? "model" : "rules",
       model_error: pick ? null : lastModelError(),
       model: pick ? pick.model : null,
@@ -482,6 +546,7 @@ async function actOn(s, world) {
       forecast_ms: fc?.ms ?? null,
       pacts: pacts.ids,
       options: cands.map((c) => c.why),
+      option_cells_sha256: optionHashes(cands),
       option_forecasts: cands.map((c) => c.forecastText ?? null),
       outcome: null,
     });
@@ -490,17 +555,13 @@ async function actOn(s, world) {
   }
 }
 
-/** A model's lab note, kept to plain text: no links, no account names, nothing invisible. */
+/**
+ * A model's lab note as it may go on chain: plain text that passes the guard's hard rules in every spelling (no links,
+ * accounts, payment requests or instructions, however obfuscated), or "" so the rules write the note instead.
+ */
 function cleanNote(n) {
   if (!n) return "";
-  const t = String(n)
-    .normalize("NFKC")
-    .replace(/[^ -~À-ɏ]/g, "")
-    .replace(/\S+\.(near|testnet|com|org|io|xyz|app)/gi, "")
-    .replace(/https?:\S*/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return t.slice(0, 120);
+  return safeNote(String(n).replace(TEE_TAG_RE, "")) ?? "";
 }
 
 /** Once per tide window the house strains meet; see council.mjs. */
@@ -548,17 +609,85 @@ async function keep() {
     }
   }
   // On mainnet every advance is real gas, and the house's own plantings step the dish; the keeper steps in once the
-  // dish is KEEPER_LAG generations behind (before the clock would skip at max_lag), about 14 times a day.
+  // dish is KEEPER_LAG generations behind (before the clock would skip at max_lag): with the default lag of 240 that is about 48 advances a day.
   // Keepers take no keeper pot (rules.keepers), so the pot is no reason to advance.
   const due = MAINNET ? behind >= keeperLag() : behind >= 20;
+  dishSeen = { state: st, at: Date.now() };
   if (due) {
     try {
       const r = await callDish(KEEPER, "advance", {}, CALL_TGAS);
-      log("keeper advanced", behind, "due generation(s)", r.hash);
+      const gens = Math.max(0, Number(r.value ?? st.generation) - Number(st.generation));
+      lastAdvanceAt = Date.now();
+      noteAdvance({ at: new Date().toISOString(), tx: r.hash, gens, burnt: r.burnt.toString() });
+      log("keeper advanced", gens, "of", behind, "due generation(s)", r.hash, keeperCostText());
     } catch (e) {
       log("keeper refused:", e instanceof Error ? e.message : e);
     }
   }
+}
+
+// What the keeper's advances really cost, from the gas each one burnt: the last 60, kept across restarts.
+const KEEPER_COSTS = path.join(LOG_DIR, `keeper-costs-${NETWORK}.json`);
+let advances = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(KEEPER_COSTS, "utf8"));
+  } catch {
+    return [];
+  }
+})();
+let dishSeen = null;
+let lastAdvanceAt = 0;
+let genMs = 15_000;
+function noteAdvance(a) {
+  advances = [...advances, a].slice(-60);
+  try {
+    fs.writeFileSync(KEEPER_COSTS, JSON.stringify(advances));
+  } catch {
+    /* the estimate still holds for this run */
+  }
+}
+/** NEAR a day the keeper spends at its measured cost per generation, if it advanced every generation itself. */
+function keeperCost() {
+  const gens = advances.reduce((a, x) => a + x.gens, 0);
+  if (!gens) return null;
+  const burnt = advances.reduce((a, x) => a + Number(x.burnt) / 1e24, 0);
+  const perGen = burnt / gens;
+  const gensPerDay = 86_400_000 / genMs;
+  const perDay = perGen * gensPerDay;
+  const held = lastHealth?.near?.[KEEPER] ?? null;
+  return {
+    advances_measured: advances.length,
+    near_per_advance: Number((burnt / advances.length).toFixed(6)),
+    near_per_generation: Number(perGen.toFixed(8)),
+    advances_per_day: Math.round(gensPerDay / Math.max(1, gens / advances.length)),
+    near_per_day: Number(perDay.toFixed(5)),
+    keeper_near: held,
+    days_left: held != null && perDay > 0 ? Number((held / perDay).toFixed(1)) : null,
+  };
+}
+const keeperCostText = () => {
+  const c = keeperCost();
+  return c ? `(${c.near_per_advance} NEAR each; at this pace about ${c.near_per_day} NEAR a day${c.days_left != null ? `, ${c.days_left} days of the keeper's NEAR` : ""})` : "";
+};
+/** How far the stored dish is behind the clock right now, and when the keeper last advanced it. */
+function dishStatus() {
+  if (!dishSeen) return null;
+  const st = dishSeen.state;
+  const now = Number(st.now_ms) + (Date.now() - dishSeen.at);
+  const storedAt = Number(st.epoch_ms) + Number(st.generation) * genMs;
+  const last = advances[advances.length - 1] ?? null;
+  return {
+    generation: Number(st.generation),
+    due_generation: Math.floor((now - Number(st.epoch_ms)) / genMs),
+    behind: Math.floor((now - storedAt) / genMs),
+    // How old the stored board is (seconds behind the clock), and how long since these agents last advanced it.
+    stored_age_s: Math.max(0, Math.round((now - storedAt) / 1000)),
+    last_advanced_age_s: lastAdvanceAt ? Math.round((Date.now() - lastAdvanceAt) / 1000) : null,
+    keeper_lag: MAINNET ? keeperLag() : 20,
+    keeper_last_advance: last ? { at: last.at, tx: last.tx, gens: last.gens, age_s: Math.round((Date.now() - Date.parse(last.at)) / 1000) } : null,
+    keeper_cost: keeperCost(),
+    checked_at: new Date(dishSeen.at).toISOString(),
+  };
 }
 
 /** A planting needs the stored board within max_catchup of the clock; on a slow dish the strain advances it first. */
@@ -568,6 +697,7 @@ async function catchUp(accountId) {
     const behind = Number(st.due_generation) - Number(st.generation);
     if (behind <= 120) return; // rules.max_catchup on both dishes
     const r = await callDish(accountId, "advance", {}, CALL_TGAS);
+    lastAdvanceAt = Date.now();
     log(accountId, "advanced the dish first:", behind, "generations behind", r.hash);
   }
 }
@@ -581,7 +711,8 @@ async function health() {
       out[a] = null;
     }
   }
-  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)), modelCalls: modelTally(), tee: { ...teeTally } };
+  lastHealth = { at: new Date().toISOString(), near: out, model: modelName(), modelErrors: modelErrors(), claudeUsd: Number(claudeSpent().toFixed(4)), modelCalls: modelTally(), tee: { ...teeTally }, keeper_cost: keeperCost() };
+  if (MAINNET && lastHealth.keeper_cost) log("keeper cost", JSON.stringify(lastHealth.keeper_cost));
   fs.writeFileSync(path.join(LOG_DIR, "health.json"), JSON.stringify(lastHealth, null, 1));
   const low = Object.entries(out).filter(([, v]) => v !== null && v < 0.5);
   if (low.length) log("LOW GAS:", low.map(([a, v]) => `${a} ${v}`).join(", "));
@@ -642,6 +773,8 @@ async function swarmTick(due, tick) {
 
 async function main() {
   const rules = await view("rules");
+  genMs = Number(rules.generation_ms) || genMs;
+  if (dry) setTeeArchive(null);
   holdGens = pactGens(Number(rules.tide_every), Math.max(...STRAINS.map((s) => s.every[1])) * PACE, Number(rules.pact_max_gens ?? 2880));
   if (dry && !swarmOnly) return dryRun();
   if (process.argv.includes("--setup-break")) {
@@ -655,8 +788,9 @@ async function main() {
   if (SWARM_ON) await resumeSpawns(reg, log).catch((e) => log("swarm: resuming spawns failed", e instanceof Error ? e.message : e));
   if (!swarmOnly) await health();
   if (once) {
-    if (!swarmOnly) for (const s of PLAYERS) await act(s).catch((e) => log(s.name, "error", e.message));
-    if (SWARM_ON) for (const s of reg.strains.filter((x) => x.status === "active")) await playSpawned(s);
+    const mine = (s) => !only || s.account === only || s.name === only;
+    if (!swarmOnly) for (const s of PLAYERS.filter(mine)) await act(s).catch((e) => log(s.name, "error", e.message));
+    if (SWARM_ON) for (const s of reg.strains.filter((x) => x.status === "active" && mine(x))) await playSpawned(s);
     return;
   }
   let tick = 0;
