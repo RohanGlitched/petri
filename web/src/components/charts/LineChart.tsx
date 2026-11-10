@@ -28,6 +28,7 @@ type Props = {
   maxRight?: number;
   /** the left axis's floor (0 by default), for a series that moves in a narrow band far from zero */
   minLeft?: number;
+  minRight?: number;
   height?: number;
   label: string;
   /** a few x ticks; by default five evenly spaced */
@@ -41,7 +42,7 @@ function nice(v: number): number {
   return 10 * e;
 }
 
-export function LineChart({ x, series, fmt, fmtRight, fmtX, maxLeft, maxRight, minLeft = 0, height = 320, label, ticks }: Props) {
+export function LineChart({ x, series, fmt, fmtRight, fmtX, maxLeft, maxRight, minLeft = 0, minRight = 0, height = 320, label, ticks }: Props) {
   const id = useId();
   const box = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -57,7 +58,7 @@ export function LineChart({ x, series, fmt, fmtRight, fmtX, maxLeft, maxRight, m
     return { l: maxLeft ?? nice(hi(false)), r: maxRight ?? nice(hi(true)) };
   }, [series, maxLeft, maxRight]);
   const px = (v: number) => pad.l + (x1 === x0 ? 0 : ((v - x0) / (x1 - x0)) * pw);
-  const py = (v: number, right?: boolean) => (right ? pad.t + ph * (1 - v / top.r) : pad.t + ph * (1 - (v - minLeft) / Math.max(1e-12, top.l - minLeft)));
+  const py = (v: number, right?: boolean) => (right ? pad.t + ph * (1 - (v - minRight) / Math.max(1e-12, top.r - minRight)) : pad.t + ph * (1 - (v - minLeft) / Math.max(1e-12, top.l - minLeft)));
   const path = (vals: number[], right?: boolean) => vals.map((v, i) => `${i ? "L" : "M"}${px(x[i]).toFixed(1)},${py(v, right).toFixed(1)}`).join("");
   const area = (band: [number, number][], right?: boolean) =>
     band.map((b, i) => `${i ? "L" : "M"}${px(x[i]).toFixed(1)},${py(b[1], right).toFixed(1)}`).join("") +
@@ -89,7 +90,7 @@ export function LineChart({ x, series, fmt, fmtRight, fmtX, maxLeft, maxRight, m
             </text>
             {series.some((v) => v.right) && (
               <text x={W - pad.r + 8} y={pad.t + ph * (1 - f) + 4} className={s.axisR} textAnchor="start">
-                {(fmtRight ?? fmt)(top.r * f)}
+                {(fmtRight ?? fmt)(minRight + (top.r - minRight) * f)}
               </text>
             )}
           </g>

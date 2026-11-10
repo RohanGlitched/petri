@@ -16,7 +16,29 @@ type Tally = { total: number; by: Record<string, number>; recent: { attempt: str
 const TX = (h: string) => `${EXPLORERS.testnet}/txns/${h}`;
 
 /** Refusals recorded with near-cli from ordinary testnet accounts, for what a guest's key cannot even ask. */
-export const RECORDED: { title: string; why: string; hash: string; cmd: string }[] = [];
+export const RECORDED: { title: string; why: string; text: string; hash: string; cmd: string }[] = [
+  {
+    title: "A free-play colony sends its PETRI to a wallet",
+    why: "lab-kept.petri-lab.testnet joined on sponsored credit only, as a guest does, but with a full-access key, so it can attach the 1 yoctoNEAR a transfer needs.",
+    text: "free play's PETRI stays in the dish: a colony that has never attached NEAR cannot send PETRI (it can plant it, or sell it back for credit)",
+    hash: "7MNF1BS9oErV9bTvih51KdRQPjEdbZqvBPDH2MvSMDQy",
+    cmd: `near contract call-function as-transaction petri-v6.testnet ft_transfer json-args '{"receiver_id":"petri-bench-a.testnet","amount":"1000000","memo":null}' prepaid-gas '30 Tgas' attached-deposit '1 yoctoNEAR' sign-as <your account> network-config testnet sign-with-keychain send`,
+  },
+  {
+    title: "A colony grown on credit brings its own NEAR (v6.5)",
+    why: "The same colony, with a block it planted on credit still alive, attaches 0.02 NEAR to buy PETRI, which would turn its free-play cells into NEAR-earning ones.",
+    text: "a colony that grew on sponsored credit must let its cells die (or start a new colony) before it brings its own NEAR",
+    hash: "FseHY8ihnKznXhrDHgE6DRpDizGj8b82HCMdrwQdfdwj",
+    cmd: `near contract call-function as-transaction petri-v6.testnet buy json-args '{}' prepaid-gas '150 Tgas' attached-deposit '0.02 NEAR' sign-as <your account> network-config testnet sign-with-keychain send`,
+  },
+  {
+    title: "Relaunch from an ordinary account",
+    why: "relaunch would wipe the dish; only the contract account's own key can run it, at a deploy, and that key goes on 14 November for mainnet.",
+    text: "Method relaunch is private",
+    hash: "GwMj4tp4s9je1jw383Jzgo51etebFb2WuLuMA8gSVCJ3",
+    cmd: `near contract call-function as-transaction petri-v6.testnet relaunch json-args '{"rules":{},"accounts":[]}' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' sign-as <your account> network-config testnet sign-with-keychain send`,
+  },
+];
 
 export function Break() {
   const dish = useDish();
@@ -103,7 +125,7 @@ export function Break() {
     {
       id: "twice",
       title: "Plant twice in one generation",
-      why: "One planting per colony per generation. Sends two plantings in one signed action; the second is refused, which undoes the first.",
+      why: "One planting per colony per generation. Plants a blinker, then a second one straight after, within the same 15-second generation: the second is refused.",
       build: async () => {
         const { e, rules, id } = ctx();
         const a = findSpot(e, rules, id, "blinker", "open");
@@ -111,10 +133,10 @@ export function Break() {
         if (!a || !b) return "No open ground for two blinkers right now; try again.";
         const da = await getPlantDeposit(a.length, null);
         const db = await getPlantDeposit(b.length, null);
-        return [
-          { method: "plant", args: { cells: a, note: null, credit: da }, tgas: 140 },
-          { method: "plant", args: { cells: b, note: null, credit: db }, tgas: 140 },
-        ];
+        // The first is a real planting; the second is the attempt.
+        const first = await relaySteps([{ method: "plant", args: { cells: a, note: null, credit: da }, tgas: 240 }], null);
+        if (!first.ok) return `The first planting did not go through (${first.error}); try again.`;
+        return [{ method: "plant", args: { cells: b, note: null, credit: db }, tgas: 240 }];
       },
     },
     {
@@ -185,8 +207,10 @@ export function Break() {
     try {
       const steps = await a.build();
       if (typeof steps === "string") return setRes((r) => ({ ...r, [a.id]: { busy: false, note: steps } }));
-      const sent = await relaySteps(steps, a.id, a.id === "oversell" || a.id === "twice" || a.id === "occupied" || a.id === "rival-slide");
-      setRes((r) => ({ ...r, [a.id]: { busy: false, sent } }));
+      const sent = await relaySteps(steps, a.id, a.id === "oversell" || a.id === "occupied" || a.id === "rival-slide");
+      // Two plantings both land only when the generation turned between them: that is the rule working, not a break.
+      if (a.id === "twice" && sent.ok) setRes((r) => ({ ...r, [a.id]: { busy: false, note: "Both landed: the 15-second generation turned between them, so each was the first of its generation. Try again." } }));
+      else setRes((r) => ({ ...r, [a.id]: { busy: false, sent } }));
       loadTally();
       refreshDish();
     } catch (e) {
@@ -294,6 +318,23 @@ export function Break() {
           </ol>
         </>
       )}
+      <h3 className="h3" style={{ marginTop: 48 }}>What a guest key cannot even ask, from a wallet</h3>
+      <p className={s.note} style={{ marginTop: 0, marginBottom: 16 }}>
+        A guest&rsquo;s key cannot attach NEAR, so these were sent with near-cli from a team test account that plays exactly like a guest. Run any of
+        them yourself from your own testnet account.
+      </p>
+      <div className={s.cards}>
+        {RECORDED.map((r) => (
+          <article key={r.hash} className={s.card}>
+            <h3>{r.title}</h3>
+            <p>{r.why}</p>
+            <div className={`${s.result} ${s.resultRefused}`}>
+              Refused on chain: <span className={s.panic}>{r.text}</span> <a href={TX(r.hash)}>The failed transaction</a>
+            </div>
+            <pre className={s.cli}>{r.cmd}</pre>
+          </article>
+        ))}
+      </div>
       <p className={s.note}>
         Every attempt is a real transaction on {CONTRACT}, signed by your guest key and relayed for free; the relayer allows at most a few dozen lab
         attempts a guest a day. The lab&rsquo;s code is <a href={`${REPO}/blob/main/web/src/components/proof/Break.tsx`}>Break.tsx</a>; what the

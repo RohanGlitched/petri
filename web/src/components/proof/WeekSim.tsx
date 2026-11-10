@@ -393,6 +393,10 @@ export function WeekSim() {
             ticks={[0, 1, 2, 3, 4, 5, 6, 7]}
             fmt={(v) => v.toFixed(6)}
             fmtRight={(v) => `${Math.round(v / 1000)}k`}
+            minLeft={Math.min(...pts.map((p) => p.price)) * 0.97}
+            maxLeft={Math.max(...pts.map((p) => p.price)) * 1.03}
+            minRight={Math.min(...pts.map((p) => p.agar / P)) * 0.97}
+            maxRight={Math.max(...pts.map((p) => p.agar / P)) * 1.01}
             height={260}
             series={[
               { label: "NEAR per PETRI", color: "#f2b45a", values: pts.map((p) => p.price) },

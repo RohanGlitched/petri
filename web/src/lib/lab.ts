@@ -3,7 +3,7 @@
 // guest key, calls the contract is meant to refuse, and sends them through the relayer marked `lab`, so the refusal is
 // a real failed transaction with a hash. The guest key is the one wallet.ts made (petri.guest.v1).
 
-import { Account, JsonRpcProvider, actions, encodeSignedDelegate, type KeyPairString } from "near-api-js";
+import { Account, JsonRpcProvider, KeyPair, KeyPairSigner, actions, encodeSignedDelegate, type KeyPairString } from "near-api-js";
 import { pattern_cells, type Engine, type PatternName } from "@/engine";
 import { getRules, getState, type Rules } from "./chain";
 import { CONTRACT, RPC_URLS } from "./config";
@@ -24,35 +24,45 @@ export type Sent = { hash?: string; error?: string; raw?: string; ok: boolean };
 
 let rulesOnce: Promise<Rules> | null = null;
 
-/** One `advance` ahead of the steps when the stored dish is more than a catch-up behind the clock. */
-async function withCatchUp(steps: Step[]): Promise<Step[]> {
+/** When the stored dish is more than a catch-up behind the clock, advance it first, in its own delegate action: a
+ * function-call key may sign only one call per action (NEAR refuses more with RequiresFullAccess). */
+async function catchUp(): Promise<void> {
   try {
     rulesOnce ??= getRules();
     const [rules, state] = await Promise.all([rulesOnce, getState()]);
     const lag = Number(state.due_generation) - Number(state.generation) + 4;
-    if (lag <= rules.max_catchup) return steps;
-    return [{ method: "advance", args: { max: rules.max_catchup }, tgas: 60 }, ...steps];
+    if (lag > rules.max_catchup) await relayOne({ method: "advance", args: { max: rules.max_catchup }, tgas: 100 }, null);
   } catch {
-    return steps;
+    /* the call itself will say if the dish is behind */
   }
 }
 
-/** Sign `steps` as one delegate action with the guest key and have the relayer submit it. */
-export async function relaySteps(steps: Step[], lab: string | null, catchUp = true): Promise<Sent> {
+/** The last nonce this page signed per guest: a delegate action NEAR refused before running it leaves the key's nonce
+ * where it was, so the next one must still move past it. */
+const lastNonce = new Map<string, bigint>();
+
+/** Sign one call as a delegate action with the guest key and have the relayer submit it (after an advance, when the
+ * dish is far behind and `current` is set). */
+export async function relaySteps(steps: Step[], lab: string | null, current = true): Promise<Sent> {
+  if (current) await catchUp();
+  return relayOne(steps[0], lab);
+}
+
+async function relayOne(step: Step, lab: string | null): Promise<Sent> {
   const g = savedGuest();
   if (!g) return { ok: false, error: "Make a guest colony first." };
-  const all = catchUp ? await withCatchUp(steps) : steps;
-  const total = all.reduce((a, s) => a + s.tgas, 0);
-  if (total > 300) {
-    const scale = 300 / total;
-    all.forEach((s) => (s.tgas = Math.floor(s.tgas * scale)));
-  }
+  const kp = KeyPair.fromString(g.secretKey);
   const acct = new Account(g.accountId, new JsonRpcProvider({ url: RPC_URLS[0] }), g.secretKey);
-  const { signedDelegate } = await acct.createSignedMetaTransaction({
+  const da = await acct.createMetaTransaction({
     receiverId: CONTRACT,
-    actions: all.map((s) => actions.functionCall(s.method, s.args, BigInt(s.tgas) * 10n ** 12n, 0n)),
+    actions: [actions.functionCall(step.method, step.args, BigInt(Math.min(300, step.tgas)) * 10n ** 12n, 0n)],
     blockHeightTtl: 120,
+    publicKey: kp.getPublicKey(),
   });
+  const last = lastNonce.get(g.accountId) ?? 0n;
+  if (da.nonce <= last) da.nonce = last + 1n;
+  lastNonce.set(g.accountId, da.nonce);
+  const { signedDelegate } = await new KeyPairSigner(kp).signDelegateAction(da);
   const bytes = encodeSignedDelegate(signedDelegate);
   let bin = "";
   bytes.forEach((b) => (bin += String.fromCharCode(b)));

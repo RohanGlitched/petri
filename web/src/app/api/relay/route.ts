@@ -30,7 +30,7 @@ export const runtime = "nodejs";
 const ALLOWED = new Set(["join", "buy", "plant", "sell", "claim", "advance", "mint_slide", "settle_pending", "pact_offer", "pact_accept", "pact_cancel"]);
 /** Calls only the break-it lab relays, each one the contract (or NEAR, for a key that may not make it) refuses: there
  * is no mint and no rule setter, relaunch is private, the dish is initialised, a guest sponsored nobody, and a guest's
- * key cannot attach the 1 yoctoNEAR a transfer needs. The lab also sends two plantings in one delegate action. */
+ * key cannot attach the 1 yoctoNEAR a transfer needs. */
 const LAB = new Set(["ft_mint", "set_rules", "relaunch", "new", "unsponsor", "ft_transfer"]);
 const LAB_IDS = /^[a-z0-9-]{2,32}$/;
 /** The most gas a relayed call may prepay: 300 TGas, a transaction's limit, which a catch-up on a crowded dish can need
@@ -138,14 +138,10 @@ export async function POST(req: Request) {
   if (da.actions.length < 1 || da.actions.length > 1 + MAX_ADVANCES) return bad("Relay one call at a time (with at most 3 advance calls before it).");
   let gas = 0n;
   const names = da.actions.map((a) => a.functionCall?.methodName ?? "");
-  // The lab's double planting: two plant calls in one delegate action (they run in one receipt, so the second's refusal
-  // undoes the first), after any advance calls.
-  const doublePlant = !!lab && names.length >= 2 && names[names.length - 1] === "plant" && names[names.length - 2] === "plant";
   for (const [i, a] of da.actions.entries()) {
     const fc = a.functionCall;
     if (!fc || !(ALLOWED.has(fc.methodName) || (lab && LAB.has(fc.methodName)))) return bad("Only join, buy, plant, sell, claim, advance, mint_slide, settle_pending and the pact calls are relayed.");
-    const beforeLast = i < da.actions.length - 1;
-    if (beforeLast && fc.methodName !== "advance" && !(doublePlant && i === da.actions.length - 2)) return bad("Only advance calls may come before the call itself.");
+    if (i < da.actions.length - 1 && fc.methodName !== "advance") return bad("Only advance calls may come before the call itself.");
     if (BigInt(fc.deposit) !== 0n) return bad("Relayed calls carry no NEAR; guests pay from their sponsored credit.");
     gas += BigInt(fc.gas);
   }
