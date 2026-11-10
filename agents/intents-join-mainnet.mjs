@@ -10,7 +10,8 @@ const API = "https://1click.chaindefuser.com";
 const ME = process.env.PAYER ?? "keeper.petri-dish.near";
 const DISH = "petri-dish.near";
 const WNEAR = "nep141:wrap.near";
-const USDC = "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
+// The stablecoin leg: native USDC on NEAR by default; STABLE=usdt uses USDt when 1Click has no USDC route at the moment.
+const USDC = process.env.STABLE === "usdt" ? "nep141:usdt.tether-token.near" : "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
 const USDC_ACCOUNT = USDC.slice("nep141:".length);
 const NEAR = 10n ** 24n;
 const WRAP_YOCTO = (NEAR * 10n) / 100n; // 0.1 NEAR
@@ -55,7 +56,7 @@ switch (step) {
       const reg = await rpcView(token, "storage_balance_of", { account_id: ME });
       if (!reg) await call(token, "storage_deposit", { account_id: ME, registration_only: true }, 125n * 10n ** 21n / 100n);
     }
-    await call("wrap.near", "near_deposit", {}, WRAP_YOCTO, 30n);
+    if (BigInt(await rpcView("wrap.near", "ft_balance_of", { account_id: ME })) < WRAP_YOCTO) await call("wrap.near", "near_deposit", {}, WRAP_YOCTO, 30n);
     console.log("wNEAR", await rpcView("wrap.near", "ft_balance_of", { account_id: ME }));
     break;
   }
@@ -66,7 +67,7 @@ switch (step) {
   }
   case "pay-usdc": {
     const amount = await rpcView("wrap.near", "ft_balance_of", { account_id: ME });
-    await call("wrap.near", "storage_deposit", { account_id: arg, registration_only: true }, 125n * 10n ** 21n / 100n).catch(() => {});
+    if (!(await rpcView("wrap.near", "storage_balance_of", { account_id: arg }))) await call("wrap.near", "storage_deposit", { account_id: arg, registration_only: true }, 125n * 10n ** 21n / 100n);
     await call("wrap.near", "ft_transfer", { receiver_id: arg, amount, memo: "petri: NEAR to USDC through 1Click" }, 1n, 30n);
     break;
   }
@@ -80,7 +81,7 @@ switch (step) {
   }
   case "pay-join": {
     const amount = await rpcView(USDC_ACCOUNT, "ft_balance_of", { account_id: ME });
-    await call(USDC_ACCOUNT, "storage_deposit", { account_id: arg, registration_only: true }, 125n * 10n ** 21n / 100n).catch(() => {});
+    if (!(await rpcView(USDC_ACCOUNT, "storage_balance_of", { account_id: arg }))) await call(USDC_ACCOUNT, "storage_deposit", { account_id: arg, registration_only: true }, 125n * 10n ** 21n / 100n);
     await call(USDC_ACCOUNT, "ft_transfer", { receiver_id: arg, amount, memo: "petri: USDC to a colony through 1Click" }, 1n, 30n);
     break;
   }

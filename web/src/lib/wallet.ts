@@ -293,23 +293,28 @@ async function call(methodName: string, args: Record<string, unknown>, tgas: num
   const a = account();
   const steps = await withCatchUp(methodName, args, tgas);
   const { actions, encodeSignedDelegate } = await import("near-api-js");
-  // The relayer takes advance calls ahead of the move in one delegate action (see /api/relay).
-  const { signedDelegate } = await a.createSignedMetaTransaction({
-    receiverId: CONTRACT,
-    actions: steps.map((s) => actions.functionCall(s.methodName, s.args, BigInt(s.tgas) * 10n ** 12n, 0n)),
-    blockHeightTtl: 120,
-  });
-  const bytes = encodeSignedDelegate(signedDelegate);
-  let bin = "";
-  bytes.forEach((b) => (bin += String.fromCharCode(b)));
-  const res = await fetch("/api/relay", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ signedDelegate: btoa(bin) }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body.hash) throw new Error(body.error ?? "The relay did not answer.");
-  return { hash: body.hash };
+  // NEAR runs a delegate action signed by a function-call key only when it holds a single call, so a lagging dish is
+  // caught up with one delegate per advance, each relayed and finished before the move itself is signed.
+  let last: TxResult | null = null;
+  for (const s of steps) {
+    const { signedDelegate } = await a.createSignedMetaTransaction({
+      receiverId: CONTRACT,
+      actions: [actions.functionCall(s.methodName, s.args, BigInt(s.tgas) * 10n ** 12n, 0n)],
+      blockHeightTtl: 120,
+    });
+    const bytes = encodeSignedDelegate(signedDelegate);
+    let bin = "";
+    bytes.forEach((b) => (bin += String.fromCharCode(b)));
+    const res = await fetch("/api/relay", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ signedDelegate: btoa(bin) }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.hash) throw new Error(body.error ?? "The relay did not answer.");
+    last = { hash: body.hash };
+  }
+  return last!;
 }
 
 export function readableFailure(f: unknown): string {
