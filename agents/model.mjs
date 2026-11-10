@@ -1,5 +1,6 @@
 // The strains think first with a model on NEAR AI Cloud that runs inside a TEE: each answer's signature is fetched
-// and checked against the enclave's attested signing address (tee.mjs). Claude Haiku, within a fixed dollar budget,
+// and checked against the model enclave's attested signing address, from a report fetched with our own nonce
+// (tee.mjs); the bytes are archived for anyone to re-check (scripts/verify-tee.mjs). Claude Haiku, within a fixed dollar budget,
 // is the second model, used when NEAR AI cannot answer.
 // Either model only chooses among moves the rules already accept (and, at the council, among deals the rules can
 // enforce) and writes the lab note; the log says which model chose. If no model answers, the strains fall back to
@@ -7,39 +8,89 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { attestedAddresses, sha256Hex, verifyAnswer } from "./tee.mjs";
+import { fileURLToPath } from "node:url";
+import { checkAttestation, newNonce, verifyAnswer, verifySignerQuotes } from "./tee.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 
 const BASE = process.env.NEARAI_BASE_URL ?? "https://cloud-api.near.ai/v1";
 const KEY = process.env.NEARAI_API_KEY ?? "";
-
-// The enclave's attestation report, fetched at most hourly and saved beside the log (with its hash), so anyone can
-// check the TDX quote offline and see that the address signing our answers was generated inside it.
-let attestation = { at: 0, addresses: null };
-export const teeTally = { verified: 0, unverified: 0 };
-async function attested() {
-  if (attestation.addresses && Date.now() - attestation.at < 3600_000) return attestation.addresses;
-  try {
-    const r = await fetch(`${BASE}/attestation/report?model=${encodeURIComponent(MODEL)}&signing_algo=ecdsa`, {
-      headers: { authorization: `Bearer ${KEY}` },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!r.ok) throw new Error(String(r.status));
-    const text = await r.text();
-    const dir = process.env.PETRI_LOG_DIR;
-    if (dir) {
-      fs.mkdirSync(path.join(dir, "attestation"), { recursive: true });
-      fs.writeFileSync(path.join(dir, "attestation", "latest.json"), text);
-      fs.writeFileSync(path.join(dir, "attestation", "latest.sha256"), sha256Hex(text) + "\n");
-    }
-    attestation = { at: Date.now(), addresses: attestedAddresses(JSON.parse(text)), sha256: sha256Hex(text) };
-  } catch {
-    attestation.at = Date.now() - 3000_000; // retry in ten minutes
-  }
-  return attestation.addresses;
-}
-export const attestationHash = () => attestation.sha256 ?? null;
 export const MODEL = process.env.NEARAI_MODEL ?? "z-ai/glm-5.3-flash";
+
+// Where each NEAR AI answer (the exact request and response bytes, the signature, the verdict) and each attestation
+// report is archived, so anyone can re-check a move later: <dir>/tee/<sha256 of the response body>.json and
+// <dir>/attestation/<sha256 of the report>.json. The log window serves both read-only. null writes nothing (dry runs).
+let archiveDir = process.env.PETRI_LOG_DIR ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "log");
+export const setTeeArchive = (dir) => {
+  archiveDir = dir;
+};
+
+// The attestation report, fetched with a fresh random nonce of our own at most hourly (PETRI_TEE_ATTEST_MS), or sooner
+// when an answer is signed by an address the report we hold does not name. Each model enclave's TDX quote is verified
+// with Intel's collateral (PETRI_TEE_DCAP=0 skips that; verdicts then say quote_verified: false). A failed fetch or
+// check leaves no signer, so every answer until the next good report fails verification: fail closed.
+const ATTEST_MS = Number(process.env.PETRI_TEE_ATTEST_MS ?? "3600000");
+const VERIFY_QUOTES = process.env.PETRI_TEE_DCAP !== "0";
+let attestation = null;
+let attestRetryAt = 0;
+export const teeTally = { verified: 0, unverified: 0 };
+
+function archive(sub, name, text) {
+  if (!archiveDir) return;
+  try {
+    const dir = path.join(archiveDir, sub);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, name);
+    if (!fs.existsSync(file)) fs.writeFileSync(file, text);
+  } catch (e) {
+    console.error("tee archive failed:", e instanceof Error ? e.message : e);
+  }
+}
+
+async function fetchAttestation() {
+  const nonce = newNonce();
+  const q = new URLSearchParams({ model: MODEL, provider: "near", include_tls_fingerprint: "false", signing_algo: "ecdsa", nonce });
+  const r = await fetch(`${BASE}/attestation/report?${q}`, {
+    headers: { authorization: `Bearer ${KEY}`, accept: "application/json", "x-no-aliasing": "true" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!r.ok) throw new Error(`attestation report ${r.status}`);
+  const text = await r.text();
+  let att = checkAttestation(text, { nonce, model: MODEL });
+  if (VERIFY_QUOTES) att = await verifySignerQuotes(att);
+  archive("attestation", `${att.sha256}.json`, text);
+  if (archiveDir) {
+    try {
+      fs.writeFileSync(path.join(archiveDir, "attestation", "latest.json"), text);
+      fs.writeFileSync(path.join(archiveDir, "attestation", "latest.sha256"), att.sha256 + "\n");
+      const entry = { sha256: att.sha256, at: new Date().toISOString(), nonce, model: MODEL, ok: att.ok, reason: att.reason, quotes_verified: !!att.quotes_verified, signers: att.signers.map((s) => ({ address: s.address, tcb_status: s.tcb_status ?? null })), gateway: att.gateway, rejected: att.rejected };
+      fs.appendFileSync(path.join(archiveDir, "attestation", "index.jsonl"), JSON.stringify(entry) + "\n");
+    } catch {
+      /* the report itself is archived under its hash */
+    }
+  }
+  return { ...att, at: Date.now() };
+}
+
+/** The attestation to check an answer signed by `address` against: refetched when stale or when it does not name it. */
+async function attestationFor(address) {
+  const a = String(address ?? "").toLowerCase();
+  const fresh = attestation?.ok && Date.now() - attestation.at < ATTEST_MS;
+  if (fresh && attestation.signers.some((s) => s.address === a)) return attestation;
+  if (attestation && Date.now() < attestRetryAt) return attestation;
+  attestRetryAt = Date.now() + 600_000;
+  try {
+    attestation = await fetchAttestation();
+  } catch (e) {
+    attestation = { ok: false, reason: `attestation fetch failed: ${(e instanceof Error ? e.message : String(e)).slice(0, 120)}`, sha256: null, nonce: null, signers: [], rejected: [], at: Date.now() };
+  }
+  return attestation;
+}
+
+/** The attestation report the strains hold now, for the health JSON. */
+export const attestationStatus = () =>
+  attestation
+    ? { sha256: attestation.sha256, at: new Date(attestation.at).toISOString(), ok: attestation.ok, reason: attestation.reason ?? null, quotes_verified: !!attestation.quotes_verified, signers: attestation.signers.map((s) => ({ address: s.address, tcb_status: s.tcb_status ?? null })) }
+    : null;
 
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-haiku-5-5";
 const claude = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
@@ -221,18 +272,33 @@ async function askNearAI(system, user, maxTokens) {
     if (!res.ok) throw new Error(`NEAR AI ${res.status}: ${responseBody.slice(0, 200)}`);
     const body = JSON.parse(responseBody);
     const json = parseJson(body.choices?.[0]?.message?.content ?? "");
+    // A 404 means the signature is not stored yet: ask again for a few seconds. A 2xx carrying error_code means none.
     let signature = null;
-    try {
-      const s = await fetch(`${BASE}/signature/${encodeURIComponent(body.id)}?model=${encodeURIComponent(MODEL)}&signing_algo=ecdsa`, {
-        headers: { authorization: `Bearer ${KEY}` },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (s.ok) signature = await s.json();
-    } catch {
-      /* the answer stands; the log says the signature is missing */
+    for (let i = 0; i < 4 && !signature; i++) {
+      try {
+        const s = await fetch(`${BASE}/signature/${encodeURIComponent(body.id)}?model=${encodeURIComponent(MODEL)}&signing_algo=ecdsa`, {
+          headers: { authorization: `Bearer ${KEY}`, accept: "application/json" },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (s.ok) {
+          const j = await s.json();
+          if (j?.text && j?.signature && !j.error_code) signature = j;
+          else break;
+        } else if (s.status !== 404) break;
+      } catch {
+        /* the answer stands; the verdict says the signature is missing */
+      }
+      if (!signature) await new Promise((r) => setTimeout(r, 1000));
     }
-    const tee = signature ? verifyAnswer(signature, requestBody, responseBody, await attested()) : { ok: false, reason: "no signature" };
+    const att = signature ? await attestationFor(signature.signing_address) : null;
+    const tee = verifyAnswer({ signature, requestBody, responseBody, model: MODEL, attestation: att });
     teeTally[tee.ok ? "verified" : "unverified"]++;
+    // The exact bytes, so anyone can recompute both hashes, recover the signer and check it against the report.
+    archive(
+      "tee",
+      `${tee.response_sha256}.json`,
+      JSON.stringify({ v: 1, at: new Date().toISOString(), base_url: BASE, model: MODEL, chat_id: body.id, request_body: requestBody, response_body: responseBody, request_sha256: tee.request_sha256, response_sha256: tee.response_sha256, signature, attestation_sha256: tee.attestation_sha256, nonce: tee.nonce, verdict: tee }, null, 1),
+    );
     return { json, model: MODEL, chatId: body.id, signature, tee, usage: body.usage ?? null };
   } catch (e) {
     errors++;
