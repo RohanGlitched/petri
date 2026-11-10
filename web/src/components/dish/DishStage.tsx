@@ -950,16 +950,25 @@ export function DishStage() {
       // ring bloom over them; their colony's first earnings get a moment of their own when they land.
       focusCells(cells, { color: myColor, zoom: first ? 6 : undefined });
       reward.current = { at: Date.now(), shown: false };
-      const at = torusCentre(Array.from(cells), w, h);
-      if (at) {
-        const wrapD = (a: number, n: number) => Math.abs(((((a % n) + n + n / 2) % n) - n / 2));
-        const far = Array.from(cells).reduce((m, i) => Math.max(m, wrapD((i % w) - at.x, w), wrapD(((i / w) | 0) - at.y, h)), 0);
-        setYouMark({ x: at.x, y: at.y, r: far + 2.5, until: genAtStart + 40 });
+      // The ring's centre is the planting's own middle (not a cell's), each cell measured from the first across the wrap.
+      const list = Array.from(cells);
+      if (list.length) {
+        const wrapD = (a: number, n: number) => ((((a % n) + n + n / 2) % n) - n / 2);
+        const x0 = list[0] % w;
+        const y0 = (list[0] / w) | 0;
+        const dx = list.map((i) => wrapD((i % w) - x0, w));
+        const dy = list.map((i) => wrapD(((i / w) | 0) - y0, h));
+        const mx = dx.reduce((a, b) => a + b, 0) / list.length;
+        const my = dy.reduce((a, b) => a + b, 0) / list.length;
+        const far = Math.max(...dx.map((v) => Math.abs(v - mx)), ...dy.map((v) => Math.abs(v - my)));
+        setYouMark({ x: x0 + mx, y: y0 + my, r: far + 2.5, until: genAtStart + 40 });
       }
       if (first) {
         setPattern(null);
         setCustom(null);
         setFirstEarn({ at: Date.now(), gain: null });
+        // The colony card replaces the long planting card: start it at its top, where the first earnings are.
+        requestAnimationFrame(() => leftBox.current?.scrollTo({ top: 0 }));
       }
       if (info.name && PATTERNS.some((p) => p.name === info.name && (p.kind === "ship" || p.kind === "gun"))) setLaunched(true);
       setTarget(null);

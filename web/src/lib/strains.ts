@@ -81,6 +81,8 @@ export const BENCH_ACCOUNTS = [
 export function sideOf(account: string, house = false): "house" | "bench" | "player" {
   if (house || strainOf(account)) return "house";
   if (BENCH_ACCOUNTS.includes(account)) return "bench";
+  // A guest lives under petri-guests.testnet but is a key in anyone's browser: a player, never the team's.
+  if (/^g-[0-9a-f]{10}\.petri-guests\.testnet$/.test(account)) return "player";
   if (/(^|\.)petri-[a-z0-9-]+\.testnet$/.test(account) || account === "petri-dish.near" || account.endsWith(".petri-dish.near")) return "bench";
   return "player";
 }

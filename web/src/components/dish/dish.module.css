@@ -1139,6 +1139,7 @@
 .youBar { display: none; }
 @media (max-width: 799px) {
   .youBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--bone); }
+  .stickyCta.youBar { background: rgba(18, 10, 5, 0.96); box-shadow: 0 -1px 0 var(--line), 0 -18px 30px -12px rgba(0, 0, 0, 0.8); }
   .youBar > span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
   .youBar b { color: var(--ok); }
   .youBar :global(.btn) { width: auto !important; flex: none; }
