@@ -613,10 +613,10 @@ async function main() {
           nextAt.set(s.account, at);
         }
       }
-      // Living slides (purse.mjs): a house strain that holds one keeps its colony alive and collects its tides. Off
-      // unless PETRI_LIVING_SLIDES=1, since driving a purse needs a key that can call it (the VM's keys may call only
-      // the dish).
-      if (LIVING_SLIDES) await tendPurses(STRAINS).catch((e) => log("living slides error", e.message));
+      // Living slides (purse.mjs): a colony we run that holds one keeps its slide's colony alive and collects its tides.
+      // Off unless PETRI_LIVING_SLIDES=1. Driving a purse needs a key that can call it and attach NEAR: the strains'
+      // keys may call only the dish, so on testnet the team bench (full keys, own NEAR) holds and tends the living slides.
+      if (LIVING_SLIDES) await tendPurses(MAINNET ? STRAINS : BENCH).catch((e) => log("living slides error", e.message));
       if (++tick % 60 === 0) await health();
       if (tick % 4 === 0) {
         const colonies = await view("colonies", { from: 0, limit: 500 });
