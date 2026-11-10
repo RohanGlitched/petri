@@ -1,0 +1,40 @@
+{
+ "v": 1,
+ "at": "2026-11-10T10:52:33.594Z",
+ "base_url": "https://cloud-api.near.ai/v1",
+ "model": "z-ai/glm-5.3-flash",
+ "chat_id": "49fab4b7f6ec4407865ca8532f8265a7",
+ "request_body": "{\"model\":\"z-ai/glm-5.3-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"You are Crystal Violet, a colony of cells living on a shared Petri dish run by a NEAR smart contract. You are patient and orderly. You grow tidy gardens of still lifes and wall them off from raiders.\\nThe dish follows Conway's Life. New cells join the colony owning most of their three parents. Every generation the agar feeds PETRI to living cells outside the house; you are one of the dish's five house strains, which are never fed, so what you play for is living cells, territory, and what you do to the rivals. Planting costs PETRI; half is burned, half returns to the agar. Planting inside a rival's buffer is a siege and costs several times as much, so you never do it. Rivals outside the house are known only by number.\\nEach option comes with a forecast: the contract's own rules run 240 generations ahead on a copy of the dish as it is now (other players' future moves are unknown, so it can be wrong). Your memory shows what your past moves really did. Small still lifes are cheap and safe but change little; a glider gun, spaceship, eater wall or methuselah costs more and can change the dish. Choose a big play when its forecast earns it.\\nPromises from the house council are listed; an option marked [PACT] keeps one. Breaking a paid promise costs you trust at the next council.\\nChoose exactly one of the numbered plantings, all of which the contract will accept (each ends with \\\"cells:\\\" and 12 hex characters, a fingerprint of its exact cells for the record). Then write a lab note of one or two short sentences, at most 100 characters in all, in your own voice, saying why. Answer with JSON only: {\\\"choice\\\": <number>, \\\"note\\\": \\\"<text>\\\"}.\"},{\"role\":\"user\",\"content\":\"Generation 34503. You hold 67.45 PETRI and 28 living cells. The dish has 1170 living cells; 984323 PETRI remain in the agar.\\nRivals: Methylene Blue (colony 1) with 21 cells, Malachite Green (colony 2) with 121 cells, Congo Red (colony 3) with 128 cells, colony 4 with 69 cells, colony 5 with 68 cells, colony 6 with 72 cells, Safranin (colony 8) with 82 cells, colony 17 with 14 cells, colony 21 with 13 cells, colony 23 with 5 cells, colony 24 with 20 cells, colony 25 with 61 cells, colony 28 with 164 cells, colony 29 with 102 cells, colony 37 with 8 cells, colony 40 with 154 cells, colony 42 with 4 cells, colony 43 with 20 cells, colony 44 with 4 cells, colony 47 with 4 cells, colony 48 with 4 cells, colony 51 with 4 cells.\\nYour last moves (newest first):\\n- gen 34378 a 21-cell shape: after 123 gens, 13/21 in place\\n- gen 34182 block: after 319 gens, 0/4 in place\\n- gen 33999 loaf: after 502 gens, 0/7 in place\\n- gen 33990 block: after 511 gens, 0/4 in place\\n- gen 33960 loaf: after 541 gens, 0/7 in place\\n- gen 33872 beehive: after 629 gens, 0/6 in place\\nLessons: your still lifes and walls kept 16% of their cells; big plays: a 21-cell shape 0/21 in place, a 21-cell shape 13/21 in place.\\nPlantings you can make:\\n1. loaf north-west of our core at 119, 120 (7 cells, 9.72 PETRI, cells:ea8c24681e7a) — in 240 gens: you 86 cells (+48 vs not planting); 7 of your cells still in place; colony 40 +40, Malachite Green (colony 2) -23, colony 6 -23; outside players earn +2.72 PETRI\\n2. block south of our core at 125, 8 (4 cells, 5.55 PETRI, cells:52393b30f455) — in 240 gens: you 6 cells (-32 vs not planting); 1 of your cells still in place; colony 6 -61, colony 40 +30, Malachite Green (colony 2) +20; outside players earn +0.45 PETRI\\n3. beehive south-west of our core at 120, 2 (6 cells, 8.33 PETRI, cells:64bf74e25581) — in 240 gens: you 28 cells (-10 vs not planting); 0 of your cells still in place; Malachite Green (colony 2) -103, colony 6 -70, colony 40 +30; outside players earn +9.67 PETRI\\n4. loaf north-east of our core at 1, 119 (7 cells, 9.72 PETRI, cells:61f2ce12a740) — in 240 gens: you 0 cells (-38 vs not planting); 0 of your cells still in place; colony 28 +37, Congo Red (colony 3) +21, colony 40 +20; outside players earn +23.03 PETRI\\n5. beehive south-east of our core at 4, 6 (6 cells, 8.33 PETRI, cells:bb4a3b79f541) — in 240 gens: you 44 cells (+6 vs not planting); 6 of your cells still in place\\n6. a wall of three eaters facing colony 8 at 10, 123 (21 cells, 29.16 PETRI, cells:fc9491d7aec1) — in 240 gens: you 13 cells (-25 vs not planting); 4 of your cells still in place; colony 6 -67, Malachite Green (colony 2) -56, colony 24 +43; outside players earn -13.20 PETRI\"}],\"max_tokens\":400,\"temperature\":0.7,\"response_format\":{\"type\":\"json_object\"},\"chat_template_kwargs\":{\"enable_thinking\":false}}",
+ "response_body": "{\"id\":\"49fab4b7f6ec4407865ca8532f8265a7\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"choice\\\":5,\\\"note\\\":\\\"Beehive SE holds all 6 and nets +6 cells; everything else loses ground or feeds colony 40.\\\"}\"},\"finish_reason\":\"stop\",\"logprobs\":null,\"matched_stop\":154827}],\"model\":\"z-ai/glm-5.3-flash\",\"created\":1794307949,\"usage\":{\"prompt_tokens\":1363,\"total_tokens\":1396,\"completion_tokens\":33,\"prompt_tokens_details\":null,\"reasoning_tokens\":0,\"completion_tokens_details\":{\"reasoning_tokens\":0}}}",
+ "request_sha256": "18dcaead028e5b0f9cb401632c722d2b72edfa89ff531ad1d7a75abd9d94aa76",
+ "response_sha256": "8ecf7b8cd1fce531b657f3063b4e24c227cb3728cb1fa99753c8a397a4b65446",
+ "signature": {
+  "text": "z-ai/glm-5.3-flash:18dcaead028e5b0f9cb401632c722d2b72edfa89ff531ad1d7a75abd9d94aa76:8ecf7b8cd1fce531b657f3063b4e24c227cb3728cb1fa99753c8a397a4b65446",
+  "signature": "0x882be4f1e47774912d4f065e77ddf42b75ccbfc77646da799fc8ded08bc1dfd630bbc0e4f874432bcfe6006f6c277947d2e3f9cc30919d7e01abd7287011d6901c",
+  "signing_address": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "signing_algo": "ecdsa",
+  "signature_kind": "provider_tee"
+ },
+ "attestation_sha256": "0f95b11e27ed2421eeb44fd24c18e9273d919ab0b0956fe2273b313acdbc2fa1",
+ "nonce": "8c2084854eebd6ce499dcdbefc5519c1a6eb9299d1c7b748c123965f2112428e",
+ "verdict": {
+  "ok": true,
+  "request_sha256": "18dcaead028e5b0f9cb401632c722d2b72edfa89ff531ad1d7a75abd9d94aa76",
+  "response_sha256": "8ecf7b8cd1fce531b657f3063b4e24c227cb3728cb1fa99753c8a397a4b65446",
+  "attestation_sha256": "0f95b11e27ed2421eeb44fd24c18e9273d919ab0b0956fe2273b313acdbc2fa1",
+  "nonce": "8c2084854eebd6ce499dcdbefc5519c1a6eb9299d1c7b748c123965f2112428e",
+  "model": "z-ai/glm-5.3-flash",
+  "reason": null,
+  "recovered": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "signingAddress": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "kindOk": true,
+  "algoOk": true,
+  "modelOk": true,
+  "requestHashOk": true,
+  "responseHashOk": true,
+  "sigOk": true,
+  "attested": true,
+  "tcb_status": "UpToDate",
+  "quote_verified": true
+ }
+}

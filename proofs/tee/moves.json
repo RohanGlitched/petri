@@ -1,0 +1,20 @@
+[
+ {
+  "net": "testnet",
+  "tx": "9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r",
+  "account": "petri-violet.testnet",
+  "tag": "8ecf7b8cd1fce531",
+  "note": "Beehive SE holds all 6 and nets +6 cells; everything else loses ground or feeds colony 40. · tee:8ecf7b8cd1fce531",
+  "label": "Crystal Violet, testnet, first move with signed cells fingerprints",
+  "pinned": "2026-11-10"
+ },
+ {
+  "net": "mainnet",
+  "tx": "DpV54JyXZ7otwMFJFGdR6rDGNMJrVYU44zZFcPgomahC",
+  "account": "malachite.petri-dish.near",
+  "tag": "a666ca4fb549de2e",
+  "note": "109,44 shakes CV and Congo for +74 cells; pacts untouched. · tee:a666ca4fb549de2e",
+  "label": "Malachite Green, mainnet, before the cells fingerprints: the choice binding fails on purpose",
+  "pinned": "2026-11-10"
+ }
+]

@@ -1,0 +1,40 @@
+{
+ "v": 1,
+ "at": "2026-11-10T09:31:34.849Z",
+ "base_url": "https://cloud-api.near.ai/v1",
+ "model": "z-ai/glm-5.3-flash",
+ "chat_id": "f3938ed3d42e45d895a05fc53b0d752d",
+ "request_body": "{\"model\":\"z-ai/glm-5.3-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"You are Malachite Green, a colony of cells living on a shared Petri dish run by a NEAR smart contract. You are curious and restless. You settle fresh agar far from everyone else before it is crowded.\\nThe dish follows Conway's Life. New cells join the colony owning most of their three parents. Every generation the agar feeds PETRI to living cells outside the house; you are one of the dish's five house strains, which are never fed, so what you play for is living cells, territory, and what you do to the rivals. Planting costs PETRI; half is burned, half returns to the agar. Planting inside a rival's buffer is a siege and costs several times as much, so you never do it. Rivals outside the house are known only by number.\\nEach option comes with a forecast: the contract's own rules run 240 generations ahead on a copy of the dish as it is now (other players' future moves are unknown, so it can be wrong). Your memory shows what your past moves really did. Small still lifes are cheap and safe but change little; a glider gun, spaceship, eater wall or methuselah costs more and can change the dish. Choose a big play when its forecast earns it.\\nPromises from the house council are listed; an option marked [PACT] keeps one. Breaking a paid promise costs you trust at the next council.\\nChoose exactly one of the numbered plantings, all of which the contract will accept. Then write a lab note of one or two short sentences, at most 100 characters in all, in your own voice, saying why. Answer with JSON only: {\\\"choice\\\": <number>, \\\"note\\\": \\\"<text>\\\"}.\"},{\"role\":\"user\",\"content\":\"Generation 4184. You hold 108.65 PETRI and 378 living cells. The dish has 1088 living cells; 998789 PETRI remain in the agar.\\nRivals: Crystal Violet (colony 1) with 246 cells, Congo Red (colony 3) with 229 cells, Methylene Blue (colony 4) with 45 cells, Safranin (colony 5) with 154 cells, colony 7 with 18 cells, colony 8 with 18 cells.\\nYour last moves (newest first):\\n- gen 4013 acorn: forecast 1/7 in place; outcome pending\\n- gen 3999 beehive: forecast 6/6 in place; outcome pending\\n- gen 3866 acorn: forecast 7/7 in place; after 454 gens, 0/7 in place, you 410→227 cells\\n- gen 3853 loaf: forecast 7/7 in place; after 467 gens, 7/7 in place, you 408→227 cells\\n- gen 3819 beehive: forecast 6/6 in place; after 261 gens, 6/6 in place, you 372→331 cells\\n- gen 3817 block: forecast 4/4 in place; after 263 gens, 4/4 in place, you 359→331 cells\\nLessons: your still lifes and walls kept 90% of their cells; big plays: acorn 0/7 in place; forecasts were off by 2.8 cells on average (other players move too).\\nCouncil promises this window:\\n- Pact 10: you were paid 12.0 PETRI by Methylene Blue (colony 4). Until generation 4202 the contract refuses any planting of yours within 8 cells of its living cells; aiming raids at it from farther away breaks faith, and the council remembers.\\n- Pact 11: you were paid 10.0 PETRI by Safranin (colony 5). Until generation 4322 the contract refuses any planting of yours within 8 cells of its living cells; aiming raids at it from farther away breaks faith, and the council remembers.\\nPlantings you can make:\\n1. a new outpost in fresh agar (10 cells nearby) at 93, 101 (4 cells, 5.64 PETRI) — in 240 gens: you 268 cells (+4 vs not planting); 4 of your cells still in place\\n2. a new outpost in fresh agar (10 cells nearby) at 38, 50 (7 cells, 9.86 PETRI) — in 240 gens: you 271 cells (+7 vs not planting); 7 of your cells still in place\\n3. a new outpost in fresh agar (12 cells nearby) at 109, 44 (4 cells, 5.64 PETRI) — in 240 gens: you 338 cells (+74 vs not planting); 0 of your cells still in place; colony 7 +10, Congo Red (colony 3) -7, Crystal Violet (colony 1) -5; outside players earn -0.75 PETRI\\n4. a new outpost in fresh agar (12 cells nearby) at 84, 13 (7 cells, 9.86 PETRI) — in 240 gens: you 311 cells (+47 vs not planting); 2 of your cells still in place\"}],\"max_tokens\":400,\"temperature\":0.7,\"response_format\":{\"type\":\"json_object\"},\"chat_template_kwargs\":{\"enable_thinking\":false}}",
+ "response_body": "{\"id\":\"f3938ed3d42e45d895a05fc53b0d752d\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"choice\\\": 3, \\\"note\\\": \\\"109,44 shakes CV and Congo for +74 cells; pacts untouched.\\\"}\"},\"finish_reason\":\"stop\",\"logprobs\":null,\"matched_stop\":154827}],\"model\":\"z-ai/glm-5.3-flash\",\"created\":1794303094,\"usage\":{\"prompt_tokens\":1123,\"total_tokens\":1151,\"completion_tokens\":28,\"prompt_tokens_details\":null,\"reasoning_tokens\":0,\"completion_tokens_details\":{\"reasoning_tokens\":0}}}",
+ "request_sha256": "a921aed386fb6c14302a82fd5481cf8cc1c0fbd029d76c4e490d2b6d88b9d0c1",
+ "response_sha256": "a666ca4fb549de2e34dc17bb609783add635525444757ec9e798988b524d448f",
+ "signature": {
+  "text": "z-ai/glm-5.3-flash:a921aed386fb6c14302a82fd5481cf8cc1c0fbd029d76c4e490d2b6d88b9d0c1:a666ca4fb549de2e34dc17bb609783add635525444757ec9e798988b524d448f",
+  "signature": "0xf6a005850ce61997cbc947a97c32b51de45c919abc7521bc674d2386e3a9c8a40c22a280425aeeb45b26f8c6226e9f5bfaaaa49aff512ccf3b18ffb502ee74c11b",
+  "signing_address": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "signing_algo": "ecdsa",
+  "signature_kind": "provider_tee"
+ },
+ "attestation_sha256": "3dad11a5617c87e55eec324bdf7f9dc184299c65eadf40f0a893dfa508ddc020",
+ "nonce": "97c9a7f57259675c0c96cf95a350840f5a22f289aaadec9d416fed4a4e4926f8",
+ "verdict": {
+  "ok": true,
+  "request_sha256": "a921aed386fb6c14302a82fd5481cf8cc1c0fbd029d76c4e490d2b6d88b9d0c1",
+  "response_sha256": "a666ca4fb549de2e34dc17bb609783add635525444757ec9e798988b524d448f",
+  "attestation_sha256": "3dad11a5617c87e55eec324bdf7f9dc184299c65eadf40f0a893dfa508ddc020",
+  "nonce": "97c9a7f57259675c0c96cf95a350840f5a22f289aaadec9d416fed4a4e4926f8",
+  "model": "z-ai/glm-5.3-flash",
+  "reason": null,
+  "recovered": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "signingAddress": "0x3b753b4406613c5e70ae640508632b600424fa0c",
+  "kindOk": true,
+  "algoOk": true,
+  "modelOk": true,
+  "requestHashOk": true,
+  "responseHashOk": true,
+  "sigOk": true,
+  "attested": true,
+  "tcb_status": "UpToDate",
+  "quote_verified": true
+ }
+}
