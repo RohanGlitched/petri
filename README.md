@@ -57,22 +57,22 @@ cd purse && cargo test                      # living slides: expect 18 (purse), 
 ## What is real, today
 
 <!-- facts-now:start -->
-Read by `node scripts/facts-now.mjs` at mainnet block 223,928,063 and testnet block 277,079,139; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
+Read by `node scripts/facts-now.mjs` at mainnet block 223,931,851 and testnet block 277,082,837; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
 
 | | Mainnet, real NEAR | Testnet, free play |
 |---|---|---|
 | Contract | [`petri-dish.near`](https://nearblocks.io/address/petri-dish.near) | [`petri-v6.testnet`](https://testnet.nearblocks.io/address/petri-v6.testnet) |
 | Full-access keys on the dish | 0 | 1, kept for fixes |
 | Slide factory | `slides.petri-dish.near`, 0 keys | `slides.petri-v6.testnet`, 0 keys |
-| Generation stored on chain (15 s each) | 5,346 (the clock is at 5,350; the next move catches up) | 35,341 (clock 35,345) |
-| Colonies | 8: 5 house, 1 team bench, 2 other team accounts (2 living slides), 0 outside | 63: 5 house, 7 team bench, 13 other team accounts (3 living slides, 8 spawned strains, 2 test agents), 38 guest (anyone's browser, the team's tests included), 0 outside |
+| Generation stored on chain (15 s each) | 5,367 (the clock is at 5,495; the next move catches up) | 35,472 (clock 35,490) |
+| Colonies | 8: 5 house, 1 team bench, 2 other team accounts (2 living slides), 0 outside | 64: 5 house, 7 team bench, 13 other team accounts (3 living slides, 8 spawned strains, 2 test agents), 39 guest (anyone's browser, the team's tests included), 0 outside |
 | Outside players | none yet | none yet |
-| Plantings / under a slide's licence | 84 / 5 | 1,006 / 23 |
-| PETRI supply (started at 1,000,000) | 998,815.31 (1,184.69 burned) | 994,451.97 (5,548.03 burned) |
+| Plantings / under a slide's licence | 88 / 5 | 1,014 / 23 |
+| PETRI supply (started at 1,000,000) | 998,765.70 (1,234.30 burned) | 994,424.95 (5,575.05 burned) |
 | Hourly tides | 6 tides: 0.1148 NEAR paid as NEAR to colonies that attached NEAR; 0.0204 NEAR of vault shares paid as credit to colonies that never attached NEAR | 94 tides: 0.7266 NEAR paid as NEAR to colonies that attached NEAR; 0.0069 NEAR of vault shares paid as credit to colonies that never attached NEAR |
 | Royalties paid to slide holders | 0.00 PETRI | 41.79 PETRI |
-| Specimen slides (NFTs) | 22 | 30 |
-| Living slides (keyless accounts) | 2: `slide-14.petri-dish.near` (0 keys; colony 6, attached, no living cells on the stored board); `slide-18.slides.petri-dish.near` (0 keys; colony 8, attached, 18 living cells on the stored board) | 3: `slide-1.petri-slides.testnet` (0 keys; colony 23, attached, 22 living cells on the stored board); `slide-2.petri-slides.testnet` (0 keys; colony 24, attached, 25 living cells on the stored board); `slide-24.slides.petri-v6.testnet` (0 keys; colony 43, attached, no living cells on the stored board) |
+| Specimen slides (NFTs) | 23 | 30 |
+| Living slides (keyless accounts) | 2: `slide-14.petri-dish.near` (0 keys; colony 6, attached, no living cells on the stored board); `slide-18.slides.petri-dish.near` (0 keys; colony 8, attached, 18 living cells on the stored board) | 3: `slide-1.petri-slides.testnet` (0 keys; colony 23, attached, 86 living cells on the stored board); `slide-2.petri-slides.testnet` (0 keys; colony 24, attached, 20 living cells on the stored board); `slide-24.slides.petri-v6.testnet` (0 keys; colony 43, attached, no living cells on the stored board) |
 | Pacts the contract enforces | 14 | 16 |
 | Spawned strains | testnet only | 8 spawned, 4 with living cells |
 | Joins through NEAR Intents | no colony started through Intents yet; 1 delivery held as pending NEAR (the team's own test), 1 settled or paid back | mainnet only |
