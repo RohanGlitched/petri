@@ -1,8 +1,10 @@
 "use client";
 // The player's account. Either a NEAR wallet connected through NEAR Connect, which signs and pays for its own
 // transactions, or a guest: a key made in this browser and a testnet account the site creates for it. A guest's key
-// never leaves the browser; the server only sees the public half and relays what the guest signs. Guests exist only on
-// the free-play dish (testnet); on mainnet every move is signed by the player's own wallet.
+// never leaves the browser; the server only sees the public half and relays what the guest signs. On testnet the guest
+// is g-<hash>.petri-guests.testnet with a function-call key. On mainnet, only while the site runs free play (the judging
+// window), the guest is the key's own implicit account (64 hex), made by a separate relayer that also sponsors its
+// credit; its moves are relayed with the ticket the site gave it. Otherwise every mainnet move is signed by a wallet.
 
 import { Account, KeyPair, type KeyPairString } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
@@ -13,20 +15,23 @@ import { CONTRACT, FREE_PLAY, NETWORK, RPC_URLS, isAccountId } from "./config";
 import { nearProvider } from "./near-provider";
 import { getRules, getState, type Rules } from "./chain";
 
-const STORE = "petri.guest.v1";
+// Each network keeps its own guest; testnet keeps the key it always had.
+const STORE = NETWORK === "testnet" ? "petri.guest.v1" : `petri.guest.v1.${NETWORK}`;
+/** The guest routes read the network from the address; the server's own default is testnet. */
+const NET_QS = `?net=${NETWORK}`;
 // Each network remembers its own wallet; testnet keeps the key it always had.
 const WALLET_STORE = NETWORK === "testnet" ? "petri.wallet.v1" : `petri.wallet.v1.${NETWORK}`;
 
 export type Player = { accountId: string; kind: "guest" | "wallet" } | null;
 
-type Saved = { accountId: string; secretKey: KeyPairString };
+/** `ticket`: an implicit guest's proof the site made it, which the relay asks for. */
+type Saved = { accountId: string; secretKey: KeyPairString; ticket?: string };
 
 let player: Player = null;
 let loaded = false;
 const listeners = new Set<() => void>();
 
 function guestPlayer(): Player {
-  if (!FREE_PLAY) return null;
   const s = saved();
   return s ? { accountId: s.accountId, kind: "guest" } : null;
 }
@@ -160,21 +165,21 @@ async function proofOfWork(challenge: string, publicKey: string, bits: number): 
 }
 
 export async function createGuest(): Promise<string> {
-  if (!FREE_PLAY) throw new Error("Guest accounts are for free play on testnet. Connect a NEAR wallet to play with real NEAR.");
   const kp = KeyPair.fromRandom("ed25519");
   const publicKey = kp.getPublicKey().toString();
-  // The server hands out a signed, short-lived challenge; the proof of work is bound to it and to this key.
-  const ch = await fetch("/api/guest").then((r) => r.json()).catch(() => ({}));
+  // The server hands out a signed, short-lived challenge; the proof of work is bound to it and to this key. On mainnet
+  // it refuses outside free play's window or once its places are taken, before any work is done.
+  const ch = await fetch(`/api/guest${NET_QS}`).then((r) => r.json()).catch(() => ({}));
   if (!ch.challenge) throw new Error(ch.error ?? "The guest faucet did not answer.");
   const nonce = await proofOfWork(ch.challenge, publicKey, ch.bits ?? 18);
-  const res = await fetch("/api/guest", {
+  const res = await fetch(`/api/guest${NET_QS}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ publicKey, nonce, challenge: ch.challenge }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.accountId) throw new Error(body.error ?? "The guest account could not be made.");
-  const s: Saved = { accountId: body.accountId, secretKey: kp.toString() as KeyPairString };
+  const s: Saved = { accountId: body.accountId, secretKey: kp.toString() as KeyPairString, ...(body.ticket ? { ticket: String(body.ticket) } : {}) };
   memoryKey = s;
   try {
     localStorage.setItem(STORE, JSON.stringify(s));
@@ -193,6 +198,11 @@ export async function createGuest(): Promise<string> {
   }
   set({ accountId: s.accountId, kind: "guest" });
   return s.accountId;
+}
+
+/** Ask the site to sponsor this guest's free credit on the current dish (it checks the guest and pays at most once). */
+export function requestGuestCredit(accountId: string): Promise<Response> {
+  return fetch(`/api/guest/sponsor${NET_QS}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accountId, ticket: saved()?.ticket }) });
 }
 
 export function forgetGuest() {
@@ -286,7 +296,8 @@ async function walletCall(methodName: string, args: Record<string, unknown>, tga
 async function call(methodName: string, args: Record<string, unknown>, tgas: number, deposit: bigint = 0n): Promise<TxResult> {
   load();
   if (player?.kind === "wallet") return walletCall(methodName, args, tgas, deposit);
-  if (!FREE_PLAY) throw new Error("Connect a NEAR wallet first: on mainnet every move is signed and paid by your own wallet.");
+  const guest = saved();
+  if (!FREE_PLAY && !guest) throw new Error("Connect a NEAR wallet first: on mainnet every move is signed and paid by your own wallet.");
   if (deposit > 0n) {
     args = { ...args, credit: deposit.toString() };
     deposit = 0n;
@@ -295,21 +306,23 @@ async function call(methodName: string, args: Record<string, unknown>, tgas: num
   const steps = await withCatchUp(methodName, args, tgas);
   const { actions, encodeSignedDelegate } = await import("near-api-js");
   // NEAR runs a delegate action signed by a function-call key only when it holds a single call, so a lagging dish is
-  // caught up with one delegate per advance, each relayed and finished before the move itself is signed.
+  // caught up with one delegate per advance, each relayed and finished before the move itself is signed. An implicit
+  // guest's key is its account's full-access key, so its catch-up and move go in one delegate: one relayed move.
+  const batches: Step[][] = guest?.ticket ? [steps] : steps.map((s) => [s]);
   let last: TxResult | null = null;
-  for (const s of steps) {
+  for (const batch of batches) {
     const { signedDelegate } = await a.createSignedMetaTransaction({
       receiverId: CONTRACT,
-      actions: [actions.functionCall(s.methodName, s.args, BigInt(s.tgas) * 10n ** 12n, 0n)],
+      actions: batch.map((s) => actions.functionCall(s.methodName, s.args, BigInt(s.tgas) * 10n ** 12n, 0n)),
       blockHeightTtl: 120,
     });
     const bytes = encodeSignedDelegate(signedDelegate);
     let bin = "";
     bytes.forEach((b) => (bin += String.fromCharCode(b)));
-    const res = await fetch("/api/relay", {
+    const res = await fetch(`/api/relay${NET_QS}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ signedDelegate: btoa(bin) }),
+      body: JSON.stringify({ signedDelegate: btoa(bin), ...(guest?.ticket ? { ticket: guest.ticket } : {}) }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok || !body.hash) throw new Error(body.error ?? "The relay did not answer.");

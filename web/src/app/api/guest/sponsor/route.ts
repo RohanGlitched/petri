@@ -6,10 +6,15 @@
 // must be one of this relayer's guests (its name derived from its function-call key for the dish), it must have no
 // colony on the current dish, and it must hold no credit from this relayer. So each guest is topped up at most once
 // per dish, and only before it joins. Each address and the server as a whole are rate limited as well.
+//
+// An implicit guest (`?net=mainnet`) proves it is ours with the ticket /api/guest gave it, and is sponsored only if
+// its sponsorship at creation did not land, and only while the relayer stays above its floor.
 
 import { NextResponse } from "next/server";
 import { clientIp, overBudget, spent } from "@/lib/budget";
 import { NETWORK } from "@/lib/config";
+import { guestProgram, netOf, readTicket, type GuestProgram } from "@/lib/guest-program";
+import { relayerFunds } from "@/lib/implicit-guests";
 import { GUEST_CREDIT_YOCTO, hasColony, isOurGuest, relayerAccount, sponsorUntilCredited, sponsoredBy } from "../credit";
 
 export const runtime = "nodejs";
@@ -35,6 +40,10 @@ function limited(ip: string): string | null {
 }
 
 export async function POST(req: Request) {
+  const net = netOf(req);
+  const p = guestProgram(net);
+  if (net === "mainnet" && !p) return NextResponse.json({ error: "Free play on mainnet is not open on this server." }, { status: 400 });
+  if (p?.kind === "implicit") return implicitSponsor(req, p);
   if (NETWORK !== "testnet") return NextResponse.json({ error: "Free credit exists only on testnet." }, { status: 400 });
   const relayer = process.env.PETRI_RELAYER_ACCOUNT;
   const key = process.env.PETRI_RELAYER_KEY;
@@ -71,6 +80,44 @@ export async function POST(req: Request) {
     const credited = await sponsorUntilCredited(relayerAccount(relayer, key), accountId).catch(() => false);
     if (credited) await spent(ip, GUEST_CREDIT_YOCTO).catch(() => {});
     if (!credited) return NextResponse.json({ error: "Your free PETRI is still on its way. Retry in a moment." }, { status: 502 });
+    return NextResponse.json({ accountId, credited: true });
+  } finally {
+    inFlight.delete(accountId);
+  }
+}
+
+async function implicitSponsor(req: Request, p: GuestProgram) {
+  let accountId = "";
+  let ticket: unknown = null;
+  try {
+    const body = await req.json();
+    accountId = String(body?.accountId ?? "");
+    ticket = body?.ticket;
+  } catch {
+    return NextResponse.json({ error: "Send JSON: { accountId, ticket }" }, { status: 400 });
+  }
+  const t = readTicket(p, ticket);
+  if (!t || t.account !== accountId) return NextResponse.json({ error: "That is not one of this site's free-play guests." }, { status: 403 });
+  try {
+    if ((await sponsoredBy(p.relayer, accountId, p.net)) > 0n) return NextResponse.json({ accountId, credited: true });
+    if (await hasColony(accountId, p.net)) return NextResponse.json({ error: "This guest already has a colony on the dish; free credit comes once, before joining." }, { status: 409 });
+    const funds = await relayerFunds(p);
+    if (funds.spendable < p.limits!.floor + GUEST_CREDIT_YOCTO) return NextResponse.json({ error: "Free mainnet play is out of budget. Connect a NEAR wallet, or play free on testnet." }, { status: 409 });
+  } catch (e) {
+    console.error("implicit guest sponsor check failed", e instanceof Error ? e.message : String(e));
+    return NextResponse.json({ error: "NEAR did not answer. Try again in a moment." }, { status: 502 });
+  }
+  if (inFlight.has(accountId)) return NextResponse.json({ error: "Your free credit is already on its way. Retry in a few seconds." }, { status: 409 });
+  const ip = clientIp(req);
+  const why = limited(`${p.net}:${ip}`);
+  if (why) return NextResponse.json({ error: why }, { status: 429 });
+  const broke = await overBudget(ip, p.net);
+  if (broke) return NextResponse.json({ error: broke }, { status: 429 });
+  inFlight.add(accountId);
+  try {
+    const credited = await sponsorUntilCredited(relayerAccount(p.relayer, p.key, p.net), accountId, p.net).catch(() => false);
+    if (credited) await spent(ip, GUEST_CREDIT_YOCTO, p.net).catch(() => {});
+    if (!credited) return NextResponse.json({ error: "Your free credit is still on its way. Retry in a moment." }, { status: 502 });
     return NextResponse.json({ accountId, credited: true });
   } finally {
     inFlight.delete(accountId);

@@ -9,6 +9,8 @@ export const revalidate = 60;
 
 const API: Record<Network, string> = { mainnet: "https://api.nearblocks.io/v3", testnet: "https://api-testnet.nearblocks.io/v3" };
 const RELAYER = process.env.PETRI_RELAYER_ACCOUNT ?? "petri-guests.testnet";
+/** Mainnet free play's relayer (during judging), whose meta transactions are its guests' moves. */
+const MAINNET_RELAYER = process.env.PETRI_MAINNET_GUESTS === "1" ? process.env.PETRI_MAINNET_RELAYER_ACCOUNT?.trim() : undefined;
 
 type Txn = {
   transaction_hash: string;
@@ -33,7 +35,7 @@ export async function GET(req: Request) {
   const net: Network = new URL(req.url).searchParams.get("net") === "mainnet" ? "mainnet" : "testnet";
   const contract = CONTRACTS[net];
   try {
-    const [direct, relayed] = await Promise.all([list(net, contract, 50), net === "testnet" ? list(net, RELAYER, 50).catch(() => [] as Txn[]) : Promise.resolve([] as Txn[])]);
+    const [direct, relayed] = await Promise.all([list(net, contract, 50), net === "testnet" ? list(net, RELAYER, 50).catch(() => [] as Txn[]) : MAINNET_RELAYER ? list(net, MAINNET_RELAYER, 50).catch(() => [] as Txn[]) : Promise.resolve([] as Txn[])]);
     const rows: FeedRow[] = [];
     for (const t of direct) {
       const fc = t.actions.find((a) => a.action === "FUNCTION_CALL");

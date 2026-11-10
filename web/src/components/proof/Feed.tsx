@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { CONTRACTS, EXPLORERS, NETWORK, shortAccount, type Network } from "@/lib/config";
 import { strainOf } from "@/lib/strains";
 import { SIDE_LABEL, sideOfAccount } from "@/lib/sides";
+import { useFreeMainnet } from "@/lib/free-mainnet";
 import s from "./proof.module.css";
 
 type Row = { hash: string; at: number; account: string; method: string; ok: boolean; relayed: boolean };
@@ -18,6 +19,7 @@ function side(a: string): { label: string; cls: string } {
 }
 
 export function Feed() {
+  useFreeMainnet();
   const [net, setNet] = useState<Network>("testnet");
   const [rows, setRows] = useState<Row[] | null>(null);
   const [err, setErr] = useState("");

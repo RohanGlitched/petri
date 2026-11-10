@@ -8,15 +8,21 @@
 // signed in the last ten minutes and to the key: the browser finds a nonce such that
 // sha256("petri-guest:" + challenge + ":" + publicKey + ":" + nonce) starts with DIFFICULTY zero bits. The account name
 // comes from the key, so one key makes at most one guest.
+//
+// With `?net=mainnet` (PETRI_MAINNET_GUESTS=1, during the judging window) the guest is instead the key's own implicit
+// account, made by lib/implicit-guests.ts under a cap, a balance floor and per-address limits, and the answer carries a
+// ticket the relay asks for. Testnet is unchanged.
 
 import { NextResponse } from "next/server";
-import { clientIp, overBudget, spent } from "@/lib/budget";
+import { bumpToday, clientIp, overBudget, spent } from "@/lib/budget";
 import { PublicKey, actions, nearToYocto } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { CONTRACT, NETWORK } from "@/lib/config";
 import { GUEST_CREDIT_YOCTO, relayerAccount, sponsorUntilCredited } from "./credit";
+import { guestProgram, netOf, type GuestProgram } from "@/lib/guest-program";
+import { GuestRefusal, fullText, implicitStatus, makeImplicitGuest } from "@/lib/implicit-guests";
 
 export const runtime = "nodejs";
 
@@ -72,8 +78,29 @@ function config() {
   return relayer && key ? { relayer, key } : null;
 }
 
+const NOT_ON = "Free play on mainnet is not open on this server. Connect a NEAR wallet, or play free on testnet.";
+
+/** What an implicit program's start card says when it cannot make a guest now. */
+async function closedText(p: GuestProgram): Promise<{ error: string; status: number } | null> {
+  const st = await implicitStatus(p).catch(() => null);
+  if (!st) return { error: "NEAR did not answer. Try again in a moment.", status: 502 };
+  if (st.open) return null;
+  if (st.why === "soon") return { error: `Free mainnet play opens ${new Date(st.opensAt).toUTCString().replace(":00 GMT", " UTC")}.`, status: 403 };
+  if (st.why === "closed") return { error: "Free mainnet play has closed. Connect a NEAR wallet, or play free on testnet.", status: 403 };
+  return { error: fullText(st), status: 409 };
+}
+
 /** A fresh challenge: `<timestamp>.<signature>`. */
-export async function GET() {
+export async function GET(req: Request) {
+  const net = netOf(req);
+  const p = guestProgram(net);
+  if (net === "mainnet" && !p) return NextResponse.json({ error: NOT_ON }, { status: 400 });
+  if (p?.kind === "implicit") {
+    const no = await closedText(p);
+    if (no) return NextResponse.json({ error: no.error }, { status: no.status });
+    const ts = String(Date.now());
+    return NextResponse.json({ challenge: `${ts}.${sign(ts, p.key)}`, bits: DIFFICULTY }, { headers: { "cache-control": "no-store" } });
+  }
   const c = config();
   if (NETWORK !== "testnet") return NextResponse.json({ error: "Guest accounts exist only on testnet. Connect a NEAR wallet instead." }, { status: 400 });
   if (!c) return NextResponse.json({ error: "Guest accounts are not configured on this server." }, { status: 503 });
@@ -82,6 +109,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const net = netOf(req);
+  const p = guestProgram(net);
+  if (net === "mainnet" && !p) return NextResponse.json({ error: NOT_ON }, { status: 400 });
+  if (p?.kind === "implicit") return implicitPost(req, p);
   if (NETWORK !== "testnet") return NextResponse.json({ error: "Guest accounts exist only on testnet. Connect a NEAR wallet instead." }, { status: 400 });
   const c = config();
   if (!c) return NextResponse.json({ error: "Guest accounts are not configured on this server." }, { status: 503 });
@@ -139,4 +170,59 @@ export async function POST(req: Request) {
   const credited = await sponsorUntilCredited(relayer, accountId).catch(() => false);
   await spent(ip, nearToYocto(GUEST_NEAR) + (credited ? GUEST_CREDIT_YOCTO : 0n)).catch(() => {});
   return NextResponse.json({ accountId, credited });
+}
+
+/** Parse and check a guest request's key and proof of work (both kinds share it). */
+async function readProof(req: Request, key: string): Promise<{ publicKey: string } | NextResponse> {
+  let publicKey = "";
+  let nonce = "";
+  let challenge = "";
+  try {
+    const body = await req.json();
+    publicKey = String(body?.publicKey ?? "");
+    nonce = String(body?.nonce ?? "");
+    challenge = String(body?.challenge ?? "");
+  } catch {
+    return NextResponse.json({ error: "Send JSON: { publicKey, nonce, challenge }" }, { status: 400 });
+  }
+  if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(publicKey)) {
+    return NextResponse.json({ error: "publicKey must be an ed25519 public key in NEAR's base58 form." }, { status: 400 });
+  }
+  const [ts, mac] = challenge.split(".");
+  if (!ts || !mac || mac !== sign(ts, key) || Date.now() - Number(ts) > CHALLENGE_MS || Number(ts) > Date.now() + 60_000) {
+    return NextResponse.json({ error: "The challenge is missing or expired. Reload the page and try again." }, { status: 400 });
+  }
+  if (!/^\d{1,12}$/.test(nonce) || leadingZeroBits(sha256(new TextEncoder().encode(`petri-guest:${challenge}:${publicKey}:${nonce}`))) < DIFFICULTY) {
+    return NextResponse.json({ error: "The proof of work for this key is missing or too weak. Reload the page and try again." }, { status: 400 });
+  }
+  return { publicKey };
+}
+
+/** An implicit guest (mainnet free play): the key's own account, under the program's cap, floor and limits. */
+async function implicitPost(req: Request, p: GuestProgram) {
+  const proof = await readProof(req, p.key);
+  if (proof instanceof NextResponse) return proof;
+  const ip = clientIp(req);
+  const why = limited(`${p.net}:${ip}`);
+  if (why) return NextResponse.json({ error: why }, { status: 429 });
+  const broke = await overBudget(ip, p.net);
+  if (broke) return NextResponse.json({ error: broke }, { status: 429 });
+  const no = await closedText(p);
+  if (no) return NextResponse.json({ error: no.error }, { status: no.status });
+  // Counted before making, so a burst from one address cannot pass the limit together.
+  const today = await bumpToday(`guests:${p.net}:${ip}`).catch(() => 0);
+  if (today > p.limits!.perIpDay) {
+    return NextResponse.json({ error: `This network has made ${p.limits!.perIpDay} free mainnet colonies today, the most one address may. Use the one you have, connect a NEAR wallet, or play free on testnet.` }, { status: 429 });
+  }
+  try {
+    const g = await makeImplicitGuest(p, proof.publicKey);
+    await spent(ip, g.cost > 0n ? g.cost : GUEST_CREDIT_YOCTO, p.net).catch(() => {});
+    return NextResponse.json({ accountId: g.accountId, credited: g.credited, ticket: g.ticket });
+  } catch (e) {
+    if (e instanceof GuestRefusal) return NextResponse.json({ error: e.message }, { status: e.status });
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("implicit guest creation failed", msg);
+    const funds = /NotEnoughBalance|LackBalance|balance/i.test(msg);
+    return NextResponse.json({ error: funds ? "Free mainnet play is out of budget. Connect a NEAR wallet, or play free on testnet." : "NEAR did not create the guest account. Try again in a moment." }, { status: 502 });
+  }
 }

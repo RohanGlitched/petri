@@ -10,6 +10,7 @@ import { forReplay, readDishAt, type AccessKey, type DishRead, type SourceMeta }
 import { BUILD_HASH, Replayer } from "@/lib/replay";
 import { strainOf } from "@/lib/strains";
 import { sideOfAccount } from "@/lib/sides";
+import { useFreeMainnet } from "@/lib/free-mainnet";
 import type { StrainLog } from "@/lib/strain-log";
 import type { Colony } from "@/lib/chain";
 import s from "./proof.module.css";
@@ -241,12 +242,13 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
   out.push({
     id: "outside",
     claim: "People outside the team play",
-    how: "Colonies whose account is not the team's (the house, the bench, any petri-*.testnet account or sub-account, any *.petri-dish.near). Testnet guests are keys in anyone's browser, the team's own test runs included; the chain cannot tell them apart, so they are counted apart.",
+    how: "Colonies whose account is not the team's (the house, the bench, any petri-*.testnet account or sub-account, any *.petri-dish.near). Guests are counted apart, never as outside players: testnet guests, and on mainnet the free-play guests of the judging window (implicit accounts the site's mainnet relayer made and sponsored, as the dish's ledger shows). A guest is a key in anyone's browser, the team's own test runs included; the chain cannot tell them apart.",
     value: both((d) => {
       const o = outside(d);
       return (
         <>
-          <span className="num">{o.all}</span> outside wallet colonies ({o.planted} planted){d.dish.net === "testnet" ? `; ${o.guests} guest colonies (${o.guestsPlanted} planted)` : ""}
+          <span className="num">{o.all}</span> outside wallet colonies ({o.planted} planted)
+          {d.dish.net === "testnet" || o.guests > 0 ? `; ${o.guests} ${d.dish.net === "mainnet" ? "free-play guest" : "guest"} colonies (${o.guestsPlanted} planted)` : ""}
         </>
       );
     }),
@@ -346,6 +348,8 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
 }
 
 export function Claims() {
+  // Registers mainnet free-play guests, so they count as guests here, never as outside players.
+  useFreeMainnet();
   const [data, setData] = useState<Partial<Record<Network, NetData>>>({});
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {

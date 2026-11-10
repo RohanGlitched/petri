@@ -32,7 +32,7 @@ its key (see The lock).
 ## Two dishes
 
 The same build (v6.5) runs on two networks. `petri-v6.testnet` is free play: guests, a relayer and sponsored credit.
-`petri-dish.near` is mainnet: real NEAR, wallets only, and payment in other tokens through NEAR Intents. Both ran v6
+`petri-dish.near` is mainnet: real NEAR, wallets, and payment in other tokens through NEAR Intents (and, during judging only, free-play guests on credit a separate relayer sponsors: see Free play on mainnet). Both ran v6
 and then v6.1 briefly first (hours, not days) and were relaunched in place with `relaunch`, from generation 0; the testnet account kept the
 name it was made with for v6. (v5's `petri-v5.testnet` is no longer played.) Their parameters are
 `contract/launch-rules.json` and `contract/launch-rules-mainnet.json`, which differ only in `house`, `keepers` and
@@ -832,7 +832,8 @@ Nothing can hide in either, and the strains' model never sees names: rivals reac
 
 ## Guests and the relayer
 
-Free play only (testnet).
+Free play on testnet, always. On mainnet only during judging, when the site switches it on (see Free play on mainnet,
+below).
 
 - `GET /api/guest` returns a challenge signed by the server, valid for 10 minutes. The browser makes a key and finds a
   nonce so that `sha256("petri-guest:" + challenge + ":" + publicKey + ":" + nonce)` starts with 18 zero bits.
@@ -847,6 +848,58 @@ Free play only (testnet).
   key that exists on the account and a fresh nonce. The relayer pays only gas.
 - A guest never attaches NEAR, so everything it wins or is paid for sales is credit, and it cannot send PETRI.
 - Wallet players connect with NEAR Connect (`@hot-labs/near-connect`) and sign and pay for themselves.
+
+### Free play on mainnet (judging only)
+
+From 14 November 2026 18:00 UTC to 19 November 00:00 UTC, when the site's server has `PETRI_MAINNET_GUESTS=1` and a
+funded relayer, anyone can start a colony on `petri-dish.near` with no wallet, the way testnet free play works. The
+contract is the same; nothing about it changes for these guests. The site's code is `web/src/lib/guest-program.ts`,
+`web/src/lib/implicit-guests.ts`, `web/src/app/api/guest` and `web/src/app/api/relay`.
+
+- **The account.** The browser makes an ed25519 key. The guest is that key's own implicit account (the 64 hex characters
+  of the key), so the name proves which key owns it. The relayer creates it by sending it 1 yoctoNEAR: NEAR's
+  zero-balance accounts (one key, under 770 bytes) need no NEAR for storage, and the protocol's 0.007 NEAR
+  account-creation charge is paid by the relayer. Mainnet guests cannot be `g-….<relayer>` sub-accounts: those need a
+  named parent with a key, and `petri-dish.near` loses its key on 14 November.
+- **The key is a full-access key on the guest's own account.** That is what an implicit account is: the guest owns
+  its account outright, and the site never holds its key. What the account holds is 1 yoctoNEAR. The guest's 0.05
+  NEAR (less about 0.006 for its records) is credit held by the dish under `sponsor`, not NEAR in the account.
+- **The relayer is a separate implicit account,** not the keeper, not the house and not any team account. The lead funds it
+  once from `keeper.petri-dish.near` with at most 3.1 NEAR (`scripts/mainnet-guests-setup.mjs send`), and it draws on
+  nothing else, so free play on mainnet can never cost more than that one transfer. Its NEAR pays for each guest's
+  account, its sponsored credit and the gas of its relayed moves.
+- **Limits.** A guest is made only inside the window; only while fewer than 40 exist (counted on chain: the dish's
+  ledger `Sponsor` entries signed by the relayer, which only the relayer's key can add); only while the relayer keeps
+  0.3 NEAR (its floor: it covers NEAR's hold on prepaid gas, bought at ten times the gas price until the refund lands)
+  plus 0.07 NEAR for the new guest; at most 3 per client address a day, and after an 18-bit proof of work bound to the
+  key, as on testnet. The start card's "N of 40 free mainnet colonies left" is the smaller of the places left and what
+  the relayer's balance above its floor still pays for.
+- **Relaying.** `/api/relay?net=mainnet` relays a guest's delegate action only with the ticket `/api/guest` gave it
+  (an HMAC, under a key derived from the relayer's, of the account and its key's nonce when made), signed by the key
+  the account's name encodes, to the dish, one of the testnet guest's methods (a catch-up's `advance` calls ride in the
+  same delegate action), no deposit, at most 300 TGas. Each guest has 16 relayed moves in all, counted by its key's
+  nonce, which only rises. Nothing is relayed below the relayer's floor or after the window. The break-it lab is testnet
+  only.
+- **What a mainnet guest can do:** join (0.02 NEAR from credit), buy and plant with credit, earn feed and tide shares,
+  claim its PETRI, sell PETRI back for credit, mint slides and make pacts.
+- **What it cannot do** (the contract, not the site, enforces each): turn credit into NEAR. Credit has no withdraw
+  method, and only its sponsor can take back unspent credit (`unsponsor`, after a day without use). A colony that has
+  never attached NEAR is paid its tide shares and sales in credit and cannot send PETRI (`ft_transfer` refuses it), and
+  PETRI bought with credit is kept PETRI. If the guest later puts its own NEAR into the account and attaches it, the
+  dish refuses that while any of its cells live (v6.5), and once attached its credit-era PETRI is kept: it cannot be
+  sold for NEAR or sent until plantings have spent it. Measured on testnet with the same code: a guest's sale of
+  30 PETRI paid 0.000024 NEAR of credit, and the guest account still held 1 yoctoNEAR.
+- **What the full-access key adds over a testnet guest's function-call key:** if its owner funds the account, it can
+  sign for itself, as any NEAR account can, for instance to attach the 1 yoctoNEAR an `nft_transfer` of a slide it
+  minted needs. The relayer never relays that (transfers and non-dish calls are refused).
+- **Who pays:** the relayer, out of the one deposit above. Measured on testnet with this code (protocol 88, gas price
+  0.0001 NEAR per TGas): making a guest 0.0574 NEAR (0.0071 account creation, 0.05 sponsored credit, 0.0003 gas),
+  joining 0.00054, planting 0.00125, claiming 0.00041, selling 0.00076. A guest that joins, plants three times and
+  claims twice costs the relayer about 0.063 NEAR; one that uses all 16 moves on plantings about 0.077 NEAR.
+- **Afterwards** the colonies stay on the dish. The relayer can take back credit guests left unused for a day
+  (`mainnet-guests-setup.mjs reclaim`) and return what it holds to the keeper (`return`).
+- **Counted as guests.** `/judges`, `/colonies` and the trade feed count these accounts as guests (from the same ledger
+  entries), never as outside players or as the team.
 
 ## The strains
 

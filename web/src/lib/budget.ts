@@ -16,6 +16,12 @@ export const DAILY_CAP_PER_IP = BigInt(process.env.PETRI_RELAY_DAILY_NEAR_MICRO_
 /** Most refused attempts the lab relays in a day, in all and per guest. */
 export const LAB_DAILY = Number(process.env.PETRI_LAB_DAILY ?? "400");
 export const LAB_DAILY_PER_GUEST = Number(process.env.PETRI_LAB_DAILY_PER_GUEST ?? "30");
+/** Mainnet free play keeps its own day counters (default 3.1 NEAR a day in all, the whole budget, since the relayer's
+ * balance floor is what really bounds it; 0.4 NEAR per address). */
+export const MAINNET_DAILY_CAP = BigInt(process.env.PETRI_MAINNET_RELAY_DAILY_NEAR_MICRO ?? "3100000");
+export const MAINNET_DAILY_CAP_PER_IP = BigInt(process.env.PETRI_MAINNET_RELAY_DAILY_NEAR_MICRO_PER_IP ?? "400000");
+/** Testnet keeps the keys it always had. */
+const scope = (net: "testnet" | "mainnet") => (net === "mainnet" ? "mainnet:" : "");
 
 async function redis(cmds: (string | number)[][]): Promise<unknown[]> {
   const res = await fetch(`${URL_}/pipeline`, {
@@ -76,19 +82,34 @@ export function clientIp(req: Request): string {
 }
 
 /** Refuse when today's spend, in all or from this address, has reached its cap. */
-export async function overBudget(ip: string): Promise<string | null> {
-  const d = day();
+export async function overBudget(ip: string, net: "testnet" | "mainnet" = "testnet"): Promise<string | null> {
+  const d = `${scope(net)}${day()}`;
   const [all, mine] = await Promise.all([get(`petri:spend:${d}`), get(`petri:spend:${d}:${ip}`)]);
+  if (net === "mainnet") {
+    if (all >= MAINNET_DAILY_CAP) return "Free mainnet play has spent today's budget. It resumes at 00:00 UTC; a NEAR wallet works meanwhile.";
+    if (mine >= MAINNET_DAILY_CAP_PER_IP) return "This network has used today's share of free mainnet play. Connect a NEAR wallet, play free on testnet, or try again after 00:00 UTC.";
+    return null;
+  }
   if (all >= DAILY_CAP) return "The relayer has spent today's budget. Free play resumes at 00:00 UTC; a NEAR wallet works meanwhile.";
   if (mine >= DAILY_CAP_PER_IP) return "This network has used today's share of the free-play relayer. Watch meanwhile (press C on /dish for cinema mode, or replay the history on /verify), connect a NEAR wallet, or try again after 00:00 UTC.";
   return null;
 }
 
 /** Count what a relay or a new guest cost, in yoctoNEAR. */
-export async function spent(ip: string, yocto: bigint) {
+export async function spent(ip: string, yocto: bigint, net: "testnet" | "mainnet" = "testnet") {
   const units = yocto / UNIT + 1n;
-  const d = day();
+  const d = `${scope(net)}${day()}`;
   await Promise.all([incr(`petri:spend:${d}`, units, 2 * 86400), incr(`petri:spend:${d}:${ip}`, units, 2 * 86400)]);
+}
+
+/** Add one to a counter that lasts the UTC day (`name` is scoped by the caller) and return the new count. */
+export async function bumpToday(name: string): Promise<number> {
+  return Number(await incr(`petri:count:${day()}:${name}`, 1n, 2 * 86400));
+}
+
+/** Read such a counter. */
+export async function countToday(name: string): Promise<number> {
+  return Number(await get(`petri:count:${day()}:${name}`));
 }
 
 /** One more lab attempt today for this guest, or the reason it is refused. */

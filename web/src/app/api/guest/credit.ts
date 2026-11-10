@@ -5,7 +5,7 @@
 import { Account, actions, nearToYocto } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { CONTRACT, NETWORK } from "@/lib/config";
+import { CONTRACT, CONTRACTS, NETWORK, type Network } from "@/lib/config";
 import { rpcCall } from "@/lib/rpc";
 import { nearProvider } from "@/lib/near-provider";
 
@@ -13,13 +13,16 @@ export const GUEST_CREDIT = "0.05";
 /** The same, in yoctoNEAR, for the relayer's daily budget. */
 export const GUEST_CREDIT_YOCTO = 5n * 10n ** 22n;
 
-const rpc = <T,>(method: string, params: Record<string, unknown>): Promise<T> => rpcCall<T>(NETWORK, method, params, { id: "guest", timeoutMs: 6000 });
+// Every function takes the network last; left out, it is the server's own (testnet) dish, as before.
+const contractOn = (net: Network) => (net === NETWORK ? CONTRACT : CONTRACTS[net]);
+export const rpcOn = <T,>(net: Network, method: string, params: Record<string, unknown>): Promise<T> => rpcCall<T>(net, method, params, { id: "guest", timeoutMs: 6000 });
+const rpc = <T,>(method: string, params: Record<string, unknown>): Promise<T> => rpcOn<T>(NETWORK, method, params);
 
-async function view<T>(method: string, args: Record<string, unknown>): Promise<T> {
-  const r = await rpc<{ result: number[] }>("query", {
+export async function view<T>(method: string, args: Record<string, unknown>, net: Network = NETWORK): Promise<T> {
+  const r = await rpcOn<{ result: number[] }>(net, "query", {
     request_type: "call_function",
     finality: "optimistic",
-    account_id: CONTRACT,
+    account_id: contractOn(net),
     method_name: method,
     args_base64: Buffer.from(JSON.stringify(args)).toString("base64"),
   });
@@ -27,13 +30,13 @@ async function view<T>(method: string, args: Record<string, unknown>): Promise<T
 }
 
 /** The credit `relayer` has sponsored for `accountId` on the dish as it is now (a relaunched dish starts empty). */
-export async function sponsoredBy(relayer: string, accountId: string): Promise<bigint> {
-  const grants = await view<{ sponsor: string; amount: string }[]>("credit_grants", { account_id: accountId });
+export async function sponsoredBy(relayer: string, accountId: string, net: Network = NETWORK): Promise<bigint> {
+  const grants = await view<{ sponsor: string; amount: string }[]>("credit_grants", { account_id: accountId }, net);
   return grants.filter((g) => g.sponsor === relayer).reduce((s, g) => s + BigInt(g.amount), 0n);
 }
 
-export async function hasColony(accountId: string): Promise<boolean> {
-  return (await view<unknown>("colony_of", { account_id: accountId })) !== null;
+export async function hasColony(accountId: string, net: Network = NETWORK): Promise<boolean> {
+  return (await view<unknown>("colony_of", { account_id: accountId }, net)) !== null;
 }
 
 /** True when `accountId` is one of this relayer's guests: its name is derived from one of its keys, and that key is a
@@ -57,12 +60,12 @@ export async function isOurGuest(relayer: string, accountId: string): Promise<bo
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Sponsor `accountId` with GUEST_CREDIT, up to three tries, and report true only once the credit can be read on chain. */
-export async function sponsorUntilCredited(relayer: Account, accountId: string): Promise<boolean> {
+export async function sponsorUntilCredited(relayer: Account, accountId: string, net: Network = NETWORK): Promise<boolean> {
   for (let attempt = 0; attempt < 3; attempt++) {
-    if ((await sponsoredBy(relayer.accountId, accountId).catch(() => 0n)) > 0n) return true;
+    if ((await sponsoredBy(relayer.accountId, accountId, net).catch(() => 0n)) > 0n) return true;
     try {
       await relayer.signAndSendTransaction({
-        receiverId: CONTRACT,
+        receiverId: contractOn(net),
         actions: [actions.functionCall("sponsor", { account_id: accountId }, 30n * 10n ** 12n, nearToYocto(GUEST_CREDIT))],
         waitUntil: "EXECUTED_OPTIMISTIC",
       });
@@ -75,12 +78,12 @@ export async function sponsorUntilCredited(relayer: Account, accountId: string):
   }
   // The last try may have landed after its error; read once more before giving up.
   for (let i = 0; i < 3; i++) {
-    if ((await sponsoredBy(relayer.accountId, accountId).catch(() => 0n)) > 0n) return true;
+    if ((await sponsoredBy(relayer.accountId, accountId, net).catch(() => 0n)) > 0n) return true;
     await pause(700);
   }
   return false;
 }
 
-export function relayerAccount(relayer: string, key: string): Account {
-  return new Account(relayer, nearProvider(NETWORK), key as `ed25519:${string}`);
+export function relayerAccount(relayer: string, key: string, net: Network = NETWORK): Account {
+  return new Account(relayer, nearProvider(net), key as `ed25519:${string}`);
 }

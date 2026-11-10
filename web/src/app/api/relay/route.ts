@@ -14,13 +14,19 @@
 // in all and per client address (Vercel's x-vercel-forwarded-for, which a client cannot set), and relaying stops for
 // the day once either reaches its cap. The break-it lab (/break) sends calls the contract is meant to refuse; those
 // are relayed only with `lab` set, within their own daily allowance, and each refusal is tallied.
+//
+// Mainnet free play (`?net=mainnet`, see lib/guest-program.ts) relays implicit guests: the sender must carry the
+// ticket /api/guest gave it, sign with the key its own account name encodes, stay within its relayed moves (counted by
+// the key's nonce since it was made), and the relayer must be above its balance floor. The lab is testnet only.
 
 import { NextResponse } from "next/server";
 import { Account, SCHEMA, actions, baseEncode, encodeDelegateAction } from "near-api-js";
 import { deserialize } from "borsh";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { CONTRACT, NETWORK } from "@/lib/config";
+import { CONTRACT, NETWORK, type Network } from "@/lib/config";
+import { guestProgram, netOf, readTicket, type GuestProgram } from "@/lib/guest-program";
+import { relayerFunds } from "@/lib/implicit-guests";
 import { rpcCall } from "@/lib/rpc";
 import { nearProvider } from "@/lib/near-provider";
 import { burnt, clientIp, labAllowed, overBudget, recordRefusal, spent } from "@/lib/budget";
@@ -97,21 +103,30 @@ function rawFailure(f: unknown): string {
 
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 
-async function finalHeight(): Promise<bigint> {
-  const b = await rpcCall<{ header: { height: number } }>(NETWORK, "block", { finality: "final" }, { id: "relay", timeoutMs: 6000 });
+async function finalHeight(net: Network): Promise<bigint> {
+  const b = await rpcCall<{ header: { height: number } }>(net, "block", { finality: "final" }, { id: "relay", timeoutMs: 6000 });
   return BigInt(b.header.height);
 }
 
 export async function POST(req: Request) {
-  const relayer = process.env.PETRI_RELAYER_ACCOUNT;
-  const key = process.env.PETRI_RELAYER_KEY;
+  const net = netOf(req);
+  const program = guestProgram(net);
+  if (net === "mainnet" && !program) return bad("Free play on mainnet is not open on this server; a NEAR wallet pays its own gas.", 400);
+  // An implicit program (mainnet free play) has its own relayer; testnet keeps the one it always had.
+  const implicit: GuestProgram | null = program?.kind === "implicit" ? program : null;
+  const relayer = implicit ? implicit.relayer : process.env.PETRI_RELAYER_ACCOUNT;
+  const key = implicit ? implicit.key : process.env.PETRI_RELAYER_KEY;
+  const contract = implicit ? implicit.contract : CONTRACT;
+  const chain: Network = implicit ? implicit.net : NETWORK;
   if (!relayer || !key) return bad("The relayer is not configured on this server.", 503);
 
   let bytes: Uint8Array;
   let lab: string | null = null;
+  let ticket: unknown = null;
   try {
     const body = await req.json();
-    if (typeof body?.lab === "string" && LAB_IDS.test(body.lab)) lab = body.lab;
+    if (!implicit && typeof body?.lab === "string" && LAB_IDS.test(body.lab)) lab = body.lab;
+    ticket = body?.ticket;
     bytes = Uint8Array.from(Buffer.from(String(body?.signedDelegate ?? ""), "base64"));
     if (bytes.length < 64 || bytes.length > 8192) throw new Error("size");
   } catch {
@@ -126,8 +141,10 @@ export async function POST(req: Request) {
   }
   const da = decoded.delegateAction;
   const guest = new RegExp(`^g-[0-9a-f]{10}\\.${relayer.replace(/\./g, "\\.")}$`);
-  if (da.receiverId !== CONTRACT) return bad(`Only calls to ${CONTRACT} are relayed.`);
-  if (!guest.test(da.senderId)) return bad("Only Petri guest accounts are relayed; wallet accounts pay their own gas.", 403);
+  if (da.receiverId !== contract) return bad(`Only calls to ${contract} are relayed.`);
+  // An implicit guest is ours when its ticket says so (the chain cannot: its credit grant is gone once spent).
+  const t = implicit ? readTicket(implicit, ticket) : null;
+  if (implicit ? !t || t.account !== da.senderId : !guest.test(da.senderId)) return bad("Only Petri guest accounts are relayed; wallet accounts pay their own gas.", 403);
   // One call, or one call preceded by up to MAX_ADVANCES `advance` calls that bring a dish far behind the clock within
   // one catch-up of it (the actions run in one receipt, so they succeed or fail together).
   if (da.actions.length < 1 || da.actions.length > 1 + MAX_ADVANCES) return bad("Relay one call at a time (with at most 3 advance calls before it).");
@@ -146,6 +163,15 @@ export async function POST(req: Request) {
   const pk = da.publicKey.ed25519Key?.data;
   const sig = decoded.signature.ed25519Signature?.data;
   if (!pk || !sig) return bad("Only ed25519 keys are relayed.");
+  if (implicit && t) {
+    // Only the key the account was made with (its name is that key), within the guest's moves and the window.
+    if (Buffer.from(Uint8Array.from(pk)).toString("hex") !== da.senderId) return bad("Only the guest's own key is relayed.", 403);
+    const used = BigInt(da.nonce) - t.nonce0;
+    if (used > BigInt(implicit.limits!.relaysPerGuest)) {
+      return bad(`This free colony has used its ${implicit.limits!.relaysPerGuest} relayed moves, the most a free mainnet colony gets. Connect a NEAR wallet to keep playing with your own NEAR.`, 429);
+    }
+    if (Date.now() >= implicit.limits!.relayUntil) return bad("Free mainnet play has closed, so the relayer no longer pays for moves. The colony stays on the dish.", 403);
+  }
   let valid = false;
   try {
     valid = ed25519.verify(Uint8Array.from(sig), sha256(encodeDelegateAction(da as never)), Uint8Array.from(pk));
@@ -157,23 +183,31 @@ export async function POST(req: Request) {
   // A guest with no colony gains nothing from advancing the dish, and a tide bounty its advance earned would be stranded
   // in an account only a function-call key controls: only colonies' advances are relayed.
   if (names.includes("advance")) {
-    const joined = await hasColony(da.senderId).catch(() => null);
+    const joined = await hasColony(da.senderId, chain).catch(() => null);
     if (joined === null) return bad("Could not read the chain. Try again.", 503);
     if (!joined) return bad("Join the dish before advancing it: a guest without a colony cannot be relayed an advance.", 403);
   }
   const why = limited(da.senderId);
   if (why) return bad(why, 429);
   const ip = clientIp(req);
-  const broke = await overBudget(ip);
+  const broke = await overBudget(ip, chain);
   if (broke) return bad(broke, 429);
   if (lab) {
     const no = await labAllowed(da.senderId);
     if (no) return bad(no, 429);
   }
 
-  const provider = nearProvider(NETWORK);
+  if (implicit) {
+    // The floor covers NEAR's hold on this call's prepaid gas; under it, nothing more is relayed.
+    const funds = await relayerFunds(implicit).catch(() => null);
+    if (!funds) return bad("Could not read the chain. Try again.", 503);
+    if (funds.spendable < implicit.limits!.floor) {
+      return bad("Free mainnet play has spent its budget, so the relayer no longer pays for moves. The colony stays on the dish; a NEAR wallet can keep playing.", 409);
+    }
+  }
+  const provider = nearProvider(chain);
   try {
-    if (BigInt(da.maxBlockHeight) <= (await finalHeight())) return bad("The signed action expired before it was relayed. Try again.", 409);
+    if (BigInt(da.maxBlockHeight) <= (await finalHeight(chain))) return bad("The signed action expired before it was relayed. Try again.", 409);
   } catch {
     return bad("Could not read the chain. Try again.", 503);
   }
@@ -198,7 +232,7 @@ export async function POST(req: Request) {
       waitUntil: "EXECUTED_OPTIMISTIC",
       throwOnFailure: false,
     });
-    await spent(ip, burnt(res as never)).catch(() => {});
+    await spent(ip, burnt(res as never), chain).catch(() => {});
     const failures = [res.status, ...(res.receipts_outcome ?? []).map((r) => r.outcome.status)]
       .map((st) => (st && typeof st === "object" && "Failure" in st ? (st as { Failure?: unknown }).Failure : null))
       .filter(Boolean);

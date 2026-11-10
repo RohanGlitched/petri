@@ -7,6 +7,7 @@ import { viewShared } from "@/lib/chain";
 import { accountUrl, shortAccount } from "@/lib/config";
 import { sideOf, strainOf } from "@/lib/strains";
 import { sideOfAccount, type Side } from "@/lib/sides";
+import { useFreeMainnet } from "@/lib/free-mainnet";
 import s from "./ledger.module.css";
 import { BenchTag, BENCH_LABEL, BENCH_TITLE } from "@/components/site/BenchTag";
 
@@ -72,6 +73,8 @@ const territoryLabel = (name: string, at?: { n: number; x: number; y: number }) 
   at?.n ? `${name}, ${int(at.n)} ${at.n === 1 ? "cell" : "cells"} near ${at.x}, ${at.y}` : `${name}, no living cells`;
 
 export function Ledger() {
+  // Mainnet free-play guests are filed as guests once read.
+  useFreeMainnet();
   const { d, ready, colonies, w, h } = useLive();
   // Until the agar has fed anyone, every Net is just what planting cost, so it is shown as neutral, not as a loss.
   const places = useMemo(() => whereabouts(d.cells, w, h), [d.cells, w, h]);

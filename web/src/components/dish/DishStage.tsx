@@ -10,6 +10,8 @@ import { PayAnyToken } from "@/components/intents/PayAnyToken";
 import { SlideGlass } from "@/components/specimens/SlideGlass";
 import { currentEngine, refreshDish } from "@/lib/dish-store";
 import { useLive, usePatternOffsets, petri, int, hex, near } from "@/lib/live";
+import { requestGuestCredit } from "@/lib/wallet";
+import { FreeMainnetOffer } from "./FreeMainnet";
 import { BUY_NEAR, GUEST_CREDIT, JOIN_NEAR, buyPetri, sellPetri, claimAll, claimPending, connectWallet, renameColony, createGuest, disconnectWallet, joinDish, mintSlide, plantCells, usePlayer, forgetGuest, offerPact, acceptPact, cancelPact, type Player } from "@/lib/wallet";
 import { buy_quote, pattern_cells, quote, sell_quote, PATTERNS, type PatternInfo, type PatternName } from "@/engine";
 import { getBalance, getClaimable, getColonyOf, getCredit, getNearBalance, getPending, getPlantDeposit, getSlide, getSlideDeposit, PACT_DEPOSIT, type Colony } from "@/lib/chain";
@@ -238,7 +240,7 @@ const NO_CREDIT = /won and sponsored credit|no credit|credit.*(left|enough)/i;
 /** Ask the site to sponsor this guest's free credit on the current dish (it checks the guest and pays at most once). */
 async function topUpGuest(accountId: string): Promise<void> {
   for (let i = 0; i < 2; i++) {
-    const res = await fetch("/api/guest/sponsor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accountId }) }).catch(() => null);
+    const res = await requestGuestCredit(accountId).catch(() => null);
     const body = res ? await res.json().catch(() => ({})) : {};
     if (res?.ok && body.credited) return;
     // An answer that will not change on a retry: say it plainly.
@@ -373,6 +375,8 @@ export function DishStage() {
   const [fossilOn, setFossilOn] = useState(false);
   const [slideTitle, setSlideTitle] = useState("");
   const [payOpen, setPayOpen] = useState(false);
+  /** Mainnet free play chosen on the start card (during the judging window): the join form then makes a guest. */
+  const [freeMainnet, setFreeMainnet] = useState(false);
   const [pendingNear, setPendingNear] = useState(0n);
   /** A colony clicked on the dish: its card shows its pacts and lets a player offer it one. */
   const [picked, setPicked] = useState<number | null>(null);
@@ -778,7 +782,7 @@ export function DishStage() {
   async function start(name: string, color: number) {
     setError(null);
     setDone(null);
-    if (!player && !net.freePlay) {
+    if (!player && !net.freePlay && !freeMainnet) {
       setError("Connect a NEAR wallet first: on the mainnet dish your own wallet signs and pays.");
       return;
     }
@@ -821,7 +825,7 @@ export function DishStage() {
       const held = await readJoined(accountId, joinPetri);
       const amount = held !== null ? petri(held, 2) : `about ${petri(joinPetri)}`;
       setDone({
-        text: net.freePlay
+        text: guest
           ? `${name} is on the dish with ${amount} PETRI to plant.`
           : `${name} is on the dish. Its 0.02 NEAR stake bought ${amount} PETRI from the agar.`,
         hash: r.hash,
@@ -1761,7 +1765,7 @@ export function DishStage() {
         )}
         {showProgress && <JoinProgress step={joining?.step ?? 4} guest={joining?.guest ?? player?.kind !== "wallet"} name={joining?.name ?? joinName} color={joining?.color ?? joinPicked ?? 0xf2b45a} />}
         {showJoin &&
-          (net.freePlay || player ? (
+          (net.freePlay || player || freeMainnet ? (
             <JoinForm
               onStart={start}
               onConnect={connect}
@@ -1771,7 +1775,8 @@ export function DishStage() {
               player={player}
               grant={ready ? petri(joinPetri) : "…"}
               taken={joinTaken}
-              freePlay={net.freePlay}
+              freePlay={net.freePlay || ((freeMainnet || player?.kind === "guest") && player?.kind !== "wallet")}
+              mainnet={!net.freePlay}
               name={joinName}
               touched={joinTouched}
               onName={(n) => {
@@ -1787,7 +1792,7 @@ export function DishStage() {
               error={error && !busy ? error : null}
             />
           ) : (
-            <MainnetStart onConnect={connect} onPay={() => setPayOpen(true)} onFold={() => setStartFolded(true)} busy={!!busy} />
+            <MainnetStart onConnect={connect} onPay={() => setPayOpen(true)} onFold={() => setStartFolded(true)} busy={!!busy} onFree={() => setFreeMainnet(true)} />
           ))}
 
         {player && pendingNear > 0n && (
@@ -1967,7 +1972,7 @@ export function DishStage() {
                   {sellButton}
                 </div>
                 {keptLine}
-                <p className={s.hint}>The site sponsored {near(Number(GUEST_CREDIT), 2)} testnet NEAR of credit for this guest, held by the dish contract and spendable only on joining, buying and planting; with what it has won, {near(Number(sponsoredLeft), 4)} NEAR of credit is left. Connect a wallet to play with your own.</p>
+                <p className={s.hint}>The site sponsored {near(Number(GUEST_CREDIT), 2)} {net.freePlay ? "testnet " : ""}NEAR of credit for this guest, held by the dish contract and spendable only on joining, buying and planting; with what it has won, {near(Number(sponsoredLeft), 4)} NEAR of credit is left. Connect a wallet to play with your own.</p>
                 <p className={s.hint}>Free play earns credit, not NEAR: a guest&rsquo;s tide shares and sales are paid as credit it can spend here.</p>
               </details>
             )}
@@ -2238,7 +2243,7 @@ function Rename({ current, busy, onRename }: { current: string; busy: boolean; o
 }
 
 /** The mainnet dish has no guests: a colony starts from a wallet, or from any token through NEAR Intents. */
-function MainnetStart({ onConnect, onPay, onFold, busy }: { onConnect: () => void; onPay: () => void; onFold: () => void; busy: boolean }) {
+function MainnetStart({ onConnect, onPay, onFold, busy, onFree }: { onConnect: () => void; onPay: () => void; onFold: () => void; busy: boolean; onFree: () => void }) {
   return (
     <section className={s.card} id="start-panel">
       <div className={s.joinHead}>
@@ -2246,9 +2251,10 @@ function MainnetStart({ onConnect, onPay, onFold, busy }: { onConnect: () => voi
         <FoldButton onFold={onFold} />
       </div>
       <p className={s.hint}>
-        This is the mainnet dish: the NEAR is real, and every move is signed by your own wallet. Joining stakes 0.02 NEAR; a little
+        This is the mainnet dish: the NEAR is real, and a wallet signs and pays for its own moves. Joining stakes 0.02 NEAR; a little
         pays for your colony&rsquo;s storage and the rest buys PETRI from the agar.
       </p>
+      <FreeMainnetOffer onFree={onFree} busy={busy} />
       <div className={s.stickyCta}>
         <button className="btn btn-amber" onClick={onConnect} disabled={busy} style={{ width: "100%", marginTop: 16 }}>
           Connect a NEAR wallet
@@ -2321,6 +2327,7 @@ function JoinForm({
   grant,
   taken,
   freePlay,
+  mainnet = false,
   name,
   touched,
   onName,
@@ -2339,6 +2346,8 @@ function JoinForm({
   /** Stains worn by colonies that still have living cells, with the colony wearing each. */
   taken: Map<number, string>;
   freePlay: boolean;
+  /** The mainnet dish: a guest here plays on credit the mainnet relayer sponsored (free play during judging). */
+  mainnet?: boolean;
   name: string;
   /** The player has typed in the field; until then the name is a suggestion that typing replaces. */
   touched: boolean;
@@ -2367,7 +2376,16 @@ function JoinForm({
         <h2 className={s.joinTitle}>Start a colony</h2>
         <FoldButton onFold={onFold} />
       </div>
-      {freePlay && player?.kind !== "wallet" ? (
+      {freePlay && mainnet && player?.kind !== "wallet" ? (
+        <>
+          <p className={s.freeLead}>Free play on mainnet. No wallet: credit you can play with, not withdraw.</p>
+          <p className={s.fine}>
+            You start with about {grant} PETRI, bought by a 0.02 NEAR stake out of the credit the site&rsquo;s relayer sponsors
+            (0.05 NEAR, less a little for its records) for a new account made from a key in this browser. The relayer pays the
+            gas. The credit stays in the dish: it plants and buys, but it never turns into NEAR anyone can withdraw.
+          </p>
+        </>
+      ) : freePlay && player?.kind !== "wallet" ? (
         <>
           <p className={s.freeLead}>Free play. No wallet: the dish gives you PETRI to plant.</p>
           <p className={s.fine}>

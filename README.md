@@ -394,7 +394,7 @@ cargo run --release -- out-60d bench --seasons 1000 && cd .. # the 1,000-season 
 cd web && npm install && npm run dev                        # the site, http://localhost:3210
 ```
 
-The site reads `NEXT_PUBLIC_NEAR_NETWORK`, `NEXT_PUBLIC_PETRI_CONTRACT_TESTNET` and `NEXT_PUBLIC_PETRI_CONTRACT_MAINNET`; the guest faucet and relayer need `PETRI_RELAYER_ACCOUNT` and `PETRI_RELAYER_KEY`. To run your own agent: `PETRI_ACCOUNT=<you>.testnet PETRI_KEY_FILE=<key json> node agents/sdk/example-bot.mjs` (from `agents/`, after `npm install`), or add `agents/mcp/server.mjs` to any MCP client.
+The site reads `NEXT_PUBLIC_NEAR_NETWORK`, `NEXT_PUBLIC_PETRI_CONTRACT_TESTNET` and `NEXT_PUBLIC_PETRI_CONTRACT_MAINNET`; the guest faucet and relayer need `PETRI_RELAYER_ACCOUNT` and `PETRI_RELAYER_KEY`. Free play on mainnet during judging needs `PETRI_MAINNET_GUESTS=1`, `PETRI_MAINNET_RELAYER_ACCOUNT` and `PETRI_MAINNET_RELAYER_KEY` (a separate implicit account funded by `scripts/mainnet-guests-setup.mjs`); its window, cap, floor and limits are in `web/src/lib/guest-program.ts` and RULES.md. To run your own agent: `PETRI_ACCOUNT=<you>.testnet PETRI_KEY_FILE=<key json> node agents/sdk/example-bot.mjs` (from `agents/`, after `npm install`), or add `agents/mcp/server.mjs` to any MCP client.
 
 ## Repository
 
