@@ -52,7 +52,7 @@ export function SlideGlass({ src, id, title, colony, generation, mintedGen, coun
           {generation != null && (
             <span className="num" title="The generation of the board the contract fixed these cells from">
               fixed at gen {int(generation)}
-              {count != null && size !== "large" ? ` · ${int(count)} ${count === 1 ? "cell" : "cells"}` : ""}
+              {count != null ? ` · ${int(count)} ${count === 1 ? "cell" : "cells"}` : ""}
             </span>
           )}
           {mintedGen != null && generation != null && mintedGen !== generation && (
@@ -60,7 +60,7 @@ export function SlideGlass({ src, id, title, colony, generation, mintedGen, coun
               minted gen {int(mintedGen)}
             </span>
           )}
-          {count != null && (generation == null || size === "large") && <span className="num">{int(count)} {count === 1 ? "cell" : "cells"}</span>}
+          {count != null && generation == null && <span className="num">{int(count)} {count === 1 ? "cell" : "cells"}</span>}
         </span>
       </div>
       <div className={s.well}>
