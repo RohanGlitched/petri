@@ -1,6 +1,6 @@
 // Checks a NEAR AI Cloud answer's TEE signature, so a move the strains say came from the enclave can be proven to.
 //
-// NEAR AI Cloud signs "<sha256(request body)>:<sha256(response body)>" with an ECDSA key generated inside the
+// NEAR AI Cloud signs "<model>:<sha256(request body)>:<sha256(response body)>" with an ECDSA key generated inside the
 // model's TEE, as an Ethereum personal message (EIP-191). The key's address is published in the attestation report,
 // which carries the Intel TDX quote (and NVIDIA GPU evidence) binding that address to the enclave. We check three
 // things per answer: the hashes are of exactly what we sent and received, the signature recovers to the signing
@@ -53,7 +53,9 @@ export function attestedAddresses(report) {
  */
 export function verifyAnswer(signature, requestBody, responseBody, attested) {
   if (!signature?.text || !signature?.signature) return { ok: false, reason: "no signature" };
-  const [reqHash, resHash] = String(signature.text).split(":");
+  // The signed text is "<model>:<sha256 request>:<sha256 response>" (older answers omit the model).
+  const parts = String(signature.text).split(":");
+  const [reqHash, resHash] = parts.slice(-2);
   const recovered = recoverPersonal(signature.text, signature.signature);
   const signingAddress = String(signature.signing_address ?? "").toLowerCase();
   const requestHashOk = reqHash === sha256Hex(requestBody);
