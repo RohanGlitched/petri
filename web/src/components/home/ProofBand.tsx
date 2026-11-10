@@ -22,7 +22,7 @@ const PARTS = [
   {
     name: "Gasless guests, on free play",
     where: "NEP-366 meta transactions, testnet",
-    text: "On the testnet dish no wallet is needed. Your browser's key is a function-call key for the dish alone; it signs delegate actions, the relayer pays the gas, and the NEAR you play with is credit the relayer sponsored inside the contract. On mainnet you connect any NEAR wallet with NEAR Connect; for judging, mainnet free play opens on 14 November at 18:00 UTC (40 places, credit you can play with, not withdraw).",
+    text: "On the testnet dish no wallet is needed. Your browser's key is a function-call key for the dish alone; it signs delegate actions, the relayer pays the gas, and the NEAR you play with is credit the relayer sponsored inside the contract. On mainnet you connect any NEAR wallet with NEAR Connect; for judging, mainnet free play opens on 14 November at 18:00 UTC (as many places as its funded relayer pays for, most held for judges with a code; credit you can play with, not withdraw).",
   },
   {
     name: "Pay with any token",

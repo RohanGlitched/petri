@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     if (net === "mainnet") {
       const w = mainnetWindow();
       const now = Date.now();
-      return NextResponse.json({ net, on: true, kind: "implicit", open: false, why: now < w.start ? "soon" : now >= w.end ? "closed" : "full", opensAt: w.start, closesAt: w.end, cap: w.cap, made: 0, left: 0, guests: [] }, { headers: cache });
+      return NextResponse.json({ net, on: true, kind: "implicit", open: false, why: now < w.start ? "soon" : now >= w.end ? "closed" : "full", opensAt: w.start, closesAt: w.end, cap: w.cap, made: 0, left: 0, judgePlaces: w.judgePlaces, judgeLeft: 0, publicLeft: 0, guests: [] }, { headers: cache });
     }
     return NextResponse.json({ net, on: false }, { headers: cache });
   }

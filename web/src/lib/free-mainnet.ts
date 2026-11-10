@@ -9,12 +9,16 @@ import { addSponsoredGuests } from "./sides";
 export type FreeMainnet = {
   on: boolean;
   open?: boolean;
-  why?: "open" | "soon" | "closed" | "full" | "spent";
+  why?: "open" | "judges" | "soon" | "closed" | "full" | "spent";
   opensAt?: number;
   closesAt?: number;
   cap?: number;
   made?: number;
   left?: number;
+  /** Places held for judges with a code, and how many of `left` only a code opens. */
+  judgePlaces?: number;
+  judgeLeft?: number;
+  publicLeft?: number;
   guests?: string[];
   relayer?: string;
 };

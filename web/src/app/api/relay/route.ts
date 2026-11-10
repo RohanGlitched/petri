@@ -17,7 +17,12 @@
 //
 // Mainnet free play (`?net=mainnet`, see lib/guest-program.ts) relays implicit guests: the sender must carry the
 // ticket /api/guest gave it, sign with the key its own account name encodes, stay within its relayed moves (counted by
-// the key's nonce since it was made), and the relayer must be above its balance floor. The lab is testnet only.
+// the key's nonce since it was made), and the relayer must be above its balance floor. The lab is testnet only. On the
+// mainnet dish no `advance` is relayed (the keeper catches the dish up; an advance would spend the relayer's NEAR on
+// stepping the whole board) and a relayed call prepays at most 100 TGas, so one guest's moves cannot drain the pool.
+//
+// On both networks a planting's note may not carry a ` · tee:<hex>` tag: that tag names a strain move's TEE proof, and
+// a guest copying it would make its own planting look like a verified AI move.
 
 import { NextResponse } from "next/server";
 import { Account, SCHEMA, actions, baseEncode, encodeDelegateAction } from "near-api-js";
@@ -44,6 +49,11 @@ const LAB_IDS = /^[a-z0-9-]{2,32}$/;
 /** The most gas a relayed call may prepay: 300 TGas, a transaction's limit, which a catch-up on a crowded dish can need
  * (unused gas is refunded to the relayer). */
 const MAX_GAS = 300n * 10n ** 12n;
+/** On mainnet: the most gas a relayed delegate action may prepay in all (a planting needs well under it once the
+ * keeper has the dish current), and no `advance` at all. */
+const MAINNET_MAX_GAS = 100n * 10n ** 12n;
+/** The tag strain moves carry in their planting notes to name their TEE proof; never relayed for a guest. */
+const TEE_TAG = /\btee:[0-9a-f]{4,}/i;
 /** Most `advance` calls a relayed delegate action may carry ahead of its call (in all within MAX_GAS). */
 const MAX_ADVANCES = 3;
 const PER_ACCOUNT_PER_MIN = 6;
@@ -155,9 +165,21 @@ export async function POST(req: Request) {
     if (!fc || !(ALLOWED.has(fc.methodName) || (lab && LAB.has(fc.methodName)))) return bad("Only join, buy, plant, sell, claim, advance, mint_slide, settle_pending and the pact calls are relayed.");
     if (i < da.actions.length - 1 && fc.methodName !== "advance") return bad("Only advance calls may come before the call itself.");
     if (BigInt(fc.deposit) !== 0n) return bad("Relayed calls carry no NEAR; guests pay from their sponsored credit.");
+    if (chain === "mainnet" && fc.methodName === "advance") {
+      return bad("On mainnet the relayer does not pay for advancing the dish; the keeper keeps it current. Send the move on its own.", 403);
+    }
+    if (fc.methodName === "plant") {
+      let note: unknown = null;
+      try {
+        note = JSON.parse(new TextDecoder().decode(Uint8Array.from(fc.args)))?.note;
+      } catch {
+        return bad("The planting's arguments are not JSON.");
+      }
+      if (typeof note === "string" && TEE_TAG.test(note)) return bad("A lab note may not carry a tee: tag; those name the strains' TEE proofs.", 403);
+    }
     gas += BigInt(fc.gas);
   }
-  if (gas > MAX_GAS) return bad("Too much gas requested.");
+  if (gas > (chain === "mainnet" ? MAINNET_MAX_GAS : MAX_GAS)) return bad(chain === "mainnet" ? "Too much gas requested: a free mainnet move may prepay at most 100 TGas." : "Too much gas requested.");
 
   // The signature must be valid for exactly this delegate action.
   const pk = da.publicKey.ed25519Key?.data;

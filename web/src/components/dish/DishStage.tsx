@@ -33,7 +33,7 @@ import { Goals } from "./Goals";
 import { MyPacts, PickedColony, pactLines, pactsOn, zoneColonies, type PactActions } from "./Pacts";
 import s from "./dish.module.css";
 import { NetTag } from "@/components/site/NetTag";
-import { NoteText, splitTee } from "@/components/site/TeeNote";
+import { NoteText, splitTee, teeEligible } from "@/components/site/TeeNote";
 import { DishDelight } from "@/components/delight/Delight";
 
 type Cell = { x: number; y: number };
@@ -2199,7 +2199,7 @@ export function DishStage() {
                 // Hover or tap the badge: who chose the move, the options it weighed and its reasoning.
                 const why = move
                   ? `${who.long}.${move.options?.length ? ` It weighed ${move.options.length} legal ${move.options.length === 1 ? "option" : "options"}, each forecast 240 generations ahead.` : ""}${move.note ? ` Its reasoning: “${splitTee(move.note).text}”` : ""}`
-                  : splitTee(p.note).tag
+                  : splitTee(p.note).tag && teeEligible(c?.account)
                     ? "Chosen by a NEAR AI model inside a TEE: the chip on its note opens the signed answer."
                     : `${spawned ? "A spawned strain" : "A house strain"}; its move is not in the public log yet.`;
                 return (
@@ -2219,7 +2219,7 @@ export function DishStage() {
                       </p>
                       {p.note && (
                         <q>
-                          <NoteText note={p.note} net={net.network} />
+                          <NoteText note={p.note} net={net.network} account={c?.account ?? null} />
                         </q>
                       )}
                     </div>

@@ -59,14 +59,15 @@ export async function isOurGuest(relayer: string, accountId: string): Promise<bo
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Sponsor `accountId` with GUEST_CREDIT, up to three tries, and report true only once the credit can be read on chain. */
-export async function sponsorUntilCredited(relayer: Account, accountId: string, net: Network = NETWORK): Promise<boolean> {
+/** Sponsor `accountId` with GUEST_CREDIT (plus `mark` yoctoNEAR: a judge's guest on mainnet carries one, see
+ * lib/implicit-guests.ts), up to three tries, and report true only once the credit can be read on chain. */
+export async function sponsorUntilCredited(relayer: Account, accountId: string, net: Network = NETWORK, mark = 0n): Promise<boolean> {
   for (let attempt = 0; attempt < 3; attempt++) {
     if ((await sponsoredBy(relayer.accountId, accountId, net).catch(() => 0n)) > 0n) return true;
     try {
       await relayer.signAndSendTransaction({
         receiverId: contractOn(net),
-        actions: [actions.functionCall("sponsor", { account_id: accountId }, 30n * 10n ** 12n, nearToYocto(GUEST_CREDIT))],
+        actions: [actions.functionCall("sponsor", { account_id: accountId }, 30n * 10n ** 12n, nearToYocto(GUEST_CREDIT) + mark)],
         waitUntil: "EXECUTED_OPTIMISTIC",
       });
       // It landed: never send a second one, only wait for the read to show it.

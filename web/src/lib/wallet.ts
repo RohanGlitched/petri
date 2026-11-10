@@ -164,6 +164,13 @@ async function proofOfWork(challenge: string, publicKey: string, bits: number): 
   }
 }
 
+/** A judge code for free mainnet play (scripts/judge-codes.mjs): it opens the places held for judges. Sent once, with
+ * the next guest request. */
+let judgeCode: string | null = null;
+export function setJudgeCode(code: string | null) {
+  judgeCode = code?.trim() || null;
+}
+
 export async function createGuest(): Promise<string> {
   const kp = KeyPair.fromRandom("ed25519");
   const publicKey = kp.getPublicKey().toString();
@@ -175,7 +182,7 @@ export async function createGuest(): Promise<string> {
   const res = await fetch(`/api/guest${NET_QS}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ publicKey, nonce, challenge: ch.challenge }),
+    body: JSON.stringify({ publicKey, nonce, challenge: ch.challenge, ...(judgeCode ? { judgeCode } : {}) }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.accountId) throw new Error(body.error ?? "The guest account could not be made.");
@@ -303,7 +310,10 @@ async function call(methodName: string, args: Record<string, unknown>, tgas: num
     deposit = 0n;
   }
   const a = account();
-  const steps = await withCatchUp(methodName, args, tgas);
+  // A free mainnet colony's relayer pays for no `advance` and at most 100 TGas a move (/api/relay): the keeper keeps
+  // that dish current, so the move goes alone.
+  const mainnetGuest = NETWORK === "mainnet" && !!guest?.ticket;
+  const steps = mainnetGuest ? [{ methodName, args, tgas: Math.min(tgas, 100) }] : await withCatchUp(methodName, args, tgas);
   const { actions, encodeSignedDelegate } = await import("near-api-js");
   // NEAR runs a delegate action signed by a function-call key only when it holds a single call, so a lagging dish is
   // caught up with one delegate per advance, each relayed and finished before the move itself is signed. An implicit

@@ -436,7 +436,10 @@ export default function Page() {
           <strong>Server limits are per instance.</strong> The relay and guest rate limits are kept in each server instance&rsquo;s memory.
         </li>
         <li>
-          <strong>Relayed gas is capped at 300 TGas.</strong> A guest call that needs more is refused by the relay.
+          <strong>Relayed gas is capped.</strong> A testnet guest call may prepay at most 300 TGas; a free mainnet guest&rsquo;s at most 100 TGas, and the mainnet relay refuses <C>advance</C> altogether (the keeper keeps that dish current). A guest&rsquo;s planting note may not carry a <C>tee:</C> tag, and the site draws the TEE chip only on strains&rsquo; plantings.
+        </li>
+        <li>
+          <strong>Free mainnet places are held for judges.</strong> Most of the free mainnet places (25 by default) open only with a judge code, an HMAC under a secret on the site&rsquo;s server. A judge&rsquo;s guest is sponsored with one extra yoctoNEAR, so the places taken are counted from the dish&rsquo;s own ledger, not from a server&rsquo;s memory; how often one code may be used is counted per server instance.
         </li>
         <li>
           <strong>Replays trust their RPC.</strong> See <Doc to="verification" hash="limits">What verification does not prove</Doc>.

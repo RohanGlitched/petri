@@ -15,7 +15,12 @@
 //   - nothing is relayed once the relayer is under its floor, and each guest gets at most PETRI_MAINNET_GUEST_RELAYS
 //     relayed moves (counted by its key's nonce, which only ever rises);
 //   - per address: PETRI_MAINNET_GUESTS_PER_IP guests a day, and the daily spend caps of lib/budget.ts on their own
-//     mainnet counters.
+//     mainnet counters;
+//   - PETRI_MAINNET_JUDGE_PLACES of the places (default 25) are held for judges: a guest made without a judge code is
+//     refused once the public places (cap less that) are taken. A judge code is an HMAC under PETRI_JUDGE_CODE_SECRET
+//     (scripts/judge-codes.mjs prints them); without that secret no place is held back. A judge's guest is marked on
+//     chain, not in a server's memory: its sponsorship carries one extra yoctoNEAR, so the dish's own ledger counts the
+//     judge places taken (lib/implicit-guests.ts).
 // The same implicit flow can run on testnet for a rehearsal: PETRI_TESTNET_GUESTS=implicit with the PETRI_TESTNET_*
 // variables of the same names.
 
@@ -43,6 +48,10 @@ export type ImplicitLimits = {
   relaysPerGuest: number;
   /** The dish ledger index the guest count starts from. */
   ledgerFrom: number;
+  /** Places held for guests made with a judge code (0 when no PETRI_JUDGE_CODE_SECRET is set). */
+  judgePlaces: number;
+  /** Guests one judge code may make on one server instance. */
+  judgeCodeUses: number;
 };
 
 export type GuestProgram = {
@@ -81,10 +90,14 @@ function limits(prefix: string): ImplicitLimits {
     relayUntil: env(`${prefix}_GUESTS_RELAY_UNTIL`) ? time(env(`${prefix}_GUESTS_RELAY_UNTIL`), DEFAULT_END) : end,
     cap: Number(env(`${prefix}_GUESTS_CAP`) ?? "40"),
     floor: nearToYoctoStr(env(`${prefix}_RELAYER_FLOOR`) ?? "0.3"),
-    reserve: nearToYoctoStr(env(`${prefix}_GUEST_RESERVE`) ?? "0.07"),
+    // 0.1 NEAR, not the 0.07 a guest's creation and credit take: also its 16 relayed moves' gas (about 0.02 measured
+    // on testnet), so "places left" never counts a guest the relayer could make but not carry.
+    reserve: nearToYoctoStr(env(`${prefix}_GUEST_RESERVE`) ?? "0.1"),
     perIpDay: Number(env(`${prefix}_GUESTS_PER_IP`) ?? "3"),
     relaysPerGuest: Number(env(`${prefix}_GUEST_RELAYS`) ?? "16"),
     ledgerFrom: Number(env(`${prefix}_GUESTS_LEDGER_FROM`) ?? "0"),
+    judgePlaces: judgeSecret() ? Math.max(0, Number(env(`${prefix}_JUDGE_PLACES`) ?? "25")) : 0,
+    judgeCodeUses: Math.max(1, Number(env("PETRI_JUDGE_CODE_USES") ?? "2")),
   };
 }
 
@@ -110,9 +123,30 @@ export function guestProgram(net: Network): GuestProgram | null {
 }
 
 /** The window as configured, for the start card, even when the relayer is not. */
-export function mainnetWindow(): { start: number; end: number; cap: number } {
+export function mainnetWindow(): { start: number; end: number; cap: number; judgePlaces: number } {
   const l = limits("PETRI_MAINNET");
-  return { start: l.start, end: l.end, cap: l.cap };
+  return { start: l.start, end: l.end, cap: l.cap, judgePlaces: Math.min(l.judgePlaces, l.cap) };
+}
+
+// Judge codes. A code is `petri-<n>-<8 hex>`: n is its number, the hex the start of HMAC-SHA256(secret, "petri-judge:<n>").
+// scripts/judge-codes.mjs prints them from the same secret, for the submission text. 32 bits per code, each guess also
+// costs an 18-bit proof of work, so codes cannot be guessed.
+
+const judgeSecret = () => env("PETRI_JUDGE_CODE_SECRET");
+
+export function judgeCodeFor(secret: string, n: number): string {
+  const mac = bytesToHex(hmac(sha256, new TextEncoder().encode(secret), new TextEncoder().encode(`petri-judge:${n}`))).slice(0, 8);
+  return `petri-${n}-${mac}`;
+}
+
+/** The code's number when `code` is a valid judge code under this server's secret, else null. */
+export function readJudgeCode(code: unknown): number | null {
+  const secret = judgeSecret();
+  if (!secret || typeof code !== "string") return null;
+  const m = code.trim().toLowerCase().match(/^petri-(\d{1,4})-([0-9a-f]{8})$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return judgeCodeFor(secret, n) === `petri-${n}-${m[2]}` ? n : null;
 }
 
 /** The network a request names with `?net=` (the server's own default is testnet). */
