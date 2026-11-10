@@ -347,9 +347,9 @@ async function actOn(s, world) {
     }
   }
   await maybeFossilize(s, world, me, balance);
-  // The bench (and on mainnet the house) sometimes plants another colony's specimen slide under its licence (moved, never turned), so the
+  // The bench sometimes plants another colony's specimen slide under its licence (moved, never turned), so the
   // licence discount and the holder's royalty run on chain, not only in the rules.
-  if ((s.bench || MAINNET) && !dry && rng() < LICENSED_SHARE && (await plantLicensed(s, world, me, balance))) return;
+  if (s.bench && !dry && rng() < LICENSED_SHARE && (await plantLicensed(s, world, me, balance))) return;
   if (!s.bench) await learn(world);
   const totalLive = world.engine.total_live();
   const counts = world.engine.live_counts();
