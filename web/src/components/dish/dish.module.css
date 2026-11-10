@@ -254,8 +254,8 @@
   padding: 0;
   margin: 0 0 16px;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
 }
 .stains legend {
   font-size: 13.5px;
@@ -764,17 +764,9 @@
   .meWait { min-height: 300px; }
 }
 
-/* The status toast stays in view at the foot of the left column, above the stamp dock, however long the column is. */
-@media (min-width: 800px) {
-  .toast {
-    position: sticky;
-    bottom: 0;
-    z-index: 4;
-    flex: none;
-    background: rgba(24, 14, 7, 0.96);
-    box-shadow: 0 -10px 30px -12px rgba(0, 0, 0, 0.7), 0 18px 40px -18px rgba(0, 0, 0, 0.8);
-  }
-}
+/* Before there is a colony, messages sit at the top of the left column, in the flow: they never cover a button. */
+.toast { flex: none; padding: 14px 16px; }
+.toast .statusInline { margin: 0; padding: 0; border: 0; }
 
 /* Phones: "Find open agar" floats on the dish while a stamp is in hand (the zoom buttons are hidden there). */
 .findFab { display: none; }
@@ -796,4 +788,209 @@
     font: 600 14px var(--body);
     cursor: pointer;
   }
+}
+
+/* A card's own status line: busy, the result with its transaction, or the error, right above the card's button. */
+.statusInline {
+  margin: 12px 0 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(243, 233, 218, 0.045);
+  box-shadow: inset 0 0 0 1px var(--line);
+  display: grid;
+  gap: 6px;
+}
+.statusInline p { margin: 0; font-size: 14px; line-height: 1.45; }
+.statusInline a { text-underline-offset: 3px; }
+.shareLink {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--amber-2, #ffcf85);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.formError { margin: 0 0 4px; font-size: 14px; line-height: 1.45; }
+
+/* The name field and its dice: another lab name in one press. */
+.nameRow { display: flex; gap: 8px; }
+.nameRow input { flex: 1; min-width: 0; }
+.dice {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(243, 233, 218, 0.06);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--dim);
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.25s ease;
+}
+.dice:hover { color: var(--bone); }
+.dice:active { transform: rotate(90deg); }
+.takenList { margin: 6px 0 10px; }
+.takenList summary { cursor: pointer; font-size: 13.5px; color: var(--dim); min-height: 44px; display: flex; align-items: center; }
+.takenList .hint { margin-top: 0; }
+
+/* A join under way: the steps with ticks, in the form's place. */
+.progress { min-height: 260px; }
+.progressHead { display: flex; align-items: center; gap: 10px; }
+.steps { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
+.steps li {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  font-size: 14.5px;
+  color: var(--dim);
+  transition: color 0.3s ease;
+}
+.steps li[data-state="now"] { color: var(--bone); font-weight: 600; }
+.steps li[data-state="done"] { color: var(--text-2); }
+.stepMark {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.steps li[data-state="done"] .stepMark { background: rgba(159, 216, 168, 0.18); color: var(--ok); box-shadow: none; animation: tickIn 0.4s cubic-bezier(0.2, 0.7, 0.1, 1) both; }
+.steps li[data-state="now"] .stepMark { box-shadow: none; }
+@keyframes tickIn {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Earning: a live dot, and "+0.0123" floating up from the figure each generation the colony earns. */
+.earnDd { position: relative; }
+.tick {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 1px;
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ok);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: tickUp 1.8s cubic-bezier(0.2, 0.7, 0.1, 1) both;
+}
+@keyframes tickUp {
+  0% { opacity: 0; transform: translateY(8px); }
+  15% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+.earning {
+  position: relative;
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ok);
+  background: rgba(159, 216, 168, 0.1);
+}
+.earning .tick { left: auto; right: 0; bottom: 100%; margin: 0 0 2px; }
+.earning > i,
+.earningLine > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 0 rgba(159, 216, 168, 0.6);
+  animation: alive 2s ease-out infinite;
+}
+@keyframes alive {
+  0% { box-shadow: 0 0 0 0 rgba(159, 216, 168, 0.55); }
+  70%, 100% { box-shadow: 0 0 0 7px rgba(159, 216, 168, 0); }
+}
+.earningLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  color: var(--ok);
+}
+
+/* A ring blooms where the view just centred a colony (Find my colony, a planting, a shared link). */
+.bloom {
+  position: absolute;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.bloom::before,
+.bloom i {
+  content: "";
+  position: absolute;
+  left: -60px;
+  top: -60px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--bloom, #f2b45a), 0 0 30px 4px color-mix(in srgb, var(--bloom, #f2b45a) 55%, transparent);
+  opacity: 0;
+  animation: bloom 1.6s cubic-bezier(0.15, 0.7, 0.2, 1) both;
+}
+.bloom i {
+  display: block;
+  animation-delay: 0.35s;
+  box-shadow: 0 0 0 1.5px rgba(255, 246, 228, 0.8);
+}
+@keyframes bloom {
+  0% { opacity: 0; transform: scale(0.15); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+/* A colony's first earnings after a planting: the amount rises from the colony itself. */
+.firstEarn {
+  position: absolute;
+  z-index: 3;
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 8px 14px 9px;
+  border-radius: 14px;
+  background: rgba(24, 14, 7, 0.86);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.45), 0 18px 40px -16px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  pointer-events: none;
+  translate: -50% -100%;
+  animation: firstEarn 4.2s cubic-bezier(0.2, 0.7, 0.1, 1) both;
+}
+.firstEarn b { font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--ok); }
+.firstEarn span { font-size: 12px; color: var(--text-2); }
+@keyframes firstEarn {
+  0% { opacity: 0; transform: translateY(10px) scale(0.96); }
+  12% { opacity: 1; transform: translateY(-28px) scale(1); }
+  80% { opacity: 1; transform: translateY(-40px); }
+  100% { opacity: 0; transform: translateY(-52px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tick, .bloom::before, .bloom i, .firstEarn, .earning > i, .earningLine > i, .steps li .stepMark { animation-duration: 0.01s; }
+  .firstEarn { animation: none; translate: -50% -140%; }
+}
+/* Touch: six stains to a row, so each is a full tap target. */
+@media (pointer: coarse) {
+  .stains { grid-template-columns: repeat(6, 1fr); gap: 8px; }
 }

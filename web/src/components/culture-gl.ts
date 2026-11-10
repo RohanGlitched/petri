@@ -135,8 +135,9 @@ void main() {
     }
   }
 
-  // Overlay: 1 ghost ok, 2 ghost blocked, 3 forbidden buffer, 4 pending planting, 5 highlight,
-  // 6 inside a slide frame, 7 a cell the slide would keep, 8 outside the frame (dimmed, as under a field stop).
+  // Overlay: 1 ghost ok, 2 ghost blocked, 3 forbidden buffer, 4 pending planting (or cells pulsing), 5 highlight,
+  // 6 inside a slide frame, 7 a cell the slide would keep, 8 outside the frame (dimmed, as under a field stop),
+  // 9 a rival's buffer drawn lightly.
   uint ov = texelFetch(uOverlay, wrapCell(base), 0).r;
   if (ov == 8u) {
     c *= 0.62;
@@ -166,12 +167,14 @@ void main() {
     bool dark = uLook != 0;
     vec3 okInk = dark ? vec3(0.92, 0.96, 1.0) : vec3(0.08, 0.13, 0.2);
     vec3 badInk = vec3(0.95, 0.28, 0.36);
-    if (ov == 3u) {
-      // Screen-space diagonal hatching, so the buffer reads as a hatched zone at any zoom.
+    if (ov == 3u || ov == 9u) {
+      // Screen-space diagonal hatching, so the buffer reads as a hatched zone at any zoom. 9 is the same zone drawn
+      // lightly: the play page shades only the buffers near the stamp, as a hint rather than a wall.
       float d = (gl_FragCoord.x + gl_FragCoord.y) / 9.0;
       float hatch = smoothstep(0.30, 0.42, fract(d)) * (1.0 - smoothstep(0.58, 0.70, fract(d)));
-      c = mix(c, badInk * (dark ? 0.55 : 0.8), 0.16);
-      c = mix(c, badInk * (dark ? 0.85 : 0.7), 0.30 * hatch);
+      float k = ov == 9u ? 0.5 : 1.0;
+      c = mix(c, badInk * (dark ? 0.55 : 0.8), 0.16 * k);
+      c = mix(c, badInk * (dark ? 0.85 : 0.7), 0.30 * hatch * k);
     } else if (ov == 4u) {
       float pulse = 0.5 + 0.5 * sin(uTime * 5.0);
       c = mix(c, okInk, (0.25 + 0.3 * pulse) * (1.0 - smoothstep(0.38, 0.5, m)));

@@ -70,7 +70,12 @@ export class Culture2D {
         b = c & 255;
         a = 255;
       }
-      if (ov === 1 || ov === 4) {
+      if (ov === 4 && id) {
+        // A living cell pulsing (just planted, or found): its own stain, lifted towards white.
+        r = Math.round(r + (255 - r) * 0.45);
+        g = Math.round(g + (255 - g) * 0.45);
+        b = Math.round(b + (255 - b) * 0.45);
+      } else if (ov === 1 || ov === 4) {
         r = (ghost >> 16) & 255;
         g = (ghost >> 8) & 255;
         b = ghost & 255;
@@ -80,11 +85,11 @@ export class Culture2D {
         g = 72;
         b = 92;
         a = 230;
-      } else if (ov === 3 && !id) {
+      } else if ((ov === 3 || ov === 9) && !id) {
         r = 242;
         g = 72;
         b = 92;
-        a = 60;
+        a = ov === 9 ? 30 : 60;
       } else if ((ov === 6 || ov === 7) && !id) {
         r = 255;
         g = 240;
@@ -145,6 +150,7 @@ export class Culture2D {
       const paths = new Map<number, Path2D>();
       const shine = new Path2D();
       const shade = new Path2D();
+      const ring = new Path2D();
       const rad = z * 0.5;
       for (let cy = Math.floor(y0) - 1; cy <= Math.ceil(y1); cy++) {
         const wy = ((cy % this.h) + this.h) % this.h;
@@ -161,6 +167,10 @@ export class Culture2D {
           if (!path) paths.set(key, (path = new Path2D()));
           path.moveTo(sx + rad, sy);
           path.arc(sx, sy, rad, 0, Math.PI * 2);
+          if (id && ov === 4) {
+            ring.moveTo(sx + rad * 1.18, sy);
+            ring.arc(sx, sy, rad * 1.18, 0, Math.PI * 2);
+          }
           if (id) {
             shade.moveTo(sx + rad * 1.05, sy + rad * 0.18);
             shade.arc(sx + rad * 0.1, sy + rad * 0.18, rad * 1.05, 0, Math.PI * 2);
@@ -179,6 +189,9 @@ export class Culture2D {
       ctx.globalAlpha = 1;
       ctx.fillStyle = "rgba(255,250,240,0.55)";
       ctx.fill(shine);
+      ctx.strokeStyle = "rgba(255,246,228,0.85)";
+      ctx.lineWidth = Math.max(1, rad * 0.16);
+      ctx.stroke(ring);
     }
 
     // Vignette, as the lens darkens towards its rim.

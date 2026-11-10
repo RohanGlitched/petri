@@ -595,3 +595,58 @@ main:focus-visible { outline: none; }
 @media (max-width: 380px) {
   .brand { font-size: 18px; gap: 6px; }
 }
+
+/* A word of the dish's vocabulary: dotted underneath, one plain sentence on hover, tap or focus (components/site/Term.tsx). */
+.term {
+  position: relative;
+  display: inline;
+  text-decoration: underline dotted rgba(243, 233, 218, 0.45);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: help;
+  pointer-events: auto;
+  outline: none;
+}
+.term:focus-visible { border-radius: 4px; box-shadow: 0 0 0 2px var(--amber); }
+.term-tip {
+  position: absolute;
+  z-index: 60;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: min(270px, 80vw);
+  padding: 9px 12px 10px;
+  border-radius: 12px;
+  background: #2a190c;
+  box-shadow: inset 0 0 0 1px var(--line-2), 0 18px 40px -16px rgba(0, 0, 0, 0.9);
+  color: var(--text-2, #e2d5c3);
+  font: 400 13px/1.45 var(--body);
+  letter-spacing: 0;
+  text-align: left;
+  text-transform: none;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.15s ease, transform 0.18s ease, visibility 0s linear 0.18s;
+  pointer-events: none;
+}
+.term[data-place="below"] .term-tip { bottom: auto; top: calc(100% + 8px); transform: translate(-50%, -4px); }
+.term[data-align="start"] .term-tip { left: 0; transform: translate(0, 4px); }
+.term[data-align="end"] .term-tip { left: auto; right: 0; transform: translate(0, 4px); }
+.term[data-place="below"][data-align="start"] .term-tip,
+.term[data-place="below"][data-align="end"] .term-tip { transform: translate(0, -4px); }
+.term:hover .term-tip,
+.term:focus .term-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition: opacity 0.15s ease, transform 0.18s ease, visibility 0s;
+}
+.term[data-align="start"]:hover .term-tip,
+.term[data-align="start"]:focus .term-tip,
+.term[data-align="end"]:hover .term-tip,
+.term[data-align="end"]:focus .term-tip { transform: translate(0, 0); }
+@media (prefers-reduced-motion: reduce) {
+  .term-tip { transition: none; }
+}

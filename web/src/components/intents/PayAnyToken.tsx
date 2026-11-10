@@ -31,7 +31,7 @@ import {
   type Token,
 } from "@/lib/intents";
 import { useLive, hex, int, near, petri } from "@/lib/live";
-import { STAINS, firstFreeStain } from "@/lib/stains";
+import { STAINS, firstFreeStain, livingStains } from "@/lib/stains";
 import s from "./intents.module.css";
 
 /** NEAR a join keeps for the new colony's storage before the rest buys PETRI (as on the join form). */
@@ -154,6 +154,7 @@ export function PayAnyToken({ open, onClose, account, onLanded }: { open: boolea
           }}
           onQuoted={(o) => setStage({ kind: "deposit", order: o })}
           colonies={d.colonies}
+          liveCounts={d.liveCounts}
           agar={d.agar}
           rulesReady={ready && !!rules}
           rules={rules ?? null}
@@ -171,6 +172,7 @@ function PayForm({
   onResume,
   onQuoted,
   colonies,
+  liveCounts,
   agar,
   rulesReady,
   rules,
@@ -180,6 +182,7 @@ function PayForm({
   onResume: (o: SavedOrder) => void;
   onQuoted: (o: SavedOrder) => void;
   colonies: Colony[];
+  liveCounts: number[];
   agar: number;
   rulesReady: boolean;
   rules: ReturnType<typeof useLive>["rules"] | null;
@@ -231,7 +234,8 @@ function PayForm({
   const action: Plan["do"] = known?.colony ? "buy" : "join";
   const implicit = /^[0-9a-f]{64}$/.test(ownerId) || /^0x[0-9a-f]{40}$/.test(ownerId);
 
-  const taken = useMemo(() => new Map(colonies.map((c) => [c.color, c.name])), [colonies]);
+  // Only living colonies hold their stain: a colony with no cells left gives its colour back.
+  const taken = useMemo(() => livingStains(colonies, liveCounts), [colonies, liveCounts]);
   const color = picked !== null && !taken.has(picked) ? picked : firstFreeStain(new Set(taken.keys()));
   const cleanName = name.split(/\s+/).filter(Boolean).join(" ");
   const nameTaken = colonies.some((c) => c.name.toLowerCase() === cleanName.toLowerCase());
