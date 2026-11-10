@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { RuleDemo, type Seed } from "@/components/site/RuleDemo";
 import { buy_quote } from "@/engine";
 import { useLive, petri, int, near, hex } from "@/lib/live";
-import { view } from "@/lib/chain";
+import { viewShared } from "@/lib/chain";
 import { fmtPetri } from "@/lib/config";
 import { useNet } from "@/lib/use-net";
 import { LAUNCH, DEMO, YOCTO, nearPer, weightOf } from "./shared";
@@ -108,7 +108,7 @@ export function CoinSection() {
   const [reg, setReg] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    view<{ min: string }>("storage_balance_bounds")
+    viewShared<{ min: string }>("storage_balance_bounds")
       .then((b) => live && setReg(b.min))
       .catch(() => undefined);
     return () => {

@@ -2447,12 +2447,12 @@ function JoinForm({
         {takenStains.length > 0 && (
           <>
             <p className={`${s.hint} ${s.hoverOnly}`} style={{ margin: "6px 0 10px" }}>
-              A slashed stain is worn by a living colony; hover it to see which.
+              A slashed colour is worn by a living colony; hover it to see which.
             </p>
             {/* Touch screens have no hover, so they say it in words, folded away. */}
             <details className={`${s.touchOnly} ${s.takenList}`}>
               <summary>
-                {takenStains.length} {takenStains.length === 1 ? "stain is" : "stains are"} worn by living colonies
+                {takenStains.length} {takenStains.length === 1 ? "colour is" : "colours are"} worn by living colonies
               </summary>
               <p className={s.hint}>{takenStains.map((x) => `${x.name} by ${x.owner}`).join("; ")}.</p>
             </details>

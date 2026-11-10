@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useLive, int, near } from "@/lib/live";
 import { fmtPetri } from "@/lib/config";
 import { useNet } from "@/lib/use-net";
-import { getPlantDeposit } from "@/lib/chain";
+import { viewShared } from "@/lib/chain";
 import { LAUNCH } from "./shared";
 import s from "./rules.module.css";
 import { PhoneFold } from "./PhoneFold";
@@ -118,7 +118,7 @@ function useDeposits(ready: boolean) {
   useEffect(() => {
     if (!ready) return;
     let live = true;
-    Promise.all(DEPOSITS.map((x) => getPlantDeposit(x.cells, x.note).catch(() => null))).then((v) => {
+    Promise.all(DEPOSITS.map((x) => viewShared<string>("plant_deposit", { cells: x.cells, note_bytes: x.note, slide: null }).catch(() => null))).then((v) => {
       if (live) setOut(v);
     });
     return () => {

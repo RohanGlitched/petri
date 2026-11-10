@@ -3,7 +3,7 @@
 // and their recent pace (the dish's own ledger) straight from NEAR mainnet, whichever dish the page is showing.
 
 import { CONTRACTS } from "./config";
-import { rpcCall } from "./rpc";
+import { accountAt, sharedHead, viewAt } from "./shared-read";
 import { strainsOn } from "./strains";
 import { entryGeneration, type DishState, type Entry } from "./chain";
 
@@ -11,17 +11,12 @@ const YOCTO = 10n ** 24n;
 /** The pace is measured over the last day of the ledger (5,760 generations of 15 s), or less if the dish is younger. */
 const WINDOW_GENS = 5760;
 
-const rpc = <T,>(method: string, params: unknown): Promise<T> => rpcCall<T>("mainnet", method, params, { id: "runway" });
 
+/** Every read is at the block all visitors share for a few seconds, through the site's cache (shared-read.ts). */
+let block: Promise<number> | null = null;
+const at = () => (block ??= sharedHead("mainnet"));
 async function view<T>(method: string, args: Record<string, unknown>): Promise<T> {
-  const r = await rpc<{ result: number[] }>("query", {
-    request_type: "call_function",
-    finality: "final",
-    account_id: CONTRACTS.mainnet,
-    method_name: method,
-    args_base64: btoa(JSON.stringify(args)),
-  });
-  return JSON.parse(new TextDecoder().decode(new Uint8Array(r.result))) as T;
+  return viewAt<T>("mainnet", await at(), method, args, CONTRACTS.mainnet);
 }
 
 export type Runway = {
@@ -41,10 +36,11 @@ export type Runway = {
 };
 
 export async function readRunway(): Promise<Runway> {
+  block = null;
   const defs = strainsOn("mainnet");
   const balances = await Promise.all(
     defs.map((s) =>
-      rpc<{ amount: string }>("query", { request_type: "view_account", finality: "final", account_id: s.account }).then(
+      at().then((b) => accountAt("mainnet", b, s.account)).then(
         (a) => BigInt(a.amount),
         () => null,
       ),

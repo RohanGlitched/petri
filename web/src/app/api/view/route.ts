@@ -8,6 +8,7 @@
 
 import { CONTRACTS, type Network } from "@/lib/config";
 import { PARENTS } from "@/lib/living";
+import { keeperOn, strainsOn } from "@/lib/strains";
 import { RpcAnswer, rpcCall } from "@/lib/rpc";
 import { finalHeight } from "@/lib/final-head";
 
@@ -16,8 +17,10 @@ export const dynamic = "force-dynamic";
 const FOREVER = "public, max-age=31536000, s-maxage=31536000, immutable";
 const mem = new Map<string, { status: number; body: string }>();
 
-function allowed(net: Network, account: string): boolean {
+function allowed(net: Network, account: string, kind: string): boolean {
   if (account === CONTRACTS[net] || account === PARENTS[net]) return true;
+  // The house strains' and the keeper's balances (view_account only), for the house runway on /strains.
+  if (kind === "account" && (strainsOn(net).some((s) => s.account === account) || keeperOn(net) === account)) return true;
   return new RegExp(`^slide-[1-9][0-9]{0,9}\.${PARENTS[net].replace(/\./g, "\.")}$`).test(account);
 }
 
@@ -33,7 +36,7 @@ export async function GET(req: Request) {
   const args = q.get("args") ?? "e30=";
   if (!Number.isSafeInteger(block) || block <= 0) return bad("block must be a final block height");
   if (kind !== "call" && kind !== "account" && kind !== "keys") return bad("kind is call, account or keys");
-  if (!allowed(net, account)) return bad("only the dish, its slide factory and living slides are served here");
+  if (!allowed(net, account, kind)) return bad("only the dish, its slide factory, living slides and the house accounts are served here");
   if (kind === "call" && (!/^[a-z_][a-z0-9_]{0,63}$/.test(method) || args.length > 2048 || !/^[A-Za-z0-9+/=]*$/.test(args))) return bad("a view method and base64 JSON arguments");
 
   const key = `${net}|${block}|${kind}|${account}|${method}|${args}`;

@@ -297,7 +297,8 @@ export const getBoard = async () => {
 };
 export const getColonies = (from = 0, limit = 500) => view<Colony[]>("colonies", { from, limit });
 export const getPlants = (from = 0, limit = 1000) => view<PlantRecord[]>("plants", { from, limit });
-export const getLedger = (from = 0, limit = 1000) => view<Entry[]>("ledger", { from, limit });
+/** Ledger pages, the pacts and the slides are public and change slowly: read at the shared block, through the cache. */
+export const getLedger = (from = 0, limit = 1000) => viewShared<Entry[]>("ledger", { from, limit });
 /** At most 500 a call; see getAllEarnings. */
 export const getEarnings = (from = 0, limit = 500) => view<string[]>("earnings", { from, limit });
 /** At most 500 a call; see getAllTideWinnings. */
@@ -306,7 +307,7 @@ export const getStakes = (from = 0, limit = 2000) => view<string[]>("stakes", { 
 export const getCredit = (account_id: string) => view<string>("credit_of", { account_id });
 export const getCreditGrants = (account_id: string) => view<Grant[]>("credit_grants", { account_id });
 export const getSellQuote = (petri: string) => view<string>("sell_quote", { petri });
-export const getCheckpoints = (from = 0, limit = 2000) => view<Checkpoint[]>("checkpoints", { from, limit });
+export const getCheckpoints = (from = 0, limit = 2000) => viewShared<Checkpoint[]>("checkpoints", { from, limit });
 export const getBalance = (account_id: string) => view<string>("ft_balance_of", { account_id });
 export const getClaimable = (account_id: string) => view<Claimable>("claimable", { account_id });
 /** PETRI units a planting costs now; `licensed` for one under a slide's licence (`slide_discount_bps` off). */
@@ -317,8 +318,8 @@ export const getBuyQuote = (near: string) => view<string>("buy_quote", { near })
 export const getPlantDeposit = (cells: number, note_bytes: number | null, slide: string | null = null) => view<string>("plant_deposit", { cells, note_bytes, slide });
 export const getColonyOf = (account_id: string) => view<Colony | null>("colony_of", { account_id });
 /** Slides in mint order (token "1" is the first), at most 500 a call. */
-export const getSlides = (from = 0, limit = 100) => view<SlideView[]>("slides", { from, limit });
-export const getSlide = (token_id: string) => view<SlideView | null>("slide", { token_id });
+export const getSlides = (from = 0, limit = 100) => viewShared<SlideView[]>("slides", { from, limit });
+export const getSlide = (token_id: string) => viewShared<SlideView | null>("slide", { token_id });
 export const getSlidesFor = (account_id: string, from = 0, limit = 100) => view<SlideView[]>("slides_for", { account_id, from, limit });
 /** yoctoNEAR to attach to a slide of w × h with a title of `title_bytes` UTF-8 bytes; what is not used comes back. */
 export const getSlideDeposit = (w: number, h: number, title_bytes: number | null) => view<string>("slide_deposit", { w, h, title_bytes });
@@ -329,11 +330,11 @@ export const getPendingRecord = (account_id: string) => view<PendingRecord | nul
 export const getIntentMinimum = (what: "join" | "buy", account_id: string) => view<string>("intent_minimum", { what, account_id });
 /** The pacts a colony is party to that have not ended (at most 8), and one pact by number. */
 export const getPactsOf = (account_id: string) => view<PactView[]>("pacts_of", { account_id });
-export const getPact = (id: number) => view<PactView | null>("pact", { id });
+export const getPact = (id: number) => viewShared<PactView | null>("pact", { id });
 /** yoctoNEAR that always covers a pact offer's storage (attached, or as credit); what is not used comes back. */
 export const PACT_DEPOSIT = 4_200_000_000_000_000_000_000n;
 /** PETRI a slide's holders have been paid in royalties, in all. */
-export const getSlideRoyalties = (token_id: string) => view<string>("slide_royalties", { token_id });
+export const getSlideRoyalties = (token_id: string) => viewShared<string>("slide_royalties", { token_id });
 
 /** Decode a slide's base64 bitmap for `slide_svg` or for drawing cells yourself. */
 export function slideBits(b64: string): Uint8Array {
