@@ -188,8 +188,9 @@ brought 0.015 NEAR, which netted under `min_join` (0.01 NEAR) after the join's s
 the house that has never attached can attach only while none of its cells is alive. While its first pattern lived it
 played under the kept-PETRI rules: what it earned was kept PETRI and its share of the first mainnet tide was paid as
 credit. Once those cells had died on chain, the holder attached it with NEAR and replanted the 45 cells at generation
-4,896; the dish's `colonies` view now says `attached: true` for colony 6, so its tide shares from then on are NEAR (the
-first tide after the replanting is at generation 5,040). The testnet purses `slide-1` and `slide-2.petri-slides.testnet`
+4,896; the dish's `colonies` view now says `attached: true` for colony 6, so its tide shares are NEAR: by generation
+5,346 it had won 0.0155 NEAR at the tides since (`tide_winnings`), and its holder had claimed it. Its replanted pattern
+had died again by then, so it earns again when its holder replants. The testnet purses `slide-1` and `slide-2.petri-slides.testnet`
 are attached and earn normally.
 
 ## Mainnet v2: done on 10 November 2026
