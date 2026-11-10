@@ -41,7 +41,7 @@ export default function JudgesPage() {
         <div className={s.sect} style={{ paddingTop: 24 }}>
           <div className={s.sectHead}>
             <h2 className="h2">Live claims</h2>
-            <p>Green holds on chain now; amber is disclosed or holds on one dish only; red would be a failure. The replay rows take a few seconds.</p>
+            <p>Green holds on chain now; amber is disclosed or holds on one dish only; red would be a failure. The replay rows download each dish&rsquo;s whole ledger and replay it from generation zero in this browser, so they finish last.</p>
           </div>
           <Claims />
         </div>
