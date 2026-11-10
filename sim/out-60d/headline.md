@@ -1,0 +1,7 @@
+| Scenario | What happens | Largest share of living cells one outside player held (day 7 on) | Largest share of players' PETRI one player held (day 7 on) | PETRI burned | NEAR the vault paid out | PETRI left in the agar | Living cells, day 60 |
+|---|---|---|---|---|---|---|---|
+| boom | 600 outside players arrive over the first ten days, then nobody new | 65.2% (45.8–93.5%; Methuselah) | 44.5% (25.5–59.2%) | 151568 (148246–156936) | 133.554 (133.191–135.888) | 829028 (818059–835275) | 457 (341–516) |
+| steady | 5 new outside players a day for sixty days (300 in all) | 67.6% (59.3–86.6%; Raider, Whale) | 62.5% (42.5–71.4%) | 137127 (135653–150664) | 75.943 (69.736–78.365) | 852116 (839926–855489) | 1230 (977–1354) |
+| decline | 300 players arrive in the first two days and nobody after; each stops once its budget is spent | 78.2% (48.2–94.4%; Methuselah) | 39.2% (30.4–65.0%) | 77866 (74711–81112) | 65.280 (64.563–65.928) | 905040 (899676–913050) | 468 (396–479) |
+| whale siege | steady arrivals (150 over 30 days) plus three 2-NEAR whales, a 10-colony split whale and two lattice lockers from day 0 | 87.3% (77.1–100.0%; Methuselah, Whale) | 61.8% (53.9–71.1%) | 110595 (103233–114479) | 58.984 (58.014–59.312) | 855084 (837911–875123) | 488 (404–558) |
+| strains only | the five house strains alone, with their mainnet budgets, and no outside player | 0.0% (0.0–0.0%; nobody) | 0.0% (0.0–0.0%) | 1385 (1269–1465) | 0.000 (0.000–0.000) | 998547 (998474–998670) | 508 (482–705) |

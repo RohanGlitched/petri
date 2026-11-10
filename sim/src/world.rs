@@ -355,6 +355,9 @@ pub struct TideRow {
     pub first_share: f64,
     pub top_share: f64,
     pub outsiders: usize,
+    /// The largest share of the living cells any one outside player (all its colonies) held, and its kind.
+    pub top_live_share: f64,
+    pub top_live_kind: Option<Kind>,
 }
 
 #[derive(Clone)]
@@ -382,6 +385,14 @@ pub struct DayRow {
     pub tides_skipped: u64,
     pub joined: usize,
     pub claimed: u128,
+    /// Cumulative NEAR (and credit) the vault has paid out: tide shares in NEAR and as credit, bounties, sales.
+    pub vault_out: u128,
+    /// PETRI held by players (balances and unclaimed earnings), outside the agar.
+    pub held: u128,
+    /// The largest share of the living cells, and of the PETRI players hold, any one outside player held at the day's end.
+    pub top_live_share: f64,
+    pub top_live_kind: Option<Kind>,
+    pub top_held_share: f64,
 }
 
 /// One player's totals (summed over its colonies).
@@ -1502,6 +1513,7 @@ impl World {
         let newcomer_near = newcomer_petri * self.k / self.agar + deposit;
         let siege_near = self.cost(4, true) * self.k / self.agar + deposit;
         let outsiders = self.accts.iter().filter(|a| a.joined && a.kind() != Kind::House && a.kind() != Kind::Bench).count();
+        let (top_live_share, top_live_kind) = self.top_live();
         self.timeline.push(TideRow {
             gen: self.gen,
             wall: self.t,
@@ -1530,6 +1542,8 @@ impl World {
             first_share,
             top_share,
             outsiders,
+            top_live_share,
+            top_live_kind,
         });
     }
 
@@ -2845,12 +2859,44 @@ impl World {
         }
     }
 
+    /// The outside player (summed over its colonies) holding the most living cells: its share of all living cells.
+    fn top_live(&self) -> (f64, Option<Kind>) {
+        if self.total_live == 0 {
+            return (0.0, None);
+        }
+        let mut by = vec![(0u64, None); self.groups];
+        for a in self.accts.iter().filter(|a| a.joined && a.kind() != Kind::House) {
+            let e = &mut by[a.group];
+            e.0 += self.live.get(a.id as usize).copied().unwrap_or(0) as u64;
+            e.1 = Some(a.kind());
+        }
+        let (n, k) = by.into_iter().max_by_key(|e| e.0).unwrap_or((0, None));
+        (n as f64 / self.total_live as f64, if n > 0 { k } else { None })
+    }
+
+    /// PETRI players hold (balances and unclaimed earnings), and the largest share of it one outside player holds.
+    fn top_held(&self) -> (u128, f64) {
+        let mut by = vec![0u128; self.groups];
+        let mut all = 0u128;
+        for a in self.accts.iter().filter(|a| a.joined) {
+            let u = a.balance + a.unclaimed;
+            all += u;
+            if a.kind() != Kind::House {
+                by[a.group] += u;
+            }
+        }
+        let top = by.into_iter().max().unwrap_or(0);
+        (all, if all > 0 { top as f64 / all as f64 } else { 0.0 })
+    }
+
     fn day_row(&mut self) {
         let gpd = self.r.gens_per_day();
         let house: Vec<&Acct> = self.accts.iter().filter(|a| a.kind() == Kind::House).collect();
         let house_paid = house.iter().map(|a| a.attached + a.gas).sum();
         let house_left = house.iter().map(|a| if self.s.net == Net::Mainnet { a.wallet } else { a.credit() }).sum();
         let day = (self.t + 1) / gpd;
+        let (top_live_share, top_live_kind) = self.top_live();
+        let (held, top_held_share) = self.top_held();
         if self.house_out_day.is_none() && !house.is_empty() && house.iter().all(|a| if self.s.net == Net::Mainnet { a.wallet < a.floor + HOUSE_TOP_UP } else { a.credit() < HOUSE_TOP_UP }) {
             self.house_out_day = Some(day);
         }
@@ -2878,6 +2924,11 @@ impl World {
             tides_skipped: self.tides_today.1,
             joined: self.accts.iter().filter(|a| a.joined).count(),
             claimed: self.claimed_total,
+            vault_out: self.tides_paid + self.tides_as_credit + self.bounties + self.sold_total + self.credit_sold,
+            held,
+            top_live_share,
+            top_live_kind,
+            top_held_share,
         };
         self.tides_today = (0, 0);
         self.days.push(row);
