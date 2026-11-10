@@ -1,6 +1,6 @@
 [package]
 name = "petri-contract"
-version = "0.3.0"
+version = "6.5.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/RohanGlitched/petri"
@@ -25,3 +25,5 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 near-sdk = { version = "=5.29.1", features = ["unit-testing"] }
 # The v6.3 contract, frozen, so the relaunch test can build a real v6.3 state.
 petri-contract-v6-3 = { path = "v6_3" }
+# The v6.4 contract (749f246), frozen, so the upgrade test can build a real v6.4 state and run v6.5 over it.
+petri-contract-v6-4 = { path = "v6_4" }

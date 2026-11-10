@@ -24,7 +24,8 @@
 //!   only what it gave and the account has not spent.
 //! - A colony is paid in NEAR only once it has brought at least `min_join` of NEAR to the vault in one call (smaller
 //!   amounts go to the vault but leave it a guest), and only while it holds no kept PETRI: until then its tide shares
-//!   and bounties are credit and it claims no NEAR.
+//!   and bounties are credit and it claims no NEAR. A guest brings its own NEAR only once none of its cells live
+//!   (v6.5), so no cell grown on credit is ever paid for by the stake its NEAR buys.
 //! - PETRI earned before a colony's first NEAR stays in the dish. A guest cannot send PETRI and takes no keeper pot;
 //!   when it first attaches NEAR, what it earned, bought with credit or was paid in royalties until then is kept PETRI,
 //!   and so is PETRI anyone buys with credit. Kept PETRI is spent first by plantings and slides, and while a colony
@@ -71,6 +72,8 @@ const BOARD_KEY: &[u8] = b"board";
 /// Which version launched the dish (v6.4 on): written by `new` and `relaunch`, so a relaunch can tell a v6.3 dish (which
 /// has none) from one that already runs this version.
 pub(crate) const VERSION_KEY: &[u8] = b"v";
+/// v6.5 is a code-only upgrade of a v6.4 dish (the same state layout), so the marker stays "6.4": it names the layout
+/// a relaunch would find, and only `new` and `relaunch` write it.
 pub(crate) const VERSION: &[u8] = b"6.4";
 const MAX_NAME_BYTES: usize = 24;
 const MAX_NAME_CHARS: usize = 24;
@@ -88,6 +91,8 @@ const MAX_HOUSE: usize = 16;
 const PLANT_STORAGE_BASE: u64 = 180;
 /// A purchase's ledger entry, charged up front (it is 97 to 113 bytes with its key and record overhead).
 const BUY_BYTES: u128 = 113;
+/// A new colony record's borsh bytes besides its account and name (their length prefixes included): see `join_bytes`.
+pub(crate) const COLONY_FIXED_BYTES: u128 = 171;
 /// A catch-up stops stepping once the call has used this much gas less what writing the hot table back and moving idle
 /// rows out will cost, so a call stays under about 150 TGas on the real network with `GAS_RESERVE` left for the
 /// caller's own work and its payouts; and never beyond its prepaid gas less the same. It always steps one generation.
@@ -107,6 +112,8 @@ const UNSPONSOR_BYTES: u128 = 210;
 /// payout that may be refunded is never smaller, so a refund always pays for itself.
 const REFUND_BYTES: u128 = 97;
 const PENDING_RECORD_BYTES: u128 = 142;
+/// Why a colony with living cells that has never attached NEAR cannot attach (v6.5, see `attach`).
+pub(crate) const GREW_ON_CREDIT: &str = "a colony that grew on sponsored credit must let its cells die (or start a new colony) before it brings its own NEAR";
 /// `by` of a tide run by a house account that has no colony (a keeper).
 pub const HOUSE_RUNNER: u16 = u16::MAX;
 
@@ -463,6 +470,7 @@ pub struct DishState {
         standard(standard = "nep177", version = "2.1.0"),
         standard(standard = "nep178", version = "1.0.0"),
         standard(standard = "nep181", version = "1.0.0"),
+        standard(standard = "nep199", version = "2.0.0"),
         standard(standard = "nep297", version = "1.0.0"),
         standard(standard = "nep330", version = "1.3.0")
     )
@@ -947,6 +955,8 @@ impl Petri {
                 Some(Licence { token: U64(i as u64 + 1), moves, holder, royalty: U64(toll as u64), to_agar })
             }
         };
+        // Whether a colony that has never attached NEAR has living cells before this planting (v6.5, see `attach`).
+        let had_cells = guest && !colony.house && dish.cells.iter().any(|&c| c == id);
         dish.plant_unchecked(id, &cells);
         self.store_dish(&dish);
         self.total_live += cells.len() as u32;
@@ -991,7 +1001,7 @@ impl Petri {
         let (near, cred) = split_after_storage(attached, from_credit, storage);
         self.ledger.set(index as u32, Entry::Plant { generation: U64(self.generation), colony: id, cells: short, cost: U64(cost as u64), near: U128(near), credit: U128(cred), siege: check.siege, spent, licence: licence.clone() });
         // A planting that attaches the colony stakes like an attached colony's: its first NEAR cleared its stake.
-        if self.attach(id, near) && !is_house {
+        if self.attach(id, near, Some(had_cells)) && !is_house {
             let add = planting_stake(cells.len() as u32, true, cost, kept_before);
             self.hot_table().get_feed_mut(id).unwrap().stake += add;
         }
@@ -1521,9 +1531,18 @@ impl Petri {
     /// free play, so they stop earning until it plants with PETRI that is not kept. Its tide window (v6.4) goes to zero
     /// too: what it earned as a guest is paid nothing at the coming tide, so a window played on credit never turns into
     /// NEAR. The house keeps both. Returns whether this call attached it.
-    fn attach(&mut self, id: u16, near: u128) -> bool {
+    ///
+    /// v6.5: a colony outside the house attaches only while it has no living cells (`had_cells`, as the board stood
+    /// before this call's own planting; read from the stored board when `None`). Cells it grew on sponsored credit would
+    /// otherwise stay alive into its attached life, where the stake its first NEAR plantings add would pay for them in
+    /// NEAR. The call is refused instead, changing nothing, so every attach that succeeds is exactly a v6.4 attach.
+    fn attach(&mut self, id: u16, near: u128, had_cells: Option<bool>) -> bool {
         let b = self.books(id);
         if near >= self.rules.min_join.0 && !b.attached {
+            if !self.colony(id).house {
+                let alive = had_cells.unwrap_or_else(|| self.load_dish().cells.iter().any(|&c| c == id));
+                require!(!alive, GREW_ON_CREDIT);
+            }
             self.update_books(id, |b| b.attached = true);
             let mut c = self.colony(id);
             c.attached = true;
@@ -1580,7 +1599,7 @@ impl Petri {
                 self.colonies.set(id as u32 - 1, c);
             }
         } else {
-            let _ = self.attach(id, near);
+            let _ = self.attach(id, near, None);
             if from_credit > 0 {
                 let mut c = self.colony(id);
                 let kept = c.kept.0 + from_credit;
@@ -2106,7 +2125,7 @@ fn alive_colonies(dish: &Dish) -> Vec<ColonyId> {
 }
 
 pub(crate) fn emit(event: &str, data: near_sdk::serde_json::Value) {
-    log!("EVENT_JSON:{}", json!({ "standard": "petri", "version": "6.4.0", "event": event, "data": [data] }));
+    log!("EVENT_JSON:{}", json!({ "standard": "petri", "version": "6.5.0", "event": event, "data": [data] }));
 }
 
 pub(crate) fn fmt_petri(units: u128) -> String {
