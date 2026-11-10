@@ -108,7 +108,7 @@ if (cmd !== "send") {
 
 // 1. Strains move the creation's NEAR into petri-dish.near (it pays the account's storage and the transaction's gas).
 if (purseNow === null) {
-  for (const [from, amount] of FUNDERS) await step(`${from} sends ${near(amount)} NEAR to ${DISH} for the purse's storage`, from, DISH, [actions.transfer(amount)], amount, false);
+  if (process.env.SKIP_FUNDING !== "1") for (const [from, amount] of FUNDERS) await step(`${from} sends ${near(amount)} NEAR to ${DISH} for the purse's storage`, from, DISH, [actions.transfer(amount)], amount, false);
   // 2. One transaction, no AddKey: the account never has a key.
   await step(`${DISH} creates ${PURSE}: create, fund ${near(STORAGE)} NEAR, deploy the purse, init (holder ${HOLDER})`, DISH, PURSE, [
     actions.createAccount(),

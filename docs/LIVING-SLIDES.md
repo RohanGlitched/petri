@@ -106,7 +106,18 @@ On mainnet the site uses `petri-dish.near` as the parent account, so a mainnet s
 `slide-<id>.petri-dish.near` owns it. The mainnet house strains tend it (`tendPurses`, with `PETRI_LIVING_SLIDES=1`):
 they replant its pattern if its colony dies, and claim its tides.
 
-Proof: pending. The transactions are listed here once the script has run.
+Proof, 10 November 2026 (mainnet; every account below can be checked on any explorer):
+
+| Step | Signer | Transaction | NEAR |
+|---|---|---|---|
+| Three strains move the purse's storage into `petri-dish.near` (0.16 + 0.13 + 0.03 NEAR, moved, not spent) | methylene, safranin, violet `.petri-dish.near` | (three transfers) | gas only |
+| `petri-dish.near` creates `slide-14.petri-dish.near`: create, fund 0.31604 NEAR, deploy the purse, `init` with Congo Red as holder, no key ever added | `petri-dish.near` | `FFyXQGq413Y2d8CyHjJkftQ7ozpJjMyoMStCfkDsAr7J` | 0.323692 |
+| Congo Red sends slide 14 into its purse | `congo.petri-dish.near` | `39nNhzovv4jsWvkYHi41R8FF2sP2WGCGkSaUeTp9y8Ne` | 0.000297 |
+| The purse joins the dish as its own colony ("Living slide 14") | `congo.petri-dish.near` | `53CojkigLHHVL9t6qUEvjNjZobfG4cd6R7PTipjohhCX` | 0.016668 |
+| The purse buys the PETRI the planting still needed | `congo.petri-dish.near` | `GLLZ74XchqtFm3xiYURmDpeH4oEcaejaERnBMTm65WTu` | 0.005031 |
+| The purse plants its slide's 45-cell pattern | `congo.petri-dish.near` | `Df4SYSysAqSaSXYonu93aTHCjG2Etqh7SXUzxAYSKrXg` | 0.012246 |
+
+`slide-14.petri-dish.near` has 0 access keys (`view_access_key_list`), and the dish's `slide` view names it as slide 14's owner.
 
 ## Build and test
 
