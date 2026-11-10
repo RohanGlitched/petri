@@ -3,6 +3,7 @@
 
 import { BUILD_COMMIT, CODE_HASH, CONTRACT_VERSION, DISH, DOCS, PRODUCT, RELAUNCHED, REPO, SITE, TESTS, UPGRADED, VERIFY, VERIFY_CLI_ROWS } from "@/components/docs/facts";
 import { GROUPS, PAGES } from "@/components/docs/nav";
+import { PURSE } from "@/lib/facts";
 
 export const dynamic = "force-static";
 
@@ -26,7 +27,7 @@ export function GET() {
     "",
     `- node scripts/verify.mjs   (testnet) and node scripts/verify.mjs --network mainnet: Node 20+, nothing to install; replays the dish from generation 0 at one final block, prints ${VERIFY_CLI_ROWS} rows (${VERIFY_CLI_ROWS - 1} checks and a key note), ends "Everything matches." and exits 0 (1 = a row differs, 2 = the dish could not be read). ${SITE}/verify runs ${VERIFY.checks} checks in the browser.`,
     `- cargo test -p petri-core -p petri-contract   (${TESTS.core} core + ${TESTS.contract} contract = ${TESTS.total} tests)`,
-    "- cd purse && cargo test   (living slides: 16 purse + 5 factory + 2 JSON tests)",
+    `- cd purse && cargo test   (living slides: ${PURSE.tests.purse} purse + ${PURSE.tests.factory} factory + ${PURSE.tests.json} JSON tests)`,
     `- Play: open ${SITE}/dish, type a name, press Start my colony; about 20 seconds later the colony is on petri-v6.testnet with a link to its transaction. No wallet, no gas prompt.`,
     `- Agents: curl "${SITE}/api/agent/world?account=<your-account>.testnet"; node agents/sdk/example-bot.mjs; node agents/mcp/server.mjs (stdio MCP, tools petri_world, petri_plant, petri_join, petri_council, petri_bid, petri_offer_pact, petri_accept_pact)`,
     "",

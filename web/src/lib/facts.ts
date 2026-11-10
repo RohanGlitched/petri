@@ -34,3 +34,8 @@ export const VERIFY = { checks: 43, notes: 1 };
 /** What `node scripts/verify.mjs` prints: the same ground with some rows split finer, 44 checks, then the key note. */
 export const VERIFY_CLI_CHECKS = 44;
 export const VERIFY_CLI_ROWS = VERIFY_CLI_CHECKS + 1;
+
+/** The living slides' purse (purse/): `cargo test` in purse/ runs the purse's, the factory's and the JSON kit's tests.
+ * The v2 purse every factory-sealed slide runs is PURSE.bytes; the first purses (v1: mainnet slide 14, testnet slides
+ * 1 and 2) keep their older, smaller code, PURSE.v1Bytes, since a purse's code is immutable. */
+export const PURSE = { tests: { purse: 18, factory: 6, json: 2, total: 18 + 6 + 2 }, bytes: 30_879, v1Bytes: 29_404 };

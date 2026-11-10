@@ -23,6 +23,9 @@ const tests = { contract: +pick(/contract: (\d+)/, "TESTS.contract"), core: +pic
 const checks = +pick(/checks: (\d+)/, "VERIFY.checks");
 const cliChecks = +pick(/VERIFY_CLI_CHECKS = (\d+)/, "VERIFY_CLI_CHECKS");
 const cliRows = cliChecks + 1;
+const purse = { purse: +pick(/purse: (\d+), factory/, "PURSE.tests.purse"), factory: +pick(/factory: (\d+), json/, "PURSE.tests.factory"), json: +pick(/json: (\d+)/, "PURSE.tests.json"), bytes: pick(/bytes: ([\d_]+)/, "PURSE.bytes").replaceAll("_", "") };
+purse.total = purse.purse + purse.factory + purse.json;
+const purseBytes = Number(purse.bytes).toLocaleString("en-US");
 const [major, minor] = version.split(".").map(Number);
 
 /** Figures that are wrong wherever they appear. */
@@ -43,7 +46,7 @@ const NOW = /\b(now runs|runs now|run now|dishes run|build both|same build|the b
 const CURRENT = new RegExp(`\\bv${major}\\.${minor}\\b|CONTRACT_VERSION`);
 const EVENT = /"version":\s*"(\d+)\.(\d+)\.\d+"|<C>petri<\/C> (\d+)\.(\d+)\.\d+/;
 
-const FILES = ["README.md", "RULES.md", "scripts/verify.mjs", ".github/workflows/live.yml"];
+const FILES = ["README.md", "RULES.md", "docs/LIVING-SLIDES.md", "scripts/verify.mjs", ".github/workflows/live.yml"];
 const SKIP = [/web\/src\/engine\/pkg\//, /web\/src\/app\/docs\/changelog\//];
 function walk(dir) {
   for (const name of readdirSync(join(root, dir))) {
@@ -81,6 +84,14 @@ for (const f of FILES) {
       }
       for (const m of line.matchAll(/\b(\d{2,3}) contract tests\b/g))
         if (+m[1] !== tests.contract) hits.push(`${at}  the contract has ${tests.contract} tests: ${line.trim().slice(0, 140)}`);
+      // The purse's test counts ("18 purse + 6 factory + 2 JSON tests", "16 purse and 5 factory tests", "23 tests" in purse/).
+      for (const m of line.matchAll(/\b(\d{1,2}) purse (?:\+|and) (\d{1,2}) factory\b/g))
+        if (+m[1] !== purse.purse || +m[2] !== purse.factory) hits.push(`${at}  purse/ has ${purse.purse} purse + ${purse.factory} factory + ${purse.json} JSON tests: ${line.trim().slice(0, 140)}`);
+      for (const m of line.matchAll(/\bthe purse has (\d{1,2}) tests and the factory (\d{1,2})\b/g))
+        if (+m[1] !== purse.purse || +m[2] !== purse.factory) hits.push(`${at}  purse/ has ${purse.purse} purse + ${purse.factory} factory tests: ${line.trim().slice(0, 140)}`);
+      if (/\[`purse\/`\]/.test(line)) for (const m of line.matchAll(/\b(\d{1,2}) tests\b/g)) if (+m[1] !== purse.total) hits.push(`${at}  purse/ has ${purse.total} tests: ${line.trim().slice(0, 140)}`);
+      // The v1 purse's size is history (slide 14, testnet slides 1 and 2); stated as the purse contract's size, it is stale.
+      if (/29,404 bytes/.test(line) && !/\bv1\b|slide[- ]?14|slide-1\b|slide-2\b|first purse|Both purses/i.test(line)) hits.push(`${at}  the purse is ${purseBytes} bytes (29,404 was v1): ${line.trim().slice(0, 140)}`);
       // A live count of NEAR AI moves goes stale the next hour; link /judges, which counts them live.
       if (/\b\d+ of \d+ \(of (?:\d+ moves|the latest)/.test(line)) hits.push(`${at}  a hard-coded live count (link /judges instead): ${line.trim().slice(0, 140)}`);
       // The deprecated NEAR Foundation RPC is not a provider any more.
@@ -99,4 +110,4 @@ if (hits.length) {
   for (const h of hits) console.error("  " + h);
   process.exit(1);
 }
-console.log(`check-facts: nothing stale in ${FILES.length} files (contract v${version}, ${tests.contract} + ${tests.core} tests, ${checks} checks on /verify)`);
+console.log(`check-facts: nothing stale in ${FILES.length} files (contract v${version}, ${tests.contract} + ${tests.core} tests, ${checks} checks on /verify, purse ${purse.purse} + ${purse.factory} + ${purse.json} tests and ${purseBytes} bytes)`);
