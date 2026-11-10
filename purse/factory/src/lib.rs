@@ -1,10 +1,15 @@
 //! The factory that seals specimen slides into living slides.
 //!
 //! 1. `prepay` the creation cost (`create_cost`, about the purse's code size in storage) once.
-//! 2. Send your slide to the factory with the dish's `nft_transfer_call`. The factory creates `slide-<id>.<factory>`
-//!    in one receipt (create the account, fund its storage, deploy the purse, `init` it with you as holder) and no
-//!    access key is ever added; then it moves the slide on into the new account. If anything fails, the dish gives the
-//!    slide back to you and your prepayment stays yours (`refund` takes it back).
+//! 2. Send your slide to the factory with the dish's `nft_transfer_call`. The factory asks the dish who minted the
+//!    slide (the dish's own `nft_payout`, which names the minter beside the factory, the slide's owner at that
+//!    moment), then creates `slide-<id>.<factory>` in one receipt (create the account, fund its storage, deploy the
+//!    purse, `init` it with you as holder and the minter as the account every sale pays a royalty to) and no access
+//!    key is ever added; then it moves the slide on into the new account. If anything fails, the dish gives the slide
+//!    back to you and your prepayment stays yours (`refund` takes it back).
+//!
+//! The factory account can itself be keyless: its parent account may create it, deploy it and call `new` in one
+//! transaction with no `AddKey`, and nobody can change how it makes purses after that.
 //!
 //! The factory has no power over a purse once it exists: NEAR gives a parent account none over its sub-accounts, and
 //! the purse's code has no method that obeys the factory after `init`.
@@ -27,6 +32,8 @@ pub const PURSE_EXTRA_BYTES: u64 = 2_200;
 /// The least a prepayment can be, so a stranger's prepayments cost them more than the record costs the factory.
 pub const MIN_PREPAY: u128 = 10_000_000_000_000_000_000_000;
 const GAS_INIT: u64 = 10 * TGAS;
+const GAS_PAYOUT_VIEW: u64 = 10 * TGAS;
+const GAS_ON_MINTER: u64 = 80 * TGAS;
 const GAS_DISH_TRANSFER: u64 = 20 * TGAS;
 const GAS_CALLBACK: u64 = 10 * TGAS;
 
@@ -52,8 +59,17 @@ fn set_credit(acc: &[u8], amount: u128) {
     }
 }
 
+/// The purse code each purse gets. Native tests stand a few bytes in for it.
+fn code() -> &'static [u8] {
+    #[cfg(test)]
+    if PURSE.is_empty() {
+        return b"\0asm test purse";
+    }
+    PURSE
+}
+
 pub fn cost() -> u128 {
-    (PURSE.len() as u128 + PURSE_EXTRA_BYTES as u128) * BYTE_COST
+    (code().len() as u128 + PURSE_EXTRA_BYTES as u128) * BYTE_COST
 }
 
 fn purse_account(token: &[u8]) -> Vec<u8> {
@@ -68,11 +84,43 @@ fn only_self() {
     k::require(k::predecessor() == k::current(), "only the factory itself can call this");
 }
 
+/// The account this factory is a sub-account of (`petri-dish.near` for `slides.petri-dish.near`), if any.
+fn parent() -> Vec<u8> {
+    let me = k::current();
+    match me.iter().position(|&c| c == b'.') {
+        Some(i) => me[i + 1..].to_vec(),
+        None => Vec::new(),
+    }
+}
+
+/// The minter the dish's `nft_payout` names: the one account in the split that is not this factory (the slide's
+/// owner while it is being sealed). None if the answer names no such account.
+fn minter_in(payout: &[u8]) -> Option<Vec<u8>> {
+    let me = k::current();
+    let mut found = None;
+    json::each(payout, |key, split| {
+        if key == b"payout" {
+            json::each(split, |acc, _| {
+                if acc != &me[..] && k::valid_account(acc) {
+                    found = Some(acc.to_vec());
+                    return true;
+                }
+                false
+            });
+            return true;
+        }
+        false
+    });
+    found
+}
+
 methods! {
-    /// Set up once, by the factory account itself: which dish's slides it seals.
+    /// Set up once, by the factory account itself or the parent account that creates it (in the same transaction, so
+    /// the factory never needs a key): which dish's slides it seals.
     fn new() {
         k::require(k::read(K_DISH).is_none(), "the factory is already set up");
-        k::require(k::predecessor() == k::current(), "only the factory account sets it up");
+        let by = k::predecessor();
+        k::require(by == k::current() || by == parent(), "only the factory account or its parent sets it up");
         let input = k::input();
         let d = json::str_arg(&input, "dish");
         k::require(k::valid_account(d), "dish must be an account id");
@@ -105,8 +153,8 @@ methods! {
         k::a_transfer(p, c + 1);
     }
 
-    /// The dish sends a slide with `nft_transfer_call`: create its purse and move the slide into it. Returns false
-    /// (keep it) once the slide is in its purse, true (give it back) otherwise.
+    /// The dish sends a slide with `nft_transfer_call`: ask the dish who minted it, then create its purse and move the
+    /// slide into it. Returns false (keep it) once the slide is in its purse, true (give it back) otherwise.
     fn nft_on_transfer() {
         let input = k::input();
         if k::predecessor() != dish() {
@@ -121,9 +169,41 @@ methods! {
             k::ret(b"true");
             return;
         }
+        if code().is_empty() || credit(owner) < cost() {
+            k::log(b"prepay the creation cost first (create_cost), then send the slide again");
+            k::ret(b"true");
+            return;
+        }
+        // The dish's own sale split names the minter: 5% to it, the rest to the owner, which is this factory now.
+        let mut q = Out::new();
+        q.s("{\"token_id\":").q(token).s(",\"balance\":\"10000\",\"max_len_payout\":2}");
+        let p = k::batch(&dish());
+        k::a_call(p, "nft_payout", &q.done(), 0, GAS_PAYOUT_VIEW, 0);
+        let mut a = Out::new();
+        a.s("{\"token_id\":").q(token).s(",\"owner\":").q(owner).s("}");
+        let cb = k::batch_then(p, &k::current());
+        k::a_call(cb, "on_minter", &a.done(), 0, GAS_ON_MINTER, 1);
+        k::promise_return(cb);
+    }
+
+    /// The dish answered who minted the slide: create the purse with it. Returns what `nft_on_transfer` returns.
+    fn on_minter() {
+        only_self();
+        let input = k::input();
+        let token = json::str_arg(&input, "token_id");
+        let owner = json::str_arg(&input, "owner");
+        let minter = match k::result(0).and_then(|v| minter_in(&v)) {
+            Some(m) => m,
+            None => {
+                k::log(b"the dish did not say who minted the slide; it goes back");
+                k::ret(b"true");
+                return;
+            }
+        };
+        // Charged now, not when the slide arrived: a second sealing on the same credit finds it spent.
         let cost = cost();
         let have = credit(owner);
-        if PURSE.is_empty() || have < cost {
+        if have < cost {
             k::log(b"prepay the creation cost first (create_cost), then send the slide again");
             k::ret(b"true");
             return;
@@ -131,12 +211,12 @@ methods! {
         set_credit(owner, have - cost);
         let purse = purse_account(token);
         let mut init = Out::new();
-        init.s("{\"dish\":").q(&dish()).s(",\"holder\":").q(owner).s("}");
+        init.s("{\"dish\":").q(&dish()).s(",\"holder\":").q(owner).s(",\"minter\":").q(&minter).s("}");
         // One receipt: if any action fails, none happened, and the account never had a key.
         let p = k::batch(&purse);
         k::a_create(p);
         k::a_transfer(p, cost);
-        k::a_deploy(p, PURSE);
+        k::a_deploy(p, code());
         k::a_call(p, "init", &init.done(), 0, GAS_INIT, 0);
         let mut a = Out::new();
         a.s("{\"token_id\":").q(token).s(",\"owner\":").q(owner).s(",\"cost\":").qn(cost).s("}");
@@ -200,7 +280,7 @@ methods! {
 
     fn factory() {
         let mut o = Out::new();
-        o.s("{\"dish\":").q(&dish()).s(",\"purse_code_bytes\":").n(PURSE.len() as u128).s(",\"create_cost\":").qn(cost()).s("}");
+        o.s("{\"dish\":").q(&dish()).s(",\"purse_code_bytes\":").n(code().len() as u128).s(",\"create_cost\":").qn(cost()).s("}");
         k::ret(&o.done());
     }
 }

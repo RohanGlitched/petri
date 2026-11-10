@@ -59,6 +59,38 @@ fn value_end(b: &[u8], i: usize) -> Option<usize> {
     }
 }
 
+/// Each key of the top-level object `obj` (raw, without its quotes) with its raw value, until `f` returns true. A
+/// malformed object stops early.
+pub fn each<'a>(obj: &'a [u8], mut f: impl FnMut(&'a [u8], &'a [u8]) -> bool) {
+    let mut i = ws(obj, 0);
+    if obj.get(i) != Some(&b'{') {
+        return;
+    }
+    i += 1;
+    loop {
+        i = ws(obj, i);
+        if obj.get(i) != Some(&b'"') {
+            return;
+        }
+        let Some(kend) = value_end(obj, i) else { return };
+        let k = &obj[i + 1..kend - 1];
+        i = ws(obj, kend);
+        if obj.get(i) != Some(&b':') {
+            return;
+        }
+        i = ws(obj, i + 1);
+        let Some(vend) = value_end(obj, i) else { return };
+        if f(k, &obj[i..vend]) {
+            return;
+        }
+        i = ws(obj, vend);
+        if obj.get(i) != Some(&b',') {
+            return;
+        }
+        i += 1;
+    }
+}
+
 /// The raw value of `key` in the top-level object `obj` (`null` reads as missing).
 pub fn get<'a>(obj: &'a [u8], key: &str) -> Option<&'a [u8]> {
     let mut i = ws(obj, 0);
@@ -129,6 +161,7 @@ fn missing(key: &str) -> &'static str {
         "account_id" => "account_id is missing or not a plain string",
         "dish" => "dish is missing or not a plain string",
         "holder" => "holder is missing or not a plain string",
+        "minter" => "minter is missing or not a plain string",
         "method" => "method is missing or not a plain string",
         "previous_owner_id" => "previous_owner_id is missing",
         "sender_id" => "sender_id is missing",
@@ -214,6 +247,15 @@ mod tests {
         assert_eq!(get(o, "zz"), None);
         assert_eq!(get(b"[1]", "a"), None);
         assert_eq!(get(b"{\"a\":", "a"), None);
+        let mut keys = Vec::new();
+        each(br#"{"payout":{"m.near":"500","f.near":"9500"}}"#, |k, v| {
+            each(v, |k2, _| {
+                keys.push(k2.to_vec());
+                false
+            });
+            k == b"payout"
+        });
+        assert_eq!(keys, vec![b"m.near".to_vec(), b"f.near".to_vec()]);
     }
 
     #[test]

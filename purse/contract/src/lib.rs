@@ -8,6 +8,8 @@
 //! - The purse is a one-token NEP-171 contract (with NEP-178 approvals and NEP-199 payouts). Its token is the slide's
 //!   id; whoever holds that token is the only account that can make the purse act, and moving the token moves
 //!   everything at once: the NEAR, the PETRI, the colony and the slide.
+//! - Every sale pays the slide's minter (the colony account that minted it, named at `init`) 5% of the price, the
+//!   dish's own NEP-199 rule for its slides; a minter selling keeps the whole price.
 //!
 //! Control lives in one field of this contract, `holder`, checked and changed in the same receipt as everything it
 //! guards, so no check can go stale between a holder and the money. The account has no key and no method that adds
@@ -30,6 +32,7 @@ const K_APPROVALS: &[u8] = b"a";
 const K_FLIGHT: &[u8] = b"f";
 const K_STATS: &[u8] = b"s";
 const K_LOG: &[u8] = b"l";
+const K_MINTER: &[u8] = b"m";
 
 pub const MAX_APPROVALS: usize = 4;
 pub const LOG_MAX: usize = 12;
@@ -42,6 +45,8 @@ const GAS_DISH_MIN: u64 = 30 * TGAS;
 const GAS_FT: u64 = 20 * TGAS;
 const GAS_ON_TRANSFER: u64 = 15 * TGAS;
 const GAS_RESOLVE: u64 = 15 * TGAS;
+/// The share of every sale paid to the slide's minter, as the dish's `SALE_ROYALTY_BPS` pays it for its own slides.
+pub const SALE_ROYALTY_BPS: u128 = 500;
 
 /// The dish calls a holder may make as the purse. Everything that could hand the purse's money, its slide or its
 /// payouts to another account is left out: `set_payout`, `sponsor`, `pact_offer`, `ft_transfer*`, `nft_transfer*`,
@@ -83,6 +88,19 @@ fn dish() -> Vec<u8> {
 
 fn holder() -> Vec<u8> {
     k::read(K_HOLDER).unwrap_or_else(|| k::fail("this purse has not been set up"))
+}
+
+fn minter() -> Vec<u8> {
+    k::read(K_MINTER).unwrap_or_else(|| k::fail("this purse has not been set up"))
+}
+
+/// The minter's cut of a sale for `balance` by `seller`: none when the minter sells, or when the cut rounds to
+/// nothing. 500 bps is exactly a twentieth, rounded down as the dish rounds it, and no balance overflows.
+fn royalty(seller: &[u8], balance: u128) -> u128 {
+    if seller == &minter()[..] {
+        return 0;
+    }
+    balance / (10_000 / SALE_ROYALTY_BPS)
 }
 
 fn only_holder() -> Vec<u8> {
@@ -342,16 +360,21 @@ fn token_json(o: &mut Out) {
     o.s("}}");
 }
 
-fn payout_json(to: &[u8], balance: u128) -> Vec<u8> {
-    let mut o = Out::new();
-    o.s("{\"payout\":{").q(to).s(":").qn(balance).s("}}");
-    o.done()
-}
-
-fn check_payout_len(input: &[u8]) {
+/// The NEP-199 split of a sale for the input's `balance` by `seller`: the minter's royalty, the rest to the seller.
+/// Fails if it names more accounts than the input's `max_len_payout`.
+fn payout_json(input: &[u8], seller: &[u8]) -> Vec<u8> {
+    let balance = json::get(input, "balance").and_then(json::uint).unwrap_or_else(|| k::fail("balance is missing"));
+    let cut = royalty(seller, balance);
     if let Some(m) = json::get(input, "max_len_payout").and_then(json::uint) {
-        k::require(m >= 1, "the payout has one account");
+        k::require(m >= if cut > 0 { 2 } else { 1 }, "this sale pays more accounts than max_len_payout");
     }
+    let mut o = Out::new();
+    o.s("{\"payout\":{");
+    if cut > 0 {
+        o.q(&minter()).s(":").qn(cut).s(",");
+    }
+    o.q(seller).s(":").qn(balance - cut).s("}}");
+    o.done()
 }
 
 /// Send `f` to the dish (or anyone) and have `on_done` land it: returns the callback's promise.
@@ -365,17 +388,20 @@ fn with_landing(p: u64, kind: u8, to: &[u8], amount: u128) -> u64 {
 }
 
 methods! {
-    /// Set up by the factory in the transaction that creates the account: the dish and the first holder.
+    /// Set up by the factory in the transaction that creates the account: the dish, the first holder and the slide's
+    /// minter, who is paid a royalty on every sale.
     fn init() {
         k::require(k::read(K_DISH).is_none(), "this purse is already set up");
         k::require(k::predecessor() == factory(), "only the factory sets a purse up");
         let input = k::input();
         let d = json::str_arg(&input, "dish");
         let h = json::str_arg(&input, "holder");
-        k::require(k::valid_account(d) && k::valid_account(h), "dish and holder must be account ids");
+        let m = json::str_arg(&input, "minter");
+        k::require(k::valid_account(d) && k::valid_account(h) && k::valid_account(m), "dish, holder and minter must be account ids");
         let id = token_id();
         k::write(K_DISH, d);
         k::write(K_HOLDER, h);
+        k::write(K_MINTER, m);
         k::write(K_NONCE, &0u64.to_le_bytes());
         store_approvals(&Approvals { next: 0, list: Vec::new() });
         set_flight(0, 0);
@@ -485,7 +511,8 @@ methods! {
     }
 
     /// Buy the listed slide, attaching at least its price. `nonce` is the purse's nonce when you looked: if anything
-    /// changed since (a withdrawal, a call, a new price), the purchase fails and nothing is paid.
+    /// changed since (a withdrawal, a call, a new price), the purchase fails and nothing is paid. The price is split as
+    /// `nft_payout` splits it: the minter's royalty, the rest to the seller.
     fn buy() {
         let input = k::input();
         let price = listed().unwrap_or_else(|| k::fail("the slide is not for sale"));
@@ -495,8 +522,10 @@ methods! {
         k::require(paid >= price, "attach the price");
         let buyer = k::predecessor();
         let seller = holder();
+        let cut = royalty(&seller, price);
         move_to(&seller, &buyer, LOG_SALE, price, None, Some(b"sale"));
-        refund(&seller, price);
+        refund(&minter(), cut);
+        refund(&seller, price - cut);
         refund(&buyer, paid - price);
     }
 
@@ -699,28 +728,28 @@ methods! {
 
     // ---------- NEP-199 ----------
 
-    /// All of a sale's price goes to the holder: the slide keeps no cut.
+    /// How a sale for `balance` splits now: `SALE_ROYALTY_BPS` to the slide's minter, the rest to the holder; all of it
+    /// to the holder when that is the minter. The purse itself keeps no cut.
     fn nft_payout() {
         let input = k::input();
         check_token(&input);
-        check_payout_len(&input);
-        let balance = json::get(&input, "balance").and_then(json::uint).unwrap_or_else(|| k::fail("balance is missing"));
-        k::ret(&payout_json(&holder(), balance));
+        k::ret(&payout_json(&input, &holder()));
     }
 
     fn nft_transfer_payout() {
         k::require_one_yocto();
         let input = k::input();
         check_token(&input);
-        check_payout_len(&input);
-        let balance = json::get(&input, "balance").and_then(json::uint).unwrap_or_else(|| k::fail("balance is missing"));
         let to = json::str_arg(&input, "receiver_id");
         let sender = k::predecessor();
         let h = holder();
         authorize(&sender, &h, json::get(&input, "approval_id").and_then(json::uint));
+        // The split for the holder who sells, worked out before the token moves.
+        let payout = payout_json(&input, &h);
+        let balance = json::get(&input, "balance").and_then(json::uint).unwrap_or(0);
         let memo = json::get(&input, "memo").and_then(json::plain_str);
         move_to(&h, to, LOG_SALE, balance, (sender != h).then_some(&sender[..]), memo);
-        k::ret(&payout_json(&h, balance));
+        k::ret(&payout);
     }
 
     // ---------- receiving ----------
@@ -787,6 +816,7 @@ methods! {
         let locked = (k::storage_usage() + HEADROOM) as u128 * BYTE_COST;
         let mut o = Out::new();
         o.s("{\"token_id\":").q(&token_id()).s(",\"dish\":").q(&dish()).s(",\"factory\":").q(&factory()).s(",\"holder\":").q(&holder());
+        o.s(",\"minter\":").q(&minter()).s(",\"royalty_bps\":").n(SALE_ROYALTY_BPS);
         o.s(",\"nonce\":").n(nonce() as u128).s(",\"price\":");
         match listed() {
             Some(p) => {

@@ -11,6 +11,8 @@ const ALICE: &str = "alice.testnet";
 const BOB: &str = "bob.testnet";
 const CAROL: &str = "carol.testnet";
 const MARKET: &str = "market.testnet";
+/// The colony account that minted slide 7: every sale but its own pays it 5%.
+const MINTER: &str = "minter.testnet";
 const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
 const MILLI: u128 = NEAR / 1000;
 
@@ -24,7 +26,12 @@ fn setup() {
         c.height = 1_000;
         c.ms = 1_700_000_000_000;
     });
-    call(init, FACTORY, &format!(r#"{{"dish":"{DISH}","holder":"{ALICE}"}}"#), 0).unwrap();
+    call(init, FACTORY, &format!(r#"{{"dish":"{DISH}","holder":"{ALICE}","minter":"{MINTER}"}}"#), 0).unwrap();
+}
+
+/// The NEAR each account was sent by the promises the last call made.
+fn paid() -> Vec<(String, u128)> {
+    promises().iter().filter_map(|q| match q.actions[0] { Action::Transfer(a) => Some((q.account.clone(), a)), _ => None }).collect()
 }
 
 fn view(f: fn(), args: &str) -> String {
@@ -75,12 +82,15 @@ fn setup_once_by_the_factory_only() {
     assert!(with(|c| c.logs[0].contains("nft_mint")));
     assert_eq!(holder_now(), ALICE);
     // T7: nobody re-runs init to take the purse over, not even the factory.
-    assert!(call(init, FACTORY, &format!(r#"{{"dish":"{DISH}","holder":"{BOB}"}}"#), 0).unwrap_err().contains("already set up"));
+    assert!(call(init, FACTORY, &format!(r#"{{"dish":"{DISH}","holder":"{BOB}","minter":"{BOB}"}}"#), 0).unwrap_err().contains("already set up"));
     with(|c| c.storage.clear());
-    assert!(call(init, BOB, &format!(r#"{{"dish":"{DISH}","holder":"{BOB}"}}"#), 0).unwrap_err().contains("only the factory"));
+    assert!(call(init, BOB, &format!(r#"{{"dish":"{DISH}","holder":"{BOB}","minter":"{BOB}"}}"#), 0).unwrap_err().contains("only the factory"));
+    // The minter is named at setup, as an account id: no purse is made without one.
+    assert!(call(init, FACTORY, &format!(r#"{{"dish":"{DISH}","holder":"{BOB}"}}"#), 0).unwrap_err().contains("minter is missing"));
+    assert!(call(init, FACTORY, &format!(r#"{{"dish":"{DISH}","holder":"{BOB}","minter":"Bad..id"}}"#), 0).unwrap_err().contains("must be account ids"));
     // The token id comes from the account's own name.
     with(|c| c.current = "evil.slides.petri-v6.testnet".into());
-    assert!(call(init, FACTORY, &format!(r#"{{"dish":"{DISH}","holder":"{BOB}"}}"#), 0).unwrap_err().contains("slide-<token id>"));
+    assert!(call(init, FACTORY, &format!(r#"{{"dish":"{DISH}","holder":"{BOB}","minter":"{BOB}"}}"#), 0).unwrap_err().contains("slide-<token id>"));
 }
 
 #[test]
@@ -93,7 +103,8 @@ fn views_follow_the_standards() {
     assert!(view(nft_tokens_for_owner, &format!(r#"{{"account_id":"{ALICE}"}}"#)).contains("Living slide #7"));
     assert_eq!(view(nft_tokens_for_owner, &format!(r#"{{"account_id":"{BOB}"}}"#)), "[]");
     assert!(view(nft_metadata, "{}").contains("nft-2.1.0"));
-    assert_eq!(view(nft_payout, r#"{"token_id":"7","balance":"100","max_len_payout":3}"#), format!(r#"{{"payout":{{"{ALICE}":"100"}}}}"#));
+    assert_eq!(view(nft_payout, r#"{"token_id":"7","balance":"100","max_len_payout":3}"#), format!(r#"{{"payout":{{"{MINTER}":"5","{ALICE}":"95"}}}}"#));
+    assert!(info().contains(&format!(r#""minter":"{MINTER}","royalty_bps":500"#)));
     // The token's JSON parses as JSON (a quick structural check: balanced and quoted).
     let t = view(nft_token, r#"{"token_id":"7"}"#);
     assert!(t.starts_with('{') && t.ends_with('}') && t.contains(r#""approved_account_ids":{}"#));
@@ -244,10 +255,9 @@ fn buying_pays_the_seller_and_hands_over_everything() {
     assert!(call(buy, BOB, &format!(r#"{{"nonce":{n}}}"#), NEAR - 1).unwrap_err().contains("attach the price"));
     assert!(call(buy, BOB, r#"{}"#, NEAR).unwrap_err().contains("nonce"));
     call(buy, BOB, &format!(r#"{{"nonce":{n}}}"#), NEAR + 5).unwrap();
-    let p = promises();
+    // The minter's 5%, the seller the rest, the buyer its change.
+    assert_eq!(paid(), vec![(MINTER.to_string(), NEAR / 20), (ALICE.to_string(), NEAR - NEAR / 20), (BOB.to_string(), 5)]);
     assert_eq!(holder_now(), BOB);
-    let paid: Vec<(String, u128)> = p.iter().filter_map(|q| match q.actions[0] { Action::Transfer(a) => Some((q.account.clone(), a)), _ => None }).collect();
-    assert_eq!(paid, vec![(ALICE.to_string(), NEAR), (BOB.to_string(), 5)]);
     let i = info();
     assert!(i.contains("\"price\":null") && i.contains("\"sales\":1") && i.contains("\"sales_volume\":\"1000000000000000000000000\""));
     assert!(view(history, "{}").contains("\"kind\":\"sale\",\"account\":\"bob.testnet\""));
@@ -278,8 +288,11 @@ fn a_marketplace_sale_through_nep_199() {
     setup();
     call(nft_approve, ALICE, &format!(r#"{{"token_id":"7","account_id":"{MARKET}"}}"#), MILLI).unwrap();
     assert!(call(nft_transfer_payout, MARKET, &format!(r#"{{"receiver_id":"{BOB}","token_id":"7","approval_id":5,"balance":"900"}}"#), 1).unwrap_err().contains("out of date"));
+    // A market that pays only one account cannot sell it: the minter would go unpaid.
+    assert!(call(nft_transfer_payout, MARKET, &format!(r#"{{"receiver_id":"{BOB}","token_id":"7","approval_id":0,"balance":"900","max_len_payout":1}}"#), 1).unwrap_err().contains("max_len_payout"));
+    assert_eq!(holder_now(), ALICE);
     let r = call(nft_transfer_payout, MARKET, &format!(r#"{{"receiver_id":"{BOB}","token_id":"7","approval_id":0,"balance":"900","max_len_payout":10}}"#), 1).unwrap();
-    assert_eq!(r, Some(format!(r#"{{"payout":{{"{ALICE}":"900"}}}}"#)));
+    assert_eq!(r, Some(format!(r#"{{"payout":{{"{MINTER}":"45","{ALICE}":"855"}}}}"#)));
     assert!(with(|c| c.logs.iter().any(|l| l.contains("\"authorized_id\":\"market.testnet\""))));
     assert_eq!(holder_now(), BOB);
     // The market's approval went with the sale.
@@ -343,4 +356,41 @@ fn storage_stays_bounded() {
     call(list, &from, r#"{"price":"340282366920938463463374607431768211455"}"#, 1).unwrap();
     assert!(purse_kit::storage_usage() <= start + HEADROOM, "state grew by {}", purse_kit::storage_usage() - start);
     assert!(view(history, "{}").contains("\"total\":101"));
+}
+
+#[test]
+fn every_sale_pays_the_minter_its_royalty() {
+    setup();
+    let payout = |balance: &str, max: &str| call(nft_payout, "anyone.testnet", &format!(r#"{{"token_id":"7","balance":"{balance}"{max}}}"#), 0);
+    // The dish's rule: 5% to the minter, the rest to the holder who sells.
+    assert_eq!(payout("1000000000000000000000000", "").unwrap().unwrap(), format!(r#"{{"payout":{{"{MINTER}":"50000000000000000000000","{ALICE}":"950000000000000000000000"}}}}"#));
+    assert!(payout("100", r#","max_len_payout":1"#).unwrap_err().contains("max_len_payout"));
+    // A cut that rounds to nothing names one account, and any max_len_payout of at least 1 takes it.
+    assert_eq!(payout("19", r#","max_len_payout":1"#).unwrap().unwrap(), format!(r#"{{"payout":{{"{ALICE}":"19"}}}}"#));
+    // No balance overflows.
+    let max = u128::MAX;
+    let cut = max / 10_000 * 500 + max % 10_000 * 500 / 10_000;
+    assert_eq!(payout(&max.to_string(), "").unwrap().unwrap(), format!(r#"{{"payout":{{"{MINTER}":"{cut}","{ALICE}":"{}"}}}}"#, max - cut));
+    assert!(payout("x", "").unwrap_err().contains("balance"));
+    // Whoever holds it later pays the same minter.
+    transfer(ALICE, BOB).unwrap();
+    assert_eq!(payout("100", "").unwrap().unwrap(), format!(r#"{{"payout":{{"{MINTER}":"5","{BOB}":"95"}}}}"#));
+    // The purse's own market pays the same split.
+    call(list, BOB, r#"{"price":"20000"}"#, 1).unwrap();
+    call(buy, CAROL, &format!(r#"{{"nonce":{}}}"#, nonce_now()), 20_000).unwrap();
+    assert_eq!(paid(), vec![(MINTER.to_string(), 1_000), (BOB.to_string(), 19_000)]);
+    assert_eq!(holder_now(), CAROL);
+}
+
+#[test]
+fn the_minter_selling_keeps_the_whole_price() {
+    setup();
+    // Sold to the minter, then sold on by it: no cut to itself, one account in the split.
+    transfer(ALICE, MINTER).unwrap();
+    assert_eq!(view(nft_payout, r#"{"token_id":"7","balance":"1000","max_len_payout":1}"#), format!(r#"{{"payout":{{"{MINTER}":"1000"}}}}"#));
+    call(list, MINTER, r#"{"price":"1000"}"#, 1).unwrap();
+    call(buy, BOB, &format!(r#"{{"nonce":{}}}"#, nonce_now()), 1_000).unwrap();
+    assert_eq!(paid(), vec![(MINTER.to_string(), 1_000)]);
+    // The minter is fixed at setup: a sale by the next holder still pays it.
+    assert_eq!(view(nft_payout, r#"{"token_id":"7","balance":"1000"}"#), format!(r#"{{"payout":{{"{MINTER}":"50","{BOB}":"950"}}}}"#));
 }
