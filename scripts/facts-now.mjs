@@ -4,7 +4,12 @@
 // access keys of the dish, the slide factory and every living slide's purse. Nothing is typed in by hand.
 //
 //   node scripts/facts-now.mjs            print the table (Markdown)
-//   node scripts/facts-now.mjs --diff     compare it with README.md's table; exit 1 if a row changed
+//   node scripts/facts-now.mjs --diff     compare it with README.md's table. Rows that grow with play (generation,
+//                                         plantings, supply, tides, royalties, slides, pacts, joins, living cells)
+//                                         are printed as "moved with play" and exit 0. It exits 1 only when what
+//                                         must not move does: the contract, keys on the dish, the factory or a
+//                                         purse, the deployed code (dish, factory, purses), or which side an account
+//                                         is filed on (a side's count fell, or the team bench changed).
 //   node scripts/facts-now.mjs --write    rewrite README.md's table in place
 //   node scripts/facts-now.mjs --json     the raw figures
 //
@@ -36,7 +41,28 @@ const NETS = {
   },
 };
 const STRAINS = ["violet", "safranin", "methylene", "malachite", "congo"];
-const BENCH = ["petri-bench-a.testnet", "petri-bench-b.testnet", "petri-bench-c.testnet", "9e0f14b0b58c9760dd95af218cdd98a4417cd37d316e01cbff178d41ac5b7c5e", "58135f2e727a40755df38f1d231aca159ea4ab138260b8d0d9419da63f999932"];
+// The team bench is the site's own list (web/src/lib/strains.ts BENCH_ACCOUNTS), read from that file so the two never
+// differ: the testnet bench, both implicit benches and the testnet rehearsal guests of mainnet free play.
+const STRAINS_TS = path.join(root, "web", "src", "lib", "strains.ts");
+function benchAccounts() {
+  const src = fs.readFileSync(STRAINS_TS, "utf8");
+  const m = src.match(/export const BENCH_ACCOUNTS\s*=\s*\[([\s\S]*?)\];/);
+  const list = m ? [...m[1].replace(/\/\/.*$/gm, "").matchAll(/"([^"]+)"/g)].map((x) => x[1]) : [];
+  if (!list.length) {
+    console.error(`facts-now: no BENCH_ACCOUNTS list in ${path.relative(root, STRAINS_TS)}`);
+    process.exit(2);
+  }
+  return list;
+}
+const BENCH = benchAccounts();
+
+// The deployed code that must not change, by NEAR code hash (base58). The dish: README's "Fixed facts" (v6.5). The v2
+// slide factory and the purses it makes, and the v1 purses (docs/LIVING-SLIDES.md).
+const CODE = {
+  dish: "CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD",
+  factory: "5QTHyZ64eudxyGctrqdwbKiUvZK8oMnpWELzdyD2SG2N",
+  purses: ["CDyvfMn9zQJyArwxrY3ASaASoEHH8JTp5S7uC8ShziCe", "HRSkpLzDjnevFrwEV8B9TadHyTiYr6NoXbUyFufxXF44"],
+};
 
 /** Mainnet free-play guests: accounts the dish's ledger shows were sponsored (Sponsor entries), as lib/sides.ts files them. */
 const sponsored = new Set();
@@ -80,6 +106,13 @@ async function read(net) {
     const r = await rpc(net, "query", { request_type: "call_function", block_id: block, account_id: account, method_name: method, args_base64: Buffer.from(JSON.stringify(args)).toString("base64") });
     return JSON.parse(Buffer.from(r.result).toString("utf8"));
   };
+  const codeOf = async (account) => {
+    try {
+      return (await rpc(net, "query", { request_type: "view_account", block_id: block, account_id: account })).code_hash;
+    } catch {
+      return null;
+    }
+  };
   const keys = async (account) => {
     try {
       const r = await rpc(net, "query", { request_type: "view_access_key_list", block_id: block, account_id: account });
@@ -94,13 +127,15 @@ async function read(net) {
     return out.slice(0, total);
   };
   const [rules, state] = await Promise.all([view("rules"), view("state")]);
-  const [colonies, ledger, slides, board, dishKeys, factoryKeys] = await Promise.all([
+  const [colonies, ledger, slides, board, dishKeys, factoryKeys, dishCode, factoryCode] = await Promise.all([
     paged("colonies", state.colonies, 500),
     paged("ledger", Number(state.ledger), 1000),
     paged("slides", Number(state.slides), 500),
     view("board"),
     keys(n.dish),
     keys(n.factory),
+    codeOf(n.dish),
+    codeOf(n.factory),
   ]);
 
   // Living cells per colony on the stored board (the contract's compact form: liveness rows, then each cell's owner).
@@ -145,7 +180,7 @@ async function read(net) {
     const owner = sl.owner_id ?? sl.owner;
     if (!n.parents.some((p) => owner === `slide-${id}.${p}`)) continue;
     const c = colonies.find((x) => x.account === owner) ?? null;
-    living.push({ id, purse: owner, keys: await keys(owner), colony: c?.id ?? null, attached: c ? !!c.attached : null, live: c ? live.get(c.id) ?? 0 : null });
+    living.push({ id, purse: owner, keys: await keys(owner), code: await codeOf(owner), colony: c?.id ?? null, attached: c ? !!c.attached : null, live: c ? live.get(c.id) ?? 0 : null });
   }
 
   const Y = 10n ** 24n;
@@ -157,6 +192,7 @@ async function read(net) {
     due: Math.floor((Number(state.now_ms) - Number(state.epoch_ms)) / Number(rules.generation_ms)),
     dishKeys,
     factoryKeys,
+    code: { dish: dishCode, factory: factoryCode },
     colonies: colonies.length,
     bySide,
     planted,
@@ -270,15 +306,70 @@ if (mode === "write") {
   process.exit(0);
 }
 // --diff: rows by their first cell; the provenance line always differs (block heights), so it is left out.
-const rows = (s) => new Map(s.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("|---")).map((l) => [l.split(" | ")[0], l]));
+const rows = (txt) => new Map(txt.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("|---")).map((l) => [l.split(" | ")[0], l]));
+const cellsOf = (line) => line.split(" | ").slice(1).map((c) => c.replace(/ \|$/, ""));
+// Rows whose figures grow as people play: a change there is the dish being played, not a broken claim.
+const PLAY = new Set(["| Generation stored on chain (15 s each)", "| Plantings / under a slide's licence", "| PETRI supply (started at 1,000,000)", "| Hourly tides", "| Royalties paid to slide holders", "| Specimen slides (NFTs)", "| Pacts the contract enforces", "| Spawned strains", "| Joins through NEAR Intents"]);
+// Rows that must not move at all.
+const FIXED = new Set(["| Contract", "| Full-access keys on the dish", "| Slide factory"]);
+/** Per-side counts in a Colonies cell ("55: 5 house, 4 team bench, 13 other team accounts (...), 30 guest (...), 3 outside"). */
+function sideCounts(cell) {
+  const n = (re) => Number(((cell.match(re) ?? [])[1] ?? "0").replace(/,/g, ""));
+  return { house: n(/(\d[\d,]*) house/), bench: n(/(\d[\d,]*) team bench/), team: n(/(\d[\d,]*) other team/), guest: n(/(\d[\d,]*) (?:free-play )?guest/), outside: n(/(\d[\d,]*) outside(?! wallet)/) };
+}
+/** Why a changed row is not just play, or null when it moved with play. */
+function structural(key, was, now) {
+  if (FIXED.has(key)) return "this row must not change";
+  if (PLAY.has(key)) return null;
+  const [a, b] = [cellsOf(was), cellsOf(now)];
+  if (key === "| Colonies") {
+    for (let i = 0; i < 2; i++) {
+      const [x, y] = [sideCounts(a[i] ?? ""), sideCounts(b[i] ?? "")];
+      if (x.bench !== y.bench) return `the team bench changed (${x.bench} → ${y.bench}): the list or an account's side moved`;
+      const fell = Object.keys(x).filter((k) => y[k] < x[k]);
+      if (fell.length) return `${fell.join(", ")} fell (${fell.map((k) => `${x[k]} → ${y[k]}`).join(", ")}): an account moved to another side`;
+    }
+    return null;
+  }
+  if (key === "| Outside players") {
+    const out = (c) => Number((c.match(/^(\d[\d,]*) outside/) ?? [])[1]?.replace(/,/g, "") ?? 0);
+    for (let i = 0; i < 2; i++) if (out(b[i] ?? "") < out(a[i] ?? "")) return "fewer outside colonies than before: an account moved to another side";
+    return null;
+  }
+  if (key === "| Living slides (keyless accounts)") {
+    // Keys, purses and colonies must stay; whether a purse has living cells (and has attached NEAR) moves with play.
+    const shape = (c) => c.replace(/(\d[\d,]*) living cells?|no living cells/g, "N living cells").replace(/\b(un)?attached\b/g, "attached?");
+    for (let i = 0; i < 2; i++) if (shape(a[i] ?? "") !== shape(b[i] ?? "")) return "a purse, its keys or its colony changed";
+    return null;
+  }
+  return "a row this script does not know";
+}
 const was = rows(before);
 const now = rows(out);
-let changed = 0;
+let moved = 0;
+let broken = 0;
 for (const [k, l] of now) {
   if (was.get(k) === l) continue;
-  changed++;
-  console.log(`- ${was.get(k) ?? "(missing)"}\n+ ${l}`);
+  const why = was.has(k) ? structural(k, was.get(k), l) : "a new row";
+  if (why) broken++;
+  else moved++;
+  console.log(`${why ? `DIFFERS (${why})` : "moved with play"}:\n- ${was.get(k) ?? "(missing)"}\n+ ${l}`);
 }
-for (const k of was.keys()) if (!now.has(k)) (changed++, console.log(`- ${was.get(k)}\n+ (gone)`));
-console.log(changed ? `facts-now: ${changed} ${changed === 1 ? "row differs" : "rows differ"} from the chain now` : "facts-now: README.md matches the chain");
-process.exit(changed ? 1 : 0);
+for (const k of was.keys()) if (!now.has(k)) (broken++, console.log(`DIFFERS (a row is gone):\n- ${was.get(k)}\n+ (gone)`));
+// The deployed code, which the table does not print: the dish, the factory and every living slide's purse.
+for (const f of [m, t]) {
+  const bad = [];
+  if (f.code.dish !== CODE.dish) bad.push(`dish code ${f.code.dish ?? "unknown"}, not ${CODE.dish}`);
+  if (f.code.factory !== CODE.factory) bad.push(`factory code ${f.code.factory ?? "unknown"}, not ${CODE.factory}`);
+  for (const l of f.living) if (!CODE.purses.includes(l.code)) bad.push(`${l.purse} code ${l.code ?? "unknown"}, not a known purse build`);
+  if (bad.length) (broken++, console.log(`DIFFERS (${f.net} code): ${bad.join("; ")}`));
+}
+if (!text.includes(CODE.dish)) (broken++, console.log(`DIFFERS: README.md no longer names the dish's code hash ${CODE.dish}`));
+console.log(
+  broken
+    ? `facts-now: ${broken} ${broken === 1 ? "thing differs" : "things differ"} from the chain beyond play (keys, code, or who is filed where)${moved ? `; ${moved} more ${moved === 1 ? "row" : "rows"} moved with play` : ""}`
+    : moved
+      ? `facts-now: README.md matches the chain; ${moved} ${moved === 1 ? "row has" : "rows have"} moved with play since it was written (run --write to refresh them)`
+      : "facts-now: README.md matches the chain",
+);
+process.exit(broken ? 1 : 0);
