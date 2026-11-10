@@ -158,7 +158,7 @@
 .log { list-style: none; margin: 0; padding: 0; }
 .logRow {
   display: grid;
-  grid-template-columns: 110px 84px minmax(0, 1fr) 130px 120px;
+  grid-template-columns: 120px 76px minmax(0, 1fr) 190px 96px;
   gap: 4px 14px;
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
@@ -166,6 +166,7 @@
   align-items: baseline;
 }
 .logRow .num { text-align: right; }
+.logRow small { white-space: nowrap; }
 .logRow a { color: var(--amber); }
 .kind { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim); }
 .kfeed { color: var(--ok); }

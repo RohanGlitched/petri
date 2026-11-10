@@ -8,7 +8,9 @@ import { getAllColonies, getAllLedger, getAllSlides, getRules, getState, pinFina
 import { buildCoinBook, type CoinBook, type EventKind } from "@/lib/supply";
 import { CONTRACT, REPO, accountUrl, shortAccount } from "@/lib/config";
 import { actionIndex, useStrainLog } from "@/lib/strain-log";
-import { sideOf } from "@/lib/strains";
+import { sideOfAccount } from "@/lib/sides";
+
+const SIDE_TEXT = { house: "a house strain", bench: "the team's bench", team: "a team account", guest: "a guest", outside: "an outside player" } as const;
 import { useNet } from "@/lib/use-net";
 import { LineChart } from "@/components/charts/LineChart";
 import { NetTag } from "@/components/site/NetTag";
@@ -114,10 +116,10 @@ export function CoinLog() {
   const pages = Math.max(1, Math.ceil(events.length / PAGE));
   const longest = book.longest ? byId.get(book.longest.id) : null;
   const hoursOf = (g: number) => (g * Number(rules.generation_ms)) / 3_600_000;
-  const xfmt = (g: number) => {
-    const h = hoursOf(g);
-    return h >= 48 ? `day ${Math.round(h / 24)}` : `${Math.round(h)} h`;
-  };
+  const long = hoursOf(book.target) > 48;
+  const xfmt = (g: number) => (long ? `day ${(hoursOf(g) / 24).toFixed(1)}` : `${hoursOf(g).toFixed(1)} h`);
+  const agarLo = Math.min(...book.points.map((p) => p.agar));
+  const floor = Math.max(0, Math.floor((agarLo - 0.002 * Number(rules.max_supply)) / 1e9) * 1e9);
 
   return (
     <>
@@ -190,6 +192,7 @@ export function CoinLog() {
             height={200}
             fmt={(v) => fp(v)}
             maxLeft={Number(rules.max_supply)}
+            minLeft={floor}
             series={[{ label: "PETRI in the agar", color: "#f2b45a", values: book.points.map((p) => p.agar) }]}
           />
         </div>
@@ -203,7 +206,7 @@ export function CoinLog() {
               <strong>Longest-lived colony:</strong> {longest?.name ?? `colony ${book.longest.id}`}
               {longest ? (
                 <>
-                  {" "}(<a href={accountUrl(longest.account)}>{shortAccount(longest.account)}</a>, {sideOf(longest.account, longest.house) === "house" ? "a house strain" : sideOf(longest.account) === "bench" ? "the team's bench" : "an outside player"})
+                  {" "}(<a href={accountUrl(longest.account)}>{shortAccount(longest.account)}</a>, {SIDE_TEXT[sideOfAccount(longest.account, longest.house)]})
                 </>
               ) : null}
               , alive without a break from generation {book.longest.from.toLocaleString("en-US")}

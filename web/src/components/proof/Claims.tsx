@@ -7,8 +7,10 @@ import { loadEngine } from "@/engine";
 import { CONTRACTS, EXPLORERS, REPO, type Network } from "@/lib/config";
 import { accountOf, netView, pin, readDish, readForReplay, unpin, type DishRead, type SourceMeta } from "@/lib/netread";
 import { BUILD_HASH, Replayer } from "@/lib/replay";
-import { sideOf } from "@/lib/strains";
+import { strainOf } from "@/lib/strains";
+import { sideOfAccount } from "@/lib/sides";
 import type { StrainLog } from "@/lib/strain-log";
+import type { Colony } from "@/lib/chain";
 import s from "./proof.module.css";
 
 type St = "pass" | "fail" | "warn" | "wait";
@@ -134,7 +136,7 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
 
   // 4. The strains are alive.
   const last = (d: NetData) => {
-    const a = d.log?.actions?.[d.log.actions.length - 1];
+    const a = [...(d.log?.actions ?? [])].reverse().find((x) => strainOf(x.account));
     return a ? { at: Date.parse(a.at), tx: a.tx, strain: a.strain } : null;
   };
   const lm = m ? last(m) : null;
@@ -239,19 +241,21 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
 
   // 7. Outside colonies.
   const outside = (d: NetData) => {
-    const o = d.dish.colonies.filter((c) => sideOf(c.account, c.house) === "player" && !(d.dish.rules.keepers ?? []).includes(c.account));
-    return { all: o.length, planted: o.filter((c) => Number(c.cells_planted) > 0).length, guests: o.filter((c) => /(^|\.)petri-guests\./.test(c.account)).length };
+    const side = (c: Colony) => sideOfAccount(c.account, c.house);
+    const o = d.dish.colonies.filter((c) => side(c) === "outside");
+    const g = d.dish.colonies.filter((c) => side(c) === "guest");
+    return { all: o.length, planted: o.filter((c) => Number(c.cells_planted) > 0).length, guests: g.length, guestsPlanted: g.filter((c) => Number(c.cells_planted) > 0).length };
   };
   const om = m ? outside(m) : null;
   out.push({
     id: "outside",
     claim: "People outside the team play",
-    how: "Colonies that are neither the five house strains nor the team's three bench accounts. Testnet guests are anyone's browser, the team's own test runs included; the chain cannot tell them apart.",
+    how: "Colonies whose account is not the team's (the house, the bench, any petri-*.testnet account or sub-account, any *.petri-dish.near). Testnet guests are keys in anyone's browser, the team's own test runs included; the chain cannot tell them apart, so they are counted apart.",
     value: both((d) => {
       const o = outside(d);
       return (
         <>
-          <span className="num">{o.all}</span> outside colonies ({o.planted} planted{d.dish.net === "testnet" ? `, ${o.guests} guests` : ""})
+          <span className="num">{o.all}</span> outside wallet colonies ({o.planted} planted){d.dish.net === "testnet" ? `; ${o.guests} guest colonies (${o.guestsPlanted} planted)` : ""}
         </>
       );
     }),

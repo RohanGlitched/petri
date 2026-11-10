@@ -3,21 +3,17 @@
 
 import { useEffect, useState } from "react";
 import { CONTRACTS, EXPLORERS, NETWORK, shortAccount, type Network } from "@/lib/config";
-import { sideOf, strainOf } from "@/lib/strains";
+import { strainOf } from "@/lib/strains";
+import { SIDE_LABEL, sideOfAccount } from "@/lib/sides";
 import s from "./proof.module.css";
 
 type Row = { hash: string; at: number; account: string; method: string; ok: boolean; relayed: boolean };
 
-const KEEPERS = ["petri-keeper.testnet", "keeper.petri-dish.near"];
-const RELAYER = "petri-guests.testnet";
-
 function side(a: string): { label: string; cls: string } {
-  if (KEEPERS.includes(a)) return { label: "house keeper", cls: s.sideHouse };
-  if (a === RELAYER) return { label: "guest relayer", cls: s.sideHouse };
-  if (a === CONTRACTS.mainnet || a === CONTRACTS.testnet) return { label: "the dish", cls: s.sideHouse };
-  const k = sideOf(a);
-  if (k === "house") return { label: "house strain", cls: s.sideHouse };
-  if (k === "bench") return { label: "team bench", cls: s.sideBench };
+  const k = sideOfAccount(a);
+  if (k === "house") return { label: strainOf(a) ? "house strain" : "house keeper", cls: s.sideHouse };
+  if (k === "bench" || k === "team") return { label: SIDE_LABEL[k], cls: s.sideBench };
+  if (k === "guest") return { label: "guest", cls: s.sidePlayer };
   return { label: "outside player", cls: s.sidePlayer };
 }
 
@@ -42,7 +38,8 @@ export function Feed() {
       stop = true;
     };
   }, [net]);
-  const outside = new Set((rows ?? []).filter((r) => side(r.account).label === "outside player").map((r) => r.account));
+  const outside = new Set((rows ?? []).filter((r) => sideOfAccount(r.account) === "outside").map((r) => r.account));
+  const guests = new Set((rows ?? []).filter((r) => sideOfAccount(r.account) === "guest").map((r) => r.account));
   return (
     <>
       <div className={s.filters} role="group" aria-label="Dish">
@@ -54,7 +51,7 @@ export function Feed() {
       </div>
       {rows && (
         <p className={s.note} style={{ marginTop: 0, marginBottom: 12 }}>
-          {rows.length} latest calls on {CONTRACTS[net]}; <b>{outside.size}</b> distinct outside account{outside.size === 1 ? "" : "s"} among them.
+          {rows.length} latest calls on {CONTRACTS[net]}: <b>{outside.size}</b> distinct outside account{outside.size === 1 ? "" : "s"} and {guests.size} guest{guests.size === 1 ? "" : "s"} (keys in someone&rsquo;s browser; the team&rsquo;s own tests look the same on chain). Team accounts are every petri-*.testnet account and its sub-accounts, and *.petri-dish.near.
         </p>
       )}
       <ol className={s.feed}>
