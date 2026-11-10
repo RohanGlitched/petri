@@ -2,36 +2,18 @@
 // the credit is really there. A sponsor transaction that timed out may still have landed, so every retry first reads
 // the credit again: the relayer never pays twice for one guest.
 
-import { Account, JsonRpcProvider, actions, nearToYocto } from "near-api-js";
+import { Account, actions, nearToYocto } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { CONTRACT, RPC_URLS } from "@/lib/config";
+import { CONTRACT, NETWORK } from "@/lib/config";
+import { rpcCall } from "@/lib/rpc";
+import { nearProvider } from "@/lib/near-provider";
 
 export const GUEST_CREDIT = "0.05";
 /** The same, in yoctoNEAR, for the relayer's daily budget. */
 export const GUEST_CREDIT_YOCTO = 5n * 10n ** 22n;
 
-async function rpc<T>(method: string, params: Record<string, unknown>): Promise<T> {
-  let last: unknown = null;
-  for (const url of RPC_URLS) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: "guest", method, params }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(6000),
-      });
-      const body = await res.json();
-      if (body.error) throw new Error(JSON.stringify(body.error));
-      if (body.result?.error) throw new Error(String(body.result.error));
-      return body.result as T;
-    } catch (e) {
-      last = e;
-    }
-  }
-  throw last instanceof Error ? last : new Error("NEAR RPC did not answer");
-}
+const rpc = <T,>(method: string, params: Record<string, unknown>): Promise<T> => rpcCall<T>(NETWORK, method, params, { id: "guest", timeoutMs: 6000 });
 
 async function view<T>(method: string, args: Record<string, unknown>): Promise<T> {
   const r = await rpc<{ result: number[] }>("query", {
@@ -100,5 +82,5 @@ export async function sponsorUntilCredited(relayer: Account, accountId: string):
 }
 
 export function relayerAccount(relayer: string, key: string): Account {
-  return new Account(relayer, new JsonRpcProvider({ url: RPC_URLS[0] }), key as `ed25519:${string}`);
+  return new Account(relayer, nearProvider(NETWORK), key as `ed25519:${string}`);
 }

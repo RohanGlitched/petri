@@ -2,7 +2,7 @@
 // Replay the Petri dish from generation zero and check it against the contract.
 //
 //   node scripts/verify.mjs
-//   node scripts/verify.mjs [--network testnet|mainnet] [--contract <account>] [--code-hash <base58>]
+//   node scripts/verify.mjs [--network testnet|mainnet] [--contract <account>] [--code-hash <base58>] [--rpc <url,...>]
 //   node scripts/verify.mjs --dump <file>      (a snapshot written by the contract's replay test with PETRI_DUMP)
 //
 // Every read is pinned to one finalized block, so a transaction landing mid-read cannot skew the result. The script
@@ -58,7 +58,13 @@ const NETWORK = arg("network", "testnet");
 const CONTRACT = arg("contract", NETWORK === "mainnet" ? "petri-dish.near" : "petri-v6.testnet");
 const CODE_HASH = arg("code-hash", BUILD_HASH);
 const DUMP = arg("dump", null);
-const RPCS = NETWORK === "mainnet" ? ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"] : ["https://rpc.testnet.fastnear.com", "https://rpc.testnet.near.org"];
+/** Public NEAR RPC providers that answer without a key (rpc.*.near.org is deprecated and rate-limits everyone). `--rpc`
+ * puts your own provider (or several, comma-separated) first. */
+const PUBLIC_RPCS = {
+  mainnet: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://free.rpc.fastnear.com", "https://rpc.shitzuapes.xyz"],
+  testnet: ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"],
+};
+const RPCS = [...(arg("rpc", "") || "").split(",").map((u) => u.trim()).filter(Boolean), ...(PUBLIC_RPCS[NETWORK] ?? PUBLIC_RPCS.testnet)];
 /** `by` of a tide a keeper (a house account with no colony) ran. */
 const HOUSE_RUNNER = 0xffff;
 /** Payout kinds a Refund entry names. */
@@ -70,21 +76,41 @@ const BYTE = 10n ** 19n;
 /** What a Tide entry and its place in the tide index store: 126 + 4 bytes, and 45 more on the tide that starts an index page. */
 const TIDE_BYTES = [130, 175];
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Failover across RPCS; a provider that answers 429 (or 5xx) is retried after its Retry-After (or a short backoff),
+ * with jitter, while the others are tried in between. */
 async function rpc(method, params) {
   let last;
-  for (const url of RPCS) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: "verify", method, params }),
-        signal: AbortSignal.timeout(20_000),
-      });
-      const body = await res.json();
-      if (body.error) throw new Error(JSON.stringify(body.error).slice(0, 200));
-      return body.result;
-    } catch (e) {
-      last = e;
+  const resting = new Map();
+  for (let round = 0; round < 4; round++) {
+    for (const url of RPCS) {
+      const wait = (resting.get(url) ?? 0) - Date.now();
+      if (wait > 0 && round > 0) await sleep(wait);
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: "verify", method, params }),
+          signal: AbortSignal.timeout(20_000),
+        });
+        if (res.status === 429 || res.status >= 500) {
+          const after = Number(res.headers.get("retry-after"));
+          const ms = (Number.isFinite(after) && after > 0 ? Math.min(after, 30) * 1000 : 1000 * 2 ** round) + Math.random() * 400;
+          resting.set(url, Date.now() + ms);
+          throw new Error(`${new URL(url).host} answered ${res.status}`);
+        }
+        const body = await res.json();
+        if (body.error) {
+          const e = new Error(JSON.stringify(body.error).slice(0, 200));
+          // A contract error is the answer, not a provider failing: no other provider will say otherwise.
+          if (/FunctionCallError|MethodNotFound|CodeDoesNotExist|UNKNOWN_ACCOUNT/.test(e.message)) e.final = true;
+          throw e;
+        }
+        return body.result;
+      } catch (e) {
+        if (e?.final) throw e;
+        last = e;
+      }
     }
   }
   throw last;

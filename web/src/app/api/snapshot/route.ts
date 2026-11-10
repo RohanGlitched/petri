@@ -1,9 +1,11 @@
 // The dish's first paint in one request: every view the browser's dish store needs to rebuild the board (rules, state,
-// stored board, colonies, stakes, earnings, the latest plantings), read from NEAR here and kept for five seconds, so a
-// first visit does not wait on six or seven RPC calls from the browser. The store refines from RPC straight after.
+// stored board, colonies, stakes, earnings, the latest plantings), read from NEAR here and kept for five seconds (and a few more by the CDN), so
+// a visit does not spend six or seven RPC calls from the browser. The dish polls it (`part=head`, just the state) instead
+// of RPC, and reads RPC itself only right after its own move.
 // Read-only: it calls view methods and nothing else.
 
-import { CONTRACTS, RPCS, type Network } from "@/lib/config";
+import { CONTRACTS, type Network } from "@/lib/config";
+import { b64, decodeView, rpcCall } from "@/lib/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -14,30 +16,8 @@ const cache = new Map<Network, Snap>();
 const inflight = new Map<Network, Promise<Snap>>();
 
 async function view<T>(net: Network, method: string, args: Record<string, unknown> = {}): Promise<T> {
-  let last: unknown = null;
-  for (const url of RPCS[net]) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: "petri-snapshot",
-          method: "query",
-          params: { request_type: "call_function", finality: "optimistic", account_id: CONTRACTS[net], method_name: method, args_base64: btoa(JSON.stringify(args)) },
-        }),
-        signal: AbortSignal.timeout(6000),
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`RPC ${res.status}`);
-      const body = await res.json();
-      if (body.error || !body.result?.result) throw new Error("RPC error");
-      return JSON.parse(new TextDecoder().decode(new Uint8Array(body.result.result))) as T;
-    } catch (e) {
-      last = e;
-    }
-  }
-  throw last instanceof Error ? last : new Error("NEAR did not answer");
+  const r = await rpcCall<{ result?: number[] }>(net, "query", { request_type: "call_function", finality: "optimistic", account_id: CONTRACTS[net], method_name: method, args_base64: b64(args) }, { id: "petri-snapshot", timeoutMs: 6000 });
+  return decodeView<T>(r);
 }
 
 /** Every page of a paged view, all at once. */
@@ -61,7 +41,10 @@ async function read(net: Network): Promise<Snap> {
 }
 
 export async function GET(req: Request) {
-  const net: Network = new URL(req.url).searchParams.get("net") === "mainnet" ? "mainnet" : "testnet";
+  const q = new URL(req.url).searchParams;
+  const net: Network = q.get("net") === "mainnet" ? "mainnet" : "testnet";
+  // `part=head`: only the state, for the dish's five-second poll; the board and the rest are fetched when it moves.
+  const head = q.get("part") === "head";
   try {
     let s = cache.get(net);
     if (!s || Date.now() - s.at > TTL) {
@@ -73,9 +56,11 @@ export async function GET(req: Request) {
       s = await p;
       cache.set(net, s);
     }
-    // `servedAt` lets the browser carry the chain's clock forward by however long the snapshot sat in this cache.
-    return new Response(s.body.slice(0, -1) + `,"servedAt":${Date.now()}}`, {
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    const body = head ? JSON.stringify({ net, at: s.at, state: (JSON.parse(s.body) as { state: unknown }).state }) : s.body;
+    // `servedAt` lets the browser carry the chain's clock forward by however long the snapshot sat in this cache; the
+    // CDN keeps it a few seconds more and says so in its Age header.
+    return new Response(body.slice(0, -1) + `,"servedAt":${Date.now()}}`, {
+      headers: { "content-type": "application/json", "cache-control": "public, max-age=0, s-maxage=4, stale-while-revalidate=6" },
     });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502, headers: { "cache-control": "no-store" } });

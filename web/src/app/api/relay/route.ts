@@ -16,11 +16,13 @@
 // are relayed only with `lab` set, within their own daily allowance, and each refusal is tallied.
 
 import { NextResponse } from "next/server";
-import { Account, JsonRpcProvider, SCHEMA, actions, baseEncode, encodeDelegateAction } from "near-api-js";
+import { Account, SCHEMA, actions, baseEncode, encodeDelegateAction } from "near-api-js";
 import { deserialize } from "borsh";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { CONTRACT, RPC_URLS } from "@/lib/config";
+import { CONTRACT, NETWORK } from "@/lib/config";
+import { rpcCall } from "@/lib/rpc";
+import { nearProvider } from "@/lib/near-provider";
 import { burnt, clientIp, labAllowed, overBudget, recordRefusal, spent } from "@/lib/budget";
 import { hasColony } from "../guest/credit";
 
@@ -96,15 +98,8 @@ function rawFailure(f: unknown): string {
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 
 async function finalHeight(): Promise<bigint> {
-  const res = await fetch(RPC_URLS[0], {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "relay", method: "block", params: { finality: "final" } }),
-    signal: AbortSignal.timeout(6000),
-  });
-  const body = await res.json();
-  if (body.error) throw new Error("rpc");
-  return BigInt(body.result.header.height);
+  const b = await rpcCall<{ header: { height: number } }>(NETWORK, "block", { finality: "final" }, { id: "relay", timeoutMs: 6000 });
+  return BigInt(b.header.height);
 }
 
 export async function POST(req: Request) {
@@ -176,7 +171,7 @@ export async function POST(req: Request) {
     if (no) return bad(no, 429);
   }
 
-  const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
+  const provider = nearProvider(NETWORK);
   try {
     if (BigInt(da.maxBlockHeight) <= (await finalHeight())) return bad("The signed action expired before it was relayed. Try again.", 409);
   } catch {

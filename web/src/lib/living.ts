@@ -3,7 +3,8 @@
 //
 // Server-safe: the API routes use these reads too, with the network passed in.
 
-import { CONTRACTS, RPCS, type Network } from "./config";
+import { CONTRACTS, type Network } from "./config";
+import { rpcCall } from "./rpc";
 
 /**
  * The factory each dish's slides are sealed through now: `slides.<dish>`, an account with no key (its parent created,
@@ -74,27 +75,7 @@ export type PurseLogEntry = { kind: "seal" | "transfer" | "sale" | "withdraw" | 
 export type PurseHistory = { total: number; entries: PurseLogEntry[] };
 export type AccessKey = { public_key: string; access_key: { nonce: number; permission: unknown } };
 
-async function rpc<T>(net: Network, method: string, params: unknown): Promise<T> {
-  let last: unknown = null;
-  for (const url of RPCS[net]) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: "petri-living", method, params }),
-        signal: AbortSignal.timeout(8000),
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`RPC ${res.status}`);
-      const body = await res.json();
-      if (body.error) throw new Error(typeof body.error?.data === "string" ? body.error.data : body.error?.cause?.name ?? "RPC error");
-      return body.result as T;
-    } catch (e) {
-      last = e;
-    }
-  }
-  throw last instanceof Error ? last : new Error("NEAR did not answer");
-}
+const rpc = <T,>(net: Network, method: string, params: unknown): Promise<T> => rpcCall<T>(net, method, params, { id: "petri-living", timeoutMs: 8000 });
 
 export async function viewOn<T>(net: Network, account: string, method: string, args: Record<string, unknown> = {}): Promise<T> {
   const r = await rpc<{ result?: number[]; error?: string }>(net, "query", {

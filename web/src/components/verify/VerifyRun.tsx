@@ -4,7 +4,7 @@ import { Amount } from "./Amount";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Culture } from "@/components/Culture";
 import { loadEngine } from "@/engine";
-import { getAllColonies, getAllEarnings, getAllLedger, getAllSlides, getAllTideWinnings, getLock, getRules, getState, pinFinalBlock } from "@/lib/chain";
+import { forReplay, readDishAt } from "@/lib/netread";
 import { Replayer, type Check } from "@/lib/replay";
 import { CONTRACT, NETWORK, REPO, accountUrl } from "@/lib/config";
 import { VERIFY } from "@/lib/facts";
@@ -24,31 +24,27 @@ export function VerifyRun() {
   const [counts, setCounts] = useState({ plants: 0, colonies: 0, checkpoints: 0 });
   const [ms, setMs] = useState(0);
   const runId = useRef(0);
+  /** The first run reuses a read another page made in the last two minutes; a replay asked for again reads anew. */
+  const fresh = useRef(false);
+  /** Seconds until an automatic retry after a failed read (null when none is waiting), and how many have run. */
+  const [retryIn, setRetryIn] = useState<number | null>(null);
+  const retries = useRef(0);
 
   const run = useCallback(async () => {
     const id = ++runId.current;
+    setRetryIn(null);
     setPhase("fetching");
     setChecks([]);
     setLog([]);
     setMsg("Reading the contract at one final block: rules, state, colonies, slides and the whole ledger…");
     try {
       await loadEngine();
-      // Every read below comes from the same final block, so nothing can land between them.
-      await pinFinalBlock();
-      let rules, state, colonies, ledger, earnings, winnings, slides, lock;
-      try {
-        [rules, state] = await Promise.all([getRules(), getState()]);
-        [colonies, ledger, earnings, winnings, slides, lock] = await Promise.all([
-          getAllColonies(state.colonies),
-          getAllLedger(Number(state.ledger)),
-          getAllEarnings(state.colonies),
-          getAllTideWinnings(state.colonies),
-          getAllSlides(Number(state.slides)),
-          getLock().catch(() => null),
-        ]);
-      } finally {
-        await pinFinalBlock(false);
-      }
+      // Every read comes from one final block, through the site's cache, and is shared with /judges, /coin and
+      // /records for two minutes; "Replay it again" reads a newer block.
+      const full = await readDishAt(NETWORK, { fresh: fresh.current });
+      fresh.current = true;
+      const { rules, state, colonies, ledger, slides } = full;
+      const { earnings, winnings, lock } = forReplay(full);
       const plants = ledger.filter((e) => "Plant" in e);
       const tides = ledger.filter((e) => "Tide" in e);
       if (id !== runId.current) return;
@@ -86,14 +82,34 @@ export function VerifyRun() {
       setChecks(r.checks());
       setLog(r.log.slice());
       setPhase("done");
+      retries.current = 0;
       setMsg(`Replayed ${r.target.toLocaleString("en-US")} generations in ${((performance.now() - t0) / 1000).toFixed(1)} s on screen.`);
       r.free();
     } catch (e) {
       if (id !== runId.current) return;
       setPhase("error");
-      setMsg(e instanceof Error ? e.message : String(e));
+      const raw = e instanceof Error ? e.message : String(e);
+      // A read that failed is nearly always the public RPC refusing a busy address: say so, and try again by itself.
+      const busy = /fetch|network|RPC|busy|429|5\d\d|timed? ?out|abort|provider|cache/i.test(raw);
+      setMsg(busy ? "NEAR's public RPC is busy right now, so the ledger could not be read." : `The replay stopped: ${raw}`);
+      if (busy && retries.current < 4) {
+        retries.current++;
+        setRetryIn(10);
+      }
     }
   }, []);
+
+  // The automatic retry's countdown.
+  useEffect(() => {
+    if (retryIn === null) return;
+    if (retryIn <= 0) {
+      setRetryIn(null);
+      run();
+      return;
+    }
+    const t = setTimeout(() => setRetryIn((n) => (n === null ? null : n - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [retryIn, run]);
 
   useEffect(() => {
     run();
@@ -129,9 +145,12 @@ export function VerifyRun() {
         </span>
       </div>
     ) : phase === "error" ? (
-      <div className={`${s.verdict} ${s.badV}`}>
-        <b>The replay could not finish.</b>
-        <span>{msg}</span>
+      <div className={`${s.verdict} ${retryIn !== null ? s.pendingV : s.badV}`}>
+        <b>{retryIn !== null ? `NEAR's public RPC is busy, retrying in ${retryIn} s` : "The replay could not finish."}</b>
+        <span>
+          {msg} Or run it from a terminal, where nothing is shared with other visitors: <code>node scripts/verify.mjs{NETWORK === "mainnet" ? " --network mainnet" : ""}</code>{" "}
+          (<a href={`${REPO}/blob/main/scripts/verify.mjs`}>the script</a>).
+        </span>
       </div>
     ) : (
       <div className={`${s.verdict} ${s.pendingV}`} aria-busy="true">

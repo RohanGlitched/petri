@@ -4,9 +4,11 @@
 // replay is checked against the contract's own history chain, agar and burn before anything is drawn.
 
 import { useEffect, useMemo, useState } from "react";
-import { getAllColonies, getAllLedger, getAllSlides, getRules, getState, pinFinalBlock, type Colony, type DishState, type Rules } from "@/lib/chain";
+import type { Colony, DishState, Rules } from "@/lib/chain";
+import { readDishAt } from "@/lib/netread";
+import { readError } from "@/lib/rpc";
 import { buildCoinBook, type CoinBook, type EventKind } from "@/lib/supply";
-import { CONTRACT, REPO, accountUrl, shortAccount } from "@/lib/config";
+import { CONTRACT, NETWORK, REPO, accountUrl, shortAccount } from "@/lib/config";
 import { actionIndex, useStrainLog } from "@/lib/strain-log";
 import { sideOfAccount } from "@/lib/sides";
 
@@ -50,14 +52,8 @@ export function CoinLog() {
     let stop = false;
     (async () => {
       try {
-        await pinFinalBlock();
-        let rules, state, colonies, ledger, slides;
-        try {
-          [rules, state] = await Promise.all([getRules(), getState()]);
-          [colonies, ledger, slides] = await Promise.all([getAllColonies(state.colonies), getAllLedger(Number(state.ledger)), getAllSlides(Number(state.slides))]);
-        } finally {
-          await pinFinalBlock(false);
-        }
+        // The whole dish at one final block, shared with /judges, /verify and /records (netread.ts).
+        const { rules, state, colonies, ledger, slides } = await readDishAt(NETWORK);
         if (stop) return;
         setPhase("replaying");
         const book = await buildCoinBook({ rules, state, colonies, ledger, slides }, (g, of) => !stop && setProg(g / Math.max(1, of)));
@@ -66,7 +62,7 @@ export function CoinLog() {
         setPhase("done");
       } catch (e) {
         if (!stop) {
-          setErr(e instanceof Error ? e.message : String(e));
+          setErr(readError(e));
           setPhase("error");
         }
       }
@@ -95,7 +91,7 @@ export function CoinLog() {
         <p className="lede">
           {phase === "reading" && <>Reading the whole ledger of {CONTRACT} at one final block…</>}
           {phase === "replaying" && <>Replaying PETRI from generation zero with petri-core…</>}
-          {phase === "error" && <>The dish could not be read: {err}. Reload to try again.</>}
+          {phase === "error" && <>The dish could not be read ({err}); it was tried three times. Reload in a minute.</>}
         </p>
         {phase === "replaying" && (
           <div className={s.progress} aria-hidden="true">

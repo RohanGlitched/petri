@@ -4,12 +4,13 @@
 // never leaves the browser; the server only sees the public half and relays what the guest signs. Guests exist only on
 // the free-play dish (testnet); on mainnet every move is signed by the player's own wallet.
 
-import { Account, JsonRpcProvider, KeyPair, type KeyPairString } from "near-api-js";
+import { Account, KeyPair, type KeyPairString } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { useSyncExternalStore } from "react";
 import type { NearConnector } from "@hot-labs/near-connect";
 import type { DataStorage } from "@hot-labs/near-connect";
 import { CONTRACT, FREE_PLAY, NETWORK, RPC_URLS, isAccountId } from "./config";
+import { nearProvider } from "./near-provider";
 import { getRules, getState, type Rules } from "./chain";
 
 const STORE = "petri.guest.v1";
@@ -181,7 +182,7 @@ export async function createGuest(): Promise<string> {
     /* kept in memory for this visit */
   }
   // The account exists once the creating transaction is final; wait until RPC sees the key.
-  const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
+  const provider = nearProvider(NETWORK);
   for (let i = 0; i < 20; i++) {
     try {
       await provider.viewAccessKey({ accountId: s.accountId, publicKey: kp.getPublicKey() });
@@ -207,7 +208,7 @@ export function forgetGuest() {
 function account(): Account {
   const s = saved();
   if (!s) throw new Error("Make a guest account first.");
-  const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
+  const provider = nearProvider(NETWORK);
   return new Account(s.accountId, provider, s.secretKey);
 }
 

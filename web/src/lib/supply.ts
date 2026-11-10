@@ -110,6 +110,12 @@ export async function buildCoinBook(
     while (r.generation < end) {
       r.run(Math.min(LIFE_STEP, end - r.generation));
       lives();
+      // Hand the page back every 40 ms, so the replay never blocks scrolling or input for long.
+      if (performance.now() - last > 40) {
+        last = performance.now();
+        onProgress?.(r.generation, target);
+        await new Promise((res) => setTimeout(res, 0));
+      }
     }
     const after = counters();
     const fed = before.agar - after.agar - (after.sold - before.sold) + (after.returned - before.returned) + (after.back - before.back);
@@ -118,7 +124,7 @@ export async function buildCoinBook(
       events.push({ index: -1, g: g0, to: r.generation, kind: "feed", colony: null, petri: fed, burned: 0, near: 0, text: "The agar fed the living cells" });
     }
     point();
-    if (onProgress && performance.now() - last > 120) {
+    if (onProgress && performance.now() - last > 40) {
       last = performance.now();
       onProgress(r.generation, target);
       await new Promise((res) => setTimeout(res, 0));

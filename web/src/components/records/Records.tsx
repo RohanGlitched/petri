@@ -6,11 +6,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { getAllColonies, getAllLedger, getRules, getState, type Colony, type Entry } from "@/lib/chain";
+import type { Colony, Entry } from "@/lib/chain";
+import { readDishAt } from "@/lib/netread";
 import { Replayer } from "@/lib/replay";
 import { loadEngine } from "@/engine";
 import { useLive, hex, int, near, petri } from "@/lib/live";
-import { accountUrl, shortAccount } from "@/lib/config";
+import { NETWORK, accountUrl, shortAccount } from "@/lib/config";
 import { useNet } from "@/lib/use-net";
 import { sideOf } from "@/lib/strains";
 import s from "./records.module.css";
@@ -95,8 +96,8 @@ function fromLedger(ledger: Entry[]) {
 
 async function compute(onProgress: (at: number, of: number) => void): Promise<{ r: Result; colonies: Colony[] }> {
   await loadEngine();
-  const [rules, state] = await Promise.all([getRules(), getState()]);
-  const [colonies, ledger] = await Promise.all([getAllColonies(state.colonies), getAllLedger(Number(state.ledger))]);
+  // The whole dish at one final block, shared with /judges, /verify and /coin (netread.ts).
+  const { rules, state, colonies, ledger } = await readDishAt(NETWORK);
   const rp = new Replayer({ rules, state, colonies, ledger, earnings: [], winnings: [], lock: null });
   const target = Number(state.generation);
   const since = new Map<number, number>();

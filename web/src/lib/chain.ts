@@ -1,6 +1,8 @@
 // Read-only views of the dish contract over JSON-RPC, with failover between providers.
 
-import { CONTRACT, RPC_URLS } from "./config";
+import { CONTRACT, NETWORK } from "./config";
+import { b64, decodeView, rpcCall } from "./rpc";
+import { accountAt, keysAt, pagedAt, sharedHead, viewAt } from "./shared-read";
 
 export type Rules = {
   width: number;
@@ -245,65 +247,43 @@ export const entryGeneration = (e: Entry): number => Number(Object.values(e)[0].
 export type Checkpoint = { generation: string; chain: string };
 export type Claimable = { petri: string; near: string };
 
-let preferred = 0;
+const rpc = <T,>(method: string, params: unknown, timeoutMs = 8000): Promise<T> => rpcCall<T>(NETWORK, method, params, { timeoutMs });
 
-async function rpc<T>(method: string, params: unknown, timeoutMs = 8000): Promise<T> {
-  let lastErr: unknown = null;
-  for (let attempt = 0; attempt < RPC_URLS.length; attempt++) {
-    const i = (preferred + attempt) % RPC_URLS.length;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(RPC_URLS[i], {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: "petri", method, params }),
-        signal: ctrl.signal,
-        cache: "no-store",
-      });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error(`RPC ${res.status}`);
-      const body = await res.json();
-      if (body.error) {
-        const msg = body.error?.data ?? body.error?.cause?.name ?? body.error?.message ?? "RPC error";
-        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-      }
-      preferred = i;
-      return body.result as T;
-    } catch (e) {
-      clearTimeout(timer);
-      lastErr = e;
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error("Every NEAR RPC provider failed");
-}
-
-/** Reads can be pinned to one block so a replay compares numbers from a single moment. */
+/** Reads can be pinned to one final block so a replay compares numbers from a single moment; pinned reads go through
+ * the site's cache (/api/view), since a final block never changes. */
 let pinned: number | null = null;
 
-/** Pin every following read to the latest final block (or unpin with `null`). Returns the block height. */
+/** Pin every following read to a recent final block, the same one other visitors read for a few seconds (or unpin
+ * with `null`). Returns the block height. */
 export async function pinFinalBlock(on = true): Promise<number | null> {
   if (!on) {
     pinned = null;
     return null;
   }
-  const b = await rpc<{ header: { height: number } }>("block", { finality: "final" });
-  pinned = b.header.height;
+  pinned = await sharedHead(NETWORK);
   return pinned;
 }
 
 export async function view<T>(method: string, args: Record<string, unknown> = {}, contract = CONTRACT): Promise<T> {
-  const argsB64 = btoa(JSON.stringify(args));
-  const r = await rpc<{ result: number[]; logs: string[] } & { error?: string }>("query", {
+  if (pinned !== null) return viewAt<T>(NETWORK, pinned, method, args, contract);
+  const r = await rpc<{ result?: number[] }>("query", {
     request_type: "call_function",
-    ...(pinned !== null ? { block_id: pinned } : { finality: "optimistic" }),
+    finality: "optimistic",
     account_id: contract,
     method_name: method,
-    args_base64: argsB64,
+    args_base64: b64(args),
   });
-  if (r.error) throw new Error(r.error);
-  const text = new TextDecoder().decode(new Uint8Array(r.result));
-  return JSON.parse(text) as T;
+  return decodeView<T>(r);
+}
+
+/** A view at the block every visitor shares for a few seconds, through the site's cache: for reads many pages make at
+ * once (every colony's balance, every tide's winnings), where a few seconds' age does not matter. */
+export async function viewShared<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {
+  try {
+    return await viewAt<T>(NETWORK, await sharedHead(NETWORK), method, args);
+  } catch {
+    return view<T>(method, args);
+  }
 }
 
 export const getRules = () => view<Rules>("rules");
@@ -419,34 +399,31 @@ export async function getNearBalance(account_id: string): Promise<bigint> {
 
 /** The contract account's deployed code hash and access keys, to show that nobody can change the code. */
 export async function getLock(account_id = CONTRACT): Promise<{ codeHash: string; fullAccessKeys: number; keys: number; balance: string; storageUsage: number }> {
-  const at = pinned !== null ? { block_id: pinned } : { finality: "final" };
-  const acct = await rpc<{ code_hash: string; amount: string; storage_usage: number }>("query", { request_type: "view_account", account_id, ...at });
-  const list = await rpc<{ keys: { access_key: { permission: unknown } }[] }>("query", { request_type: "view_access_key_list", account_id, ...at });
+  const block = pinned ?? (await sharedHead(NETWORK));
+  const [acct, list] = await Promise.all([accountAt(NETWORK, block, account_id), keysAt(NETWORK, block, account_id)]);
   const full = list.keys.filter((k) => k.access_key.permission === "FullAccess").length;
   return { codeHash: acct.code_hash, fullAccessKeys: full, keys: list.keys.length, balance: acct.amount, storageUsage: acct.storage_usage };
 }
 
-async function paged<T>(total: number, page: (from: number, limit: number) => Promise<T[]>): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; from < total; from += 1000) out.push(...(await page(from, 1000)));
-  return out.slice(0, total);
+/** Every page of a paged view, at the block every visitor shares for a few seconds (through the site's cache), or at
+ * the pinned block; straight from RPC if the cache cannot answer. */
+async function pagedBy<T>(size: number, total: number, method: string): Promise<T[]> {
+  if (total <= 0) return [];
+  try {
+    return await pagedAt<T>(NETWORK, pinned ?? (await sharedHead(NETWORK)), method, total, size);
+  } catch {
+    const n = Math.ceil(total / size);
+    const parts = await Promise.all(Array.from({ length: n }, (_, i) => view<T[]>(method, { from: i * size, limit: size })));
+    return parts.flat().slice(0, total);
+  }
 }
-export const getAllPlants = (total: number) => paged(total, getPlants);
-export const getAllLedger = (total: number) => paged(total, getLedger);
-async function paged500<T>(total: number, page: (from: number, limit: number) => Promise<T[]>): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; from < total; from += 500) out.push(...(await page(from, 500)));
-  return out.slice(0, total);
-}
+export const getAllPlants = (total: number) => pagedBy<PlantRecord>(1000, total, "plants");
+export const getAllLedger = (total: number) => pagedBy<Entry>(1000, total, "ledger");
 /** Every colony's lifetime earnings, in colony order (the view returns at most 500 a call). */
-export const getAllEarnings = (total: number) => paged500(total, getEarnings);
-export const getAllTideWinnings = (total: number) => paged500(total, getTideWinnings);
-export const getAllSlides = (total: number) => paged500(total, getSlides);
-export async function getAllColonies(total: number): Promise<Colony[]> {
-  const out: Colony[] = [];
-  for (let from = 0; from < total; from += 500) out.push(...(await getColonies(from, 500)));
-  return out.slice(0, total);
-}
+export const getAllEarnings = (total: number) => pagedBy<string>(500, total, "earnings");
+export const getAllTideWinnings = (total: number) => pagedBy<string>(500, total, "tide_winnings");
+export const getAllSlides = (total: number) => pagedBy<SlideView>(500, total, "slides");
+export const getAllColonies = (total: number): Promise<Colony[]> => pagedBy<Colony>(500, total, "colonies");
 
 export function colorHex(c: number): string {
   return "#" + c.toString(16).padStart(6, "0");

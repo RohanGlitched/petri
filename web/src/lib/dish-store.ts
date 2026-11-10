@@ -4,11 +4,18 @@
 // The contract stores the board at the last generation someone advanced to. Time keeps running after that, and the
 // rules are deterministic, so this store loads the stored board into petri-core (WASM) and steps it forward to the
 // generation the clock says is due. When the plant log grows, it reloads the stored board and steps forward again.
+// A dish more than max_lag behind is asleep: the contract's next call skips ahead and runs only max_catchup generations
+// (projection.mjs), so the browser steps only those, with their feed, and says how many the next call skips.
+//
+// The chain is read through the site's snapshot (/api/snapshot, shared by every visitor through the CDN): a small
+// `part=head` poll every five seconds, and the whole snapshot only when the ledger moved. The browser reads RPC itself
+// only for the clock once, if the snapshot cannot answer, and right after its own move (refreshDish).
 
 import { useSyncExternalStore } from "react";
 import { Engine, loadEngine } from "@/engine";
 import { getBoard, getColonies, getEarnings, getPlants, getRules, getStakes, getState, type Colony, type DishState, type PlantRecord, type Rules } from "./chain";
 import { NETWORK } from "./config";
+import { projectTarget } from "./projection.mjs";
 
 export type Snapshot = {
   status: "loading" | "ready" | "error";
@@ -42,6 +49,10 @@ export type Snapshot = {
   agar: number;
   /** Each colony's lifetime earnings at the stored board, claimed or not (index = colony id). */
   earnings: number[];
+  /** More than max_lag behind the clock: the board shown is the stored one plus max_catchup generations, and the next
+   * call skips `skipNext` generations (no Life, no feed) before it runs them. */
+  asleep: boolean;
+  skipNext: number;
 };
 
 const empty: Snapshot = {
@@ -63,6 +74,8 @@ const empty: Snapshot = {
   recentPlants: [],
   agar: 0,
   earnings: [],
+  asleep: false,
+  skipNext: 0,
 };
 
 let snap: Snapshot = empty;
@@ -116,8 +129,12 @@ function loadStored({ rules, state, colonies, board, stakes }: Inputs) {
   storedGeneration = Number(state.generation);
 }
 
+/** Step the board to where the contract's next catch-up would leave it for the clock's `due` generation. */
 function advanceTo(due: number, force = false) {
-  if (!engine) return;
+  if (!engine || !snap.rules) return;
+  const lag = projectTarget(storedGeneration, due, snap.rules);
+  if (lag.asleep !== snap.asleep || lag.skip !== snap.skipNext) emit({ asleep: lag.asleep, skipNext: lag.skip });
+  due = lag.target;
   const g = engine.generation();
   if (g >= due && !force) return;
   const prev = snap.cells ?? engine.cells();
@@ -153,6 +170,7 @@ async function apply(inp: Inputs) {
   const due = dueFor(rules, state);
   emit({ rules, state, colonies, status: "ready", syncedAt: Date.now(), dueGeneration: due });
   advanceTo(due, true);
+  knownPlants = `${state.ledger}:${state.colonies}`;
 }
 
 async function sync(first = false) {
@@ -180,23 +198,47 @@ async function sync(first = false) {
   }
 }
 
+/** A snapshot URL that changes every four seconds, so every visitor in those four seconds shares one CDN answer. */
+const snapUrl = (head: boolean) => `/api/snapshot?net=${NETWORK}${head ? "&part=head" : ""}&t=${Math.floor(Date.now() / 4000)}`;
+
+/** Carry the chain's clock forward by how long the snapshot sat in the server's cache and the CDN, and half the trip. */
+function clockFrom(j: { state: DishState; at: number; servedAt: number }, res: Response, t0: number) {
+  if (clockFromChain) return;
+  const age = Number(res.headers.get("age") ?? 0) * 1000;
+  clockOffset = Number(j.state.now_ms) + (Number(j.servedAt) - Number(j.at)) + (Number.isFinite(age) ? age : 0) + (Date.now() - t0) / 2 - Date.now();
+}
+
 /**
- * The site's own five-second snapshot of the same views (/api/snapshot), for the first paint. Whichever of it and the
- * browser's own RPC reads lands first draws the board; the RPC reads then keep it current.
+ * The site's own five-second snapshot of the same views (/api/snapshot): the first paint, and again whenever the
+ * ledger moves. Returns false when it could not be read.
  */
-async function fromSnapshot() {
+async function fromSnapshot(): Promise<boolean> {
   const t0 = Date.now();
-  const res = await fetch(`/api/snapshot?net=${NETWORK}`, { cache: "no-store", signal: AbortSignal.timeout(6000) });
+  const res = await fetch(snapUrl(false), { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`snapshot ${res.status}`);
   const j = await res.json();
   if (j.error || !j.state || !j.rules) throw new Error("no snapshot");
-  if (engine) return;
-  // Carry the chain's clock forward by how long the snapshot sat in the server's cache, and half the round trip.
-  if (!clockFromChain) clockOffset = Number(j.state.now_ms) + (Number(j.servedAt) - Number(j.at)) + (Date.now() - t0) / 2 - Date.now();
+  clockFrom(j, res, t0);
+  // An older snapshot than the board this page already holds (its own move was read straight from RPC) is skipped.
+  if (engine && Number(j.state.ledger) < Number(snap.state?.ledger ?? 0)) return true;
   const bin = atob(j.board as string);
   const board = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) board[i] = bin.charCodeAt(i);
   await apply({ rules: j.rules, state: j.state, board, colonies: j.colonies, stakes: j.stakes, earned: j.earnings, recent: j.plants });
+  return true;
+}
+
+/** The five-second poll: the snapshot's state only, and the whole snapshot when the ledger or the colonies moved. */
+async function pollSnapshot() {
+  const t0 = Date.now();
+  const res = await fetch(snapUrl(true), { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`snapshot ${res.status}`);
+  const j = await res.json();
+  if (j.error || !j.state) throw new Error("no snapshot");
+  clockFrom(j, res, t0);
+  const st = j.state as DishState;
+  if (`${st.ledger}:${st.colonies}` !== knownPlants && Number(st.ledger) >= Number(snap.state?.ledger ?? 0)) await fromSnapshot();
+  else if (Number(st.ledger) >= Number(snap.state?.ledger ?? 0)) emit({ state: st, syncedAt: Date.now() });
 }
 
 let settled: Promise<void> | null = null;
@@ -222,11 +264,12 @@ function tick() {
   const due = dueFor(rules, state);
   const genMs = Number(rules.generation_ms);
   const nextInMs = genMs - ((nowChain() - Number(state.epoch_ms)) % genMs);
-  if (due > engine.generation()) {
+  const lag = projectTarget(storedGeneration, due, rules);
+  if (lag.target > engine.generation()) {
     emit({ dueGeneration: due, nextInMs });
     advanceTo(due);
-  } else if (Math.abs(nextInMs - snap.nextInMs) > 400) {
-    emit({ nextInMs, dueGeneration: due });
+  } else if (due !== snap.dueGeneration || lag.skip !== snap.skipNext || Math.abs(nextInMs - snap.nextInMs) > 400) {
+    emit({ nextInMs, dueGeneration: due, asleep: lag.asleep, skipNext: lag.skip });
   }
 }
 
@@ -235,21 +278,48 @@ export function startDish() {
   started = true;
   (async () => {
     engineReady = loadEngine();
-    const quick = fromSnapshot().catch(() => {});
+    let drawn = false;
     try {
-      await sync(true);
-    } catch (e) {
-      // The snapshot may still have drawn the dish; only report an error when nothing did.
-      await quick;
-      if (snap.status !== "ready") emit({ status: "error", error: e instanceof Error ? e.message : String(e) });
+      drawn = await fromSnapshot();
+    } catch {
+      drawn = false;
+    }
+    if (!drawn) {
+      // The site's snapshot did not answer: read the chain directly.
+      try {
+        await sync(true);
+      } catch (e) {
+        if (snap.status !== "ready") emit({ status: "error", error: e instanceof Error ? e.message : String(e) });
+      }
+    } else {
+      // One read of the chain's own clock, so the generation counter is exact (the snapshot's is a close estimate).
+      getState()
+        .then((st) => {
+          clockOffset = Number(st.now_ms) - Date.now();
+          clockFromChain = true;
+        })
+        .catch(() => {});
     }
     setInterval(tick, 250);
+    let misses = 0;
     const poll = async () => {
       if (document.visibilityState === "visible") {
         try {
-          await sync();
+          // Two misses in a row and the poll reads the chain directly until the snapshot answers again.
+          if (misses >= 2) await sync();
+          else await pollSnapshot();
+          misses = 0;
           if (snap.status === "error") emit({ status: "ready", error: undefined });
         } catch (e) {
+          misses++;
+          if (misses > 2) {
+            try {
+              await pollSnapshot();
+              misses = 0;
+            } catch {
+              /* keep the last board */
+            }
+          }
           if (snap.status !== "ready") emit({ status: "error", error: e instanceof Error ? e.message : String(e) });
         }
       }

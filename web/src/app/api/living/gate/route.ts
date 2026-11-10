@@ -11,7 +11,8 @@
 
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { RPCS, type Network } from "@/lib/config";
+import type { Network } from "@/lib/config";
+import { rpcCall } from "@/lib/rpc";
 import { darkroomMessage, dishView, isLiving, viewOn, type PurseInfo } from "@/lib/living";
 
 export const dynamic = "force-dynamic";
@@ -62,23 +63,12 @@ function nep413Hash(message: string, nonce: Uint8Array, recipient: string): Uint
 }
 
 async function keyPermission(net: Network, account: string, publicKey: string): Promise<unknown> {
-  for (const url of RPCS[net]) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: "gate", method: "query", params: { request_type: "view_access_key", finality: "optimistic", account_id: account, public_key: publicKey } }),
-        signal: AbortSignal.timeout(6000),
-        cache: "no-store",
-      });
-      const body = await res.json();
-      if (body.error) return null;
-      return body.result?.permission ?? null;
-    } catch {
-      /* next provider */
-    }
+  try {
+    const r = await rpcCall<{ permission?: unknown }>(net, "query", { request_type: "view_access_key", finality: "optimistic", account_id: account, public_key: publicKey }, { id: "gate", timeoutMs: 6000 });
+    return r.permission ?? null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 const no = (why: string, status = 403) => Response.json({ ok: false, why }, { status });

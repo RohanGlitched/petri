@@ -9,10 +9,12 @@ export const CONTRACTS: Record<Network, string> = {
   testnet: process.env.NEXT_PUBLIC_PETRI_CONTRACT_TESTNET ?? process.env.NEXT_PUBLIC_PETRI_CONTRACT ?? "petri-v6.testnet",
   mainnet: process.env.NEXT_PUBLIC_PETRI_CONTRACT_MAINNET ?? "petri-dish.near",
 };
-/** Every network's RPC providers, for the few reads that look at the other dish (the mainnet pulse). */
+/** Every network's keyless public RPC providers, all answering CORS requests from a browser (checked 10 November
+ * 2026). rpc.*.near.org is deprecated and answers 429 to nearly everyone, so it is not here. rpc.ts fails over across
+ * them and backs off on 429. */
 export const RPCS: Record<Network, string[]> = {
-  mainnet: ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"],
-  testnet: ["https://rpc.testnet.fastnear.com", "https://rpc.testnet.near.org", "https://test.rpc.fastnear.com"],
+  mainnet: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://free.rpc.fastnear.com", "https://rpc.shitzuapes.xyz"],
+  testnet: ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"],
 };
 export const EXPLORERS: Record<Network, string> = { mainnet: "https://nearblocks.io", testnet: "https://testnet.nearblocks.io" };
 

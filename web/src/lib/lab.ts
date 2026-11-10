@@ -3,10 +3,11 @@
 // guest key, calls the contract is meant to refuse, and sends them through the relayer marked `lab`, so the refusal is
 // a real failed transaction with a hash. The guest key is the one wallet.ts made (petri.guest.v1).
 
-import { Account, JsonRpcProvider, KeyPair, KeyPairSigner, actions, encodeSignedDelegate, type KeyPairString } from "near-api-js";
+import { Account, KeyPair, KeyPairSigner, actions, encodeSignedDelegate, type KeyPairString } from "near-api-js";
 import { pattern_cells, type Engine, type PatternName } from "@/engine";
 import { getColonyOf, getRules, getState, type Colony, type Rules } from "./chain";
-import { CONTRACT, RPC_URLS } from "./config";
+import { CONTRACT, NETWORK } from "./config";
+import { nearProvider } from "./near-provider";
 
 const STORE = "petri.guest.v1";
 
@@ -59,7 +60,7 @@ export async function signOne(step: Step): Promise<string | null> {
   const g = savedGuest();
   if (!g) return null;
   const kp = KeyPair.fromString(g.secretKey);
-  const acct = new Account(g.accountId, new JsonRpcProvider({ url: RPC_URLS[0] }), g.secretKey);
+  const acct = new Account(g.accountId, nearProvider(NETWORK), g.secretKey);
   const da = await acct.createMetaTransaction({
     receiverId: CONTRACT,
     actions: [actions.functionCall(step.method, step.args, BigInt(Math.min(300, step.tgas)) * 10n ** 12n, 0n)],

@@ -1,7 +1,9 @@
 // One colony as a share card needs it, read on the server straight from the contract's views: its row, its lifetime
 // earnings, the stored board (decoded here, no WASM) and the clock. Kept for thirty seconds per colony. Read-only.
 
-import { CONTRACTS, RPCS, type Network } from "./config";
+import { CONTRACTS, type Network } from "./config";
+import { b64, decodeView, rpcCall } from "./rpc";
+import { projectTarget } from "./projection.mjs";
 import { STAINS } from "./stains";
 import { ENGINE_HASH } from "@/engine";
 import { Engine, initSync } from "@/engine/pkg/petri";
@@ -32,30 +34,8 @@ export type ColonyCard = {
 };
 
 async function view<T>(net: Network, method: string, args: Record<string, unknown> = {}): Promise<T> {
-  let last: unknown = null;
-  for (const url of RPCS[net]) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: "petri-card",
-          method: "query",
-          params: { request_type: "call_function", finality: "optimistic", account_id: CONTRACTS[net], method_name: method, args_base64: Buffer.from(JSON.stringify(args)).toString("base64") },
-        }),
-        signal: AbortSignal.timeout(6000),
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`RPC ${res.status}`);
-      const body = await res.json();
-      if (body.error || !body.result?.result) throw new Error("RPC error");
-      return JSON.parse(Buffer.from(body.result.result).toString("utf8")) as T;
-    } catch (e) {
-      last = e;
-    }
-  }
-  throw last instanceof Error ? last : new Error("NEAR did not answer");
+  const r = await rpcCall<{ result?: number[] }>(net, "query", { request_type: "call_function", finality: "optimistic", account_id: CONTRACTS[net], method_name: method, args_base64: b64(args) }, { id: "petri-card", timeoutMs: 6000 });
+  return decodeView<T>(r);
 }
 
 /** The contract's compact board: a bit per cell (rows of 64-bit little-endian words), then each live cell's owner. */
@@ -84,7 +64,7 @@ export function decodeBoard(bytes: Uint8Array, w: number, h: number): Uint16Arra
 }
 
 type RawColony = { id: number; account: string; name: string; color: number; house: boolean; joined_generation: string; cells_planted: string };
-type RawRules = { width: number; height: number; generation_ms: string; feed_ppm: number; keeper_bps: number; reach: number; live_floor: number; stake_keep_bps: number };
+type RawRules = { width: number; height: number; generation_ms: string; feed_ppm: number; keeper_bps: number; reach: number; live_floor: number; stake_keep_bps: number; max_lag: number; max_catchup: number };
 type RawState = { generation: string; epoch_ms: string; now_ms: string; colonies: number; chain: string; counted: number; house: number[]; agar: string };
 
 /** petri-core (WASM), loaded once on the server from the site's own copy of the engine. */
@@ -146,11 +126,14 @@ async function read(net: Network, id: number, origin: string): Promise<ColonyCar
       e.set_stakes(new BigUint64Array(stakes.map((v) => BigInt(v))));
       e.set_house(new Uint16Array(state.house));
       e.set_agar(state.agar);
-      if (e.load_compact(bytes, boardGeneration, state.chain) && generation >= boardGeneration && generation - boardGeneration <= 500_000) {
-        e.step(generation - boardGeneration);
+      // A dish asleep (more than max_lag behind) is stepped only as far as the contract's next call would take it:
+      // the skipped generations never run (projection.mjs).
+      const to = projectTarget(boardGeneration, generation, rules).target;
+      if (e.load_compact(bytes, boardGeneration, state.chain) && to >= boardGeneration) {
+        e.step(to - boardGeneration);
         cells = e.cells();
         since = Number(e.earned_of(id));
-        boardGeneration = generation;
+        boardGeneration = to;
       }
     } catch {
       cells = null;

@@ -3,34 +3,15 @@
 // and their recent pace (the dish's own ledger) straight from NEAR mainnet, whichever dish the page is showing.
 
 import { CONTRACTS } from "./config";
+import { rpcCall } from "./rpc";
 import { strainsOn } from "./strains";
 import { entryGeneration, type DishState, type Entry } from "./chain";
 
-const RPCS = ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"];
 const YOCTO = 10n ** 24n;
 /** The pace is measured over the last day of the ledger (5,760 generations of 15 s), or less if the dish is younger. */
 const WINDOW_GENS = 5760;
 
-async function rpc<T>(method: string, params: unknown): Promise<T> {
-  let last: unknown = null;
-  for (const url of RPCS) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: "runway", method, params }),
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`RPC ${res.status}`);
-      const body = await res.json();
-      if (body.error) throw new Error(JSON.stringify(body.error));
-      return body.result as T;
-    } catch (e) {
-      last = e;
-    }
-  }
-  throw last instanceof Error ? last : new Error("NEAR mainnet did not answer");
-}
+const rpc = <T,>(method: string, params: unknown): Promise<T> => rpcCall<T>("mainnet", method, params, { id: "runway" });
 
 async function view<T>(method: string, args: Record<string, unknown>): Promise<T> {
   const r = await rpc<{ result: number[] }>("query", {

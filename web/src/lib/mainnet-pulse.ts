@@ -5,7 +5,8 @@
 // When the page already reads mainnet, the live dish store has every number and no extra call is made.
 
 import { useSyncExternalStore } from "react";
-import { CONTRACTS, NETWORK, RPCS } from "./config";
+import { CONTRACTS, NETWORK } from "./config";
+import { decodeView, rpcCall } from "./rpc";
 import { dishSettled, useDish } from "./dish-store";
 
 export type Pulse = {
@@ -45,39 +46,17 @@ function fromRead(r: Read): Pulse {
 }
 
 async function fetchState(): Promise<Read> {
-  let last: unknown = null;
-  for (const url of RPCS.mainnet) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: "petri-pulse",
-          method: "query",
-          params: { request_type: "call_function", finality: "optimistic", account_id: CONTRACTS.mainnet, method_name: "state", args_base64: "e30=" },
-        }),
-        signal: AbortSignal.timeout(8000),
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`RPC ${res.status}`);
-      const body = await res.json();
-      if (body.error || !body.result?.result) throw new Error("RPC error");
-      const s = JSON.parse(new TextDecoder().decode(new Uint8Array(body.result.result)));
-      return {
-        due: Number(s.due_generation),
-        epoch: Number(s.epoch_ms),
-        offset: Number(s.now_ms) - Date.now(),
-        colonies: Number(s.colonies),
-        live: Number(s.total_live),
-        vault: Number(s.vault),
-        at: Date.now(),
-      };
-    } catch (e) {
-      last = e;
-    }
-  }
-  throw last instanceof Error ? last : new Error("Mainnet did not answer");
+  const r = await rpcCall<{ result?: number[] }>("mainnet", "query", { request_type: "call_function", finality: "optimistic", account_id: CONTRACTS.mainnet, method_name: "state", args_base64: "e30=" }, { id: "petri-pulse" });
+  const s = decodeView<Record<string, string | number>>(r);
+  return {
+    due: Number(s.due_generation),
+    epoch: Number(s.epoch_ms),
+    offset: Number(s.now_ms) - Date.now(),
+    colonies: Number(s.colonies),
+    live: Number(s.total_live),
+    vault: Number(s.vault),
+    at: Date.now(),
+  };
 }
 
 async function refresh() {

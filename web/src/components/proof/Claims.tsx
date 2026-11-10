@@ -5,7 +5,8 @@
 import { useEffect, useState } from "react";
 import { loadEngine } from "@/engine";
 import { CONTRACTS, EXPLORERS, REPO, type Network } from "@/lib/config";
-import { accountOf, netView, pin, readDish, readForReplay, unpin, type DishRead, type SourceMeta } from "@/lib/netread";
+import { readError } from "@/lib/rpc";
+import { forReplay, readDishAt, type AccessKey, type DishRead, type SourceMeta } from "@/lib/netread";
 import { BUILD_HASH, Replayer } from "@/lib/replay";
 import { strainOf } from "@/lib/strains";
 import { sideOfAccount } from "@/lib/sides";
@@ -27,35 +28,25 @@ const ago = (ms: number) => {
   return m < 90 ? `${m} min ago` : m < 48 * 60 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
 };
 
-type Acct = Awaited<ReturnType<typeof accountOf>>;
+type Acct = { codeHash: string; balance: string; storageUsage: number; keys: AccessKey[]; fullAccess: number };
 type NetData = { dish: DishRead; acct: Acct; meta: SourceMeta | null; log: StrainLog | null; replay: { ok: number; total: number; bad: string[] } | null };
 
 async function readNet(net: Network): Promise<NetData> {
-  await pin(net);
-  try {
-    const [dish, acct, meta] = await Promise.all([readDish(net), accountOf(net, CONTRACTS[net]), netView<SourceMeta>(net, "contract_source_metadata").catch(() => null)]);
-    const log = await fetch(`/api/strains?net=${net}`, { cache: "no-store" })
-      .then((r) => r.json() as Promise<StrainLog>)
-      .catch(() => null);
-    return { dish, acct, meta, log, replay: null };
-  } finally {
-    unpin(net);
-  }
+  // One read of the whole dish at a final block, shared with /verify, /coin and /records (see netread.ts).
+  const full = await readDishAt(net);
+  const acct: Acct = { ...full.account, keys: full.keys, fullAccess: full.keys.filter((k) => k.access_key.permission === "FullAccess").length };
+  const log = await fetch(`/api/strains?net=${net}`, { cache: "no-store" })
+    .then((r) => r.json() as Promise<StrainLog>)
+    .catch(() => null);
+  return { dish: full, acct, meta: full.meta, log, replay: null };
 }
 
 async function replayNet(d: NetData): Promise<{ ok: number; total: number; bad: string[] }> {
   await loadEngine();
-  // The same block as the counts: pin again to the latest final block and read the replay's own inputs with the dish.
-  await pin(d.dish.net);
-  let dish: DishRead;
-  let extra: Awaited<ReturnType<typeof readForReplay>>;
-  try {
-    dish = await readDish(d.dish.net);
-    extra = await readForReplay(dish);
-  } finally {
-    unpin(d.dish.net);
-  }
-  const r = new Replayer({ rules: dish.rules, state: dish.state, colonies: dish.colonies, ledger: dish.ledger, earnings: extra.earnings, winnings: extra.winnings, slides: dish.slides, lock: extra.lock });
+  // The same read as the counts, so the replay and the numbers above it are one moment.
+  const full = await readDishAt(d.dish.net);
+  const extra = forReplay(full);
+  const r = new Replayer({ rules: full.rules, state: full.state, colonies: full.colonies, ledger: full.ledger, earnings: extra.earnings, winnings: extra.winnings, slides: full.slides, lock: extra.lock });
   while (!r.run(5000)) await new Promise((res) => setTimeout(res, 0));
   const checks = r.checks().filter((c) => c.id !== "lock");
   r.free();
@@ -369,7 +360,7 @@ export function Claims() {
           if (stop) return;
           setData((x) => ({ ...x, [n]: { ...(x[n] ?? d), replay } }));
         } catch (e) {
-          if (!stop) setErr(`${n}: ${e instanceof Error ? e.message : String(e)}`);
+          if (!stop) setErr(`${n}: ${readError(e)}`);
         }
       }
     })();
@@ -405,7 +396,7 @@ export function Claims() {
           </li>
         ))}
       </ul>
-      {err && <p className={s.note}>Could not read {err}. Reload to try again.</p>}
+      {err && <p className={s.note}>Could not read {err}; it was tried three times. Reload in a minute, or run <code>node scripts/verify.mjs</code> from a terminal.</p>}
     </>
   );
 }
