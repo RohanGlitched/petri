@@ -38,11 +38,13 @@ const NETS = {
 const STRAINS = ["violet", "safranin", "methylene", "malachite", "congo"];
 const BENCH = ["petri-bench-a.testnet", "petri-bench-b.testnet", "petri-bench-c.testnet", "9e0f14b0b58c9760dd95af218cdd98a4417cd37d316e01cbff178d41ac5b7c5e", "58135f2e727a40755df38f1d231aca159ea4ab138260b8d0d9419da63f999932"];
 
+/** Mainnet free-play guests: accounts the dish's ledger shows were sponsored (Sponsor entries), as lib/sides.ts files them. */
+const sponsored = new Set();
 /** Who an account plays for (the same rule as web/src/lib/sides.ts). */
 function side(a, house) {
   if (house || STRAINS.some((s) => a === `${s}.petri-dish.near` || a === `petri-${s}.testnet`) || a === "petri-keeper.testnet" || a === "keeper.petri-dish.near") return "house";
   if (BENCH.includes(a)) return "bench";
-  if (/^g-[0-9a-f]{10}\.petri-guests\.testnet$/.test(a)) return "guest";
+  if (/^g-[0-9a-f]{10}\.petri-guests\.testnet$/.test(a) || sponsored.has(a)) return "guest";
   if (/(^|\.)petri-[a-z0-9-]+\.testnet$/.test(a) || a === "petri-dish.near" || a.endsWith(".petri-dish.near")) return "team";
   return "outside";
 }
@@ -116,6 +118,7 @@ async function read(net) {
     }
   }
 
+  if (net === "mainnet") for (const e of ledger) if (e.Sponsor) sponsored.add(e.Sponsor.account);
   const bySide = { house: 0, bench: 0, team: 0, guest: 0, outside: 0 };
   const planted = { house: 0, bench: 0, team: 0, guest: 0, outside: 0 };
   for (const c of colonies) {
@@ -187,6 +190,7 @@ function colonyLine(f) {
     parts.push(`${int(f.bySide.team)} other team ${f.bySide.team === 1 ? "account" : "accounts"} (${what.join(", ")})`);
   }
   if (f.net === "testnet") parts.push(`${f.bySide.guest} guest (anyone's browser, the team's tests included)`);
+  else if (f.bySide.guest) parts.push(`${f.bySide.guest} free-play guest (anyone's browser)`);
   parts.push(`${f.bySide.outside} outside`);
   return `${int(f.colonies)}: ${parts.join(", ")}`;
 }

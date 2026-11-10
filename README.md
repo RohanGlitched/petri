@@ -55,14 +55,14 @@ cd purse && cargo test                      # living slides: expect 18 (purse), 
 ## What is real, today
 
 <!-- facts-now:start -->
-Read by `node scripts/facts-now.mjs` at mainnet block 223,907,922 and testnet block 277,059,510; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
+Read by `node scripts/facts-now.mjs` at mainnet block 223,908,669 and testnet block 277,060,289; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
 
 | | Mainnet, real NEAR | Testnet, free play |
 |---|---|---|
 | Contract | [`petri-dish.near`](https://nearblocks.io/address/petri-dish.near) | [`petri-v6.testnet`](https://testnet.nearblocks.io/address/petri-v6.testnet) |
 | Full-access keys on the dish | 1, held by the team until the final verify on 14 November, then deleted | 1, kept for fixes |
 | Slide factory | `slides.petri-dish.near`, 0 keys | `slides.petri-v6.testnet`, 0 keys |
-| Generation stored on chain (15 s each) | 4,562 (the clock is at 4,581; the next move catches up) | 34,574 (clock 34,575) |
+| Generation stored on chain (15 s each) | 4,562 (the clock is at 4,611; the next move catches up) | 34,594 (clock 34,606) |
 | Colonies | 8: 5 house, 1 team bench, 2 other team accounts (2 living slides), 0 outside | 55: 5 house, 4 team bench, 13 other team accounts (3 living slides, 8 spawned strains, 2 test agents), 30 guest (anyone's browser, the team's tests included), 3 outside |
 | Outside players | none yet | 3 outside wallet colonies, 2 planted |
 | Plantings / under a slide's licence | 71 / 2 | 947 / 18 |
@@ -89,7 +89,7 @@ One shared 128×128 dish of Conway's Life runs inside a NEAR contract, and every
 - **Owning ground is a skill.** A colony is paid for at most 8 living cells per cell it planted, so splitting never earns more and holding ground means replanting. Planting within 3 cells of a rival costs three times as much, so nobody can close the dish.
 - **NFTs do things.** A specimen slide fixes a patch of your own living cells as an NFT whose picture the contract draws. Planting its pattern costs 25% less, and anyone else pays its holder a 10% royalty. Sealed into its own keyless account, a slide becomes a *living slide*: a colony that holds what it earns and passes whole to whoever holds it.
 - **AI strains play and bargain.** Five house strains forecast every move 240 generations ahead and buy peace from each other with pacts the contract enforces. Anyone can spawn a strain or bring an agent of their own.
-- **Free play never reaches NEAR.** A guest plays on testnet with credit the site sponsors. PETRI earned before a colony's first NEAR cannot be sold for NEAR or sent.
+- **Free play never reaches NEAR.** A guest plays on testnet with credit the site sponsors (mainnet free play opens 14 Nov 18:00 UTC for judging: 40 places, credit you can play with, not withdraw). PETRI earned before a colony's first NEAR cannot be sold for NEAR or sent.
 - **Everything replays.** The browser, the simulator and the contract run the same Rust engine, so anyone can rebuild the whole history from the ledger.
 
 How a session feels, at three speeds ([/rules](https://www.playpetri.xyz/rules#loops)): every 30 seconds you pick a stamp, see a forecast and plant; every few minutes you watch it grow and collide, claim and replant or lay siege; every hour the tide pays out, you fossilize a slide, and the strains strike pacts.
@@ -227,7 +227,7 @@ The dish itself never stops and costs nothing to keep: it is a contract (with no
 | The mainnet keeper | Stepping the dish costs about 0.000047 NEAR of gas a generation, about 0.27 NEAR a day when it is kept fully stepped (5,760 generations). It idles until 14 November 18:00 UTC and keeps the dish within 240 generations until 19 November. | The dish sleeps: a dish left alone for 480 generations skips ahead on the next call, without feed for the skipped generations, and the page says how many the next move skips. Nothing is lost; the next planting wakes it. |
 | The house strains' gas and PETRI | Their own NEAR, in their own accounts (`violet.petri-dish.near` and four more); the house runway on [/strains](https://www.playpetri.xyz/strains) shows what is left. | They stop planting. Their pacts still bind until they end, and the dish plays on without them. |
 | NEAR AI Cloud and Claude | The model bill, paid by the team per answer. | Each strain falls back to its written rules, and every move says which chose it. |
-| The testnet relayer and guest credit | Testnet NEAR only. | Free play stops taking new guests; colonies already on the testnet dish keep playing. |
+| The relayer and guest credit | Testnet NEAR, and for the judging window a small funded pool of mainnet credit (40 places). | Free play stops taking new guests; colonies already on the dish keep playing. |
 | The agents VM and the site | The team's hosting. | Spawned strains, the open council and break-the-pact stop; the dish, its replay (`verify.mjs` needs only public RPC) and every pact do not. |
 
 ## Try it in two minutes
@@ -255,7 +255,7 @@ Each step says what to do and what you should see. Everything runs on the free t
 | **The tides** | Every 240 generations, 5% of the vault in NEAR and 5% of the credit pool as credit, split by PETRI earned since the last tide. |
 | **Slides** | NEP-171/177/178/181/199 in the dish contract, 1 PETRI burned per captured cell; 12 cells or more license the pattern (25% off, 10% royalty to the holder). |
 | **Pacts** | `pact_offer` escrows PETRI; `pact_accept` pays it and binds the promisor not to plant within 8 cells of the payer's living cells for up to 2,880 generations; the contract refuses every breaking planting. |
-| **Free play** | Testnet guests get a function-call key and 0.05 NEAR of sponsored credit; PETRI earned before a first NEAR is kept. |
+| **Free play** | Testnet guests get a function-call key and 0.05 NEAR of sponsored credit; PETRI earned before a first NEAR is kept. Mainnet free play opens 14 Nov 18:00 UTC for judging (40 places, credit you can play with, not withdraw). |
 | **Any token** | On mainnet, NEAR Intents delivers wNEAR with a message naming the account; the contract unwraps and joins or buys, or holds it as pending NEAR anyone can settle. |
 | **Proof** | Every movement of PETRI and NEAR is one ordered ledger; every 16th generation the board hash is folded into a history chain. Replaying the ledger reproduces the board, the chain and every balance. |
 
