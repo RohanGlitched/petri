@@ -24,10 +24,11 @@ view. No method changes a parameter of a running dish, mints PETRI after launch,
 `#[init(ignore_state)]` method, so only a transaction from the contract account itself (signed with its full-access
 key) can run it. It deletes every key the v6.3 layout wrote and launches a fresh dish from generation 0, exactly as `new`
 does, and it refuses an account with no v6.3 dish ("no v6.3 dish here") and
-one that already runs v6.4 ("this account already runs v6.4"). Until 14 November 2026 the team holds that key on both
-accounts, so a bug can be fixed with new code plus `relaunch`. On mainnet it is deleted on 14 November after a final
-verify, and from then nobody can deploy code to `petri-dish.near`, relaunch it or move its NEAR; the testnet dish keeps
-its key (see The lock).
+one that already runs v6.4 ("this account already runs v6.4"). On mainnet nobody can call it any more: the team deleted
+`petri-dish.near`'s only full-access key on 10 November 2026 after a final verify
+([`Dsn8BxvX…`](https://nearblocks.io/txns/Dsn8BxvX1goYvUAKVpmNPJ98PsVa5mAXgSwA28WQpaeR)), so nobody can deploy code to it,
+relaunch it or move its NEAR. The testnet dish keeps its key, so a bug there can be fixed with new code plus `relaunch`
+(see The lock).
 
 ## Two dishes
 
@@ -172,7 +173,8 @@ runs for skipped generations.
 `plant`, `sell` and `mint_slide` require the dish to be current after their own catch-up ("the dish is behind the clock; call advance first").
 The site, when the stored board lags by more than one call can catch up, puts up to three `advance` calls (sharing 150 TGas, with at
 least 150 left for the move; one if the lag is past `max_lag`) ahead of the move in the same transaction, and the relayer accepts a
-delegate of one call preceded by up to three `advance` calls (total gas within its 300 TGas, deposits 0). The strains advance the dish
+delegate of one call preceded by up to three `advance` calls (total gas within its 300 TGas, deposits 0) on testnet; on
+mainnet it relays no `advance` and at most 100 TGas (the keeper keeps that dish current). The strains advance the dish
 themselves before they plant or mint when it is more than 120 generations behind.
 
 The site does not wait for the stored board: it loads it into the same `petri-core` engine in WebAssembly and steps it
@@ -785,16 +787,19 @@ Both dishes run one build of v6.5 (617,238 bytes, near-sdk 5.29.1), made with `c
 commit `27a59761af835f2278b7cf28676c3acf0fdda538` in `sourcescan/cargo-near:0.22.0-rust-1.99.1@sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb`
 (pinned in `contract/Cargo.toml`). Its NEP-330 `contract_source_metadata` links that commit, so anyone can rebuild it
 and compare the hash with the account's code hash, `CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD` (hex
-`a7235140d0156c2567e2e4d85ae9754605dea9c8b5d99125b0e2928c3af3fcd4`). Each account has one full-access key,
-held by the team until 14 November 2026 so a last bug could still be fixed: new code plus `relaunch`, which starts the
-dish again from generation 0 with a fresh ledger anyone can replay. On 14 November 2026, after a final verify, the
-mainnet key is deleted: `petri-dish.near` then has no access keys, and nobody can deploy code to it, relaunch it or move
-its NEAR. The testnet dish, `petri-v6.testnet`, keeps its key so a bug can still be fixed there. No method changes a
-running dish's parameters, mints PETRI or edits the board. While a key exists it cannot change anything quietly: new code
-changes the account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published reproducible build on
-every run, and `scripts/verify.mjs` says whether the key's nonce has moved since the v6.5 deploy. The verifier reports a
-key as a disclosed note, not a failed check (`  note    Full-access keys   1 (team-held, see The lock; ...)`), so
-`node scripts/verify.mjs` exits 0 when everything else matches and ends with "Everything matches." The CI workflow
+`a7235140d0156c2567e2e4d85ae9754605dea9c8b5d99125b0e2928c3af3fcd4`). Until 10 November 2026 each account had one
+full-access key, held by the team so a bug could be fixed: new code plus `relaunch`, which starts the dish again from
+generation 0 with a fresh ledger anyone can replay. On 10 November 2026, after a final verify (Everything matches, 5,016
+generations, 4 tides), the team deleted the mainnet key
+([`Dsn8BxvX…`](https://nearblocks.io/txns/Dsn8BxvX1goYvUAKVpmNPJ98PsVa5mAXgSwA28WQpaeR)): `petri-dish.near` has no access
+keys, so nobody can deploy code to it, relaunch it or move its NEAR, and a bug found on mainnet can never be fixed. The
+testnet dish, `petri-v6.testnet`, keeps its key so a bug can still be fixed there. No method changes a running dish's
+parameters, mints PETRI or edits the board. The testnet key cannot change anything quietly: new code changes the
+account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published reproducible build on every run,
+and `scripts/verify.mjs` says whether the key's nonce has moved since the v6.5 deploy. On mainnet the verifier's last
+row is `  PASS    Full-access keys   0 (nobody can deploy other code or relaunch)`; on testnet it reports the key as a
+disclosed note, not a failed check (`  note    Full-access keys   1 (team-held, see The lock; ...)`). Either way
+`node scripts/verify.mjs` exits 0 when everything matches and ends with "Everything matches." The CI workflow
 `.github/workflows/live.yml` counts the mainnet keys every six hours. Anyone can list the keys:
 
 ```
@@ -849,7 +854,9 @@ below).
   address and 120 in all per hour, per server instance.
 - `/api/relay` relays a guest's signed NEP-366 delegate action only if it is from a guest account, to the dish, one of
   those methods (a call may be preceded by up to three `advance` calls), with no deposit and at most 300 TGas in all, not expired, with a valid signature for the action, and with a
-  key that exists on the account and a fresh nonce. The relayer pays only gas.
+  key that exists on the account and a fresh nonce. The relayer pays only gas. A `plant` whose note carries a
+  `tee:<hex>` tag is refused on both networks: that tag names a strain move's TEE proof, and the site draws its TEE chip
+  only on house and spawned strains' plantings.
 - A guest never attaches NEAR, so everything it wins or is paid for sales is credit, and it cannot send PETRI.
 - Wallet players connect with NEAR Connect (`@hot-labs/near-connect`) and sign and pay for themselves.
 
@@ -864,7 +871,7 @@ contract is the same; nothing about it changes for these guests. The site's code
   of the key), so the name proves which key owns it. The relayer creates it by sending it 1 yoctoNEAR: NEAR's
   zero-balance accounts (one key, under 770 bytes) need no NEAR for storage, and the protocol's 0.007 NEAR
   account-creation charge is paid by the relayer. Mainnet guests cannot be `g-….<relayer>` sub-accounts: those need a
-  named parent with a key, and `petri-dish.near` loses its key on 14 November.
+  named parent with a key, and `petri-dish.near` has had no key since 10 November.
 - **The key is a full-access key on the guest's own account.** That is what an implicit account is: the guest owns
   its account outright, and the site never holds its key. What the account holds is 1 yoctoNEAR. The guest's 0.05
   NEAR (less about 0.006 for its records) is credit held by the dish under `sponsor`, not NEAR in the account.
@@ -875,13 +882,23 @@ contract is the same; nothing about it changes for these guests. The site's code
 - **Limits.** A guest is made only inside the window; only while fewer than 40 exist (counted on chain: the dish's
   ledger `Sponsor` entries signed by the relayer, which only the relayer's key can add); only while the relayer keeps
   0.3 NEAR (its floor: it covers NEAR's hold on prepaid gas, bought at ten times the gas price until the refund lands)
-  plus 0.07 NEAR for the new guest; at most 3 per client address a day, and after an 18-bit proof of work bound to the
-  key, as on testnet. The start card's "N of 40 free mainnet colonies left" is the smaller of the places left and what
-  the relayer's balance above its floor still pays for.
+  plus 0.1 NEAR for the new guest (its account, its credit and the gas of its 16 relayed moves, about 0.077 NEAR at
+  most, measured below); at most 3 per client address a day, and after an 18-bit proof of work bound to the key, as on
+  testnet. With the relayer's 3.1 NEAR that pays for 27 guests, so 27 is the most there will be, not 40.
+- **Places for judges.** 25 of the places (`PETRI_MAINNET_JUDGE_PLACES`) open only with a judge code, so a script
+  cannot take them all before judges arrive. A code is `petri-<n>-<8 hex>`, the hex the start of
+  HMAC-SHA256(secret, "petri-judge:<n>") under `PETRI_JUDGE_CODE_SECRET` on the site's server
+  (`node scripts/judge-codes.mjs` prints them from the same secret); the team gives them to judges in the submission. A
+  judge's guest is sponsored with 0.05 NEAR and one yoctoNEAR: the dish takes its records' storage in whole bytes
+  (10^19 yoctoNEAR each), so that last yoctoNEAR stays in the ledger's `Sponsor` entry, and the judge places taken are
+  counted from the chain, not from a server's memory. Judges may also take public places; the public never a held one.
+  One code makes at most 2 guests per server instance (`PETRI_JUDGE_CODE_USES`). The start card shows "N places left
+  (M for judges with a code)", N being the smaller of the places left and what the relayer's balance above its floor
+  still pays for.
 - **Relaying.** `/api/relay?net=mainnet` relays a guest's delegate action only with the ticket `/api/guest` gave it
   (an HMAC, under a key derived from the relayer's, of the account and its key's nonce when made), signed by the key
-  the account's name encodes, to the dish, one of the testnet guest's methods (a catch-up's `advance` calls ride in the
-  same delegate action), no deposit, at most 300 TGas. Each guest has 16 relayed moves in all, counted by its key's
+  the account's name encodes, to the dish, one of the testnet guest's methods except `advance` (the keeper keeps the
+  dish current during the window), no deposit, at most 100 TGas. Each guest has 16 relayed moves in all, counted by its key's
   nonce, which only rises. Nothing is relayed below the relayer's floor or after the window. The break-it lab is testnet
   only.
 - **What a mainnet guest can do:** join (0.02 NEAR from credit), buy and plant with credit, earn feed and tide shares,
@@ -1057,7 +1074,10 @@ bought. In these runs the simulator still wrote a tide entry with nobody to pay,
 
 - **Free play has no market.** The testnet dish's NEAR and PETRI have no market, and guests play with credit the site
   gives them. On mainnet the NEAR is real and nothing guarantees PETRI a price.
-- **The team holds a full-access key until 14 November.** Each contract account has one, so a bug can be fixed with new code plus `relaunch`; new code changes the code hash, which the verifier checks. The mainnet key is deleted on 14 November after a final verify; after that a bug found on mainnet cannot be fixed. The testnet key stays.
+- **A bug on mainnet can never be fixed.** `petri-dish.near`'s only full-access key was deleted on 10 November 2026
+  after a final verify, so nobody can deploy new code or `relaunch` it: immutability was chosen over fixability. The
+  testnet dish keeps its key, so a bug there can be fixed with new code plus `relaunch`; new code changes the code hash,
+  which the verifier checks.
 - **The methuselah edge.** In the simulator one R-pentomino planter was the only kind ahead at 15 and 150 players
   (+0.02 and +0.14 NEAR median); with 5% tides +0.29 at 150.
 - **PETRI is paper until sold back, and the vault caps it.** Buy-backs pay half the curve's price, at most the units'

@@ -549,7 +549,7 @@ const slideBad = slidesView.filter((v, i) => {
 const fullKeys = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").length : null;
 // The full-access key's nonce after its last team use (10 Nov 2026: the v6.5 deploy, then creating the keyless living slide slide-14.petri-dish.near
 // and the keyless slide factory slides.petri-dish.near (D7cJhZC4…); on testnet, then creating slides.petri-v6.testnet). Any later use of the key, a
-// deploy, a transfer or a relaunch, moves it. The mainnet key itself is deleted on 14 November 2026.
+// deploy, a transfer or a relaunch, moves it. The mainnet key was deleted on 10 November 2026 (tx Dsn8BxvX…), so mainnet prints PASS 0.
 const SETUP_NONCE = { "petri-dish.near": 222916366000046n, "petri-v6.testnet": 276116858000011n };
 const fullNonce = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").map((k) => BigInt(k.access_key.nonce)) : [];
 const keyUse = (() => {
