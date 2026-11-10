@@ -1,11 +1,12 @@
 import { CoinLog } from "@/components/proof/CoinLog";
 import { SimSixty } from "@/components/charts/SimSixty";
+import { WhoWins } from "@/components/coin/WhoWins";
 import { DishName } from "@/components/site/DishName";
 import s from "@/components/proof/proof.module.css";
 
 export const metadata = {
   title: "The coin",
-  description: "PETRI since generation zero: every mint (the agar feeding living cells) and every burn (plantings, specimen slides), purchases, sales and tides, rebuilt in your browser from the contract's ledger, with the supply over time and a 60-day simulation of five scenarios.",
+  description: "PETRI since generation zero: every mint (the agar feeding living cells) and every burn (plantings, specimen slides), purchases, sales and tides, rebuilt in your browser from the contract's ledger, with the supply over time, a 60-day simulation of five scenarios, and who wins and who pays in it, player by player.",
 };
 
 export default function CoinPage() {
@@ -25,6 +26,7 @@ export default function CoinPage() {
             <a href="#chart">Supply over time</a>
             <a href="#log">Mint and burn log</a>
             <a href="#sixty">60 days, simulated</a>
+            <a href="#who-wins">Who wins, who pays</a>
           </nav>
         </header>
         <CoinLog />
@@ -39,6 +41,11 @@ export default function CoinPage() {
             </p>
           </div>
           <SimSixty />
+        </div>
+      </section>
+      <section className="band" data-section="Who wins, who pays" id="who-wins">
+        <div className="wrap">
+          <WhoWins />
         </div>
       </section>
     </>

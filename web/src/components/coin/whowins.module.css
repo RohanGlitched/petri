@@ -1,0 +1,93 @@
+.root { display: grid; gap: 22px; min-width: 0; }
+.what { margin: 0; color: var(--text-2); max-width: 72ch; }
+.what a { color: var(--amber); }
+.block { display: grid; gap: 16px; min-width: 0; margin-top: 28px; }
+
+.tabs, .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.tab, .tabOn {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 0;
+  font: 600 14px/1 var(--body);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.tabOn { background: var(--amber); color: #1d1006; box-shadow: none; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 0; }
+.stats div { padding: 12px 14px; border-radius: 14px; background: rgba(243, 233, 218, 0.04); box-shadow: inset 0 0 0 1px var(--line); }
+.stats dt { font-size: 13px; color: var(--dim); }
+.stats dd { margin: 4px 0 0; font: 400 26px/1.1 var(--display); color: var(--bone); }
+
+/* Who wins: one row a kind, a p10-p90 bar of NEAR back per NEAR put in, median dot, 1.00 marked. */
+.scale { position: relative; height: 18px; margin-left: calc(34% + 16px); margin-right: calc(150px + 16px); font-size: 12px; color: var(--dim); }
+.scale span { position: absolute; transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.scale .even { color: var(--bone); font-weight: 600; }
+.scale .first { transform: none; }
+.rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.row {
+  display: grid;
+  grid-template-columns: 34% minmax(0, 1fr) 150px;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.who { display: grid; gap: 2px; min-width: 0; }
+.who b { font-weight: 600; color: var(--bone); }
+.who span { font-size: 13px; color: var(--dim); line-height: 1.4; }
+.track { position: relative; height: 22px; }
+.tick, .evenLine { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.evenLine { background: rgba(243, 233, 218, 0.7); }
+.range, .rangeUp { position: absolute; top: 6px; height: 10px; border-radius: 5px; background: rgba(255, 143, 127, 0.38); min-width: 3px; }
+.rangeUp { background: rgba(159, 216, 168, 0.38); }
+.dot, .dotUp { position: absolute; top: 5px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--bad); }
+.dotUp { background: var(--ok); }
+.nums { display: grid; gap: 2px; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.ahead { font-weight: 600; color: var(--amber); font-size: 14px; }
+
+/* Who pays: proportion bars. */
+.split { margin: 0; display: grid; gap: 10px; }
+.bar { position: relative; display: flex; height: 26px; border-radius: 6px; overflow: hidden; background: rgba(243, 233, 218, 0.06); }
+.bar span { display: block; height: 100%; }
+.pVault { background: #e2d5c3; }
+.pStore { background: var(--bad); }
+.pGas { background: #7d6a58; }
+.pHouse { background: var(--amber); min-width: 3px; }
+.marker { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; background: var(--ok); box-shadow: 0 0 0 2px var(--bg); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--text-2); }
+.key { display: inline-flex; align-items: baseline; gap: 7px; }
+.key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; transform: translateY(1px); }
+.key b { font-weight: 600; color: var(--bone); }
+.markerKey { background: var(--ok); width: 3px !important; height: 12px !important; border-radius: 0 !important; }
+.after { padding: 16px 18px; border-radius: 14px; background: rgba(243, 233, 218, 0.04); box-shadow: inset 0 0 0 1px var(--line); max-width: 78ch; }
+.after h4 { margin: 0 0 6px; font: 400 19px/1.2 var(--display); color: var(--bone); }
+.after p { margin: 0; color: var(--text-2); }
+
+/* A player's first day, and the round trip: receipts. */
+.card { display: grid; gap: 12px; padding: 18px 20px; border-radius: 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); max-width: 760px; }
+.cardHead { margin: 0; color: var(--bone); font-weight: 600; }
+.receipt { margin: 0; display: grid; max-width: 760px; }
+.receipt div { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px dashed var(--line-2); }
+.receipt dt { color: var(--text-2); min-width: 0; }
+.receipt dd { margin: 0; color: var(--bone); white-space: nowrap; }
+.receipt .total { border-bottom: 0; border-top: 1px solid var(--line-2); margin-top: 2px; }
+.receipt .total dt, .receipt .total dd { font-weight: 600; color: var(--amber); }
+
+.tableWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 620px; }
+.table th { text-align: left; font-weight: 600; color: var(--dim); padding: 8px 10px; border-bottom: 1px solid var(--line-2); }
+.table td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.details summary { cursor: pointer; color: var(--amber); font-weight: 600; min-height: 36px; display: flex; align-items: center; }
+.details[open] summary { margin-bottom: 8px; }
+
+@media (max-width: 760px) {
+  .scale { margin-left: 0; margin-right: 0; }
+  .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .nums { grid-auto-flow: column; justify-content: space-between; }
+  .receipt div { flex-direction: column; gap: 2px; }
+  .receipt dd { white-space: normal; }
+}
