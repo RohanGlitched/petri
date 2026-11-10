@@ -216,6 +216,7 @@
 .msgMe { justify-self: end; background: rgba(242, 180, 90, 0.14); color: var(--bone); border-bottom-right-radius: 4px; }
 .msgThem { justify-self: start; background: rgba(243, 233, 218, 0.06); color: var(--bone); border-bottom-left-radius: 4px; }
 .msgThem small { display: block; margin-top: 6px; }
+.msgPast { opacity: 0.72; }
 .msgSys { justify-self: center; text-align: center; font-size: 13.5px; color: var(--dim); max-width: 100%; }
 .chatForm { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--line); }
 @media (max-width: 520px) {
@@ -231,8 +232,8 @@
 .code { position: relative; margin: 0; min-width: 0; max-width: 100%; }
 .code pre {
   margin: 0;
-  padding: 16px 18px;
-  padding-right: 84px;
+  /* The copy button sits in the top strip, which no line of code reaches, so it never covers code (scrolled or not). */
+  padding: 44px 18px 16px;
   border-radius: 16px;
   background: #0c0603;
   box-shadow: inset 0 0 0 1px var(--line);
