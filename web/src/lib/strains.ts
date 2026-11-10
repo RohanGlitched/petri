@@ -54,7 +54,7 @@ export function strainsOn(net: Network): Strain[] {
 /** The project's keeper on `net`. */
 export const keeperOn = (net: Network) => accountOn("keeper", net);
 
-/** The models the strains can think with (agents/model.mjs): Claude Haiku first, NEAR AI Cloud as the second provider. */
+/** The models the strains can think with (agents/model.mjs): NEAR AI Cloud first (TEE-verified), Claude Haiku second. */
 export const CLAUDE_MODEL = "claude-haiku-5-5";
 export const NEARAI_MODEL = "z-ai/glm-5.3-flash";
 

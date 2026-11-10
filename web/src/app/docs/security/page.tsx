@@ -252,7 +252,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["an_intent_below_the_minimum_is_kept_for_its_account_not_refunded", "dust_wnear_is_refunded", "the_dish_tells_1click_the_least_a_payment_needs"],
-    limit: "The quote route's check is server code with no automated test. A join delivered at exactly the least intent_minimum asks for nets under min_join after the join's own storage, so it does not attach NEAR: that colony is a guest until it buys 0.01 NEAR net.",
+    limit: "The quote route's check is server code with no automated test. Since v6.5 intent_minimum("join") includes the join's own storage, so a join paid at the floor attaches NEAR; a join that nets less waits as pending NEAR for its account.",
   },
   {
     id: "t-names",
@@ -369,7 +369,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["relaunch_leaves_nothing_of_v6_1", "relaunch_refuses_an_account_without_a_v6_1_dish", "relaunch_refuses_a_dish_that_runs_v6_2"],
-    limit: "The team keeps one full-access key on each contract account on purpose, so its holder can deploy new code and run relaunch to fix a bug. That restarts the dish from generation 0 with a fresh ledger, and new code changes the code hash that verify compares.",
+    limit: "Until 14 November 2026 the team holds one full-access key on each contract account, so its holder can deploy new code and run relaunch to fix a bug; that restarts the dish from generation 0 with a fresh ledger, and new code changes the code hash that verify compares. The mainnet key is deleted on 14 November after a final verify (0 keys on petri-dish.near from then); the testnet dish keeps its key.",
   },
 ];
 
@@ -421,7 +421,7 @@ export default function Page() {
       <H2 id="limits">Known limits</H2>
       <ul>
         <li>
-          <strong>The team holds a full-access key.</strong> Each contract account has one, on purpose: it exists only so a bug can be fixed with new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger. It cannot change anything quietly, because new code changes the code hash that the verifier checks. Deleting it would make the dish unfixable.
+          <strong>The team holds a full-access key.</strong> Each contract account has one, on purpose: it exists only so a bug can be fixed with new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger. It cannot change anything quietly, because new code changes the code hash that the verifier checks. On mainnet the team holds it only until a final verify on 14 November 2026 and then deletes it, so <C>petri-dish.near</C> is left with no keys at all (check view_access_key_list, or the first row of the judge desk at playpetri.xyz/judges). The testnet dish, petri-v6.testnet, keeps its key so a bug can still be fixed there. After that the mainnet dish cannot be fixed: a bug found later stays.
         </li>
         <li>
           <strong>Most players lose NEAR.</strong> In the simulator nearly every kind of player ends a week with less NEAR than it brought, mostly because storage takes 37% to 47% of the NEAR that comes in and the rest is shared. Petri Dish is a game with a live economy, not an investment. See <Doc to="simulations" hash="losses">What loses money</Doc>.
@@ -442,7 +442,7 @@ export default function Page() {
           <strong>Replays trust their RPC.</strong> See <Doc to="verification" hash="limits">What verification does not prove</Doc>.
         </li>
         <li>
-          <strong>Model choices are not on chain.</strong> Which model chose a strain&rsquo;s move, the forecasts it saw, and the NEAR AI Cloud signature when there is one, are in the agents&rsquo; log, not the ledger. The pacts the council makes are on chain and enforced by the contract (within their radius); what the models said to each other, and the faith scored beyond the radius, are in the agents&rsquo; log.
+          <strong>Model choices are not on chain.</strong> Which model chose a strain&rsquo;s move, the forecasts it saw, and the NEAR AI Cloud signature with its verification when there is one, are in the agents&rsquo; log, not the ledger: a verified signature proves the enclave produced that answer, not that it is on chain. The pacts the council makes are on chain and enforced by the contract (within their radius); what the models said to each other, and the faith scored beyond the radius, are in the agents&rsquo; log.
         </li>
       </ul>
 

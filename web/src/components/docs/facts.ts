@@ -9,7 +9,7 @@ export const blob = (path: string) => `${REPO}/blob/main/${path}`;
 export const tree = (path: string) => `${REPO}/tree/main/${path}`;
 
 // The version, build, code hash and test counts live in lib/facts.ts, shared with the site.
-export { BUILD_COMMIT, BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, EVENT_VERSION, PRODUCT, TESTS, VERIFY, VERIFY_CLI_CHECKS, VERIFY_CLI_ROWS, WASM_BYTES, RELAUNCHED } from "@/lib/facts";
+export { BUILD_COMMIT, BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, EVENT_VERSION, PRODUCT, TESTS, VERIFY, VERIFY_CLI_CHECKS, VERIFY_CLI_ROWS, WASM_BYTES, RELAUNCHED, UPGRADED } from "@/lib/facts";
 export const BUILD_IMAGE = "sourcescan/cargo-near:0.22.0-rust-1.99.1";
 export const BUILD_DIGEST = "sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb";
 export const NEAR_SDK = "5.29.1";

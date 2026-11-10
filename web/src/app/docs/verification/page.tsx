@@ -2,7 +2,7 @@ import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { NetTabs } from "@/components/docs/NetTabs";
 import { Callout, Doc, Ext, Formula, H2, H3, Steps, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT, BUILD_DIGEST, BUILD_IMAGE, CODE_HASH, CONTRACT_VERSION, NEAR_SDK, RELAUNCHED, REPO, SITE } from "@/components/docs/facts";
+import { BUILD_COMMIT, BUILD_DIGEST, BUILD_IMAGE, CODE_HASH, CONTRACT_VERSION, NEAR_SDK, RELAUNCHED, REPO, SITE, UPGRADED } from "@/components/docs/facts";
 
 export const metadata = docMetadata("verification");
 
@@ -300,7 +300,7 @@ node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
 
       <H2 id="keys">The lock: check the keys</H2>
       <p>
-        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Each contract account has one full-access key, held by the team on purpose. It exists only so a bug can be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 for {CONTRACT_VERSION} on {RELAUNCHED}, with a fresh ledger anyone can replay. Deleting the key would make the dish unfixable, so it will not be deleted. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
+        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Each contract account has one full-access key, held by the team, so a bug can be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 on {RELAUNCHED}, with a fresh ledger anyone can replay (the {CONTRACT_VERSION} code-only upgrade on {UPGRADED} kept that state). On mainnet the team holds it only until a final verify on 14 November 2026 and then deletes it, so <C>petri-dish.near</C> is left with no keys at all (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
       </p>
       <NetTabs
         mainnet={<Code lang="sh" title="mainnet">{`near account list-keys petri-dish.near network-config mainnet now

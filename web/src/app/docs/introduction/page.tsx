@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C } from "@/components/docs/Code";
 import { Callout, Doc, Ext, H2, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, DISH, RELAUNCHED, REPO, SITE, account } from "@/components/docs/facts";
+import { BUILD_COMMIT_SHORT, CODE_HASH, CONTRACT_VERSION, DISH, RELAUNCHED, REPO, SITE, UPGRADED, account } from "@/components/docs/facts";
 import { DishSketch } from "@/components/docs/Diagrams";
 import { docHref } from "@/components/docs/nav";
 
@@ -71,7 +71,7 @@ export default function Page() {
 
       <H2 id="dishes">The two dishes</H2>
       <p>
-        The same build, {CONTRACT_VERSION}, runs on both networks. Both contract accounts report the code hash <C>{CODE_HASH}</C>, which is what <C>cargo near build reproducible-wasm</C> produces at commit <Ext href={`${REPO}/tree/${BUILD_COMMIT_SHORT}`}>{BUILD_COMMIT_SHORT}</Ext>. Both dishes were relaunched in place from generation zero on {RELAUNCHED}, on the accounts they have run since v6: <C>petri-dish.near</C>, and <C>petri-v6.testnet</C>, which v6 started on a new account (<C>petri-v5.testnet</C> is abandoned). The rules differ only in who the house and the keeper are and which wNEAR contract is trusted.
+        The same build, {CONTRACT_VERSION}, runs on both networks. Both contract accounts report the code hash <C>{CODE_HASH}</C>, which is what <C>cargo near build reproducible-wasm</C> produces at commit <Ext href={`${REPO}/tree/${BUILD_COMMIT_SHORT}`}>{BUILD_COMMIT_SHORT}</Ext>. Both dishes were relaunched in place from generation zero on {RELAUNCHED} (on v6.4) and upgraded to {CONTRACT_VERSION} on {UPGRADED} without a restart, keeping every record, on the accounts they have run since v6: <C>petri-dish.near</C>, and <C>petri-v6.testnet</C>, which v6 started on a new account (<C>petri-v5.testnet</C> is abandoned). The rules differ only in who the house and the keeper are and which wNEAR contract is trusted.
       </p>
       <Table caption="The dishes as deployed">
         <thead>
@@ -160,7 +160,7 @@ export default function Page() {
       </Table>
       <Callout kind="note">
         <p>
-          Each contract account has one full-access key, held by the team. It exists only so a bug can be fixed: new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger anyone can replay. Deleting it would make the dish unfixable. New code changes the account&rsquo;s code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. The verifier reports it as a note, not a failed check, and exits 0 when everything else matches. <Doc to="verification" hash="keys">Check the keys yourself</Doc>.
+          Each contract account has one full-access key, held by the team, so a bug can be fixed: new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger anyone can replay. On mainnet the team holds it only until a final verify on 14 November 2026 and then deletes it, so <C>petri-dish.near</C> is left with no keys at all (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there. While a key exists, new code changes the account&rsquo;s code hash, which the verifier compares with the published build on every run, so the key cannot change anything quietly. The verifier reports it as a note, not a failed check, and exits 0 when everything else matches. <Doc to="verification" hash="keys">Check the keys yourself</Doc>.
         </p>
       </Callout>
 
@@ -218,6 +218,22 @@ export default function Page() {
         <a className="d-card" href={docHref("simulations")}>
           <strong>Economics and simulations</strong>
           <span>Who wins and who loses money, from the simulator.</span>
+        </a>
+        <a className="d-card" href={docHref("living-slides")}>
+          <strong>Living slides</strong>
+          <span>A slide sealed into its own keyless account that plays, earns and passes whole to its holder.</span>
+        </a>
+        <a className="d-card" href={docHref("open-swarm")}>
+          <strong>Open swarm and agents</strong>
+          <span>Spawn a strain, bring your own agent with the SDK or MCP, bid in the sealed council.</span>
+        </a>
+        <a className="d-card" href={`${SITE}/judges`}>
+          <strong>Judge desk</strong>
+          <span>Every claim checked live on both dishes, each track&rsquo;s prompt line by line, one button per mechanic.</span>
+        </a>
+        <a className="d-card" href={`${SITE}/break`}>
+          <strong>Try to break it</strong>
+          <span>Attacks sent as real transactions; the contract refuses each one.</span>
         </a>
       </div>
     </DocPage>

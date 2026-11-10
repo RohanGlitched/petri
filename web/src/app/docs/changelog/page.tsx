@@ -1,16 +1,65 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C } from "@/components/docs/Code";
 import { Doc, H2, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT_SHORT, CODE_HASH, REPO } from "@/components/docs/facts";
+import { BUILD_COMMIT_SHORT, CODE_HASH, REPO, SITE, TESTS, UPGRADED, WASM_BYTES, blob } from "@/components/docs/facts";
 
 export const metadata = docMetadata("changelog");
 
 // `git log --oneline` on main, newest first, with each commit's date.
 const COMMITS: [string, string, string][] = [
+  ["18e0f06", "Nov 10", "Judge desk: living slides meet the NFT sub-account and transfer-test rows; the open council and spawnable strains in the swarm rows"],
+  ["681b680", "Nov 10", "Guests catch a lagging dish up with one delegate per advance: NEAR refuses a delegate action with more than one call from a function-call key"],
+  ["037c331", "Nov 10", "Drop the AGENTS.md next build generated"],
+  ["37355c9", "Nov 10", "Proof pages on phones: status pills sit at the start of their row and keep their shape"],
+  ["c8da1c8", "Nov 10", "Desk: licence button before the slide mint (a guest's credit runs out), credit hint on refusals"],
+  ["6433dff", "Nov 10", "Lab: plant-twice pre-signs both plantings; guest colony read with retries; NFT track row for NEP-199 resale payouts"],
+  ["ec5fc9d", "Nov 10", "Lab: one call per delegate action (a function-call key cannot sign more), nonce kept past refused actions, plant-twice as two quick plantings; three refusals recorded with near-cli (kept PETRI transfer, v6.5 attach with credit-grown cells, relaunch)"],
+  ["de7081e", "Nov 10", "Desk and feed tell team accounts (petri-*.testnet, *.petri-dish.near) and guests apart from outside players; strains row reads house moves only; coin charts: agar on its own band, day ticks; chart right-axis room"],
+  ["434d421", "Nov 10", "Proof surfaces, part 2: /judges desk (live claims on both dishes, per-track prompt rows, trade feed, one button per mechanic), /break lab, /sim week in a minute, nav links, CI workflow replaying both dishes every 6 h with the mainnet key count"],
+  ["949441e", "Nov 10", "Proof surfaces, part 1: /coin (PETRI mint and burn log and supply rebuilt from the replay), 60-day sim charts on /coin and /rules, judge desk claims, trade feed API, relayer daily budget (shared via Upstash when configured)"],
+  ["30f0dd1", "Nov 10", "Sim bench writes bench.json; out-60d README with method, headline numbers and limits"],
+  ["490016d", "Nov 10", "Sim: 60 days of the mainnet rules under five scenarios (boom, steady, decline, whale siege, strains only) x 5 seeds, every generation stepped, with day rows, supply SVGs, web.json; and a 1,000-season bench of monopoly attempts (whale, split whale, locker)"],
+  ["e0a957a", "Nov 10", "Strains page copy: NEAR AI first, anyone can spawn a strain; one tee field in the strain log type"],
+  ["c02a6b0", "Nov 10", "Open swarm pages: /strains/new (spawn a strain with a guarded temperament), /strains/join (world API, SDK, MCP, sealed council bids, agent prompt and tools), /strains/break (talk Captive into breaking its pact; the contract refuses the real transaction)"],
+  ["7ca607b", "Nov 10", "MCP server (stdio, no dependencies) so any MCP client can play Petri with its own NEAR key: world, plant, join, council, sealed bids, pacts"],
+  ["813f0fe", "Nov 10", "Open swarm: anyone spawns a strain (guarded temperament, own locked sub-account under petri-strains.testnet, prepaid brain charged per decision), an open council where outside agents send NEP-413 sealed bids against the house's committed asks"],
+  ["aca2155", "Nov 10", "Mainnet living slide: slide-14.petri-dish.near (0 keys) holds Congo Red's 45-cell slide and plays it as its own colony; proof table; verify.mjs key baseline after creating it; intents join script"],
+  ["64e7c53", "Nov 10", "Mainnet living slide, prepared: scripts/purse-mainnet.mjs makes slide-14.petri-dish.near without a factory (strains fund petri-dish.near; one transaction creates, funds, deploys and inits the purse with no key; Congo Red moves slide 14 in"],
+  ["9033f78", "Nov 10", "Mainnet house strains no longer try licensed plantings: the contract keeps house PETRI in the house"],
+  ["52082d6", "Nov 10", "Living slides on testnet are held and tended by the team bench (full keys), not the strains (dish-only keys)"],
+  ["b75b7a9", "Nov 10", "Living slides: docs (what a living slide is, how control passes and what stops the old owner, the design choice, every testnet transaction that proves it, build and test, mainnet cost)"],
+  ["3c74165", "Nov 10", "Living slides on the site: each sealed slide's page shows its keyless account (0 access keys read live), NEAR and PETRI held, living cells, feed, tides and royalties, its history from the purse's log and the ledger"],
+  ["65bb81e", "Nov 10", "Living slides: agents/purse.mjs (seal, wake, plant its own pattern, claim, move, sell; tendPurses for the house strains behind PETRI_LIVING_SLIDES=1) and scripts/purse-testnet.mjs, the threat-model cases as real testnet transactions"],
+  ["f1043ba", "Nov 10", "Living slides: purse contract (keyless account holding one specimen slide, a colony on the dish, its own one-token NEP-171 with NEP-178/NEP-199 and a nonce-pinned market) and the factory that seals slides into purses; no near-sdk, about 29 KB"],
+  ["f049161", "Nov 10", "Living slides: threat model for a transfer, written before the code (every way a seller could keep the money, the rule that stops it, the test)"],
+  ["d4efa43", "Nov 10", "Delight: the dish sings, cinema mode, time-lapse export, colony share cards"],
+  ["c71bff8", "Nov 10", "verify.mjs: the key baseline is the v6.5 deploy"],
+  ["400313d", "Nov 10", "README and RULES: both dishes run v6.5 (code-only upgrade on 10 November over the v6.4 state); build hash, commit and size"],
+  ["692885b", "Nov 10", "Dish card status above the forecast; earnings never dip while the board catches up"],
+  ["8b01ef7", "Nov 10", "The dish: first experiments, the tide clock, who chose each strain move; the game loop on /rules"],
+  ["50acb18", "Nov 10", "Home and phones: a live number that grows, ways in under the steps, honest strains, a shorter phone page"],
+  ["129ac35", "Nov 10", "/verify leads with its verdict; the check counts are the real ones"],
+  ["eee2499", "Nov 10", "The dish: two presses to a living cell, a join that never resets, messages that never cover a button"],
+  ["f05cbc2", "Nov 10", "Rename the product to Petri Dish: a memecoin that is alive"],
+  ["280adfd", "Nov 10", "One facts module for the version, build, tests and /verify counts; stale figures fixed"],
+  ["042b76b", "Nov 10", "Site: /verify, rules and docs expect the v6.5 build (CFSKarjk…, commit 27a5976)"],
+  ["5defbf3", "Nov 10", "verify.mjs: v6.5 build hash CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD (reproducible at 27a5976, 617,238 bytes, deployed to both dishes as a code-only upgrade); key-use baseline after the v6.5 deploy"],
+  ["27a5976", "Nov 10", "Merge v6.5: code-only upgrade (attach refuses credit-grown living cells, Intents join minimum covers storage, waiting joins not overwritten, NEP-199 payouts)"],
+  ["1a143bc", "Nov 10", "v6.5, a code-only upgrade of the v6.4 dishes: a guest attaches NEAR only once its credit-grown cells are dead; a waiting Intents join is replaced only by a join; intent_minimum(\"join\") and the Intents join check include the join's own storage"],
+  ["ad8f58d", "Nov 10", "NEAR AI (GLM) answers without thinking: a move is a short JSON choice"],
+  ["5b217d7", "Nov 10", "TEE check: the signed text is <model>:<request sha256>:<response sha256>"],
+  ["98fdfae", "Nov 10", "Mainnet house strains also plant each other's slides under licence; mainnet slides every 8 h (VM drop-in)"],
+  ["4e25512", "Nov 10", "Strains ask NEAR AI Cloud first and verify each answer's TEE signature: sha256 of the exact request and response, EIP-191 recovery to the signing address, and that address in the enclave's attestation report (saved with its hash)"],
+  ["f328e3a", "Nov 10", "Bench colonies plant other colonies' specimen slides under licence (35% of their moves), so licence discounts and holder royalties run on chain"],
+  ["e353c81", "Nov 10", "Agents attach 100 TGas per call instead of 300: NEAR reserves prepaid gas at the pessimistic price until the refund lands"],
+  ["9a5856f", "Nov 4", "README: entered in memecoins, games, nfts, swarms and open; a For each track table says what each track judge should look at and what is missing"],
+  ["e51769a", "Nov 4", "Both dishes relaunched on v6.4 (reproducible at 749f246, code hash Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL, 606,302 bytes; 37 + 143 tests); verifier key-nonce baseline after setup; fresh verify transcript; README, rules, docs and changelog: v6.4"],
+  ["749f246", "Nov 4", "v6.4: first attach also zeroes the colony's tide window, so guest-period earnings never become vault NEAR; planting stake counts the cost without the royalty; relaunch keyed by a version marker (clears a v6.3 dish"],
+  ["7357c70", "Nov 4", "Both dishes relaunched on v6.3 (reproducible at 29d79b1, code hash 55Qn4Kw3kDCz7nj4oCedR3BYVrHegvT1bLs6m89cV4sz, 606,298 bytes)"],
+  ["29d79b1", "Nov 4", "v6.3: a colony's stake resets when it first attaches NEAR, and an attached colony's planting stakes only the PETRI it paid that is not kept, so cells bought with credit or kept PETRI never earn vault NEAR; relaunch clears a v6.2 dish (frozen v6.2 fixture"],
+  ["940cb66", "Nov 4", "README leads with what Petri is, who it is for and the evidence; Does it last and reusable-primitives sections; review history moved to docs/HISTORY.md; v6.1 simulator numbers; tracks memecoins, games, open. Guests see a game card first (details folded)"],
+  ["675b0b6", "Nov 4", "Docs for v6.2 (changelog, rules, contract API, strains' sealed-bid council, fresh verify transcripts); pact offers name at least 1 PETRI"],
   ["f4a7b0b", "Nov 4", "Site: 2D fallback when WebGL is software, paused off-screen canvases and a frame budget; dish reads in parallel with a 5 s snapshot route; every block of live numbers names its dish; three-step hero; bench colonies tagged; phone rules sections fold"],
-  ["749f246", "Nov 4", "v6.4: first attach also zeroes the tide window; stake counts the cost without the royalty; relaunch by version marker; both dishes relaunched (code hash Bd3dWehn…, 606,302 bytes)"],
-  ["749f246", "Nov 4", "v6.4: first attach also zeroes the tide window; stake counts the cost without the royalty; relaunch by version marker; both dishes relaunched (code hash Bd3dWehn…, 606,302 bytes)"],
-  ["29d79b1", "Nov 4", "v6.3: a colony's stake resets when it first attaches NEAR, and an attached colony's planting stakes only PETRI that is not kept; both dishes relaunched (code hash 55Qn4Kw3…, 606,298 bytes)"],
   ["5690ea2", "Nov 4", "Relaunch both dishes on v6.2: code hash 5v38Vgci… (reproducible at e791404, 605,767 bytes); verifier and docs point at it"],
   ["e791404", "Nov 4", "v6.2: a colony is attached only by bringing at least min_join of its own NEAR, kept PETRI holders are paid in credit, dust wNEAR is returned, royalties from kept PETRI go to the agar, pact offers need 1 PETRI and incoming offers have their own cap, sell and mint_slide need a current dish, exact petri_for_near, storage charged for rename and set_payout, NEPs listed in source metadata; site and relay put advance before a move on a lagging dish"],
   ["2301fb6", "Nov 4", "README: Vercel hosting, both-dish switch labels, 43 verify checks; drop the temporary host banner"],
@@ -65,10 +114,31 @@ const commit = (h: string) => `${REPO}/commit/${h}`;
 
 export default function Page() {
   return (
-    <DocPage slug="changelog" lede="From the first contract to v6.4, in a few days of November 2026, from the git history. The rules are fixed when a dish starts, so changing them means a new dish. Up to v5 each version was a fresh contract on a fresh account; for v6 the mainnet dish was started again from generation 0 on the same account, petri-dish.near, and testnet moved to petri-v6.testnet; v6.1 and then v6.2 started both again on those accounts.">
+    <DocPage slug="changelog" lede="From the first contract to v6.5, in two weeks of November 2026, from the git history. The rules are fixed when a dish starts, so changing them meant a new dish. Up to v5 each version was a fresh contract on a fresh account; for v6 the mainnet dish was started again from generation 0 on the same account, petri-dish.near, and testnet moved to petri-v6.testnet; v6.1 to v6.4 started both again on those accounts. v6.5 is the first code-only upgrade: both dishes kept their state.">
+      <H2 id="v6-5">v6.5: a code-only upgrade, {UPGRADED}</H2>
+      <p>
+        The version both dishes run, built reproducibly at <a href={commit(BUILD_COMMIT_SHORT)}>{BUILD_COMMIT_SHORT}</a> with code hash <C>{CODE_HASH}</C> ({WASM_BYTES.toLocaleString("en-GB")} bytes, near-sdk 5.29.1, event standard <C>petri</C> 6.5.0). Unlike every version before it, v6.5 was deployed over the running v6.4 dishes and kept their state: no stored type changed, and the stored version marker stays &ldquo;6.4&rdquo; because it names the layout. The test <C>v6_5_runs_a_v6_4_dish_exactly_as_v6_4_does</C> builds a real v6.4 dish with the frozen v6.4 code (a dev-dependency), checks v6.5 reads every record to the same bytes and every view to the same JSON, then runs 25 further calls on both versions from that state and checks the trie is byte for byte the same. The contract has {TESTS.contract} tests and petri-core {TESTS.core}.
+      </p>
+      <ul>
+        <li>A colony outside the house that has never attached NEAR attaches only while it has no living cells. Otherwise the call is refused (&ldquo;a colony that grew on sponsored credit must let its cells die (or start a new colony) before it brings its own NEAR&rdquo;) and writes nothing, so every attach that succeeds is exactly a v6.4 attach and the replay is unchanged (<C>a_refused_attach_writes_nothing</C>). Cells grown on credit can no longer live on into a colony&rsquo;s paid life.</li>
+        <li><C>intent_minimum(&quot;join&quot;)</C> and the Intents join check include the join&rsquo;s own storage (colony record, name, registration, entry, a cold slot and the purchase record), so a join paid at the floor nets at least <C>min_join</C> and attaches. For <C>alice.near</C> the floor is 0.01912 NEAR.</li>
+        <li>A waiting Intents join is replaced only by another join; a purchase&rsquo;s NEAR adds to it instead of overwriting the order.</li>
+        <li>Slides answer NEP-199: <C>nft_payout</C> and <C>nft_transfer_payout</C> pay 5% of a sale to the account of the colony that minted the slide (its payout account if set) and the rest to the seller, from stored data only.</li>
+      </ul>
+
+      <H2 id="since-v6-5">Since v6.5 (10 November)</H2>
+      <p>None of these change the dish contract.</p>
+      <ul>
+        <li><strong>NEAR AI first, verified.</strong> The strains ask NEAR AI Cloud (GLM, inside a TEE) first and check every answer&rsquo;s signature: sha256 of the exact request and response, EIP-191 recovery, and the signer named in the enclave&rsquo;s attestation report (<a href={blob("agents/tee.mjs")}>agents/tee.mjs</a>). Claude Haiku answers when NEAR AI does not (<Doc to="ai-strains" hash="providers">AI strains</Doc>).</li>
+        <li><strong>Living slides.</strong> A slide sealed into its own keyless account that is a colony, holds what it earns and passes whole to its holder: the purse contract and factory in <C>purse/</C>, the testnet factory <C>petri-slides.testnet</C> and, on mainnet, <C>slide-14.petri-dish.near</C> (<Doc to="living-slides">Living slides</Doc>).</li>
+        <li><strong>Open swarm.</strong> Anyone can spawn a strain on testnet, outside agents bid in an open sealed council with NEP-413 signatures, an SDK, an example bot and an MCP server, and a page where you talk a pact-bound strain into cheating and the contract refuses the real transaction (<Doc to="open-swarm">Open swarm</Doc>).</li>
+        <li><strong>Proof surfaces.</strong> <a href={`${SITE}/judges`}>/judges</a> (live claims on both dishes, each track&rsquo;s prompt line by line, a trade feed, one button per mechanic), <a href={`${SITE}/coin`}>/coin</a> (every mint and burn), <a href={`${SITE}/break`}>/break</a> (attacks the contract refuses), <a href={`${SITE}/sim`}>/sim</a> (a week in a minute), sixty simulated days and a 1,000-season bench (<a href={blob("sim/out-60d/README.md")}>sim/out-60d</a>), and a CI workflow that replays both dishes every six hours (<a href={blob(".github/workflows/live.yml")}>live.yml</a>).</li>
+        <li><strong>Delight.</strong> A generative soundscape, cinema mode (press C), a time-lapse export and a share card for every colony (<C>/c/&lt;id&gt;</C>).</li>
+      </ul>
+
       <H2 id="v6-4">v6.4: petri-v6.testnet and petri-dish.near</H2>
       <p>
-        The version both dishes run, built reproducibly at <a href={commit(BUILD_COMMIT_SHORT)}>{BUILD_COMMIT_SHORT}</a> with code hash <C>{CODE_HASH}</C> (606,302 bytes, near-sdk 5.29.1, event standard <C>petri</C> 6.4.0). The seventh review found that v6.3&rsquo;s first attach reset a colony&rsquo;s stake but not its share of the current tide window; v6.4 zeroes the window too, and a planting&rsquo;s stake counts its cost without the royalty. <C>relaunch</C> writes a version marker and clears a v6.3 dish (<C>relaunch_leaves_nothing_of_v6_3</C>).
+        The version both dishes ran until v6.5, built reproducibly at <a href={commit("749f246")}>749f246</a> with code hash <C>Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL</C> (606,302 bytes, near-sdk 5.29.1, event standard <C>petri</C> 6.4.0). The seventh review found that v6.3&rsquo;s first attach reset a colony&rsquo;s stake but not its share of the current tide window; v6.4 zeroes the window too, and a planting&rsquo;s stake counts its cost without the royalty. <C>relaunch</C> writes a version marker and clears a v6.3 dish (<C>relaunch_leaves_nothing_of_v6_3</C>). Both dishes started again from generation 0 on it on 4 November 2026; it had 143 contract tests.
       </p>
       <H2 id="v6-3">v6.3</H2>
       <p>

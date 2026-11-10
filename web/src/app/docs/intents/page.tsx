@@ -211,7 +211,7 @@ near contract call-function as-transaction petri-dish.near claim_pending json-ar
           <tr>
             <td>Least wNEAR for the order to run</td>
             <td>
-              <C>intent_minimum(what, account_id)</C>: <C>min_join</C> (0.01 NEAR) for a join or a purchase&rsquo;s 114 bytes (<C>BUY_BYTES</C> and one more) for a buy, plus the <C>Pending</C> and <C>Unpend</C> entries the payment writes on its way. Those entries name the account, so the figure grows with its length: at the time of writing, for <C>alice.near</C>, 0.01184 NEAR to join and 0.00298 NEAR to buy. Less than that waits as pending NEAR (unless it is dust, which is refunded). A join delivered at exactly the join figure nets under <C>min_join</C> after the join&rsquo;s own storage, so it does not attach NEAR
+              <C>intent_minimum(what, account_id)</C>: <C>min_join</C> (0.01 NEAR) for a join or a purchase&rsquo;s 114 bytes (<C>BUY_BYTES</C> and one more) for a buy, plus the <C>Pending</C> and <C>Unpend</C> entries the payment writes on its way; since v6.5 a join&rsquo;s figure also includes the join&rsquo;s own storage (colony record, name, registration, entry, cold slot and purchase record), so a join paid at the floor still nets <C>min_join</C> and attaches NEAR. Those entries name the account, so the figure grows with its length: read live on 10 November 2026, for <C>alice.near</C>, 0.01912 NEAR to join and 0.00298 NEAR to buy. Less than that waits as pending NEAR (unless it is dust, which is refunded)
             </td>
             <td>
               The contract; <C>/api/intents/quote</C> refuses quotes below it
