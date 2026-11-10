@@ -61,10 +61,14 @@ const DUMP = arg("dump", null);
 /** Public NEAR RPC providers that answer without a key (rpc.*.near.org is deprecated and rate-limits everyone). `--rpc`
  * puts your own provider (or several, comma-separated) first. */
 const PUBLIC_RPCS = {
-  mainnet: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://free.rpc.fastnear.com", "https://rpc.shitzuapes.xyz"],
+  mainnet: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://free.rpc.fastnear.com"],
   testnet: ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"],
 };
 const RPCS = [...(arg("rpc", "") || "").split(",").map((u) => u.trim()).filter(Boolean), ...(PUBLIC_RPCS[NETWORK] ?? PUBLIC_RPCS.testnet)];
+/** Two providers run by different operators (FastNEAR and dRPC): the dish's history chain, board hash and code hash at
+ * the pinned block are read from each on its own and must agree with what the replay was compared against, so one
+ * provider answering falsely cannot pass the replay. */
+const CROSS = { mainnet: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org"], testnet: ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"] }[NETWORK] ?? [];
 /** `by` of a tide a keeper (a house account with no colony) ran. */
 const HOUSE_RUNNER = 0xffff;
 /** Payout kinds a Refund entry names. */
@@ -120,6 +124,38 @@ let block;
 async function view(method, args = {}) {
   const r = await rpc("query", { request_type: "call_function", block_id: block, account_id: CONTRACT, method_name: method, args_base64: Buffer.from(JSON.stringify(args)).toString("base64") });
   return JSON.parse(Buffer.from(r.result).toString("utf8"));
+}
+
+/** One call to one provider, no failover (retried a few times on 429/5xx). */
+async function rpcAt(url, method, params) {
+  let last;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "verify-cross", method, params }), signal: AbortSignal.timeout(20_000) });
+      if (res.status === 429 || res.status >= 500) throw new Error(`answered ${res.status}`);
+      const body = await res.json();
+      if (body.error) throw new Error(JSON.stringify(body.error).slice(0, 160));
+      return body.result;
+    } catch (e) {
+      last = e;
+      await sleep(1000 * 2 ** i);
+    }
+  }
+  throw last;
+}
+
+/** What `url` says, at the pinned block, of the dish's history chain, board hash and the contract's code hash. */
+async function crossRead(url) {
+  try {
+    const [r, acct] = await Promise.all([
+      rpcAt(url, "query", { request_type: "call_function", block_id: block, account_id: CONTRACT, method_name: "state", args_base64: Buffer.from("{}").toString("base64") }),
+      rpcAt(url, "query", { request_type: "view_account", block_id: block, account_id: CONTRACT }),
+    ]);
+    const st = JSON.parse(Buffer.from(r.result).toString("utf8"));
+    return `chain ${st.chain}, board ${st.board_hash}, code ${acct.code_hash}`;
+  } catch (e) {
+    return `could not be read (${(e?.message ?? String(e)).slice(0, 80)})`;
+  }
 }
 
 async function paged(method, total, size) {
@@ -572,6 +608,7 @@ const checks = [
   all("Colony kept PETRI", keptBad),
   ["Solvent (NEAR held >= owed, from the ledger)", "yes", free >= owedAll ? "yes" : `no: ${fmtNear(free)} held, ${fmtNear(owedAll)} owed`],
   ...(DUMP ? [] : [["Deployed code hash", CODE_HASH, account.code_hash]]),
+  ...(DUMP ? [] : await Promise.all(CROSS.map(async (url) => [`Read again from ${new URL(url).host}`, `chain ${state.chain}, board ${state.board_hash}, code ${account.code_hash}`, await crossRead(url)]))),
 ];
 let differ = 0;
 for (const [name, want, got] of checks) {
