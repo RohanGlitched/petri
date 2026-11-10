@@ -274,6 +274,42 @@ async function act(s) {
   }
 }
 
+const LICENSED_SHARE = Number(process.env.PETRI_LICENSED_SHARE ?? "0.35");
+
+/** Plants a rival's slide pattern under its licence in the emptiest legal spot found; true if it planted. */
+async function plantLicensed(s, world, me, balance) {
+  const { width: w, height: h, licence_min_cells: minCells, buffer, max_plant_cells: maxCells } = world.rules;
+  const slides = (await view("slides", { from: 0, limit: 200 }).catch(() => []))
+    .filter((x) => x.owner_id !== s.account && x.cells >= Number(minCells ?? 12) && x.cells <= Number(maxCells));
+  if (!slides.length) return false;
+  const slide = slides[Math.floor(rng() * slides.length)];
+  const bits = Buffer.from(slide.bitmap, "base64");
+  const shape = [];
+  for (let i = 0; i < slide.w * slide.h; i++) if ((bits[i >> 3] >> (i & 7)) & 1) shape.push([i % slide.w, Math.floor(i / slide.w)]);
+  if (shape.length !== slide.cells) return false;
+  const price = Number(world.state.cell_price) * shape.length;
+  if (balance < price) return false;
+  for (let t = 0; t < 80; t++) {
+    const x0 = Math.floor(rng() * w), y0 = Math.floor(rng() * h);
+    const cells = shape.map(([dx, dy]) => (((y0 + dy) % h) * w + ((x0 + dx) % w)));
+    if (world.engine.check_plant(me.id, new Uint32Array(cells), buffer, maxCells) !== "") continue;
+    const note = `Planted ${slide.name}'s specimen ${slide.token_id} under its licence.`;
+    try {
+      await catchUp(s.account);
+      const deposit = await view("plant_deposit", { cells: cells.length, note_bytes: Buffer.byteLength(note), slide: slide.token_id }).catch(() =>
+        view("plant_deposit", { cells: cells.length, note_bytes: Buffer.byteLength(note) }));
+      const r = await callDish(s.account, "plant", { cells, note, slide: slide.token_id }, CALL_TGAS, BigInt(deposit), attaches(s));
+      log(s.name, "planted specimen", slide.token_id, `of ${slide.name} under licence (${cells.length})`, r.hash);
+      record({ at: new Date().toISOString(), contract: CONTRACT, strain: s.name, account: s.account, generation: world.due, pattern: `specimen ${slide.token_id}`, kind: "licensed", slide: slide.token_id, holder: slide.owner_id, cells: cells.length, cost: price, note, tx: r.hash, decided_by: "rules", outcome: null });
+      return true;
+    } catch (e) {
+      log(s.name, "licensed planting refused:", e instanceof Error ? e.message : e);
+      return false;
+    }
+  }
+  return false;
+}
+
 async function actOn(s, world) {
   const me = await ensureJoined(s, world.colonies);
   if (!me) return;
@@ -309,6 +345,9 @@ async function actOn(s, world) {
     }
   }
   await maybeFossilize(s, world, me, balance);
+  // The bench sometimes plants another colony's specimen slide under its licence (moved, never turned), so the
+  // licence discount and the holder's royalty run on chain, not only in the rules.
+  if (s.bench && !dry && rng() < LICENSED_SHARE && (await plantLicensed(s, world, me, balance))) return;
   if (!s.bench) await learn(world);
   const totalLive = world.engine.total_live();
   const counts = world.engine.live_counts();
