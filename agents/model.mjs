@@ -208,6 +208,8 @@ async function askNearAI(system, user, maxTokens) {
       max_tokens: maxTokens,
       temperature: 0.7,
       response_format: { type: "json_object" },
+      // GLM thinks before answering by default; a move needs a short JSON answer, so thinking is off (1-2 s, not 10).
+      ...(process.env.NEARAI_THINKING === "1" ? {} : { chat_template_kwargs: { enable_thinking: false } }),
     });
     const res = await fetch(`${BASE}/chat/completions`, {
       method: "POST",
