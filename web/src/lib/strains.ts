@@ -73,6 +73,10 @@ export const BENCH_ACCOUNTS = [
   "petri-bench-c.testnet",
   "9e0f14b0b58c9760dd95af218cdd98a4417cd37d316e01cbff178d41ac5b7c5e",
   "58135f2e727a40755df38f1d231aca159ea4ab138260b8d0d9419da63f999932",
+  // The team's testnet rehearsal of mainnet free play (10 Nov): guests made by its rehearsal relayer.
+  "3e5504718e82cf2345f90b104be8164084f63d66c1c8e5a6c22d6c41188e6099",
+  "6e82be87443737e311a1f8f5439793512b44486ffc8f8533f6ed3aeb95c8a938",
+  "1295a926f71804ce1c712fadc641db8a59017e677cb703424d6a398f8274296e",
 ];
 
 /** Who an account plays for: the house strains, the team (its bench, and any account it made: every petri-*.testnet

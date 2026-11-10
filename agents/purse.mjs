@@ -21,7 +21,7 @@
 // purse, and a holder whose key is not on this machine is skipped with a note.
 
 import { actions } from "near-api-js";
-import { account, CONTRACT, failureText, liveDish, log, NETWORK, rpc, view } from "./lib.mjs";
+import { account, callDish, CALL_TGAS, CONTRACT, failureText, liveDish, log, NETWORK, rpc, view } from "./lib.mjs";
 
 export { actions };
 
@@ -197,6 +197,14 @@ export async function tendPurses(holders) {
         world.engine.free();
         if (alive === 0 && (st.colony.last_plant_generation === null || Number(st.colony.last_plant_generation) < due)) {
           // The holder attaches the planting's NEAR: the purse has no sponsored credit of its own.
+          // A planting needs the stored board within max_catchup of the clock; on a sleeping dish the holder advances
+          // it first (one call: the contract skips what is too far behind and steps the rest).
+          const st0 = await view("state");
+          const rules0 = await view("rules");
+          if (Number(st0.due_generation) - Number(st0.generation) > Number(rules0.max_catchup)) {
+            const a = await callDish(s.account, "advance", {}, CALL_TGAS).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+            log(s.name, `advanced the dish before replanting living slide ${token}`, a.hash ?? a.error);
+          }
           const r = await plantSlide(s.account, token);
           log(s.name, `living slide ${token} replanted its pattern`, r.failed ?? "", r.hash);
         } else if (BigInt(st.claimable.near) > 0n) {
