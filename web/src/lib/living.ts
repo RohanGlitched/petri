@@ -6,30 +6,39 @@
 import { CONTRACTS, RPCS, type Network } from "./config";
 
 /**
- * The account each dish's purses live under: `slide-<id>.<parent>`. On testnet the parent is a factory anyone can seal a
- * slide through (`nft_transfer_call` to it). On mainnet there is no factory: petri-dish.near itself made each purse in
- * one transaction (create, fund, deploy, init; no key). Either way a slide is living once its purse owns it.
+ * The factory each dish's slides are sealed through now: `slides.<dish>`, an account with no key (its parent created,
+ * deployed and set it up in one transaction). Its purses pay the slide's minter 5% of every sale. A slide is sealed by
+ * sending it there with `nft_transfer_call`.
  */
-export const PARENTS: Record<Network, string> = {
-  testnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_TESTNET ?? "petri-slides.testnet",
-  mainnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_MAINNET ?? "petri-dish.near",
-};
-/** Parents that are factories, which seal a slide sent to them; the others made their purses by hand. */
 export const FACTORIES: Record<Network, string | null> = {
-  testnet: PARENTS.testnet,
-  mainnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_MAINNET_FACTORY ?? null,
+  testnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_TESTNET_FACTORY ?? "slides.petri-v6.testnet",
+  mainnet: process.env.NEXT_PUBLIC_PETRI_SLIDES_MAINNET_FACTORY ?? "slides.petri-dish.near",
 };
 
-export const purseOf = (token: string, net: Network): string => `slide-${token}.${PARENTS[net]}`;
+/**
+ * Every account a dish's purses live under, `slide-<id>.<parent>`, the factory first. The others made the first purses
+ * (v1, no minter's royalty): the testnet factory petri-slides.testnet, and on mainnet petri-dish.near itself, which made
+ * living slide 14 by hand in one transaction that added no key. A slide is living once its purse owns it.
+ */
+export const PARENTS: Record<Network, string[]> = {
+  testnet: [FACTORIES.testnet, process.env.NEXT_PUBLIC_PETRI_SLIDES_TESTNET ?? "petri-slides.testnet"].filter((p): p is string => !!p),
+  mainnet: [FACTORIES.mainnet, process.env.NEXT_PUBLIC_PETRI_SLIDES_MAINNET ?? "petri-dish.near"].filter((p): p is string => !!p),
+};
+
+/** The account slide `token`'s purse has (or would have) under `parent`, the factory by default. */
+export const purseOf = (token: string, net: Network, parent: string = PARENTS[net][0]): string => `slide-${token}.${parent}`;
 
 /** The slide id a purse account is named for, if it is one of this network's purses. */
 export function tokenOfPurse(account: string, net: Network): string | null {
   const m = account.match(/^slide-([1-9]\d{0,9})\.(.+)$/);
-  return m && m[2] === PARENTS[net] ? m[1] : null;
+  return m && PARENTS[net].includes(m[2]) ? m[1] : null;
 }
 
-/** A slide is living when its owner on the dish is its own purse. */
-export const isLiving = (token: string, owner: string | null | undefined, net: Network) => !!owner && owner === purseOf(token, net);
+/** A slide is living when its owner on the dish is its own purse, under any of the network's parents. */
+export const isLiving = (token: string, owner: string | null | undefined, net: Network) => !!owner && PARENTS[net].some((p) => owner === purseOf(token, net, p));
+
+/** Slide `token`'s purse: its owner when it is living, else the account sealing it through the factory would make. */
+export const purseFor = (token: string, owner: string | null | undefined, net: Network): string => (owner && isLiving(token, owner, net) ? owner : purseOf(token, net));
 
 /** The message a holder signs (NEP-413) to open a living slide's darkroom. */
 export const darkroomMessage = (token: string, net: Network, issued: string) => `Open the darkroom of living slide #${token} on NEAR ${net}. Issued ${issued}.`;
@@ -39,6 +48,9 @@ export type PurseInfo = {
   dish: string;
   factory: string;
   holder: string;
+  /** v2 purses: the colony account that minted the slide, paid `royalty_bps` of every sale. v1 purses have none. */
+  minter?: string;
+  royalty_bps?: number;
   /** Bumped by every change a buyer would care about; `buy` is pinned to it. */
   nonce: number;
   /** yoctoNEAR, when listed on its own market. */

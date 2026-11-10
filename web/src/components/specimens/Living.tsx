@@ -9,7 +9,7 @@ import { accountUrl, shortAccount, txUrl, REPO } from "@/lib/config";
 import { currentEngine, useDish } from "@/lib/dish-store";
 import { useLedger } from "@/lib/ledger-feed";
 import { useLive, int, petri } from "@/lib/live";
-import { accessKeysOf, accountView, colonyCrop, darkroomMessage, dishView, purseOf, viewOn, FACTORIES, type AccountView, type PurseHistory, type PurseInfo } from "@/lib/living";
+import { accessKeysOf, accountView, colonyCrop, darkroomMessage, dishView, isLiving, purseFor, viewOn, FACTORIES, type AccountView, type PurseHistory, type PurseInfo } from "@/lib/living";
 import { livingSvg } from "@/lib/living-svg";
 import type { Slide } from "@/lib/slides";
 import { useNet, type Net } from "@/lib/use-net";
@@ -107,7 +107,7 @@ function fromLedger(entries: Entry[], colonyId: number | null, purse: string) {
 const LOG_TEXT: Record<string, (a: string, amount: string) => { kind: string; what: string; amount: string; dir: "in" | "out" | "hand" }> = {
   seal: (a) => ({ kind: "Sealed", what: `Sealed into its own account; ${shortAccount(a, 30)} holds it`, amount: "", dir: "hand" }),
   transfer: (a) => ({ kind: "Passed on", what: `Now held by ${shortAccount(a, 30)}`, amount: "", dir: "hand" }),
-  sale: (a, n) => ({ kind: "Sold", what: `Bought by ${shortAccount(a, 30)}; the price went to the seller`, amount: `${nearText(n)} NEAR`, dir: "hand" }),
+  sale: (a, n) => ({ kind: "Sold", what: `Bought by ${shortAccount(a, 30)}`, amount: `${nearText(n)} NEAR`, dir: "hand" }),
   returned: (a) => ({ kind: "Returned", what: `A transfer was refused by its receiver; back with ${shortAccount(a, 30)}`, amount: "", dir: "hand" }),
   withdraw: (a, n) => ({ kind: "Paid out", what: `NEAR to its holder ${shortAccount(a, 30)}`, amount: `${nearText(n)} NEAR`, dir: "out" }),
   ft_withdraw: (a, n) => ({ kind: "Paid out", what: `PETRI to its holder ${shortAccount(a, 30)}`, amount: `${petriText(n)} PETRI`, dir: "out" }),
@@ -117,8 +117,8 @@ const LOG_TEXT: Record<string, (a: string, amount: string) => { kind: string; wh
 
 export function LivingSlideBand({ sl }: { sl: Slide }) {
   const net = useNet();
-  const purse = purseOf(sl.id, net.network);
-  const living = sl.owner === purse;
+  const purse = purseFor(sl.id, sl.owner, net.network);
+  const living = isLiving(sl.id, sl.owner, net.network);
   const { data, error, refresh } = usePurse(net, purse, living);
 
   if (!living && !FACTORIES[net.network])
@@ -288,10 +288,11 @@ function LivingView({ sl, net, purse, data, error, refresh }: { sl: Slide; net: 
                   <dd className="num">{nearText(info.near_out)} NEAR<small>{petriText(info.petri_out)} PETRI</small></dd>
                 </div>
                 <div>
-                  <dt>Paid to sellers</dt>
+                  <dt>Paid for it</dt>
                   <dd className="num">{nearText(info.sales_volume)} NEAR<small>across {info.sales} {info.sales === 1 ? "sale" : "sales"}</small></dd>
                 </div>
               </dl>
+              <MinterRoyalty info={info} net={net} />
               {(sponsored > 0n || binding.length > 0) && (
                 <p className="muted small" style={{ marginTop: 18 }}>
                   {sponsored > 0n ? `${nearText(sponsored)} NEAR of its credit is sponsored and its sponsors may reclaim it. ` : ""}
@@ -349,6 +350,7 @@ function LivingView({ sl, net, purse, data, error, refresh }: { sl: Slide; net: 
               <li><b>Listed means frozen.</b> While it is for sale, nothing leaves it; any change bumps its nonce, and a purchase pinned to an older nonce fails.</li>
               <li><b>Nothing in flight.</b> While a call it made is still on its way, it cannot change hands.</li>
               <li><b>Approvals die with a sale.</b> Every transfer clears them and refunds their storage.</li>
+              {data.info.minter && <li><b>The minter is paid.</b> The minter named when it was sealed, read from the dish, gets {(data.info.royalty_bps ?? 500) / 100}% of every sale; no holder can change it.</li>}
             </ol>
           </div>
         </div>
@@ -383,6 +385,25 @@ function useTx(refresh: () => void) {
   return { r, run };
 }
 
+/** Who a sale pays: the minter's royalty (v2 purses), read from the purse itself. */
+function MinterRoyalty({ info, net }: { info: PurseInfo; net: Net }) {
+  if (!info.minter)
+    return (
+      <p className="muted small" style={{ marginTop: 18 }}>
+        Sealed before the minter&rsquo;s royalty: a sale of this purse pays its seller the whole price. Purses sealed since pay the slide&rsquo;s minter 5%.
+      </p>
+    );
+  const pct = (info.royalty_bps ?? 500) / 100;
+  return (
+    <p className={l.royalty}>
+      <b>{pct}% of every sale goes to its minter</b>,{" "}
+      <a href={accountUrl(info.minter, net.network)} style={{ color: "var(--bone)" }}>{shortAccount(info.minter, 28)}</a>, the colony account that minted the slide, as the dish&rsquo;s own slides pay theirs.
+      The purse&rsquo;s <code>nft_payout</code> splits a marketplace&rsquo;s price that way, and its own market pays the same split.
+      {info.holder === info.minter ? " Its minter holds it now, so a sale by it keeps the whole price." : ""}
+    </p>
+  );
+}
+
 function BuyBox({ purse, info, net, refresh }: { purse: string; info: PurseInfo; net: Net; refresh: () => void }) {
   const player = usePlayer();
   const { r, run } = useTx(refresh);
@@ -390,6 +411,7 @@ function BuyBox({ purse, info, net, refresh }: { purse: string; info: PurseInfo;
     <div className={l.banner}>
       <span>
         For sale on its own market: <b className="num">{nearText(info.price!)} NEAR</b>, pinned to nonce {info.nonce}. If anything changes before your purchase lands, it fails and costs you nothing.
+        {info.minter && info.minter !== info.holder ? ` ${(info.royalty_bps ?? 500) / 100}% of the price goes to its minter, the rest to the seller.` : ""}
       </span>
       <button className="btn btn-amber btn-small" disabled={player?.kind !== "wallet" || player.accountId === info.holder} onClick={() => run(() => walletCallTo(purse, "buy", { nonce: info.nonce }, 60, BigInt(info.price!)))}>
         {player?.kind !== "wallet" ? "Connect a wallet to buy" : player.accountId === info.holder ? "You hold it" : "Buy it"}
@@ -403,13 +425,22 @@ function SealBand({ sl, net, purse }: { sl: Slide; net: Net; purse: string }) {
   const player = usePlayer();
   const factory = FACTORIES[net.network]!;
   const [cost, setCost] = useState<bigint | null>(null);
+  // The factory did not answer: on mainnet it exists only once the team has created it (keyless, in one transaction).
+  const [missing, setMissing] = useState(false);
   const [credit, setCredit] = useState<bigint>(0n);
   const [tick, setTick] = useState(0);
   const { r, run } = useTx(() => setTick((x) => x + 1));
   const mine = !!player && player.accountId === sl.owner;
   useEffect(() => {
     let stop = false;
-    viewOn<string>(net.network, factory, "create_cost").then((c) => !stop && setCost(BigInt(c)), () => {});
+    viewOn<string>(net.network, factory, "create_cost").then(
+      (c) => {
+        if (stop) return;
+        setCost(BigInt(c));
+        setMissing(false);
+      },
+      () => !stop && setMissing(true),
+    );
     if (player) viewOn<string>(net.network, factory, "credit_of", { account_id: player.accountId }).then((c) => !stop && setCredit(BigInt(c)), () => {});
     return () => {
       stop = true;
@@ -427,20 +458,24 @@ function SealBand({ sl, net, purse }: { sl: Slide; net: Net; purse: string }) {
               has a key. It owns the slide, so royalties are paid into it. It can join the dish as a colony and plant the slide&rsquo;s own pattern, so its cells earn there.
               And it is a NEAR collectible of its own: sell it and the account, its NEAR, its PETRI and its colony all go to the buyer.
             </p>
-            <p className="muted small">Sealing is for good: the slide stays inside its account. The account&rsquo;s storage, about {cost !== null ? nearText(cost, 3) : "0.32"} NEAR, is paid once and stays in it.</p>
+            <p className="muted small">Sealing is for good: the slide stays inside its account. The account&rsquo;s storage, about {cost !== null ? nearText(cost, 3) : "0.33"} NEAR, is paid once and stays in it.</p>
           </div>
           <div>
             <ol className={l.rules} style={{ color: "var(--text-2)" }}>
               <li>Pay the factory the account&rsquo;s storage{cost !== null ? `: ${nearText(cost, 3)} NEAR` : ""}{credit > 0n ? ` (you have ${nearText(credit, 3)} NEAR prepaid)` : ""}.</li>
-              <li>Send the slide to the factory with <code>nft_transfer_call</code>. In one receipt it creates the account with the purse code and no key, then moves the slide in and makes you its holder. If anything fails, the slide comes back.</li>
+              <li>Send the slide to the factory with <code>nft_transfer_call</code>. It asks the dish who minted the slide, then in one receipt creates the account with the purse code and no key, naming you its holder and the minter as the account every later sale pays 5% to. Then it moves the slide in. If anything fails, the slide comes back.</li>
               <li>From the account&rsquo;s darkroom on this page, have it join the dish and plant the slide&rsquo;s pattern.</li>
             </ol>
-            {mine && player?.kind === "wallet" ? (
+            {missing ? (
+              <p className="muted small" style={{ marginTop: 18 }}>
+                The factory <code>{factory}</code> is not on {net.label.chain} yet, so nothing can be sealed here for now.
+              </p>
+            ) : mine && player?.kind === "wallet" ? (
               <div className={l.row} style={{ marginTop: 20 }}>
                 <button className="btn btn-ghost" disabled={owed === 0n} onClick={() => run(() => walletCallTo(factory, "prepay", {}, 30, owed < YOCTO / 100n ? YOCTO / 100n : owed))}>
                   {owed === 0n ? "Storage prepaid" : `1. Prepay ${nearText(owed, 3)} NEAR`}
                 </button>
-                <button className="btn btn-amber" disabled={owed > 0n} onClick={() => run(() => walletCallTo(net.contract, "nft_transfer_call", { receiver_id: factory, token_id: sl.id, msg: "" }, 300, 1n))}>
+                <button className="btn btn-amber" disabled={owed > 0n || cost === null} onClick={() => run(() => walletCallTo(net.contract, "nft_transfer_call", { receiver_id: factory, token_id: sl.id, msg: "" }, 300, 1n))}>
                   2. Seal it
                 </button>
               </div>

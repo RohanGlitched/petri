@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { NET_STORE, networkInUrl, shortAccount, switchNetwork, type Network } from "@/lib/config";
-import { FACTORIES, isLiving, purseOf } from "@/lib/living";
+import { FACTORIES, isLiving } from "@/lib/living";
 import { useNet } from "@/lib/use-net";
 import { useAllSlides } from "./data";
 import l from "./living.module.css";
@@ -50,11 +50,11 @@ export function LivingStrip() {
           {living.map((s) => (
             <Link key={s.id} href={`/specimens/${encodeURIComponent(s.id)}#living`} className={l.stripCard}>
               {/* The token's own picture, drawn by the server from the stored board. */}
-              <img src={`/api/living/${purseOf(s.id, net.network)}`} alt={`Living slide ${s.id}`} loading="lazy" />
+              <img src={`/api/living/${s.owner}`} alt={`Living slide ${s.id}`} loading="lazy" />
               <span>
                 <b>Living slide #{s.id}</b>
                 <span>{s.title ?? s.name ?? "Untitled"}</span>
-                <span>{shortAccount(purseOf(s.id, net.network), 32)}</span>
+                <span>{shortAccount(s.owner, 32)}</span>
               </span>
             </Link>
           ))}

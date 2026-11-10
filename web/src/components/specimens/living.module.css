@@ -86,3 +86,8 @@
 .stripCard b { font-family: var(--display); font-weight: 400; font-size: 19px; display: block; }
 .stripCard span { font-size: 13px; color: var(--dim); display: block; }
 .banner { margin-top: 22px; padding: 16px 18px; border-radius: 14px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; font-size: 15px; color: var(--text-2); }
+
+/* Who a sale pays: the minter's royalty under the purse's sales figures. */
+.royalty { margin: 18px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-size: 15px; color: var(--text-2); overflow-wrap: anywhere; }
+.royalty b { color: var(--amber-2); font-weight: 600; }
+.royalty code { font-family: var(--body); color: var(--bone); }

@@ -12,7 +12,7 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { RPCS, type Network } from "@/lib/config";
-import { darkroomMessage, purseOf, viewOn, type PurseInfo } from "@/lib/living";
+import { darkroomMessage, dishView, isLiving, viewOn, type PurseInfo } from "@/lib/living";
 
 export const dynamic = "force-dynamic";
 
@@ -93,8 +93,10 @@ export async function POST(req: Request) {
   const net: Network = b.net === "mainnet" ? "mainnet" : "testnet";
   const { token, accountId, publicKey, signature, issued, nonce, recipient } = b;
   if (!token || !/^[1-9]\d{0,9}$/.test(token) || !accountId || !publicKey?.startsWith("ed25519:") || !signature || !issued || !nonce || !recipient) return no("incomplete proof", 400);
-  const purse = purseOf(token, net);
-  if (!purse) return no("there are no living slides on this network yet", 404);
+  // The slide's purse is its owner on the dish, under whichever parent sealed it.
+  const slide = await dishView<{ owner_id: string } | null>(net, "slide", { token_id: token }).catch(() => null);
+  const purse = slide && isLiving(token, slide.owner_id, net) ? slide.owner_id : null;
+  if (!purse) return no(`slide #${token} is not a living slide on ${net}`, 404);
   const at = Date.parse(issued);
   if (!isFinite(at) || Math.abs(Date.now() - at) > 5 * 60_000) return no("the signed message is older than five minutes: sign a fresh one");
   const host = new URL(req.url).host;
