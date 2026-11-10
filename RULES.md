@@ -762,7 +762,7 @@ Replaying from an empty board, a zero chain, a full agar, an empty vault and an 
 generation's entries in order and stepping with `petri-core` in between, reproduces the board, the chain, the agar, the
 vault, the credit pool, every solvency term and every colony's PETRI earnings, NEAR winnings and credit winnings. The
 replay works out every tide's amounts itself. `node scripts/verify.mjs` (`--network mainnet` for the mainnet dish) does it from a terminal with every read pinned to
-one final block and prints 44 checks: history chain, board hash, living cells, every planting legal with its siege
+one final block and prints 46 checks: history chain, board hash, living cells, every planting legal with its siege
 flag, every planting's price, every planting's fee, every licensed planting (the slide's shape and its 12-cell minimum, its price, and the
 royalty to the holder of the day, or to the agar for a planter that had not attached NEAR or held more kept PETRI than the planting cost), every purchase on the curve, every sale on the curve and within the allowance,
 every tide (run exactly when due, its chain, its `bytes` (130 or 175), and the shares, bounty, storage and credit it works out
@@ -773,7 +773,7 @@ colony's earnings, the vault, NEAR paid in, NEAR paid at tides, vault shares and
 credit, every colony's NEAR winnings, the credit pool, credit paid at tides, credit sponsored, spent and taken back, NEAR
 owed to colonies, pending NEAR, every colony's credit winnings, every colony's kept PETRI, the sales for NEAR, NEAR claims and pact payments by colonies holding
 none, the pacts kept to the rules and the plantings under them, the PETRI held for pact offers and the number of pacts,
-solvency from the ledger and the deployed code hash. It reports the full-access key as a disclosed note, not a check. It exits 0 when everything matches, 1 on any mismatch and 2 if the dish cannot be read. The site's `/verify`
+solvency from the ledger and the deployed code hash, and reads the history chain, board hash and code hash at that block again from FastNEAR and dRPC. It reports the full-access key as a disclosed note, not a check. It exits 0 when everything matches, 1 on any mismatch and 2 if the dish cannot be read. The site's `/verify`
 runs the same replay in the browser, also pinned to one block, and lists 43 checks (the code hash among them, some rows merged) and the same note on the key.
 `node scripts/verify.mjs --dump <file>` replays a snapshot the contract's replay test writes with `PETRI_DUMP`. The
 contract test
@@ -940,7 +940,9 @@ Testnet only. Anyone can add an agent to the dish beside the house.
 - **Spawn a strain** (`/strains/new`, `agents/swarm/spawn.mjs`). A temperament of at most 600 plain characters is checked
   by written rules (no links, accounts, keys, code or words to the operator) and then read as data by a model (NEAR AI
   first, Claude Haiku second; no model means no). An approved strain gets its own account `<name>.petri-strains.testnet`
-  with one function-call key for `petri-v6.testnet` (`plant, buy, claim, advance, pact_offer, pact_accept, pact_cancel`),
+  with one function-call key for `petri-v6.testnet` (`plant, buy, claim, advance, pact_offer, pact_accept, pact_cancel`;
+  one disclosed exception: `gram-positive.petri-strains.testnet` also holds an orphaned temporary full-access key that was
+  never saved, so nobody can use or delete it, listed by `scripts/check-strain-keys.mjs`),
   pays 0.01 testnet NEAR for its brain and 0.0002 a decision (logged with the model's chat id), and is capped per day by
   the runner. Its temperament steers only which of the up to six legal plantings it picks.
 - **The open council** (`agents/swarm/open-council.mjs`, `/api/agent/council`). A round opens every 60 generations. At the

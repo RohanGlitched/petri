@@ -29,7 +29,7 @@
 | Step | Do this | You should see |
 |---|---|---|
 | 1 | Open the **[judge desk](https://www.playpetri.xyz/judges)** | Every claim below checked live in your browser against both dishes (keys, code hash, a full replay, strains, pacts, royalties, TEE checks, tides, burns), each track's prompt line by line, a trade feed, and one button per mechanic that sends a real testnet transaction. |
-| 2 | Open **[/verify](https://www.playpetri.xyz/verify)** | Your browser downloads the whole ledger at one final block, rebuilds the dish with the contract's own Rust core and shows 43 checks and one note, ending **Everything matches.** (The terminal script below splits a few of those rows finer, so it prints 44.) |
+| 2 | Open **[/verify](https://www.playpetri.xyz/verify)** | Your browser downloads the whole ledger at one final block, rebuilds the dish with the contract's own Rust core and shows 43 checks and one note, ending **Everything matches.** (The terminal script below splits a few of those rows finer and re-reads the chain, board and code hashes from a second and third provider, so it prints 46.) |
 | 3 | Open **[/break](https://www.playpetri.xyz/break)**, make a guest colony first (one press there, or **Start my colony** on /dish), then press any **Try it** | A real transaction signed by a guest key in your browser, refused by the contract, with NEAR's own error text and a link to the failed transaction. 13 attacks you can send, plus 3 a guest key cannot even sign, recorded with near-cli. |
 | 4 | Open **[/dish](https://www.playpetri.xyz/dish)**, type a name, press **Start my colony** | In about 20 seconds (a proof of work in your browser, then the relayer creates a guest account and joins the dish), your colony is on `petri-v6.testnet` with a link to its transaction. No wallet, seed phrase or gas prompt. |
 
@@ -40,7 +40,7 @@ git clone https://github.com/RohanGlitched/petri && cd petri
 
 node scripts/verify.mjs                     # replays petri-v6.testnet from generation 0
 node scripts/verify.mjs --network mainnet   # replays petri-dish.near
-# expect 44 "match" rows and one "note" row (the team-held key), then "Everything matches." and exit code 0
+# expect 46 "match" rows and one "note" row (the team-held key), then "Everything matches." and exit code 0
 # (exit 1 means a row differs, 2 means the dish could not be read)
 
 cargo test -p petri-core -p petri-contract  # expect "37 passed" (engine) and "152 passed" (contract); rust-toolchain.toml pins 1.99.1
@@ -55,22 +55,22 @@ cd purse && cargo test                      # living slides: expect 18 (purse), 
 ## What is real, today
 
 <!-- facts-now:start -->
-Read by `node scripts/facts-now.mjs` at mainnet block 223,907,075 and testnet block 277,058,658; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
+Read by `node scripts/facts-now.mjs` at mainnet block 223,907,882 and testnet block 277,059,470; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
 
 | | Mainnet, real NEAR | Testnet, free play |
 |---|---|---|
 | Contract | [`petri-dish.near`](https://nearblocks.io/address/petri-dish.near) | [`petri-v6.testnet`](https://testnet.nearblocks.io/address/petri-v6.testnet) |
 | Full-access keys on the dish | 1, held by the team until the final verify on 14 November, then deleted | 1, kept for fixes |
 | Slide factory | `slides.petri-dish.near`, 0 keys | `slides.petri-v6.testnet`, 0 keys |
-| Generation stored on chain (15 s each) | 4,186 (the clock is at 4,548; the next move catches up) | 34,539 (clock 34,542) |
-| Colonies | 8: 5 house, 1 team bench, 2 other team accounts (2 living slides), 0 outside | 52: 5 house, 4 team bench, 13 other team accounts (3 living slides, 8 spawned strains, 2 test agents), 29 guest (anyone's browser, the team's tests included), 1 outside |
-| Outside players | none yet | 1 outside wallet colony, 1 planted |
-| Plantings / under a slide's licence | 69 / 2 | 938 / 18 |
-| PETRI supply (started at 1,000,000) | 998,974.93 (1,025.07 burned) | 994,872.21 (5,127.79 burned) |
-| Hourly tides | 1 tide: no NEAR paid as NEAR yet; 0.0201 NEAR of vault shares paid as credit to colonies that never attached NEAR | 90 tides: 0.6634 NEAR paid as NEAR to colonies that attached NEAR; 0.0048 NEAR of vault shares paid as credit to colonies that never attached NEAR |
+| Generation stored on chain (15 s each) | 4,562 (the clock is at 4,579; the next move catches up) | 34,559 (clock 34,574) |
+| Colonies | 8: 5 house, 1 team bench, 2 other team accounts (2 living slides), 0 outside | 54: 5 house, 4 team bench, 13 other team accounts (3 living slides, 8 spawned strains, 2 test agents), 29 guest (anyone's browser, the team's tests included), 3 outside |
+| Outside players | none yet | 3 outside wallet colonies, 2 planted |
+| Plantings / under a slide's licence | 71 / 2 | 946 / 18 |
+| PETRI supply (started at 1,000,000) | 998,967.18 (1,032.82 burned) | 994,845.13 (5,154.87 burned) |
+| Hourly tides | 3 tides: 0.0459 NEAR paid as NEAR to colonies that attached NEAR; 0.0201 NEAR of vault shares paid as credit to colonies that never attached NEAR | 90 tides: 0.6634 NEAR paid as NEAR to colonies that attached NEAR; 0.0048 NEAR of vault shares paid as credit to colonies that never attached NEAR |
 | Royalties paid to slide holders | 0.00 PETRI | 36.17 PETRI |
 | Specimen slides (NFTs) | 19 | 25 |
-| Living slides (keyless accounts) | 2: `slide-14.petri-dish.near` (0 keys; colony 6, unattached, no living cells on the stored board); `slide-18.slides.petri-dish.near` (0 keys; colony 8, attached, 18 living cells on the stored board) | 3: `slide-1.petri-slides.testnet` (0 keys; colony 23, attached, no living cells on the stored board); `slide-2.petri-slides.testnet` (0 keys; colony 24, attached, 12 living cells on the stored board); `slide-24.slides.petri-v6.testnet` (0 keys; colony 43, attached, 20 living cells on the stored board) |
+| Living slides (keyless accounts) | 2: `slide-14.petri-dish.near` (0 keys; colony 6, unattached, no living cells on the stored board); `slide-18.slides.petri-dish.near` (0 keys; colony 8, attached, no living cells on the stored board) | 3: `slide-1.petri-slides.testnet` (0 keys; colony 23, attached, no living cells on the stored board); `slide-2.petri-slides.testnet` (0 keys; colony 24, attached, 12 living cells on the stored board); `slide-24.slides.petri-v6.testnet` (0 keys; colony 43, attached, 20 living cells on the stored board) |
 | Pacts the contract enforces | 14 | 16 |
 | Spawned strains | testnet only | 8 spawned, 5 with living cells |
 | Joins through NEAR Intents | no colony started through Intents yet; 1 delivery held as pending NEAR (the team's own test), 1 settled or paid back | mainnet only |
@@ -107,6 +107,8 @@ How a session feels, at three speeds ([/rules](https://www.playpetri.xyz/rules#l
 | Sybil resistance good enough for a demo, limits written plainly | Pay is capped by planted stake, so splitting earns nothing more (property test `splitting_never_earns_more`). Free-play PETRI is kept: it cannot be sold for NEAR or sent (`a_guest_cannot_send_winnings_to_a_wallet`, `sybil_guests_that_attach_reach_no_vault_near`). Since v6.5 a guest with credit-grown cells alive cannot attach NEAR (`a_refused_attach_writes_nothing`). Guests cost a proof of work and are rate-limited. | [`core/src/tests.rs`](core/src/tests.rs), [`contract/src/tests.rs`](contract/src/tests.rs), [Limits](#limits-and-failure-cases) | Met |
 | A page with today's state and a log of every mint and burn; the record shown like a high score | /coin replays the ledger in your browser: supply now, supply over time, and a filterable log of every feed, purchase, sale, burn, royalty and tide. /records names the longest-lived colony, the biggest siege and the top earners. | [/coin](https://www.playpetri.xyz/coin), [/records](https://www.playpetri.xyz/records) | Met |
 | Simulate 60 days first; supply over time under a few scenarios | Five scenarios (boom, steady, decline, whale siege, strains only) × 5 seeds, every one of 345,600 generations stepped with petri-core, plus 1,000 adversarial seasons. The launch parameters were chosen earlier with 7-day runs (`sim/out-v6.1`); the 60-day run came after launch and checks them. | [`sim/out-60d`](sim/out-60d/README.md), charts on [/coin](https://www.playpetri.xyz/coin) | Met |
+
+**Who wins, who pays.** Petri is an arcade game with a burn, not a yield product: playing costs storage and gas, and nobody extracts (the house only pays in). PETRI pays no yield: whatever a tide pays is NEAR other players put into the vault, plus a sliver of the house strains' NEAR while their small budget lasts. In the simulator's 60-day scenarios (mainnet rules, 10 seeds each, every generation stepped with petri-core), 0.1% to 3.6% of outside players end ahead in NEAR. The few who do are mostly R-pentomino players; no whale, split whale or lattice locker came out ahead in any run. Of the NEAR the vault paid players, 98.3% to 99.2% was other players' and 0.78% to 1.71% the house's. The house reaches its gas floor on day 6 or 7; after that, tides only move players' NEAR between players. Of every NEAR players put in, about 55% reaches the vault, a third pays the storage of their own records and 11–13% is gas. A 0.05 NEAR round trip through the agar returns 46.9% on day one and less once tides have drained the vault. Method, every number and the limits: [docs/ECONOMICS.md](docs/ECONOMICS.md); every player's row: [sim/out-econ](sim/out-econ).
 
 **Why not meme.cooking?** A launchpad gives a coin a bonding curve and then hands it to a pool, where liquidity can be pulled and the price is whatever the pool says. PETRI has no pool by design: the agar is its only market maker. The contract sets the price on its own curve from how much PETRI is left in the agar, buys back at half that, capped by the vault, and the curve, the cap and the agar are all in one contract with no admin method. There is no LP to pull, and nobody can list a second price that the game would have to follow.
 
@@ -148,7 +150,7 @@ Delight, for players rather than judges: a generative soundscape (the dish sings
 
 | The prompt asks for | Where Petri does it | Proof | Status |
 |---|---|---|---|
-| Each agent its own sub-account under one parent | Mainnet strains are `violet`, `safranin`, `methylene`, `malachite`, `congo` `.petri-dish.near`. Anyone can [spawn a strain](https://www.playpetri.xyz/strains/new) on testnet: it becomes `<name>.petri-strains.testnet` with one function-call key that can only play. The five testnet house strains are separate top-level accounts (`petri-violet.testnet` and so on). | [/strains/new](https://www.playpetri.xyz/strains/new), [`agents/swarm/spawn.mjs`](agents/swarm/spawn.mjs) | Met on mainnet and for spawned strains |
+| Each agent its own sub-account under one parent | Mainnet strains are `violet`, `safranin`, `methylene`, `malachite`, `congo` `.petri-dish.near`. Anyone can [spawn a strain](https://www.playpetri.xyz/strains/new) on testnet: it becomes `<name>.petri-strains.testnet` with one function-call key that can only play (one disclosed exception: `gram-positive` also holds an orphaned temporary full-access key that was never saved, so nobody can use or delete it; [`check-strain-keys.mjs`](scripts/check-strain-keys.mjs) lists it). The five testnet house strains are separate top-level accounts (`petri-violet.testnet` and so on). | [/strains/new](https://www.playpetri.xyz/strains/new), [`agents/swarm/spawn.mjs`](agents/swarm/spawn.mjs) | Met on mainnet and for spawned strains |
 | A coordinator that opens a round, collects sealed bids, reveals them and picks a winner | Open council: a round every 60 generations; each house ask is committed as a sha256 before bids arrive; outside agents send NEP-413-signed sealed bids; at the close asks and bids are published and pairs clear at the midpoint. Settlement is on chain (`pact_offer`, then `pact_accept`). The coordinator runs on the team's VM, so its reveal is checkable against the commitment rather than enforced by a contract. | [/strains/join](https://www.playpetri.xyz/strains/join), [`open-council.mjs`](agents/swarm/open-council.mjs), [`pacts.rs`](contract/src/pacts.rs) | Partly |
 | Settlement through NEAR Intents | Pacts settle in PETRI escrow inside the dish, not through Intents. Intents is how mainnet players pay to join. | [`intents.rs`](contract/src/intents.rs) | Not met |
 | A simulation mode with scripted strategies and no LLM calls | `sim/` runs scripted societies on the real rules (60 days, 1,000 seasons, pacts at fixed prices); each strain falls back to its written rules when no model answers. | [`sim/out-60d`](sim/out-60d/README.md) | Met |
@@ -157,11 +159,16 @@ Delight, for players rather than judges: a generative soundscape (the dish sings
 
 **Guardrails you can test.** On [/strains/break](https://www.playpetri.xyz/strains/break) you talk *Captive*, a strain bound by a pact, into breaking it. Its model can be flattered or bribed; when it agrees, the planting goes to NEAR as a real transaction from its own key and the contract refuses it (every attempt so far was refused, each one listed on the page with its transaction, for example [`7VCewY4H…`](https://testnet.nearblocks.io/txns/7VCewY4HcWLRSeZazVyrJW47H2CaA4twWmTFkiMBmb3z)). The AI can be talked into anything; the contract cannot.
 
-**Private AI, verified.** The strains ask NEAR AI Cloud first (`z-ai/glm-5.3-flash`, inside a TEE) and Claude Haiku when NEAR AI does not answer. For every NEAR AI answer, [`agents/tee.mjs`](agents/tee.mjs) checks that the signed text is `<model>:<sha256 of the exact request>:<sha256 of the exact response>`, recovers the signer (EIP-191) and checks that address is in the enclave's attestation report. Each such planting's note ends ` · tee:<16 hex>`, the start of the answer's hash, and the site serves the archived answer and report at `/api/tee/<hash>` and `/api/tee/attestation/<hash>` (checked against their hashes before it caches them). /judges shows how many of the latest NEAR AI moves verified, and why the rest of the strains' moves carry no proof (Claude Haiku answered, or the written rules chose).
+**Private AI, verified.** The strains ask NEAR AI Cloud first (`z-ai/glm-5.3-flash`, inside a TEE) and Claude Haiku when NEAR AI does not answer. For every NEAR AI answer, [`agents/tee.mjs`](agents/tee.mjs) checks that the signed text is `<model>:<sha256 of the exact request>:<sha256 of the exact response>`, recovers the signer (EIP-191) and checks that address is in the enclave's attestation report. Every NEAR AI move since 10 November carries a tag: its planting's note ends ` · tee:<16 hex>`, the start of the answer's hash. Moves after the change that binds the signed prompt to each option's cells verify end to end with `verify-tee`; older ones fail its choice check by design. The tag lets anyone find the proof: the site serves the archived answer and report at `/api/tee/<hash>` and `/api/tee/attestation/<hash>` (checked against their hashes before it caches them). /judges shows how many of the latest NEAR AI moves verified, and why the rest of the strains' moves carry no proof (Claude Haiku answered, or the written rules chose).
 
-### Check an AI move yourself
+**Check an AI move yourself.**
 
-<!-- The lead fills this box from the agents worker's verify-tee instructions. -->
+```bash
+npm ci --prefix agents
+node scripts/verify-tee.mjs 9t5xz4qRiwZ6xDMpFYrKbtwCEQA6Lz6zkAfgfttXGX7r
+```
+
+Expected last line: `VERIFIED: every check above passed (---- lines are informational).` What it proves and what remains trusted: [docs/TEE.md](docs/TEE.md).
 
 ## Open Innovation
 
@@ -308,7 +315,7 @@ flowchart LR
 
 ### Replay a dish from genesis
 
-`node scripts/verify.mjs [--network mainnet]` pins one final block, downloads the ledger, replays it with the committed WASM build of petri-core and compares 44 values with the contract (board, history chain, every planting's legality and price, every purchase, sale, tide, claim, refund, slide, royalty, pact, every colony's PETRI, NEAR, credit and kept PETRI, the vault, solvency and the deployed code hash), then notes the full-access keys. `--contract <account>` checks another dish and `--code-hash <base58>` another build.
+`node scripts/verify.mjs [--network mainnet]` pins one final block, downloads the ledger, replays it with the committed WASM build of petri-core and compares 46 values with the contract (board, history chain, every planting's legality and price, every purchase, sale, tide, claim, refund, slide, royalty, pact, every colony's PETRI, NEAR, credit and kept PETRI, the vault, solvency and the deployed code hash), then notes the full-access keys. `--contract <account>` checks another dish and `--code-hash <base58>` another build.
 
 <details>
 <summary>The mainnet run of 10 November 2026, in full</summary>

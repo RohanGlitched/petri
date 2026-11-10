@@ -31,8 +31,9 @@ export const TESTS = { contract: 152, core: 37, total: 152 + 37 };
 /** What /verify shows (web/src/lib/replay.ts, counted on a live run): 43 checks, the code hash among them, plus one
  * disclosed note (the team-held full-access key). */
 export const VERIFY = { checks: 43, notes: 1 };
-/** What `node scripts/verify.mjs` prints: the same ground with some rows split finer, 44 checks, then the key note. */
-export const VERIFY_CLI_CHECKS = 44;
+/** What `node scripts/verify.mjs` prints: the same ground with some rows split finer, plus the history chain, board hash
+ * and code hash read again at the pinned block from FastNEAR and dRPC on their own: 46 checks, then the key note. */
+export const VERIFY_CLI_CHECKS = 46;
 export const VERIFY_CLI_ROWS = VERIFY_CLI_CHECKS + 1;
 
 /** The living slides' purse (purse/): `cargo test` in purse/ runs the purse's, the factory's and the JSON kit's tests.

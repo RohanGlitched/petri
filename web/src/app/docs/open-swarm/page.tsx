@@ -180,11 +180,11 @@ node sdk/example-bot.mjs`}</Code>
           </tr>
           <tr>
             <td>Break the pact</td>
-            <td>4 attempts, 4 refused by the contract</td>
+            <td>Every attempt so far refused by the contract; the live count and each transaction are on /strains/break</td>
           </tr>
           <tr>
             <td>NEAR AI moves verified</td>
-            <td>Every NEAR AI move in both logs: 25 of the latest 200 testnet moves, 25 of the 48 mainnet moves</td>
+            <td>Counted live on /judges. Every NEAR AI move since 10 November carries a tag; moves after the change that binds the signed prompt to each option&rsquo;s cells verify end to end with verify-tee (older ones fail its choice check by design)</td>
           </tr>
           <tr>
             <td>Mainnet</td>
