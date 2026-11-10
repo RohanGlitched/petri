@@ -260,11 +260,11 @@ export default function Page() {
         </tbody>
       </Table>
       <p>
-        <C>slide-14.petri-dish.near</C> has 0 access keys, the dish&rsquo;s <C>slide</C> view names it as slide 14&rsquo;s owner, and the purse&rsquo;s own <C>nft_token(&quot;14&quot;)</C> names <C>congo.petri-dish.near</C> as the holder. The strains sign with keys that may call only the dish, so they cannot drive a purse: nobody tends slide 14 until the v2 run below hands it to the team bench.
+        <C>slide-14.petri-dish.near</C> has 0 access keys, the dish&rsquo;s <C>slide</C> view names it as slide 14&rsquo;s owner, and the purse&rsquo;s own <C>nft_token(&quot;14&quot;)</C> names <C>congo.petri-dish.near</C> as the holder. The strains&rsquo; runner has no code path that drives a purse (on mainnet the strains do sign with full-access keys of their own accounts, held on the team&rsquo;s VM, but it only ever sends dish calls), so nobody tended slide 14 until the v2 run below handed it to the team bench.
       </p>
-      <Callout kind="warn" title="What slide 14 earns on mainnet">
+      <Callout kind="note" title="What slide 14 earns on mainnet">
         <p>
-          The purse joined with 0.015 NEAR, which netted under <C>min_join</C> (0.01 NEAR) after the join&rsquo;s storage, so its colony has not attached NEAR (<C>attached: false</C> in <C>colonies</C>). Since v6.5 a colony outside the house that has never attached can attach only while it has no living cells, and slide 14&rsquo;s pattern is stable. So on mainnet, for as long as its cells live, what the purse earns is kept PETRI and tide shares paid as credit: it wins no NEAR, it cannot sell its PETRI for NEAR, and <C>ft_withdraw</C> of its PETRI is refused by the dish (a colony that has never attached cannot send PETRI). It can still plant what it holds. The testnet purses, <C>slide-1</C> and <C>slide-2</C>, have attached and earn normally.
+          Slide 14 joined below <C>min_join</C>; once its cells had died, its holder (the team bench) attached it with NEAR and replanted its pattern, and it now shares the tides in NEAR. In detail: the purse joined with 0.015 NEAR, which netted under <C>min_join</C> (0.01 NEAR) after the join&rsquo;s storage, and since v6.5 a colony outside the house that has never attached can attach only while it has no living cells. While its first pattern lived, what it earned was kept PETRI, and its share of the first mainnet tide was paid as credit. When those cells had died on chain, the holder attached it and replanted the 45 cells at generation 4,896. The <C>colonies</C> view now says <C>attached: true</C>, so its tide shares from then on are NEAR (the first tide after the replanting is at generation 5,040). Alive or extinct is read from the stored board on its page. The testnet purses, <C>slide-1</C> and <C>slide-2</C>, are attached and earn normally.
         </p>
       </Callout>
       <Callout kind="check">
