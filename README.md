@@ -11,7 +11,7 @@
   <a href="https://nearblocks.io/address/petri-dish.near"><img alt="Mainnet contract" src="https://img.shields.io/badge/mainnet-petri--dish.near-9fd8a8?style=flat-square&labelColor=120a05" /></a>
   <a href="https://testnet.nearblocks.io/address/petri-v6.testnet"><img alt="Testnet contract" src="https://img.shields.io/badge/testnet-petri--v6.testnet-9fd8a8?style=flat-square&labelColor=120a05" /></a>
   <a href="https://github.com/RohanGlitched/petri/actions/workflows/live.yml"><img alt="Both live dishes replayed every 6 hours" src="https://github.com/RohanGlitched/petri/actions/workflows/live.yml/badge.svg" /></a>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-189%20%2B%2023%20purse-9fd8a8?style=flat-square&labelColor=120a05" />
+  <a href="https://github.com/RohanGlitched/petri/actions/workflows/tests.yml"><img alt="cargo test: core, contract and purse, on every push" src="https://github.com/RohanGlitched/petri/actions/workflows/tests.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/licence-MIT-e2d5c3?style=flat-square&labelColor=120a05" /></a>
 </p>
 
@@ -43,7 +43,8 @@ node scripts/verify.mjs --network mainnet   # replays petri-dish.near
 # expect 44 "match" rows and one "note" row (the team-held key), then "Everything matches." and exit code 0
 # (exit 1 means a row differs, 2 means the dish could not be read)
 
-cargo test -p petri-core -p petri-contract  # expect "37 passed" (engine) and "152 passed" (contract)
+cargo test -p petri-core -p petri-contract  # expect "37 passed" (engine) and "152 passed" (contract); rust-toolchain.toml pins 1.99.1
+node scripts/projection-test.mjs            # the browser's projection of a lagged dish against mainnet's last skip
 cd purse && cargo test                      # living slides: expect 16 (purse), 5 (factory) and 2 (JSON) passed
 ```
 
@@ -72,7 +73,7 @@ Read from the chain and the strains' public logs on 10 November 2026 at 06:30 UT
 | Strain moves chosen by NEAR AI, TEE-verified | counted live on [/judges](https://www.playpetri.xyz/judges): each move's log names the model that chose it and whether its TEE signature checked (Claude answers when NEAR AI cannot) | the same, on the testnet log |
 | Spawned strains | none (testnet only) | 4 spawned, 3 playing |
 | Outside players | none yet | the guest colonies so far are mostly the team's own test runs; the chain cannot tell them apart |
-| CI | [`live.yml`](.github/workflows/live.yml) replays both dishes every 6 hours and on every push, and counts the mainnet keys | |
+| CI | [`live.yml`](.github/workflows/live.yml) replays both dishes every 6 hours and on every push, and counts the mainnet keys; [`tests.yml`](.github/workflows/tests.yml) runs `cargo test` (core, contract, purse) and the projection test on every push | |
 
 Not done yet, so not claimed: no payment through NEAR Intents has completed a mainnet join yet (the quote route works, and the desk's button asks 1Click for a dry quote); there is no NEP-245 and no social login.
 
