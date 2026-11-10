@@ -12,6 +12,7 @@ import { readRunway, nearOf, type Runway } from "@/lib/house-runway";
 import { Council } from "./Council";
 import s from "./strains.module.css";
 import { NetTag } from "@/components/site/NetTag";
+import { ModelBadge } from "@/components/swarm/Bits";
 
 function ago(iso: string) {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -118,7 +119,8 @@ export function StrainsView() {
               {last && (
                 <div className={s.last}>
                   <p className={s.lastHead}>
-                    {idle > 120 ? `Last move ${int(idle)} generations ago (${ago(last.at)})` : `Last move ${ago(last.at)}`}, chosen by <b>{last.decided_by === "model" ? "the model" : "its rules"}</b>
+                    {idle > 120 ? `Last move ${int(idle)} generations ago (${ago(last.at)})` : `Last move ${ago(last.at)}`}, chosen by <b>{last.decided_by === "model" ? "the model" : "its rules"}</b>{" "}
+                    <ModelBadge model={last.decided_by === "model" ? last.model : null} tee={last.tee ?? null} />
                   </p>
                   <p className={s.options}>It could have planted: {last.options.slice(0, 4).map(plain).join("; ")}{last.options.length > 4 ? "; …" : ""}</p>
                   {last.signature?.signature && (
@@ -137,7 +139,7 @@ export function StrainsView() {
                       <span className={`num ${s.meta}`}>
                         <span>Generation {int(Number(p.generation))}</span>
                         <span>{p.cells.length} cells</span>
-                        {a && <span className={a.decided_by === "model" ? s.byModel : s.byRules}>{a.decided_by === "model" ? `Chosen by ${a.model ?? "the model"}` : "Written rules"}</span>}
+                        {a && <ModelBadge model={a.decided_by === "model" ? a.model : null} tee={a.tee ?? null} />}
                         {a?.tx && <a href={txUrl(a.tx)}>Transaction</a>}
                       </span>
                     </li>

@@ -19,6 +19,10 @@ export type StrainAction = {
   chat_id: string | null;
   signature: { signature?: string; signing_address?: string; text?: string } | null;
   model_error?: string | null;
+  /** NEAR AI answers: whether the enclave's signature over the exact request and response checked out */
+  tee?: { ok: boolean; reason?: string | null } | null;
+  /** a move by a strain a visitor spawned (agents/swarm) */
+  spawned?: boolean;
   options: string[];
   /** Set by the agents when the NEAR AI enclave's signature over the answer was checked. */
   tee?: { ok?: boolean } | null;

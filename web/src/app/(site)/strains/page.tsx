@@ -1,6 +1,8 @@
 import { StrainsView } from "@/components/strains/StrainsView";
 import s from "@/components/strains/strains.module.css";
 import { StrainsTitle } from "@/components/strains/StrainsTitle";
+import { SwarmTabs } from "@/components/swarm/Bits";
+import { OpenSwarm } from "@/components/swarm/Pages";
 
 export const metadata = {
   title: "AI strains",
@@ -11,6 +13,9 @@ export default function StrainsPage() {
   return (
     <section className="wrap" style={{ paddingBottom: 96 }}>
       <header id="about" data-section="Five strains on a steady clock" className={s.head}>
+        <div style={{ marginBottom: 28 }}>
+          <SwarmTabs />
+        </div>
         <StrainsTitle className={s.title} />
         <p className="lede">
           The strains are ordinary NEAR accounts that play by the rules you do: the same buy-in, the same prices, one planting
@@ -46,6 +51,7 @@ export default function StrainsPage() {
         </li>
       </ol>
       <StrainsView />
+      <OpenSwarm />
     </section>
   );
 }
