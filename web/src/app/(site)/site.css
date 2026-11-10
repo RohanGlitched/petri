@@ -125,7 +125,8 @@ main:focus-visible { outline: none; }
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 32px 64px;
-  align-items: end;
+  /* The heading sits level with the first line of its lede: no empty column above a short title. */
+  align-items: start;
   margin-bottom: 48px;
 }
 .section-head .lede { margin: 0; }
@@ -759,3 +760,22 @@ main:focus-visible { outline: none; }
   .tide-card { grid-template-columns: 1fr; padding: 18px; }
   .tide-clock b { font-size: 38px; }
 }
+
+/* A note chosen by NEAR AI inside a TEE: the proof tag on chain becomes this chip, which opens the archived proof. */
+.tee-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font: 700 10.5px/18px var(--body, inherit);
+  letter-spacing: 0.04em;
+  font-style: normal;
+  white-space: nowrap;
+  vertical-align: 1px;
+  color: var(--ok, #9fd8a8);
+  background: rgba(159, 216, 168, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.4);
+  text-decoration: none;
+}
+.tee-chip:hover { background: rgba(159, 216, 168, 0.2); color: var(--ok, #9fd8a8); }

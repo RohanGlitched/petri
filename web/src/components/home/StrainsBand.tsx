@@ -10,6 +10,7 @@ import { useStrainLog, modelStatus, strainPulse } from "@/lib/strain-log";
 import { PulseBadge } from "@/components/strains/StrainPulse";
 import s from "./bands.module.css";
 import { NetTag } from "@/components/site/NetTag";
+import { TeeChip, splitTee } from "@/components/site/TeeNote";
 import { ReadMore, PhoneMore } from "@/components/site/ReadMore";
 
 export function StrainsBand() {
@@ -94,7 +95,15 @@ export function StrainsBand() {
                 <blockquote className={s.note}>
                   {note ? (
                     <>
-                      <p>&ldquo;{note.text}&rdquo;</p>
+                      <p>
+                        &ldquo;{splitTee(note.text).text}&rdquo;
+                        {splitTee(note.text).tag && (
+                          <>
+                            {" "}
+                            <TeeChip tag={splitTee(note.text).tag!} net={net.network} />
+                          </>
+                        )}
+                      </p>
                       <footer className="num">Generation {int(note.gen)}</footer>
                     </>
                   ) : (

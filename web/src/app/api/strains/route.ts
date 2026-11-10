@@ -1,12 +1,10 @@
 // The strains' action log, passed through from the agents' read-only log window so the page can be served over HTTPS.
 
 import { CONTRACTS } from "@/lib/config";
+import { LOG_SOURCES } from "@/lib/log-sources";
 
 // Each dish has its own agents process and log window on the agents VM.
-const SOURCES = {
-  testnet: process.env.PETRI_STRAINS_LOG_URL ?? "http://136.64.100.170:8790/",
-  mainnet: process.env.PETRI_STRAINS_LOG_URL_MAINNET ?? "http://136.64.100.170:8791/",
-};
+const SOURCES = { testnet: `${LOG_SOURCES.testnet}/`, mainnet: `${LOG_SOURCES.mainnet}/` };
 
 export const revalidate = 15;
 

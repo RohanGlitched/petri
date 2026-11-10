@@ -12,6 +12,8 @@ import { readRunway, nearOf, type Runway } from "@/lib/house-runway";
 import { Council } from "./Council";
 import s from "./strains.module.css";
 import { NetTag } from "@/components/site/NetTag";
+import { NoteText } from "@/components/site/TeeNote";
+import type { Network } from "@/lib/config";
 import { ModelBadge } from "@/components/swarm/Bits";
 
 function ago(iso: string) {
@@ -135,7 +137,7 @@ export function StrainsView() {
                   const a = index.find(st.account, Number(p.generation));
                   return (
                     <li key={i}>
-                      <Note text={p.note ?? ""} />
+                      <Note text={p.note ?? ""} net={net.network} />
                       <span className={`num ${s.meta}`}>
                         <span>Generation {int(Number(p.generation))}</span>
                         <span>{p.cells.length} cells</span>
@@ -190,7 +192,7 @@ export function StrainsView() {
 }
 
 /** A lab note, two lines until opened: the strains write whole sentences now. */
-function Note({ text }: { text: string }) {
+function Note({ text, net }: { text: string; net: Network }) {
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(false);
   const ref = useRef<HTMLQuoteElement>(null);
@@ -206,7 +208,9 @@ function Note({ text }: { text: string }) {
   }, [text, open]);
   return (
     <div className={s.note}>
-      <q ref={ref} className={!open ? s.clamp : undefined}>{text}</q>
+      <q ref={ref} className={!open ? s.clamp : undefined}>
+        <NoteText note={text} net={net} />
+      </q>
       {(long || open) && (
         <button type="button" className={s.more} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           {open ? "Show less" : "Read the whole note"}
