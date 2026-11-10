@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FeaturedSlide, Gallery } from "@/components/specimens/Gallery";
 import { DishName } from "@/components/site/DishName";
 import { SlideRules, CollectionLink } from "@/components/specimens/Bits";
+import { LivingStrip } from "@/components/specimens/LivingStrip";
 import s from "@/components/specimens/specimens.module.css";
 
 export const metadata = {
@@ -29,6 +30,7 @@ export default function SpecimensPage() {
           </div>
           <FeaturedSlide />
         </header>
+        <LivingStrip />
         <h2 className="sr">The slide box</h2>
         <Gallery />
       </section>

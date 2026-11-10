@@ -384,3 +384,29 @@ export function usePlayer(): Player {
     () => null,
   );
 }
+
+// ---------- living slides: calls to a slide's purse, and a signed message proving who holds it ----------
+
+/** A connected wallet calls another contract than the dish (a living slide's purse, its factory). Guests cannot: their
+ * key may only call the dish. */
+export async function walletCallTo(receiverId: string, methodName: string, args: Record<string, unknown>, tgas: number, deposit: bigint = 0n): Promise<TxResult> {
+  load();
+  if (player?.kind !== "wallet") throw new Error("Connect a NEAR wallet: a guest's key may only call the dish itself.");
+  const w = await (await connector()).wallet();
+  const out = (await w.signAndSendTransaction({
+    signerId: player.accountId,
+    receiverId,
+    actions: [{ type: "FunctionCall" as const, params: { methodName, args, gas: String(BigInt(tgas) * 10n ** 12n), deposit: String(deposit) } }],
+  })) as unknown as Outcome;
+  const f = failureOf(out);
+  if (f) throw new Error(readableFailure(f));
+  return { hash: out.transaction.hash };
+}
+
+/** NEP-413: the connected wallet signs `message` for `recipient` with a fresh nonce. */
+export async function walletSignMessage(message: string, recipient: string, nonce: Uint8Array): Promise<{ accountId: string; publicKey: string; signature: string }> {
+  load();
+  if (player?.kind !== "wallet") throw new Error("Connect a NEAR wallet to sign: a guest's key cannot prove it holds a slide.");
+  const w = await (await connector()).wallet();
+  return w.signMessage({ message, recipient, nonce, network: NETWORK, signerId: player.accountId });
+}

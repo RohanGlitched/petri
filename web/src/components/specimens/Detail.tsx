@@ -13,6 +13,7 @@ import { readableReadError, SpecimenCard } from "./Gallery";
 import { useSlideLicence } from "./licence";
 import { SlideGlass } from "./SlideGlass";
 import { SlideHistoryBand } from "./History";
+import { LivingSlideBand } from "./Living";
 import { order, pictureOf, useAllSlides, useColonyOf, useSlide } from "./data";
 import s from "./specimens.module.css";
 
@@ -156,6 +157,8 @@ export function SpecimenDetail({ id }: { id: string }) {
           </div>
         </div>
       </section>
+
+      <LivingSlideBand sl={sl} />
 
       <SlideHistoryBand id={sl.id} cells={sl.count} />
 
