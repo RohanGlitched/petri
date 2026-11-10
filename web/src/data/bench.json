@@ -1,0 +1,8 @@
+{
+  "generated": "sim/src/sixty.rs bench, mainnet launch rules, one-day seasons",
+  "attackers": [
+    {"kind": "Whale", "seasons": 334, "live_share_median": 0.8296, "live_share_max": 0.9959, "half_cells": 322, "tide_share_median": 0.4595, "paid_off": 0, "net_near_median": -2.4682, "net_near_best": -1.0256, "siege_near": 0.00652, "block_near": 0.00426},
+    {"kind": "SplitWhale", "seasons": 333, "live_share_median": 0.6581, "live_share_max": 0.9064, "half_cells": 239, "tide_share_median": 0.3103, "paid_off": 0, "net_near_median": -1.9242, "net_near_best": 0.0000, "siege_near": 0.00652, "block_near": 0.00426},
+    {"kind": "Locker", "seasons": 333, "live_share_median": 0.9825, "live_share_max": 1.0000, "half_cells": 333, "tide_share_median": 0.5432, "paid_off": 0, "net_near_median": -1.7431, "net_near_best": -0.6994, "siege_near": 0.00644, "block_near": 0.00424}
+  ]
+}

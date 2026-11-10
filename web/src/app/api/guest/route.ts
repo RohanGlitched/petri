@@ -10,12 +10,13 @@
 // comes from the key, so one key makes at most one guest.
 
 import { NextResponse } from "next/server";
+import { clientIp, overBudget, spent } from "@/lib/budget";
 import { PublicKey, actions, nearToYocto } from "near-api-js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { CONTRACT, NETWORK } from "@/lib/config";
-import { relayerAccount, sponsorUntilCredited } from "./credit";
+import { GUEST_CREDIT_YOCTO, relayerAccount, sponsorUntilCredited } from "./credit";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,11 @@ const CHALLENGE_MS = 10 * 60_000;
 const PER_IP_PER_HOUR = 4;
 const PER_HOUR = 120;
 // No set_payout: a guest attaches no NEAR, so the dish pays it in credit and it has no NEAR payouts to send anywhere.
-const METHODS = ["join", "buy", "plant", "sell", "claim", "advance", "mint_slide", "settle_pending", "pact_offer", "pact_accept", "pact_cancel"];
+// The last six are for the break-it lab (/break) only: the contract refuses each of them from a guest (there is no mint
+// and no rule setter, relaunch is private, the dish is initialised, a guest sponsored nobody, and a function-call key
+// cannot attach the 1 yoctoNEAR a transfer needs). Anyone can call any method with any account; listing them on the
+// key only lets the lab show the contract's own refusal instead of the key's.
+const METHODS = ["join", "buy", "plant", "sell", "claim", "advance", "mint_slide", "settle_pending", "pact_offer", "pact_accept", "pact_cancel", "ft_mint", "set_rules", "relaunch", "new", "unsponsor", "ft_transfer"];
 const hits = new Map<string, number[]>();
 let global: number[] = [];
 
@@ -101,9 +106,11 @@ export async function POST(req: Request) {
   if (!/^\d{1,12}$/.test(nonce) || leadingZeroBits(sha256(new TextEncoder().encode(`petri-guest:${challenge}:${publicKey}:${nonce}`))) < DIFFICULTY) {
     return NextResponse.json({ error: "The proof of work for this key is missing or too weak. Reload the page and try again." }, { status: 400 });
   }
-  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const ip = clientIp(req);
   const why = limited(ip);
   if (why) return NextResponse.json({ error: why }, { status: 429 });
+  const broke = await overBudget(ip);
+  if (broke) return NextResponse.json({ error: broke }, { status: 429 });
 
   // One key, one guest: the name is derived from the key.
   const suffix = bytesToHex(sha256(new TextEncoder().encode(publicKey))).slice(0, 10);
@@ -129,5 +136,6 @@ export async function POST(req: Request) {
   }
   // Credit is retried and read back here; if it still is not there, the page asks /api/guest/sponsor before joining.
   const credited = await sponsorUntilCredited(relayer, accountId).catch(() => false);
+  await spent(ip, nearToYocto(GUEST_NEAR) + (credited ? GUEST_CREDIT_YOCTO : 0n)).catch(() => {});
   return NextResponse.json({ accountId, credited });
 }

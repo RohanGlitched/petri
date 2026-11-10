@@ -9,6 +9,11 @@
 // relayer sponsored on chain when it made them (see /api/guest), and their keys are function-call keys for the dish
 // alone, so the NEAR cannot leave the dish. A call that still fails inside the contract costs the relayer only gas,
 // and the per-guest rate limit bounds that. Wallet players sign and pay for themselves.
+//
+// Every relay also counts against a daily budget (lib/budget.ts): the gas NEAR actually burnt is added up per UTC day,
+// in all and per client address (Vercel's x-vercel-forwarded-for, which a client cannot set), and relaying stops for
+// the day once either reaches its cap. The break-it lab (/break) sends calls the contract is meant to refuse; those
+// are relayed only with `lab` set, within their own daily allowance, and each refusal is tallied.
 
 import { NextResponse } from "next/server";
 import { Account, JsonRpcProvider, SCHEMA, actions, baseEncode, encodeDelegateAction } from "near-api-js";
@@ -16,11 +21,18 @@ import { deserialize } from "borsh";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { CONTRACT, RPC_URLS } from "@/lib/config";
+import { burnt, clientIp, labAllowed, overBudget, recordRefusal, spent } from "@/lib/budget";
+import { hasColony } from "../guest/credit";
 
 export const runtime = "nodejs";
 
 /** The dish's methods a guest may call through the relayer. None may attach NEAR. */
 const ALLOWED = new Set(["join", "buy", "plant", "sell", "claim", "advance", "mint_slide", "settle_pending", "pact_offer", "pact_accept", "pact_cancel"]);
+/** Calls only the break-it lab relays, each one the contract (or NEAR, for a key that may not make it) refuses: there
+ * is no mint and no rule setter, relaunch is private, the dish is initialised, a guest sponsored nobody, and a guest's
+ * key cannot attach the 1 yoctoNEAR a transfer needs. The lab also sends two plantings in one delegate action. */
+const LAB = new Set(["ft_mint", "set_rules", "relaunch", "new", "unsponsor", "ft_transfer"]);
+const LAB_IDS = /^[a-z0-9-]{2,32}$/;
 /** The most gas a relayed call may prepay: 300 TGas, a transaction's limit, which a catch-up on a crowded dish can need
  * (unused gas is refunded to the relayer). */
 const MAX_GAS = 300n * 10n ** 12n;
@@ -68,7 +80,17 @@ function failureText(f: unknown): string {
   if (/DelegateActionInvalidNonce/.test(s)) return "That action was already used. Try again.";
   if (/NotEnoughBalance|LackBalanceForState/.test(s)) return "Your guest account is out of NEAR for deposits.";
   if (/Exceeded the prepaid gas/.test(s)) return "The transaction ran out of gas.";
+  if (/MethodNotFound/.test(s)) return "The contract has no such method.";
+  if (/MethodNameMismatch|DelegateActionAccessKeyError|ReceiverMismatch/.test(s)) return "NEAR refused it: this guest's key may not make that call.";
   return "NEAR rejected the transaction.";
+}
+
+/** The failure as NEAR reported it, trimmed: the lab shows it next to the readable line. */
+function rawFailure(f: unknown): string {
+  const s = JSON.stringify(f);
+  const m = s.match(/Smart contract panicked: ([^"\\]+)/);
+  if (m) return `Smart contract panicked: ${m[1]}`;
+  return s.length > 400 ? s.slice(0, 400) + "…" : s;
 }
 
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
@@ -91,8 +113,10 @@ export async function POST(req: Request) {
   if (!relayer || !key) return bad("The relayer is not configured on this server.", 503);
 
   let bytes: Uint8Array;
+  let lab: string | null = null;
   try {
     const body = await req.json();
+    if (typeof body?.lab === "string" && LAB_IDS.test(body.lab)) lab = body.lab;
     bytes = Uint8Array.from(Buffer.from(String(body?.signedDelegate ?? ""), "base64"));
     if (bytes.length < 64 || bytes.length > 8192) throw new Error("size");
   } catch {
@@ -113,10 +137,15 @@ export async function POST(req: Request) {
   // one catch-up of it (the actions run in one receipt, so they succeed or fail together).
   if (da.actions.length < 1 || da.actions.length > 1 + MAX_ADVANCES) return bad("Relay one call at a time (with at most 3 advance calls before it).");
   let gas = 0n;
+  const names = da.actions.map((a) => a.functionCall?.methodName ?? "");
+  // The lab's double planting: two plant calls in one delegate action (they run in one receipt, so the second's refusal
+  // undoes the first), after any advance calls.
+  const doublePlant = !!lab && names.length >= 2 && names[names.length - 1] === "plant" && names[names.length - 2] === "plant";
   for (const [i, a] of da.actions.entries()) {
     const fc = a.functionCall;
-    if (!fc || !ALLOWED.has(fc.methodName)) return bad("Only join, buy, plant, sell, claim, advance, mint_slide, settle_pending and the pact calls are relayed.");
-    if (i < da.actions.length - 1 && fc.methodName !== "advance") return bad("Only advance calls may come before the call itself.");
+    if (!fc || !(ALLOWED.has(fc.methodName) || (lab && LAB.has(fc.methodName)))) return bad("Only join, buy, plant, sell, claim, advance, mint_slide, settle_pending and the pact calls are relayed.");
+    const beforeLast = i < da.actions.length - 1;
+    if (beforeLast && fc.methodName !== "advance" && !(doublePlant && i === da.actions.length - 2)) return bad("Only advance calls may come before the call itself.");
     if (BigInt(fc.deposit) !== 0n) return bad("Relayed calls carry no NEAR; guests pay from their sponsored credit.");
     gas += BigInt(fc.gas);
   }
@@ -134,8 +163,22 @@ export async function POST(req: Request) {
   }
   if (!valid) return bad("The signature does not match this action.", 403);
 
+  // A guest with no colony gains nothing from advancing the dish, and a tide bounty its advance earned would be stranded
+  // in an account only a function-call key controls: only colonies' advances are relayed.
+  if (names.includes("advance")) {
+    const joined = await hasColony(da.senderId).catch(() => null);
+    if (joined === null) return bad("Could not read the chain. Try again.", 503);
+    if (!joined) return bad("Join the dish before advancing it: a guest without a colony cannot be relayed an advance.", 403);
+  }
   const why = limited(da.senderId);
   if (why) return bad(why, 429);
+  const ip = clientIp(req);
+  const broke = await overBudget(ip);
+  if (broke) return bad(broke, 429);
+  if (lab) {
+    const no = await labAllowed(da.senderId);
+    if (no) return bad(no, 429);
+  }
 
   const provider = new JsonRpcProvider({ url: RPC_URLS[0] });
   try {
@@ -164,15 +207,14 @@ export async function POST(req: Request) {
       waitUntil: "EXECUTED_OPTIMISTIC",
       throwOnFailure: false,
     });
-    const top = res.status as { Failure?: unknown };
-    if (top && typeof top === "object" && "Failure" in top && top.Failure) {
-      return NextResponse.json({ error: failureText(top.Failure), hash: res.transaction.hash }, { status: 422 });
-    }
-    for (const r of res.receipts_outcome ?? []) {
-      const st = r.outcome.status as { Failure?: unknown };
-      if (st && typeof st === "object" && "Failure" in st && st.Failure) {
-        return NextResponse.json({ error: failureText(st.Failure), hash: res.transaction.hash }, { status: 422 });
-      }
+    await spent(ip, burnt(res as never)).catch(() => {});
+    const failures = [res.status, ...(res.receipts_outcome ?? []).map((r) => r.outcome.status)]
+      .map((st) => (st && typeof st === "object" && "Failure" in st ? (st as { Failure?: unknown }).Failure : null))
+      .filter(Boolean);
+    if (failures.length) {
+      const error = failureText(failures[0]);
+      if (lab) await recordRefusal({ attempt: lab, hash: res.transaction.hash, text: error, at: Date.now() }).catch(() => {});
+      return NextResponse.json({ error, hash: res.transaction.hash, raw: lab ? rawFailure(failures[0]) : undefined }, { status: 422 });
     }
     return NextResponse.json({ hash: res.transaction.hash });
   } catch (e) {

@@ -8,6 +8,8 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { CONTRACT, RPC_URLS } from "@/lib/config";
 
 export const GUEST_CREDIT = "0.05";
+/** The same, in yoctoNEAR, for the relayer's daily budget. */
+export const GUEST_CREDIT_YOCTO = 5n * 10n ** 22n;
 
 async function rpc<T>(method: string, params: Record<string, unknown>): Promise<T> {
   let last: unknown = null;

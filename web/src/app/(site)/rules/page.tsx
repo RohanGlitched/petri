@@ -5,6 +5,7 @@ import { BoardSection } from "@/components/rules/BoardSection";
 import { LifeSection } from "@/components/rules/LifeSection";
 import { PlantingSection } from "@/components/rules/PlantingSection";
 import { CoinSection } from "@/components/rules/CoinSection";
+import { SimSection } from "@/components/rules/SimSection";
 import { TidesSection } from "@/components/rules/TidesSection";
 import { ParamsSection } from "@/components/rules/ParamsSection";
 import { StrategySection } from "@/components/rules/StrategySection";
@@ -26,6 +27,7 @@ export default function RulesPage() {
       <LifeSection />
       <PlantingSection />
       <CoinSection />
+      <SimSection />
       <TidesSection />
       <StrategySection />
       <VerifySection />

@@ -8,8 +8,9 @@
 // per dish, and only before it joins. Each address and the server as a whole are rate limited as well.
 
 import { NextResponse } from "next/server";
+import { clientIp, overBudget, spent } from "@/lib/budget";
 import { NETWORK } from "@/lib/config";
-import { hasColony, isOurGuest, relayerAccount, sponsorUntilCredited, sponsoredBy } from "../credit";
+import { GUEST_CREDIT_YOCTO, hasColony, isOurGuest, relayerAccount, sponsorUntilCredited, sponsoredBy } from "../credit";
 
 export const runtime = "nodejs";
 
@@ -59,13 +60,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "NEAR did not answer. Try again in a moment." }, { status: 502 });
   }
   if (inFlight.has(accountId)) return NextResponse.json({ error: "Your free credit is already on its way. Retry in a few seconds." }, { status: 409 });
-  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const ip = clientIp(req);
   const why = limited(ip);
   if (why) return NextResponse.json({ error: why }, { status: 429 });
+  const broke = await overBudget(ip);
+  if (broke) return NextResponse.json({ error: broke }, { status: 429 });
 
   inFlight.add(accountId);
   try {
     const credited = await sponsorUntilCredited(relayerAccount(relayer, key), accountId).catch(() => false);
+    if (credited) await spent(ip, GUEST_CREDIT_YOCTO).catch(() => {});
     if (!credited) return NextResponse.json({ error: "Your free PETRI is still on its way. Retry in a moment." }, { status: 502 });
     return NextResponse.json({ accountId, credited: true });
   } finally {
