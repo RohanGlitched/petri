@@ -994,3 +994,51 @@
 @media (pointer: coarse) {
   .stains { grid-template-columns: repeat(6, 1fr); gap: 8px; }
 }
+
+/* The next tide, under the zoom buttons. */
+.tide { flex: none; }
+@media (max-width: 1024px) and (min-width: 800px) { .tide { display: none; } }
+@media (max-width: 799px) { .tide { margin: 0 0 12px; } }
+
+/* First experiments: six goals for a new colony, ticked off live. */
+.goals { padding: 4px 18px 14px; }
+.goalsHead {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 0 8px;
+  border: 0;
+  background: none;
+  color: var(--bone);
+  text-align: left;
+  cursor: pointer;
+}
+.goalsHead h2 { font-size: 20px !important; }
+.goalsCount { font-size: 13px; color: var(--dim); }
+.goalsCount .num { color: var(--bone); font-weight: 600; }
+.goalsChevron { color: var(--dim); transition: transform 0.2s ease; }
+.goalsHead[aria-expanded="true"] .goalsChevron { transform: rotate(180deg); }
+.goalsMeter { grid-column: 1 / -1; grid-row: 2; height: 3px; margin-top: 8px; border-radius: 999px; background: rgba(243, 233, 218, 0.1); overflow: hidden; }
+.goalsMeter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--amber), var(--ok)); transition: width 0.6s ease; }
+.goalsNext { margin: 2px 0 0; font-size: 13.5px; color: var(--dim); }
+.goalsList { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.goalsList li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 7px 0; }
+.goalsList b { display: block; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.goalsList span { display: block; font-size: 12.5px; line-height: 1.4; color: var(--dim); }
+.goalsList li[data-done] b { color: var(--bone); }
+.goalMark {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: grid !important;
+  place-items: center;
+  box-shadow: inset 0 0 0 1.5px var(--line-2);
+}
+.goalsList li[data-done] .goalMark { background: rgba(159, 216, 168, 0.2); color: var(--ok); box-shadow: none; animation: tickIn 0.4s cubic-bezier(0.2, 0.7, 0.1, 1) both; }
+
+.aiModel { color: var(--ok); box-shadow: inset 0 0 0 1px rgba(159, 216, 168, 0.4); }
+.log :global(.term) { text-decoration: none; }

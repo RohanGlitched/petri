@@ -5,6 +5,7 @@ import { LAUNCH, nearPer } from "./shared";
 import s from "./rules.module.css";
 
 export const TOC: [string, string][] = [
+  ["loops", "The game, at three speeds"],
   ["board", "The board and the clock"],
   ["life", "Life with owners"],
   ["planting", "Planting and sieges"],

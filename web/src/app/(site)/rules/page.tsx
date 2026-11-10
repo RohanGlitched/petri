@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { RulesHeader } from "@/components/rules/RulesHeader";
+import { LoopsSection } from "@/components/rules/LoopsSection";
 import { BoardSection } from "@/components/rules/BoardSection";
 import { LifeSection } from "@/components/rules/LifeSection";
 import { PlantingSection } from "@/components/rules/PlantingSection";
@@ -20,6 +21,7 @@ export default function RulesPage() {
   return (
     <>
       <RulesHeader />
+      <LoopsSection />
       <BoardSection />
       <LifeSection />
       <PlantingSection />

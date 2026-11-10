@@ -215,7 +215,9 @@ export const Culture = forwardRef<CultureHandle, Props>(function Culture(props, 
     bornAt.current = performance.now();
     reduceMotion.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const resize = () => {
-      const el = wrapRef.current!;
+      // A resize can arrive after the dish has gone (a route change mid-frame): nothing to measure then.
+      const el = wrapRef.current;
+      if (!el || !glRef.current) return;
       const cssW = Math.max(60, Math.floor(el.clientWidth));
       const cssH = Math.max(60, Math.floor(el.clientHeight));
       const dpr = Math.min(cbRef.current.maxDpr ?? DPR_CAP, DPR_CAP, lite.current ? 1 : 4, window.devicePixelRatio || 1) * (lite.current ? 1 : scale.current);

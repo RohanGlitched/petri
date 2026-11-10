@@ -19,13 +19,15 @@ import { SLIDE_TITLE_MAX, capture, cellsBitmap, clampRect, densest, normalizeSli
 import { useNet } from "@/lib/use-net";
 import { STAINS, firstFreeStain, livingStains } from "@/lib/stains";
 import { Term } from "@/components/site/Term";
+import { TideCard } from "@/components/site/TideCard";
 import { PRODUCT } from "@/lib/facts";
 import { strainOf } from "@/lib/strains";
-import { actionIndex, useStrainLog } from "@/lib/strain-log";
+import { actionIndex, chooserOf, useStrainLog } from "@/lib/strain-log";
 import { forecast, type Forecast } from "./forecast";
 import { readDishCache, writeDishCache, type DishCache } from "./cache";
 import { useSlideLicence } from "@/components/specimens/licence";
 import { pactZone, usePacts, type Pact } from "@/lib/pacts";
+import { Goals } from "./Goals";
 import { MyPacts, PickedColony, pactLines, pactsOn, zoneColonies, type PactActions } from "./Pacts";
 import s from "./dish.module.css";
 import { NetTag } from "@/components/site/NetTag";
@@ -389,6 +391,9 @@ export function DishStage() {
   /** "+0.0123" floating up from the earnings figure each generation the colony earns. */
   const [tick, setTick] = useState<{ key: number; text: string; first: boolean } | null>(null);
   const [shared, setShared] = useState(false);
+  /** Seen from this page: the colony launched a glider, spaceship or gun, or minted a slide (for First experiments). */
+  const [launched, setLaunched] = useState(false);
+  const [minted, setMinted] = useState(false);
   /** Where the last focus put its colony on the canvas: the first-earnings note rises from there. */
   const bloomAt = useRef<{ x: number; y: number } | null>(null);
 
@@ -870,6 +875,7 @@ export function DishStage() {
       // ring bloom over them; their colony's first earnings get a moment of their own when they land.
       focusCells(cells, { color: myColor });
       reward.current = { at: Date.now(), shown: false };
+      if (info.name && PATTERNS.some((p) => p.name === info.name && (p.kind === "ship" || p.kind === "gun"))) setLaunched(true);
       setTarget(null);
       setPinNote(null);
       setNote("");
@@ -1001,6 +1007,7 @@ export function DishStage() {
       });
       setFossilOn(false);
       setSlideTitle("");
+      setMinted(true);
       await refreshDish();
       await loadMe();
     } catch (e) {
@@ -1897,6 +1904,19 @@ export function DishStage() {
           </section>
         )}
 
+        {me && !info && !fossilOn && (
+          <Goals
+            me={me}
+            network={net.network}
+            generation={d.generation}
+            live={myLive}
+            earned={(d.earnings[me.id] ?? 0) + Math.max(0, myPending)}
+            wonTide={Number(me.near_claimed) > 0 || Number(me.credit_won) > 0 || claimable.near > 0}
+            launched={launched || d.recentPlants.some((p) => p.colony === me.id && p.siege)}
+            minted={minted}
+          />
+        )}
+
         {me && fossilOn && (
           <section className={`${s.card} ${s.plantCard}`} aria-labelledby="fossil-title">
             <div className={s.plantHead}>
@@ -1961,6 +1981,7 @@ export function DishStage() {
           <button onClick={() => lens.current?.setZoomFit(Math.SQRT2)}>Whole dish</button>
           <button onClick={findOpen}>Find open agar</button>
         </div>
+        <TideCard variant="dish" className={s.tide} />
         <section className={`${s.card} ${s.log}`}>
           <button className={s.logHead} onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen}>
             <h2>Lab log</h2>
@@ -1972,7 +1993,11 @@ export function DishStage() {
                 const c = d.colonies.find((x) => x.id === p.colony);
                 const strain = c ? strainOf(c.account) : null;
                 const move = strain && c ? moves.find(c.account, Number(p.generation)) : undefined;
-                const byModel = move?.decided_by === "model";
+                const who = chooserOf(move);
+                // Hover or tap the badge: who chose the move, the options it weighed and its reasoning.
+                const why = move
+                  ? `${who.long}.${move.options?.length ? ` It weighed ${move.options.length} legal ${move.options.length === 1 ? "option" : "options"}, each forecast 240 generations ahead.` : ""}${move.note ? ` Its reasoning: “${move.note}”` : ""}`
+                  : "A house strain; its move is not in the public log yet.";
                 return (
                   <li key={`${p.generation}-${i}`}>
                     <i className="swatch" style={{ background: c ? hex(c.color) : "#888" }} />
@@ -1981,9 +2006,9 @@ export function DishStage() {
                         <b>{c?.name ?? `Colony ${p.colony}`}</b>
                         {c && <BenchTag account={c.account} />}
                         {strain && (
-                          <span className={s.aiTag} title={byModel ? "A house strain; the model chose this move" : "A house strain; its written rules chose this move"}>
-                            {byModel ? "AI" : "Rules"}
-                          </span>
+                          <Term tip={why} place="below" align="end">
+                            <span className={`${s.aiTag} ${move?.decided_by === "model" ? s.aiModel : ""}`}>{move ? who.short : "AI"}</span>
+                          </Term>
                         )}{" "}
                         planted {p.cells.length} cells{p.siege ? ", a siege" : ""}
                         <span className={`num ${s.gen}`}>gen {int(Number(p.generation))}</span>
