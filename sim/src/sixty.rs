@@ -291,6 +291,10 @@ pub fn bench(out_dir: &str, rm: &Rules, seasons: u64) {
     let runs = run_all(&scen);
     let mut csv = String::from("attacker,season,max_attacker_live_share,attacker_tide_share,attacker_paid_near,attacker_got_near,attacker_cash_near,attacker_paper_near,median_siege_block_near,median_block_near\n");
     let mut lines = String::new();
+    let mut json = String::from("{
+  \"generated\": \"sim/src/sixty.rs bench, mainnet launch rules, one-day seasons\",
+  \"attackers\": [
+");
     let (mut total, mut half_cells, mut half_tides, mut paid_off) = (0usize, 0usize, 0usize, 0usize);
     let mut all_share = Vec::new();
     let mut all_siege = Vec::new();
@@ -330,6 +334,22 @@ pub fn bench(out_dir: &str, rm: &Rules, seasons: u64) {
         all_block.extend(blocks.iter().cloned());
         let n = shares.len().max(1) as f64;
         let _ = writeln!(
+            json,
+            "    {{\"kind\": \"{:?}\", \"seasons\": {}, \"live_share_median\": {:.4}, \"live_share_max\": {:.4}, \"half_cells\": {}, \"tide_share_median\": {:.4}, \"paid_off\": {}, \"net_near_median\": {:.4}, \"net_near_best\": {:.4}, \"siege_near\": {:.5}, \"block_near\": {:.5}}}{}",
+            k,
+            shares.len(),
+            med(shares.clone()),
+            hi(&shares),
+            shares.iter().filter(|x| **x >= 0.5).count(),
+            med(tshares.clone()),
+            cash.iter().filter(|c| **c > 0.0).count(),
+            med(cash.clone()),
+            hi(&cash),
+            med(sieges.clone()),
+            med(blocks.clone()),
+            if si + 1 < scen.len() { "," } else { "" }
+        );
+        let _ = writeln!(
             lines,
             "| {:?} | {} | {:.1}% (max {:.1}%) | {:.1}% | {:.1}% | {} of {} ({:.1}%) | {:+.3} NEAR (best {:+.3}) | {:.4} vs {:.4} NEAR |",
             k,
@@ -366,6 +386,10 @@ pub fn bench(out_dir: &str, rm: &Rules, seasons: u64) {
         med(all_block)
     );
     let _ = writeln!(md, "\nSeasons where the attacker took at least half of what the tides paid outside players: {} of {} ({:.1}%).", half_tides, total, 100.0 * half_tides as f64 / t);
+    json.push_str("  ]
+}
+");
+    fs::write(format!("{}/bench.json", out_dir), json).unwrap();
     fs::write(format!("{}/bench.csv", out_dir), csv).unwrap();
     fs::write(format!("{}/bench.md", out_dir), md).unwrap();
     eprintln!("bench: {} seasons in {:.0} s", total, t0.elapsed().as_secs_f64());
