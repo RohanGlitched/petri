@@ -35,7 +35,7 @@
 // deployed code hash (--code-hash, by default the hash of `cargo near build reproducible-wasm` at the commit the
 // contract's own metadata names: rebuild it to check this constant), and reports the contract account's full-access
 // keys as a note: the team keeps one so a bug can be fixed, and the note says whether it has signed anything since the
-// v6.4 setup (its nonce moves with every transaction it signs).
+// v6.5 deploy (its nonce moves with every transaction it signs).
 // Exits 0 when everything matches, 1 on any mismatch, 2 if the dish could not be read. Needs Node 20 or later.
 
 import fs from "node:fs";
@@ -485,7 +485,7 @@ const slideBad = slidesView.filter((v, i) => {
   return !s || v.moves < s.moves || (v.moves === s.moves && v.owner_id !== s.holder) || BigInt(v.royalties) !== s.royalties;
 });
 const fullKeys = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").length : null;
-// The full-access key's nonce when the v6.4 setup ended (4 Nov 2026, after the relaunch and the house refills). Any
+// The full-access key's nonce after the v6.5 deploy (10 Nov 2026, the last time the team used it). Any
 // later use of the key, a deploy, a transfer or a relaunch, moves it.
 const SETUP_NONCE = { "petri-dish.near": 222916366000044n, "petri-v6.testnet": 276116858000010n };
 const fullNonce = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").map((k) => BigInt(k.access_key.nonce)) : [];
@@ -493,7 +493,7 @@ const keyUse = (() => {
   const base = SETUP_NONCE[CONTRACT];
   if (!fullNonce.length || base === undefined) return "";
   const used = fullNonce.reduce((a, n) => a + (n > base ? n - base : 0n), 0n);
-  return used === 0n ? `; unused since the v6.5 deploy (nonce ${base})` : `; signed ${used} transaction(s) since the v6.4 setup (nonce ${base})`;
+  return used === 0n ? `; unused since the v6.5 deploy (nonce ${base})` : `; signed ${used} transaction(s) since the v6.5 deploy (nonce ${base})`;
 })();
 // Solvency from the replayed ledger, not from the contract's counters.
 const outstanding = given + creditWon + creditSold - spent - reclaimed;
