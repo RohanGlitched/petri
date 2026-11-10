@@ -9,6 +9,12 @@ const DOCS_HOSTS = new Set(["docs.playpetri.xyz", "docs.localhost"]);
 
 export function proxy(req: NextRequest) {
   const host = (req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "").split(",")[0].trim().split(":")[0].toLowerCase();
+  // /llms.txt answers on every host: the main site's agents read the same map as the docs'.
+  if (req.nextUrl.pathname === "/llms.txt") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/docs/llms.txt";
+    return NextResponse.rewrite(url);
+  }
   if (!DOCS_HOSTS.has(host)) return NextResponse.next();
 
   const { pathname, search } = req.nextUrl;
