@@ -79,6 +79,10 @@ fn two_beehives() -> Vec<(i32, i32)> {
     patterns::BEEHIVE.iter().copied().chain(patterns::BEEHIVE.iter().map(|&(x, y)| (x + 5, y))).collect()
 }
 
+/// Five cells that live five generations and are gone at the sixth: a guest's credit planting that has died by the
+/// time it brings its own NEAR (v6.5: a colony with living cells it grew on credit cannot attach).
+const FADE: &[(i32, i32)] = &[(0, 0), (0, 1), (1, 1), (2, 1), (2, 3)];
+
 fn acct(who: &str) -> AccountId {
     who.parse().unwrap()
 }
@@ -691,6 +695,9 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     let g4 = "g-4.relayer.testnet";
     guest(&mut c, g4, t, "Guest", 4);
     plant_on_credit(&mut c, g4, t, cells(26, 4, patterns::BLOCK));
+    // A guest that never plants (v6.5: only a guest without living cells may bring its own NEAR).
+    let g5 = "g-5.relayer.testnet";
+    guest(&mut c, g5, t, "Guest 5", 6);
     // A wallet colony that will hold Bob's slide.
     let w = "w.testnet";
     join(&mut c, w, t, "Wallet", 5, NEAR / 5);
@@ -734,19 +741,27 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
             c.pact_cancel(1);
         }
         if g == 34 {
-            // The guest attaches NEAR for the first time: what it earned or bought with credit before is kept PETRI. It
-            // can sell none of it, but it plants with it.
-            ctx(g4, t, NEAR / 50);
+            // v6.5: the guest's credit-grown cells live, so it cannot bring its own NEAR, and the refusal writes nothing.
+            assert_eq!(
+                refused(&mut c, |c| {
+                    ctx(g4, t, NEAR / 50);
+                    c.buy(None);
+                }),
+                GREW_ON_CREDIT
+            );
+            // The guest without cells attaches NEAR for the first time: what it bought with credit before is kept
+            // PETRI. It can sell none of it, but it plants with it.
+            ctx(g5, t, NEAR / 50);
             c.buy(None);
-            let kept = kept_petri(&c, g4).0;
+            let kept = kept_petri(&c, g5).0;
             assert!(kept > 0);
-            at(g4, t);
+            at(g5, t);
             assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 c.sell(U128(P));
             }))
             .is_err());
-            plant(&mut c, g4, t, cells(29, 14, patterns::BLOCK), None);
-            assert!(kept_petri(&c, g4).0 < kept, "kept PETRI is spent first");
+            plant(&mut c, g5, t, cells(29, 14, patterns::BLOCK), None);
+            assert!(kept_petri(&c, g5).0 < kept, "kept PETRI is spent first");
         }
         if g == 15 {
             // The guest tends the dish at the second tide, so it runs it and is paid the bounty as credit.
@@ -1155,7 +1170,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
         sync(&mut kept, &mut synced, &earned, &attached, i);
         assert_eq!(colonies_view[i - 1].kept.0 as u128, kept[i], "colony {}'s kept PETRI", i);
     }
-    assert!(kept[4] > 0, "the guest that attached still holds kept PETRI");
+    assert!(kept[4] > 0 && kept[5] > 0, "the guest, and the guest that attached, still hold kept PETRI");
     assert_eq!((escrow, pacts.len() as u64), (s.pact_escrow.0, s.pacts.0));
     assert_eq!(pacts.iter().map(|p| (p.4, p.5)).collect::<Vec<_>>(), vec![(true, true), (false, true), (false, false)]);
     assert!(breaches_checked >= 1, "a planting under a pact was checked");
@@ -1189,7 +1204,7 @@ fn replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault() {
     // The guest attached NEAR at generation 35 but still holds kept PETRI, so the tide at 40 paid it credit too.
     assert_eq!(won[4], 0, "no NEAR while it holds kept PETRI");
     assert!(credit_won[4] > colonies_view[0].credit_won.0, "but credit in its place");
-    conserved(&c, &["alice.testnet", "bob.testnet", "house.testnet", g4, w, "keeper.testnet"]);
+    conserved(&c, &["alice.testnet", "bob.testnet", "house.testnet", g4, g5, w, "keeper.testnet"]);
     // PETRI_DUMP=<file> writes what the views return, so the browser's and the script's replays can be run on it too
     // (`node scripts/verify.mjs --dump <file>`).
     if let Ok(path) = std::env::var("PETRI_DUMP") {
@@ -2763,9 +2778,13 @@ fn a_settle_spends_only_the_orders_near() {
 fn the_dish_tells_1click_the_least_a_payment_needs() {
     let mut c = new_dish();
     let min = c.intent_minimum("join".into(), acct("pat.testnet")).0;
-    assert!(min > c.rules().min_join.0 && min < c.rules().min_join.0 + NEAR / 200, "{}", min);
-    // Exactly that much joins.
+    // v6.5: min_join for the vault, the join's own storage and the payment's records.
+    let records = (entry_bytes(&Entry::Pending { generation: U64(0), account: acct("pat.testnet"), near: U128(0) }) + entry_bytes(&Entry::Unpend { generation: U64(0), account: acct("pat.testnet"), near: U128(0), paid: U128(0) })) * byte();
+    assert_eq!(min, c.rules().min_join.0 + intents::join_bytes(&acct("pat.testnet")) * byte() + records);
+    assert!(min > c.rules().min_join.0 + 500 * byte() && min < c.rules().min_join.0 + NEAR / 100, "{}", min);
+    // Exactly that much joins, and the join attaches the colony.
     assert_eq!(pay_wnear(&mut c, T0, min, r#"{"for":"pat.testnet","do":"join"}"#, true, "intents.testnet"), "join");
+    assert!(c.colony_of(acct("pat.testnet")).unwrap().attached, "a join from the minimum is not left a guest");
     // And a purchase for a colony.
     let buy = c.intent_minimum("buy".into(), acct("pat.testnet")).0;
     assert_eq!(pay_wnear(&mut c, T0, buy, r#"{"for":"pat.testnet","do":"buy"}"#, true, "intents.testnet"), "buy");
@@ -3096,14 +3115,25 @@ fn a_guest_pays_its_royalty_to_the_agar() {
     let Entry::Plant { licence: Some(l), .. } = last_entry(&c) else { panic!() };
     assert_eq!((l.holder, l.royalty.0 as u128, l.to_agar), (Some(acct("alice.testnet")), toll, true));
     assert_eq!((c.slide_royalties("1".into()).0, c.state().royalties.0), (0, 0), "no royalty reached a holder");
-    // Once it attaches NEAR, its royalty still goes to the agar while it holds kept PETRI beyond the cost.
-    ctx(g, T0 + GEN_MS, NEAR / 50);
+    // Its glider lives on, so it cannot bring its own NEAR (v6.5).
+    assert_eq!(
+        refused(&mut c, |c| {
+            ctx(g, T0 + GEN_MS, NEAR / 50);
+            c.buy(None);
+        }),
+        GREW_ON_CREDIT
+    );
+    // A guest without living cells attaches NEAR; its royalty still goes to the agar while it holds kept PETRI (what it
+    // bought with credit when it joined) beyond the cost.
+    let g2 = "g-2.relayer.testnet";
+    guest(&mut c, g2, T0 + GEN_MS, "Guest 2", 4);
+    ctx(g2, T0 + GEN_MS, NEAR / 50);
     c.buy(None);
-    assert!(c.colony_of(acct(g)).unwrap().attached);
-    plant_slide(&mut c, g, T0 + 2 * GEN_MS, cells(2, 14, patterns::GLIDER), "1");
+    assert!(c.colony_of(acct(g2)).unwrap().attached);
+    plant_slide(&mut c, g2, T0 + 2 * GEN_MS, cells(2, 14, patterns::GLIDER), "1");
     let Entry::Plant { licence: Some(l), .. } = last_entry(&c) else { panic!() };
     assert!(l.to_agar && bal(&c, "alice.testnet") == alice);
-    conserved(&c, &["alice.testnet", "bob.testnet", g]);
+    conserved(&c, &["alice.testnet", "bob.testnet", g, g2]);
 }
 
 /// The keeper pot goes to whoever's call runs a generation, whatever the call (here a planting and a sale), when the
@@ -3316,10 +3346,11 @@ fn refusal(f: impl FnOnce()) -> String {
     e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
 }
 
-/// A guest that farmed: it joined and planted on sponsored credit, and a tide later claimed what its block earned.
+/// A guest that farmed: it joined and planted on sponsored credit, and a tide later claimed what its cells earned
+/// before they died (at generation 6, so it may bring its own NEAR afterwards).
 fn farmed_guest(c: &mut Petri, g: &str, x: i32, y: i32) {
     guest(c, g, T0, &format!("Guest {} {}", x, y), 2 + x as u32);
-    plant_on_credit(c, g, T0, cells(x, y, patterns::BLOCK));
+    plant_on_credit(c, g, T0, cells(x, y, FADE));
     at(g, T0 + 8 * GEN_MS);
     c.claim();
 }
@@ -3453,7 +3484,7 @@ fn sybil_guests_that_attach_reach_no_vault_near() {
     let guests: Vec<String> = (0..10).map(|i| format!("g-{}.relayer.testnet", i)).collect();
     for (i, g) in guests.iter().enumerate() {
         guest(&mut c, g, T0, &format!("Guest {}", i), 2 + i as u32);
-        plant_on_credit(&mut c, g, T0, cells((i as i32 % 5) * 6 + 1, 10 + (i as i32 / 5) * 8, patterns::BLOCK));
+        plant_on_credit(&mut c, g, T0, cells((i as i32 % 5) * 6 + 1, 10 + (i as i32 / 5) * 8, FADE));
     }
     for g in &guests {
         at(g, T0 + 8 * GEN_MS);
@@ -3912,10 +3943,19 @@ fn one_yocto_does_not_turn_credit_into_near() {
     assert!(c.colony_of(acct(g)).unwrap().credit_won.0 > 0, "they win credit");
     at(g, T0 + 8 * 40 * GEN_MS);
     assert_eq!(c.claim().near.0, 0);
-    // A purchase that brings min_join of its own NEAR after its record attaches it.
-    ctx(g, T0 + 8 * 40 * GEN_MS, NEAR / 50);
+    // v6.5: its credit-funded block still lives, so a purchase that brings min_join of its own NEAR is refused; less
+    // than min_join still only feeds the vault.
+    let t = T0 + 8 * 40 * GEN_MS;
+    assert_eq!(
+        refused(&mut c, |c| {
+            ctx(g, t, NEAR / 50);
+            c.buy(None);
+        }),
+        GREW_ON_CREDIT
+    );
+    ctx(g, T0 + 8 * 40 * GEN_MS, NEAR / 200);
     c.buy(None);
-    assert!(c.colony_of(acct(g)).unwrap().attached);
+    assert!(!c.colony_of(acct(g)).unwrap().attached);
     conserved(&c, &["alice.testnet", g, "keeper.testnet"]);
 }
 
@@ -4078,7 +4118,8 @@ fn a_guest_window_wins_no_near_after_it_attaches() {
     plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
     let g = "g-1.relayer.testnet";
     guest(&mut c, g, T0, "Guest", 3);
-    plant_on_credit(&mut c, g, T0, cells(20, 20, patterns::BEEHIVE));
+    // Its cells are gone at generation 6 (v6.5: a colony attaches only once its credit-grown cells are dead).
+    plant_on_credit(&mut c, g, T0, cells(20, 20, FADE));
     let id = c.colony_of(acct(g)).unwrap().id;
     let t = T0 + 7 * GEN_MS;
     at("keeper.testnet", t);
@@ -4127,4 +4168,566 @@ fn a_royalty_to_a_sybil_holder_buys_no_stake() {
     assert_eq!(added, full * (cost - kept) / cost, "stake for the cost only");
     assert!(added < full * (cost + toll - kept) / (cost + toll), "less than counting the royalty would give");
     conserved(&c, &["alice.testnet", "bob.testnet", "friend.testnet"]);
+}
+
+// ---------- v6.5: a code-only upgrade of the v6.4 dishes ----------
+
+type Snapshot = (Vec<u8>, HashMap<Vec<u8>, Vec<u8>>);
+
+/// The dish as it stands: its state and the trie. Leaves a plain context, as `trie` does.
+fn snapshot(c: &mut Petri) -> Snapshot {
+    c.flush();
+    (near_sdk::borsh::to_vec(&*c).unwrap(), trie())
+}
+
+/// The trie `t` under a plain context.
+fn put_trie(t: &HashMap<Vec<u8>, Vec<u8>>) {
+    let mut b = VMContextBuilder::new();
+    b.current_account_id(acct("petri.testnet")).predecessor_account_id(acct("petri.testnet")).block_timestamp(T0 * MS).account_balance(NearToken::from_near(1_000));
+    env::set_blockchain_interface(near_sdk::MockedBlockchain::new(b.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), vec![], t.clone(), Default::default(), None));
+}
+
+/// Runs `f` (which sets its own context), which the dish must refuse, and puts the dish back as it was: a refused call
+/// changes nothing on chain, but the unit runtime keeps whatever it changed before the panic. Returns the refusal.
+fn refused(c: &mut Petri, f: impl FnOnce(&mut Petri)) -> String {
+    let s = snapshot(c);
+    let why = refusal(|| f(c));
+    put_trie(&s.1);
+    // The refused call's leftovers must not be flushed into the trie put back.
+    std::mem::forget(std::mem::replace(c, near_sdk::borsh::from_slice(&s.0).unwrap()));
+    why
+}
+
+fn alive_cells(c: &Petri, id: u16) -> usize {
+    c.load_dish().cells.iter().filter(|&&x| x == id).count()
+}
+
+/// R8 finding: cells a guest grew on sponsored credit must not live on into its attached life, where the stake its
+/// NEAR plantings add would pay for them in NEAR. So a guest brings its own NEAR (`min_join` in one call) only while it
+/// has no living cells, by every path: a purchase, a planting that attaches, a purchase through NEAR Intents. Each is
+/// refused and changes nothing; NEAR below `min_join` still only feeds the vault; and once its cells are gone (or if it
+/// never had any) it attaches as in v6.4.
+#[test]
+fn a_guest_with_living_cells_cannot_bring_its_own_near() {
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR);
+    plant(&mut c, "alice.testnet", T0, cells(2, 2, patterns::BLOCK), None);
+    let g = "g-1.relayer.testnet";
+    guest(&mut c, g, T0, "Guest", 3);
+    plant_on_credit(&mut c, g, T0, cells(20, 20, patterns::BLOCK));
+    let id = c.colony_of(acct(g)).unwrap().id;
+    let t = T0 + GEN_MS;
+    at("keeper.testnet", t);
+    c.advance(None);
+    assert_eq!(alive_cells(&c, id), 4);
+    // A purchase with min_join of its own NEAR.
+    assert_eq!(
+        refused(&mut c, |c| {
+            ctx(g, t, NEAR / 50);
+            c.buy(None);
+        }),
+        GREW_ON_CREDIT
+    );
+    // A planting that brings it, even with no living cell near the new ones.
+    let cs = cells(10, 24, patterns::BEEHIVE);
+    let d = c.plant_deposit(6, None, None).0;
+    assert_eq!(
+        refused(&mut c, |c| {
+            ctx(g, t, d + NEAR / 50);
+            c.plant(cs.clone(), None, None, None);
+        }),
+        GREW_ON_CREDIT
+    );
+    // A purchase paid with wNEAR through NEAR Intents: the order cannot run, so the NEAR waits for the account.
+    assert_eq!(wnear_in(&mut c, t, NEAR / 20, &format!(r#"{{"for":"{}","do":"buy"}}"#, g), 20, "intents.testnet").0, 0);
+    let waiting = c.pending_record(acct(g)).unwrap();
+    assert!(waiting.order_near.0 > NEAR / 50);
+    let why = refused(&mut c, |c| {
+        at("keeper.testnet", t);
+        c.settle_pending(acct(g));
+    });
+    assert_eq!(why, GREW_ON_CREDIT);
+    assert_eq!(c.pending_record(acct(g)).unwrap().order_near, waiting.order_near, "the order still waits");
+    // NEAR below min_join, and credit, still go in: it stays a guest.
+    ctx(g, t, NEAR / 200);
+    c.buy(Some(U128(NEAR / 100)));
+    assert!(!c.colony_of(acct(g)).unwrap().attached);
+    // A guest whose cells are gone attaches.
+    let g2 = "g-2.relayer.testnet";
+    guest(&mut c, g2, T0 + GEN_MS, "Guest 2", 4);
+    plant_on_credit(&mut c, g2, T0 + GEN_MS, cells(26, 8, FADE));
+    let id2 = c.colony_of(acct(g2)).unwrap().id;
+    at("keeper.testnet", T0 + 7 * GEN_MS);
+    c.advance(None);
+    assert_eq!(alive_cells(&c, id2), 0);
+    ctx(g2, T0 + 7 * GEN_MS, NEAR / 50);
+    c.buy(None);
+    assert!(c.colony_of(acct(g2)).unwrap().attached);
+    // So does a guest whose only living cells are the ones its attaching planting brings.
+    let g3 = "g-3.relayer.testnet";
+    guest(&mut c, g3, T0 + 7 * GEN_MS, "Guest 3", 5);
+    let cs = cells(26, 26, patterns::BLOCK);
+    let d = c.plant_deposit(4, None, None).0;
+    ctx(g3, T0 + 7 * GEN_MS, d + NEAR / 50);
+    c.plant(cs, None, None, None);
+    assert!(c.colony_of(acct(g3)).unwrap().attached);
+    conserved(&c, &["alice.testnet", g, g2, g3, "keeper.testnet"]);
+}
+
+/// A refused attach changes nothing: the trie after it is the trie before it, byte for byte.
+#[test]
+fn a_refused_attach_writes_nothing() {
+    let mut c = new_dish();
+    let g = "g-1.relayer.testnet";
+    guest(&mut c, g, T0, "Guest", 3);
+    plant_on_credit(&mut c, g, T0, cells(20, 20, patterns::BLOCK));
+    let before = snapshot(&mut c);
+    for attach in [0, 1] {
+        let why = refused(&mut c, |c| {
+            let t = T0 + GEN_MS;
+            if attach == 0 {
+                ctx(g, t, NEAR / 50);
+                c.buy(None);
+            } else {
+                let d = c.plant_deposit(4, None, None).0;
+                ctx(g, t, d + NEAR / 50);
+                c.plant(cells(2, 2, patterns::BLOCK), None, None, None);
+            }
+        });
+        assert_eq!(why, GREW_ON_CREDIT);
+        assert_eq!(snapshot(&mut c), before);
+    }
+}
+
+/// R8 finding: anyone could overwrite an account's waiting Intents join with a purchase for dust, so the join never
+/// ran. v6.5 replaces a waiting join only with another join; a purchase's NEAR adds to the join, which spends it all.
+#[test]
+fn nobody_can_turn_a_waiting_join_into_a_purchase() {
+    let mut c = new_dish();
+    // Pat pays for its own join, with its name, and the order waits (too little gas to unwrap now).
+    assert_eq!(wnear_in(&mut c, T0, NEAR / 20, r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#, 20, "pat.testnet").0, 0);
+    let first = c.pending_record(acct("pat.testnet")).unwrap();
+    assert_eq!(first.order.clone().map(|o| (o.join, o.name)), Some((true, Some("Pat".to_string()))));
+    // Mallory sends a little wNEAR with a purchase for Pat.
+    assert_eq!(wnear_in(&mut c, T0, NEAR / 500, r#"{"for":"pat.testnet","do":"buy"}"#, 20, "mallory.testnet").0, 0);
+    let rec = c.pending_record(acct("pat.testnet")).unwrap();
+    assert_eq!(rec.order, first.order, "the join still waits");
+    assert!(rec.order_near.0 > first.order_near.0, "with Mallory's NEAR added to it");
+    at("keeper.testnet", T0);
+    assert_eq!(c.settle_pending(acct("pat.testnet")), "join");
+    let col = c.colony_of(acct("pat.testnet")).unwrap();
+    assert_eq!((col.name.as_str(), col.attached), ("Pat", true));
+    assert!(c.pending_record(acct("pat.testnet")).is_none(), "the join spent all of it");
+    // A purchase waiting for an account is still replaced by a join.
+    assert_eq!(wnear_in(&mut c, T0, NEAR / 500, r#"{"for":"sam.testnet","do":"buy"}"#, 20, "intents.testnet").0, 0);
+    assert_eq!(wnear_in(&mut c, T0, NEAR / 20, r#"{"for":"sam.testnet","do":"join"}"#, 20, "intents.testnet").0, 0);
+    assert!(c.pending_record(acct("sam.testnet")).unwrap().order.unwrap().join);
+    at("keeper.testnet", T0);
+    assert_eq!(c.settle_pending(acct("sam.testnet")), "join");
+    conserved(&c, &["pat.testnet", "sam.testnet"]);
+}
+
+/// R8 finding: a 1Click join of a little more than min_join made a guest, because the colony's storage came out of it
+/// before min_join reached the vault. v6.5 quotes and requires min_join plus the join's storage; less waits as pending
+/// NEAR exactly as a join below min_join always did (the account can add to it, or claim it).
+#[test]
+fn an_intents_join_below_its_minimum_waits_instead_of_making_a_guest() {
+    let mut c = new_dish();
+    let min = c.intent_minimum("join".into(), acct("pat.testnet")).0;
+    // Enough for v6.4's check (min_join after the payment's records), short of the join's storage.
+    let short = min - 200 * byte();
+    assert_eq!(wnear_in(&mut c, T0, short, r#"{"for":"pat.testnet","do":"join"}"#, 20, "intents.testnet").0, 0);
+    let owed = c.pending_of(acct("pat.testnet")).0;
+    at("keeper.testnet", T0);
+    let why = refusal(|| {
+        c.settle_pending(acct("pat.testnet"));
+    });
+    assert!(why.starts_with("a join needs"), "{}", why);
+    assert!(c.colony_of(acct("pat.testnet")).is_none() && c.pending_of(acct("pat.testnet")).0 == owed, "nothing changed");
+    // From the callback too: the order waits.
+    callback(T0, None);
+    assert!(refusal(|| {
+        c.settle_intent(acct("pat.testnet"));
+    })
+    .starts_with("a join needs"));
+    // More NEAR for the same order, and it joins, attached.
+    assert_eq!(wnear_in(&mut c, T0, NEAR / 100, r#"{"for":"pat.testnet","do":"join"}"#, 20, "intents.testnet").0, 0);
+    at("keeper.testnet", T0);
+    assert_eq!(c.settle_pending(acct("pat.testnet")), "join");
+    assert!(c.colony_of(acct("pat.testnet")).unwrap().attached);
+    conserved(&c, &["pat.testnet"]);
+}
+
+/// `join_bytes` covers the largest join there is (a 64-character account, a 24-character name, a new cold page, no
+/// PETRI registration yet) and is not loose: a join of `min_join` plus it, attached, always attaches the colony.
+#[test]
+fn join_bytes_covers_the_largest_join() {
+    let mut c = new_dish();
+    let who = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+    assert_eq!(who.len(), 64);
+    let name = "Twenty four letters long";
+    assert_eq!(name.len(), MAX_NAME_BYTES);
+    let bound = intents::join_bytes(&acct(who));
+    ctx(who, T0, c.rules().min_join.0 + bound * byte());
+    let before = env::storage_usage();
+    c.join(name.into(), 1, None);
+    let used = (env::storage_usage() - before) as u128;
+    assert!(c.colony_of(acct(who)).unwrap().attached, "min_join plus the bound attaches");
+    // The bound charges the purchase record at BUY_BYTES; the record itself may be smaller.
+    assert!(used <= bound && bound - used <= 20, "used {} of {}", used, bound);
+    let col = c.colony(1);
+    assert_eq!(near_sdk::borsh::to_vec(&col).unwrap().len() as u128, COLONY_FIXED_BYTES + 64 + 24);
+}
+
+/// NEP-199: a slide sells on a marketplace with 5% to the colony that minted it, the rest to the seller.
+#[test]
+fn a_slide_sale_pays_its_minter_a_royalty() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    let one = |c: &Petri, owner: &str| c.nft_payout("1".into(), U128(NEAR), Some(10)).payout.get(&acct(owner)).copied();
+    // Alice sells the slide she minted: all of it is hers.
+    let p = c.nft_payout("1".into(), U128(NEAR), Some(1));
+    assert_eq!(p.payout.len(), 1);
+    assert_eq!(one(&c, "alice.testnet"), Some(U128(NEAR)));
+    ctx("alice.testnet", T0, 1);
+    c.nft_transfer(acct("carol.testnet"), "1".into(), None, None);
+    // Carol sells it: 5% to Alice.
+    let p = c.nft_payout("1".into(), U128(NEAR), None);
+    assert_eq!(p.payout.len(), 2);
+    assert_eq!(one(&c, "alice.testnet"), Some(U128(NEAR / 20)));
+    assert_eq!(one(&c, "carol.testnet"), Some(U128(NEAR - NEAR / 20)));
+    // Every yocto is paid, and no balance overflows.
+    for balance in [0u128, 1, 19, 9_999, 10_001, u128::MAX] {
+        let p = c.nft_payout("1".into(), U128(balance), None);
+        assert_eq!(p.payout.values().map(|v| v.0).sum::<u128>(), balance);
+        let r = p.payout.get(&acct("alice.testnet")).map(|v| v.0).unwrap_or(0);
+        assert!(r <= balance / 20 && balance / 20 - r <= 1, "{} of {}", r, balance);
+    }
+    assert!(refusal(|| {
+        c.nft_payout("1".into(), U128(NEAR), Some(1));
+    })
+    .contains("max_len_payout"));
+    // Alice sends her NEAR payouts to a wallet: so do her royalties (and a slide she still held would pay her whole).
+    ctx("alice.testnet", T0, NEAR / 1_000);
+    c.set_payout(Some(acct("alice-wallet.testnet")));
+    assert_eq!(c.nft_payout("1".into(), U128(NEAR), None).payout.get(&acct("alice-wallet.testnet")), Some(&U128(NEAR / 20)));
+    let d = c.slide_deposit(4, 4, None).0;
+    ctx("alice.testnet", T0, d);
+    let mine = c.mint_slide(2, 2, 4, 4, None, None);
+    assert_eq!(c.nft_payout(mine, U128(NEAR), Some(1)).payout.get(&acct("alice.testnet")), Some(&U128(NEAR)));
+    // A market Carol approved sells it with nft_transfer_payout: the split for Carol, then the move.
+    ctx("carol.testnet", T0, NEAR / 100);
+    c.nft_approve("1".into(), acct("market.testnet"), None);
+    ctx("market.testnet", T0, 1);
+    let p = c.nft_transfer_payout(acct("dave.testnet"), "1".into(), Some(0), Some("sold".into()), U128(NEAR), Some(10));
+    assert_eq!(p.payout.get(&acct("carol.testnet")), Some(&U128(NEAR - NEAR / 20)));
+    assert_eq!(c.nft_token("1".into()).unwrap().owner_id.as_str(), "dave.testnet");
+    assert!(get_logs().iter().any(|l| l.contains("\"nft_transfer\"") && l.contains("\"authorized_id\":\"market.testnet\"")));
+    ctx("market.testnet", T0, 0);
+    assert!(refusal(|| {
+        c.nft_transfer_payout(acct("erin.testnet"), "1".into(), None, None, U128(NEAR), None);
+    })
+    .contains("1 yoctoNEAR"));
+}
+
+/// `nft_transfer_payout` moves a slide exactly as `nft_transfer` does: the same trie, the same logs and promises.
+#[test]
+fn a_transfer_with_payout_is_exactly_a_transfer() {
+    let mut c = two_colonies();
+    mint(&mut c, "alice.testnet", T0, (0, 0, 12, 6), None);
+    ctx("alice.testnet", T0, NEAR / 100);
+    c.nft_approve("1".into(), acct("market.testnet"), None);
+    let start = snapshot(&mut c);
+    let mut runs = Vec::new();
+    for payout in [false, true] {
+        put_trie(&start.1);
+        let mut c: Petri = near_sdk::borsh::from_slice(&start.0).unwrap();
+        ctx("market.testnet", T0, 1);
+        if payout {
+            c.nft_transfer_payout(acct("dave.testnet"), "1".into(), Some(0), Some("memo".into()), U128(NEAR), Some(2));
+        } else {
+            c.nft_transfer(acct("dave.testnet"), "1".into(), Some(0), Some("memo".into()));
+        }
+        let (logs, calls) = (get_logs(), scheduled());
+        runs.push((snapshot(&mut c), logs, calls));
+    }
+    assert_eq!(runs[0], runs[1]);
+}
+
+#[test]
+fn v6_5_names_its_version_and_standards() {
+    let meta: near_sdk::serde_json::Value = near_sdk::serde_json::from_str(CONTRACT_SOURCE_METADATA).unwrap();
+    assert_eq!(meta["version"], "6.5.0");
+    let standards: Vec<String> = meta["standards"].as_array().unwrap().iter().map(|s| format!("{}:{}", s["standard"].as_str().unwrap(), s["version"].as_str().unwrap())).collect();
+    assert!(standards.contains(&"nep199:2.0.0".to_string()) && standards.contains(&"nep171:1.2.0".to_string()) && standards.contains(&"nep330:1.3.0".to_string()), "{:?}", standards);
+    let mut c = new_dish();
+    join(&mut c, "alice.testnet", T0, "Alice", 1, NEAR / 5);
+    assert!(get_logs().iter().any(|l| l.contains(r#""standard":"petri","version":"6.5.0","event":"join""#)));
+    // The version marker names the state layout, which v6.5 keeps.
+    assert_eq!(env::storage_read(VERSION_KEY).unwrap(), b"6.4");
+}
+
+/// One call on a dish of either version: `$ctx` sets the context, `$call` runs; its result (or refusal) and its logs
+/// are recorded in `$out`, with the `petri` events' version normalised (v6.5 says "6.5.0", v6.4 "6.4.0").
+macro_rules! upgrade_step {
+    ($out:ident, $ctx:expr, $call:expr) => {{
+        $ctx;
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| format!("{:?}", $call)));
+        let r = r.unwrap_or_else(|e| format!("REFUSED {:?}", e.downcast_ref::<String>()));
+        $out.push((r, get_logs().iter().map(|l| l.replace(r#""standard":"petri","version":"6.4.0""#, r#""standard":"petri","version":"6.5.0""#)).collect::<Vec<String>>()));
+    }};
+}
+
+/// wNEAR's `ft_transfer_call` landing in a dish of either version with 20 TGas, too little to unwrap at once, so the
+/// order waits as pending NEAR.
+macro_rules! upgrade_wnear {
+    ($out:ident, $c:ident, $ms:expr, $amount:expr, $msg:expr) => {{
+        upgrade_step!(
+            $out,
+            {
+                let mut b = VMContextBuilder::new();
+                b.predecessor_account_id(acct(WNEAR)).current_account_id(acct("petri.testnet")).account_balance(NearToken::from_near(1_000)).block_timestamp($ms * MS).prepaid_gas(Gas::from_tgas(20));
+                testing_env!(b.build());
+            },
+            match $c.ft_on_transfer(acct("intents.testnet"), U128($amount), String::from($msg)) {
+                PromiseOrValue::Value(v) => v.0,
+                PromiseOrValue::Promise(_) => u128::MAX,
+            }
+        )
+    }};
+}
+
+/// What happens to a dish that ran v6.4 next: joins (one on credit, one through NEAR Intents), purchases, plantings
+/// (one under a slide's licence that pays its holder a royalty), a slide minted and one moved, a pact offered,
+/// orders from Intents settled (one written by v6.4), a guest planting on credit, a guest without cells bringing its
+/// own NEAR, tides, claims, a sale and a PETRI transfer. Nothing v6.5 refuses that v6.4 ran.
+macro_rules! after_the_upgrade {
+    ($c:ident, $pact_deposit:expr) => {{
+        let mut out: Vec<(String, Vec<String>)> = Vec::new();
+        let g = |n: u64| T0 + n * GEN_MS;
+        upgrade_step!(out, ctx("carol.testnet", g(17), NEAR / 5), $c.join("Carol".into(), 0x123456, None));
+        let d = $c.plant_deposit(6, Some(5), None).0;
+        upgrade_step!(out, ctx("carol.testnet", g(17), d), $c.plant(cells(26, 14, patterns::BEEHIVE), Some("after".into()), None, None));
+        upgrade_step!(out, ctx("alice.testnet", g(17), NEAR / 10), $c.buy(None));
+        let d = $c.plant_deposit(12, None, Some("1".into())).0;
+        upgrade_step!(out, ctx("carol.testnet", g(18), d), $c.plant(cells(14, 28, &two_beehives()), None, None, Some("1".into())));
+        upgrade_step!(out, ctx("collector.testnet", g(18), 1), $c.nft_transfer(acct("dave.testnet"), "1".into(), None, Some("gift".into())));
+        let d = $c.slide_deposit(4, 4, Some(4)).0;
+        upgrade_step!(out, ctx("carol.testnet", g(19), d), $c.mint_slide(26, 14, 4, 4, Some("Hive".into()), None));
+        upgrade_step!(out, ctx("carol.testnet", g(19), $pact_deposit), $c.pact_offer(acct("alice.testnet"), U128(P), U64(119), None));
+        upgrade_wnear!(out, $c, g(19), NEAR / 20, r#"{"for":"alice.testnet","do":"buy"}"#);
+        upgrade_step!(out, at("keeper.testnet", g(19)), $c.settle_pending(acct("alice.testnet")));
+        upgrade_step!(out, at("keeper.testnet", g(19)), $c.settle_pending(acct("pat.testnet")));
+        upgrade_wnear!(out, $c, g(20), NEAR / 10, r#"{"for":"quinn.testnet","do":"join"}"#);
+        upgrade_step!(out, at("quinn.testnet", g(20)), $c.settle_pending(acct("quinn.testnet")));
+        upgrade_step!(out, ctx("relayer.testnet", g(20), NEAR / 10), $c.sponsor(acct("g-3.relayer.testnet")));
+        upgrade_step!(out, at("g-3.relayer.testnet", g(20)), $c.join("Guest 3".into(), 3, Some(U128(NEAR / 50))));
+        let d = $c.plant_deposit(5, None, None).0;
+        upgrade_step!(out, at("g-3.relayer.testnet", g(20)), $c.plant(cells(26, 22, FADE), None, Some(U128(d)), None));
+        upgrade_step!(out, at("g-2.relayer.testnet", g(21)), $c.join("Guest 2".into(), 4, Some(U128(NEAR / 50))));
+        upgrade_step!(out, ctx("g-2.relayer.testnet", g(21), NEAR / 50), $c.buy(None));
+        upgrade_step!(out, ctx("house.testnet", g(21), NEAR / 20), $c.buy(None));
+        upgrade_step!(out, at("keeper.testnet", g(24)), $c.advance(None));
+        upgrade_step!(out, at("carol.testnet", g(25)), { let r = $c.claim(); (r.petri, r.near) });
+        upgrade_step!(out, at("carol.testnet", g(25)), $c.sell(U128(300 * P)));
+        upgrade_step!(out, ctx("alice.testnet", g(25), 1), $c.ft_transfer(acct("carol.testnet"), U128(P), Some("thanks".into())));
+        upgrade_step!(out, at("keeper.testnet", g(32)), $c.advance(None));
+        upgrade_step!(out, at("alice.testnet", g(33)), { let r = $c.claim(); (r.petri, r.near) });
+        upgrade_step!(out, at("bob.testnet", g(33)), { let r = $c.claim(); (r.petri, r.near) });
+        out
+    }};
+}
+
+/// v6.5 is deployed over the live v6.4 dishes (petri-dish.near, petri-v6.testnet) as code only: no relaunch, no
+/// migration. A real v6.4 dish (the frozen v6.4 code, 749f246, run through joins, plantings with notes, a guest on
+/// credit whose living cells were still there when it attached NEAR, a slide that changed hands and was planted under
+/// its licence, a registered keeper, credit for an account that never joined, pacts, tides, a claim, a sale, a payout
+/// account and a waiting Intents join) is read by v6.5:
+/// - the state v6.5 reads back serialises to exactly the bytes v6.4 wrote, and every stored record (colonies, ledger
+///   entries, slides, pacts, pending NEAR, grants) decodes with v6.5's types to the same values v6.4's types read and
+///   encodes back to the same bytes;
+/// - every view returns the same JSON from both;
+/// - then the same calls run on both from that state, and leave the same trie, byte for byte, with the same results
+///   and the same logs (but the `petri` events' version string).
+#[test]
+fn v6_5_runs_a_v6_4_dish_exactly_as_v6_4_does() {
+    use near_sdk::borsh::{from_slice, to_vec};
+    use petri_contract_v6_4 as v64;
+    let old_rules: v64::Rules = near_sdk::serde_json::from_value(near_sdk::serde_json::to_value(rules()).unwrap()).unwrap();
+    at("deployer.testnet", T0);
+    let mut old = v64::Petri::new(old_rules);
+    for (who, name, near) in [("alice.testnet", "Alice", NEAR / 5), ("house.testnet", "House", NEAR / 20), ("bob.testnet", "Bob", NEAR / 5)] {
+        ctx(who, T0, near);
+        old.join(name.into(), 1, None);
+    }
+    let hives = two_beehives();
+    for (who, xy, shape, note) in [("alice.testnet", (2, 2), &hives[..], Some("hello")), ("house.testnet", (20, 20), patterns::BLOCK, None), ("bob.testnet", (16, 12), patterns::BLOCK, Some("bob"))] {
+        let d = old.plant_deposit(shape.len() as u32, note.map(|n: &str| n.len() as u32), None).0;
+        ctx(who, T0, d);
+        old.plant(cells(xy.0, xy.1, shape), note.map(String::from), None, None);
+    }
+    // A guest on credit, with a block it planted on credit.
+    ctx("relayer.testnet", T0, NEAR / 10);
+    old.sponsor(acct("g-1.relayer.testnet"));
+    ctx("g-1.relayer.testnet", T0, 0);
+    old.join("Guest".into(), 2, Some(U128(NEAR / 50)));
+    let d = old.plant_deposit(4, None, None).0;
+    at("g-1.relayer.testnet", T0);
+    old.plant(cells(26, 6, patterns::BLOCK), None, Some(U128(d)), None);
+    ctx("relayer.testnet", T0, NEAR / 10);
+    old.sponsor(acct("g-2.relayer.testnet"));
+    ctx("keeper.testnet", T0, NEAR / 100);
+    old.storage_deposit(None, None);
+    let d = old.slide_deposit(11, 5, Some(2)).0;
+    ctx("alice.testnet", T0, d);
+    old.mint_slide(1, 1, 11, 5, Some("Hi".into()), None);
+    ctx("alice.testnet", T0, 1);
+    old.nft_transfer(acct("collector.testnet"), "1".into(), None, None);
+    at("keeper.testnet", T0 + GEN_MS);
+    old.advance(None);
+    let d = old.plant_deposit(12, None, Some("1".into())).0;
+    ctx("bob.testnet", T0 + GEN_MS, d);
+    old.plant(cells(2, 24, &hives), None, None, Some("1".into()));
+    ctx("alice.testnet", T0 + GEN_MS, v64::PACT_DEPOSIT);
+    let p = old.pact_offer(acct("bob.testnet"), U128(P), U64(200), None);
+    ctx("bob.testnet", T0 + GEN_MS, 0);
+    old.pact_accept(p);
+    ctx("bob.testnet", T0 + GEN_MS, v64::PACT_DEPOSIT);
+    old.pact_offer(acct("alice.testnet"), U128(P), U64(200), None);
+    let mut b = VMContextBuilder::new();
+    b.predecessor_account_id(acct(WNEAR)).current_account_id(acct("petri.testnet")).account_balance(NearToken::from_near(1_000)).block_timestamp(T0 * MS).prepaid_gas(Gas::from_tgas(20));
+    testing_env!(b.build());
+    let _ = old.ft_on_transfer(acct("intents.testnet"), U128(NEAR / 10), r#"{"for":"pat.testnet","do":"join","name":"Pat"}"#.into());
+    for gen in [8u64, 16] {
+        at("keeper.testnet", T0 + gen * GEN_MS);
+        old.advance(None);
+    }
+    at("alice.testnet", T0 + 16 * GEN_MS);
+    old.claim();
+    old.sell(U128(200 * P));
+    ctx("alice.testnet", T0 + 16 * GEN_MS, NEAR / 1_000);
+    old.set_payout(Some(acct("alice-wallet.testnet")));
+    // v6.4 let the guest attach NEAR while its block lived (v6.5 refuses that; the dish keeps what v6.4 did).
+    ctx("g-1.relayer.testnet", T0 + 16 * GEN_MS, NEAR / 50);
+    old.buy(None);
+    assert!(old.colony_of(acct("g-1.relayer.testnet")).unwrap().attached);
+    env::state_write(&old);
+    drop(old);
+    let v64_trie = trie();
+    let has = |k: &[u8]| v64_trie.contains_key(k);
+    assert!(has(b"STATE") && has(b"v") && has(b"h") && has(b"j") && has(&[b'P', 1, 0, 0, 0]) && has(&[b'Q', 1, 0]) && has(&[b'V', 0, 0, 0, 0]) && has(&[b'w', 0, 0]), "a v6.4 dish with every kind of record");
+
+    // 1. The layout: v6.5 reads the state and every record v6.4 wrote, to the same values and back to the same bytes.
+    let new: Petri = env::state_read().unwrap();
+    assert_eq!(&to_vec(&new).unwrap(), &v64_trie[&b"STATE".to_vec()], "the contract state is the same bytes");
+    drop(new);
+    let mut kinds: HashMap<u8, usize> = HashMap::new();
+    for (k, v) in &v64_trie {
+        let (a, b) = match (k[0], k.len()) {
+            (b'C', 5) => (format!("{:?}", from_slice::<v64::Colony>(v).unwrap()), {
+                let x: Colony = from_slice(v).unwrap();
+                assert_eq!(&to_vec(&x).unwrap(), v);
+                format!("{:?}", x)
+            }),
+            (b'L', 5) => (format!("{:?}", from_slice::<v64::Entry>(v).unwrap()), {
+                let x: Entry = from_slice(v).unwrap();
+                assert_eq!(&to_vec(&x).unwrap(), v);
+                format!("{:?}", x)
+            }),
+            (b'D', 5) => (format!("{:?}", from_slice::<v64::Slide>(v).unwrap()), {
+                let x: Slide = from_slice(v).unwrap();
+                assert_eq!(&to_vec(&x).unwrap(), v);
+                format!("{:?}", x)
+            }),
+            (b'P', 5) => (format!("{:?}", from_slice::<v64::Pact>(v).unwrap()), {
+                let x: Pact = from_slice(v).unwrap();
+                assert_eq!(&to_vec(&x).unwrap(), v);
+                format!("{:?}", x)
+            }),
+            (b'y', _) => (format!("{:?}", from_slice::<v64::PendingRec>(v).unwrap()), {
+                let x: PendingRec = from_slice(v).unwrap();
+                assert_eq!(&to_vec(&x).unwrap(), v);
+                format!("{:?}", x)
+            }),
+            (b'g', _) => (format!("{:?}", from_slice::<Vec<v64::Grant>>(v).unwrap()), {
+                let x: Vec<Grant> = from_slice(v).unwrap();
+                assert_eq!(&to_vec(&x).unwrap(), v);
+                format!("{:?}", x)
+            }),
+            _ => continue,
+        };
+        assert_eq!(a, b, "record {:?}", k);
+        *kinds.entry(k[0]).or_default() += 1;
+    }
+    for (kind, least) in [(b'C', 4), (b'L', 20), (b'D', 1), (b'P', 2), (b'y', 1), (b'g', 1)] {
+        assert!(kinds.get(&kind).copied().unwrap_or(0) >= least, "records {}: {:?}", kind as char, kinds);
+    }
+
+    // 2. Every view returns the same.
+    let old: v64::Petri = env::state_read().unwrap();
+    let new: Petri = env::state_read().unwrap();
+    let j = |v: near_sdk::serde_json::Value| v.to_string();
+    use near_sdk::serde_json::to_value as tv;
+    let accounts = ["alice.testnet", "bob.testnet", "house.testnet", "g-1.relayer.testnet", "g-2.relayer.testnet", "keeper.testnet", "collector.testnet", "pat.testnet", "relayer.testnet", "nobody.testnet"];
+    let mut views = vec![
+        (j(tv(old.state()).unwrap()), j(tv(new.state()).unwrap())),
+        (j(tv(old.rules()).unwrap()), j(tv(new.rules()).unwrap())),
+        (j(tv(old.colonies(None, Some(500))).unwrap()), j(tv(new.colonies(None, Some(500))).unwrap())),
+        (j(tv(old.ledger(None, Some(1_000))).unwrap()), j(tv(new.ledger(None, Some(1_000))).unwrap())),
+        (j(tv(old.plants(None, None)).unwrap()), j(tv(new.plants(None, None)).unwrap())),
+        (j(tv(old.checkpoints(None, None)).unwrap()), j(tv(new.checkpoints(None, None)).unwrap())),
+        (j(tv(old.stakes(None, None)).unwrap()), j(tv(new.stakes(None, None)).unwrap())),
+        (j(tv(old.earnings(None, None)).unwrap()), j(tv(new.earnings(None, None)).unwrap())),
+        (j(tv(old.tide_winnings(None, None)).unwrap()), j(tv(new.tide_winnings(None, None)).unwrap())),
+        (j(tv(old.slides(None, None)).unwrap()), j(tv(new.slides(None, None)).unwrap())),
+        (j(tv(old.nft_tokens(None, None)).unwrap()), j(tv(new.nft_tokens(None, None)).unwrap())),
+        (j(tv(old.nft_metadata()).unwrap()), j(tv(new.nft_metadata()).unwrap())),
+        (j(tv(old.solvency()).unwrap()), j(tv(new.solvency()).unwrap())),
+        (j(tv(old.ft_total_supply()).unwrap()), j(tv(new.ft_total_supply()).unwrap())),
+        (j(tv(old.pact(1)).unwrap()), j(tv(new.pact(1)).unwrap())),
+        (j(tv(old.pact(2)).unwrap()), j(tv(new.pact(2)).unwrap())),
+        (old.board(), new.board()),
+    ];
+    for a in accounts {
+        let a = acct(a);
+        views.push((j(tv(old.colony_of(a.clone())).unwrap()), j(tv(new.colony_of(a.clone())).unwrap())));
+        views.push((j(tv(old.ft_balance_of(a.clone())).unwrap()), j(tv(new.ft_balance_of(a.clone())).unwrap())));
+        views.push((j(tv(old.storage_balance_of(a.clone())).unwrap()), j(tv(new.storage_balance_of(a.clone())).unwrap())));
+        views.push((j(tv(old.claimable(a.clone())).unwrap()), j(tv(new.claimable(a.clone())).unwrap())));
+        views.push((j(tv(old.credit_of(a.clone())).unwrap()), j(tv(new.credit_of(a.clone())).unwrap())));
+        views.push((j(tv(old.credit_grants(a.clone())).unwrap()), j(tv(new.credit_grants(a.clone())).unwrap())));
+        views.push((j(tv(old.pending_record(a.clone())).unwrap()), j(tv(new.pending_record(a.clone())).unwrap())));
+        views.push((j(tv(old.pacts_of(a.clone())).unwrap()), j(tv(new.pacts_of(a.clone())).unwrap())));
+        views.push((j(tv(old.nft_tokens_for_owner(a.clone(), None, None)).unwrap()), j(tv(new.nft_tokens_for_owner(a.clone(), None, None)).unwrap())));
+    }
+    for (i, (a, b)) in views.iter().enumerate() {
+        assert_eq!(a, b, "view {}", i);
+    }
+    drop(old);
+    drop(new);
+
+    // 3. The same calls on both, from that state.
+    let mut c: v64::Petri = env::state_read().unwrap();
+    let ran_v64 = after_the_upgrade!(c, v64::PACT_DEPOSIT);
+    env::state_write(&c);
+    drop(c);
+    let after_v64 = trie();
+    put_trie(&v64_trie);
+    let mut c: Petri = env::state_read().unwrap();
+    let ran_v65 = after_the_upgrade!(c, PACT_DEPOSIT);
+    env::state_write(&c);
+    let s = c.state();
+    drop(c);
+    let after_v65 = trie();
+    let refused: Vec<&String> = ran_v65.iter().map(|r| &r.0).filter(|r| r.starts_with("REFUSED")).collect();
+    assert!(refused.is_empty(), "every call ran: {:?}", refused);
+    assert_eq!(ran_v64.len(), ran_v65.len());
+    for (i, (a, b)) in ran_v64.iter().zip(&ran_v65).enumerate() {
+        assert_eq!(a, b, "call {}", i);
+    }
+    let mut changed: Vec<String> = after_v65.keys().filter(|k| after_v64.get(*k) != after_v65.get(*k)).map(|k| String::from_utf8_lossy(k).to_string()).collect();
+    changed.extend(after_v64.keys().filter(|k| !after_v65.contains_key(*k)).map(|k| String::from_utf8_lossy(k).to_string()));
+    assert!(changed.is_empty(), "keys that differ: {:?}", changed);
+    assert_eq!(after_v64, after_v65, "the same trie, byte for byte");
+    assert!(after_v65 != v64_trie && s.tides.0 >= 4 && s.colonies >= 8, "the calls did something: {} tides, {} colonies", s.tides.0, s.colonies);
 }

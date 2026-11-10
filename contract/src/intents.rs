@@ -176,13 +176,14 @@ impl Petri {
     /// The least wNEAR a payment for `account_id` must deliver for its order (`"join"` or `"buy"`) to run: what the
     /// order needs (`min_join`, or a purchase's record) plus the records the payment itself writes on its way (its
     /// `Pending` and `Unpend` entries; the pending record's own storage comes back when it empties). 1Click quotes that
-    /// may deliver less are refused before anyone pays.
+    /// may deliver less are refused before anyone pays. A join also pays for the colony's own storage before `min_join`
+    /// of it reaches the vault (v6.5: so a join this minimum pays for attaches the colony, never leaves it a guest).
     pub fn intent_minimum(&self, what: String, account_id: AccountId) -> U128 {
         let zero = U128(0);
         let g = U64(0);
         let pending = entry_bytes(&Entry::Pending { generation: g, account: account_id.clone(), near: zero });
-        let unpend = entry_bytes(&Entry::Unpend { generation: g, account: account_id, near: zero, paid: zero });
-        let need = if what == "join" { self.rules.min_join.0 } else { (BUY_BYTES + 1) * byte_cost() };
+        let unpend = entry_bytes(&Entry::Unpend { generation: g, account: account_id.clone(), near: zero, paid: zero });
+        let need = if what == "join" { self.intent_join_minimum(&account_id) } else { (BUY_BYTES + 1) * byte_cost() };
         U128(need + (pending + unpend) * byte_cost())
     }
 
@@ -244,7 +245,8 @@ impl Petri {
 
 impl Petri {
     /// `amount` of wNEAR (or the NEAR it became) arrived for `account` with `order`: pending NEAR, less what its record
-    /// and its `Pending` entry cost, with the order (a newer order replaces an older one; the NEAR adds up). An amount
+    /// and its `Pending` entry cost, with the order (a newer order replaces an older one, but only a join replaces a
+    /// waiting join; the NEAR adds up). An amount
     /// that cannot pay for those goes to the vault with a `Dust` entry instead. Returns what became pending.
     pub(crate) fn receive_intent(&mut self, account: &AccountId, amount: u128, order: Option<Order>) -> u128 {
         let before = env::storage_usage();
@@ -295,11 +297,21 @@ impl Petri {
     pub(crate) fn pending_add(&mut self, account: &AccountId, amount: u128, order: Option<Order>) {
         let mut rec = self.pending.get(account).cloned().unwrap_or_default();
         rec.near += amount;
-        if order.is_some() {
-            rec.order = order;
+        if let Some(new) = order {
+            // v6.5: a waiting join is replaced only by another join, so nobody can turn an account's join into a
+            // purchase with a payment of their own. A purchase's NEAR adds to the join, which buys PETRI with all of it.
+            if rec.order.as_ref().map_or(true, |o| !o.join || new.join) {
+                rec.order = Some(new);
+            }
             rec.order_near += amount;
         }
         self.pending.insert(account.clone(), rec);
+    }
+
+    /// What an order's NEAR must come to for a join from it (v6.5): `min_join` for the vault plus the most storage the
+    /// join can take for `account` (see `join_bytes`).
+    pub(crate) fn intent_join_minimum(&self, account: &AccountId) -> u128 {
+        self.rules.min_join.0 + join_bytes(account) * byte_cost()
     }
 
     /// Take `amount` (at most all) of `account`'s pending NEAR, with an `Unpend` entry. Its order's share shrinks with
@@ -361,7 +373,10 @@ impl Petri {
         if joined {
             require!(est > BUY_BYTES * byte_cost(), "too little NEAR waits with that order to buy any PETRI");
         } else {
-            require!(est >= self.rules.min_join.0, format!("a join needs {} NEAR; {} waits with that order", fmt_near(self.rules.min_join.0), fmt_near(est)));
+            // v6.5: enough for the colony's storage and `min_join` for the vault, so the join attaches the colony. Less
+            // waits as pending NEAR, as a join below `min_join` always did.
+            let need = self.intent_join_minimum(account);
+            require!(est >= need, format!("a join needs {} NEAR; {} waits with that order", fmt_near(need), fmt_near(est)));
             require!(self.colonies.len() < u16::MAX as u32 - 1, "the dish is full of colonies");
         }
         let (deposit, _) = self.take_pending(account, rec.order_near);
@@ -403,6 +418,22 @@ impl Petri {
 fn intent_bytes(account: &AccountId, order: &Option<Order>) -> u128 {
     let rec = PendingRec { near: 0, order_near: 0, order: order.clone() };
     (40 + 1 + 4 + account.as_str().len() + near_sdk::borsh::to_vec(&rec).unwrap().len()) as u128 + entry_bytes(&Entry::Pending { generation: U64(0), account: account.clone(), near: U128(0) })
+}
+
+/// The most storage a join for `account` takes, as `join_with` charges it: the colony record (its vector slot), the
+/// account's colony id, the name, a PETRI registration, the `Join` entry, a cold slot on a new page, and the purchase
+/// record it charges up front, with a name of the longest length a colony may have. A join takes no more, whatever it
+/// is called, so a join from an order of at least `min_join` plus this always attaches its colony.
+pub(crate) fn join_bytes(account: &AccountId) -> u128 {
+    let a = account.as_str().len() as u128;
+    let n = MAX_NAME_BYTES as u128;
+    let colony = 5 + COLONY_FIXED_BYTES + a + n + 40;
+    let colony_of = 1 + 4 + a + 2 + 40;
+    let name = 1 + 4 + n + 40;
+    let balance = 1 + 4 + a + 16 + 40;
+    let entry = entry_bytes(&Entry::Join { generation: U64(0), colony: 0 });
+    let cold = (books::COLD_BYTES + 3 + 40) as u128;
+    colony + colony_of + name + balance + entry + cold + BUY_BYTES
 }
 
 /// A colour for a colony whose order named none: from its account's hash, never too dark to see on the agar.

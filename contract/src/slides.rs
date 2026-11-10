@@ -1,5 +1,5 @@
-//! Specimen slides: NFTs (NEP-171 core, NEP-177 metadata, NEP-178 approvals, NEP-181 enumeration) that fix a rectangle
-//! of one colony's living cells at one generation.
+//! Specimen slides: NFTs (NEP-171 core, NEP-177 metadata, NEP-178 approvals, NEP-181 enumeration, NEP-199 payouts)
+//! that fix a rectangle of one colony's living cells at one generation.
 //!
 //! A colony mints a slide of its own cells only: rivals' cells inside the rectangle are left out. The PETRI it costs is
 //! burned and the capture goes into the ledger, so both replays recompute it from the board. The image is drawn on chain
@@ -18,6 +18,11 @@
 //! Storage: the minter pays for everything the slide stores, plus `SLIDE_RESERVE` for whatever its later owners can add
 //! (a longer account and a list of slides for an owner who had none), so no transfer can make the contract's storage
 //! outgrow what was paid for it. Approvals are paid by the owner who grants them and refunded when they go.
+//!
+//! Sales (v6.5): a marketplace that sells a slide asks `nft_payout` (or moves it with `nft_transfer_payout`) how to
+//! split the price: `SALE_ROYALTY_BPS` to the colony that minted it (its payout account if it set one), the rest to
+//! the seller. The split is worked out from what the slide already stores; the sale's NEAR never passes through the
+//! dish, and the move is exactly an `nft_transfer`.
 
 use crate::*;
 use near_sdk::GasWeight;
@@ -35,6 +40,8 @@ const SLIDE_RESERVE: u64 = 64 + 120;
 const MAX_PAGE: u64 = 10;
 const GAS_FOR_NFT_RESOLVE: Gas = Gas::from_tgas(15);
 const GAS_FOR_NFT_ON_TRANSFER_MIN: Gas = Gas::from_tgas(10);
+/// The minting colony's share of a marketplace sale (NEP-199), in basis points.
+pub const SALE_ROYALTY_BPS: u128 = 500;
 
 const SLIDE_ICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='4' fill='%230b0705'/%3E%3Ccircle cx='12' cy='12' r='9.5' fill='%2324130a' stroke='%23f3e9da' stroke-opacity='.3' stroke-width='.6'/%3E%3Cg fill='%23f2b45a'%3E%3Crect x='9' y='6.5' width='2.6' height='2.6' rx='.7'/%3E%3Crect x='12.4' y='9.9' width='2.6' height='2.6' rx='.7'/%3E%3Crect x='5.6' y='13.3' width='2.6' height='2.6' rx='.7'/%3E%3Crect x='9' y='13.3' width='2.6' height='2.6' rx='.7'/%3E%3Crect x='12.4' y='13.3' width='2.6' height='2.6' rx='.7'/%3E%3C/g%3E%3C/svg%3E";
 
@@ -127,6 +134,13 @@ pub struct NftContractMetadata {
     pub base_uri: Option<String>,
     pub reference: Option<String>,
     pub reference_hash: Option<Base64VecU8>,
+}
+
+/// NEP-199: how a sale's price is split, by account.
+#[near(serializers = [json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Payout {
+    pub payout: HashMap<AccountId, U128>,
 }
 
 fn nft_event(event: &str, data: near_sdk::serde_json::Value) {
@@ -233,11 +247,7 @@ impl Petri {
 
     #[payable]
     pub fn nft_transfer(&mut self, receiver_id: AccountId, token_id: String, approval_id: Option<u64>, memo: Option<String>) {
-        require_one_yocto();
-        let sender = caller();
-        let index = self.slide_index(&token_id);
-        let (owner, approvals) = self.slide_transfer(&sender, &receiver_id, index, approval_id, memo);
-        self.refund_approvals(&owner, &approvals);
+        self.transfer_slide(receiver_id, &token_id, approval_id, memo);
     }
 
     #[payable]
@@ -300,6 +310,24 @@ impl Petri {
 
     pub fn nft_token(&self, token_id: String) -> Option<Token> {
         self.slide_index_of(&token_id).map(|i| self.slide_token(i))
+    }
+
+    // ---------- NEP-199 ----------
+
+    /// How a sale of this slide for `balance` yoctoNEAR is split now: `SALE_ROYALTY_BPS` to the colony that minted it
+    /// (to its payout account if it set one), the rest to the slide's owner; all of it to the owner when that is the
+    /// minter. Panics if the split names more than `max_len_payout` accounts.
+    pub fn nft_payout(&self, token_id: String, balance: U128, max_len_payout: Option<u32>) -> Payout {
+        self.slide_payout(self.slide_index(&token_id), balance.0, max_len_payout)
+    }
+
+    /// `nft_transfer` for a marketplace's sale: the split of `balance` (see `nft_payout`) for the owner who sells, then
+    /// exactly the move `nft_transfer` makes. Requires exactly 1 yoctoNEAR.
+    #[payable]
+    pub fn nft_transfer_payout(&mut self, receiver_id: AccountId, token_id: String, approval_id: Option<u64>, memo: Option<String>, balance: U128, max_len_payout: Option<u32>) -> Payout {
+        let payout = self.slide_payout(self.slide_index(&token_id), balance.0, max_len_payout);
+        self.transfer_slide(receiver_id, &token_id, approval_id, memo);
+        payout
     }
 
     // ---------- NEP-177 ----------
@@ -451,6 +479,37 @@ impl Petri {
 
     pub(crate) fn slide_index(&self, token_id: &str) -> u32 {
         self.slide_index_of(token_id).unwrap_or_else(|| env::panic_str("there is no slide with that id"))
+    }
+
+    /// `nft_transfer`: the caller moves slide `token_id` to `receiver_id` and its approvals are refunded.
+    fn transfer_slide(&mut self, receiver_id: AccountId, token_id: &str, approval_id: Option<u64>, memo: Option<String>) {
+        require_one_yocto();
+        let sender = caller();
+        let index = self.slide_index(token_id);
+        let (owner, approvals) = self.slide_transfer(&sender, &receiver_id, index, approval_id, memo);
+        self.refund_approvals(&owner, &approvals);
+    }
+
+    /// The NEP-199 split of `balance` for slide `index`, as its owner would be paid now.
+    fn slide_payout(&self, index: u32, balance: u128, max_len_payout: Option<u32>) -> Payout {
+        let s = self.slides.get(index).unwrap();
+        let c = self.colony(s.colony);
+        // The minter selling its own slide keeps the whole price.
+        let own = c.account == s.owner;
+        let minter = c.payout.unwrap_or(c.account);
+        // Without overflow for any balance: the royalty of each whole 10,000 and of the rest.
+        let royalty = balance / 10_000 * SALE_ROYALTY_BPS + balance % 10_000 * SALE_ROYALTY_BPS / 10_000;
+        let mut payout = HashMap::new();
+        if own || minter == s.owner || royalty == 0 {
+            payout.insert(s.owner.clone(), U128(balance));
+        } else {
+            payout.insert(minter, U128(royalty));
+            payout.insert(s.owner.clone(), U128(balance - royalty));
+        }
+        if let Some(max) = max_len_payout {
+            require!(payout.len() <= max as usize, format!("this sale pays {} accounts, more than max_len_payout", payout.len()));
+        }
+        Payout { payout }
     }
 
     /// Move slide `index` to `receiver`, by its owner or an approved account. Clears its approvals and returns them with
