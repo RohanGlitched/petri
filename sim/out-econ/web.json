@@ -1,0 +1,3036 @@
+{
+  "generated": "sim/src/econ.rs: cargo run --release -- out-econ econ --seeds 10 (mainnet launch rules, 60 days, seeds 0-9 of each days60 scenario stream)",
+  "scenarios": [
+    {
+      "cohorts": [
+        {
+          "joined": "days 0-1",
+          "net": [
+            -0.2475,
+            -0.10996,
+            -0.04696
+          ],
+          "players": 1481,
+          "share_positive": 0.0594,
+          "tide_median": 0.0677
+        },
+        {
+          "joined": "days 2-9",
+          "net": [
+            -0.24984,
+            -0.18569,
+            -0.04748
+          ],
+          "players": 3739,
+          "share_positive": 0.027,
+          "tide_median": 0.07859
+        }
+      ],
+      "day1": [
+        {
+          "attached": 0.045,
+          "bought": 52.5,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": false,
+          "fed": 4.2,
+          "gas": 0.00482,
+          "held_petri": 32.2,
+          "held_value": 0.00274,
+          "join_day": 9.51,
+          "join_petri": 13.7,
+          "kind": "Penny",
+          "label": "Penny player",
+          "live": 0,
+          "net": -0.04472,
+          "net_median": -0.04472,
+          "net_p10": -0.04668,
+          "net_p90": -0.03295,
+          "owed": 0.00232,
+          "planted": 25.0,
+          "plantings": 8,
+          "players": 600,
+          "seed": 1,
+          "share_positive": 0.0083,
+          "sold": 0.0,
+          "tide": 0.00232
+        },
+        {
+          "attached": 0.1191,
+          "bought": 197.7,
+          "bounty": 0.001,
+          "claimed": 0.03508,
+          "credit": false,
+          "fed": 58.6,
+          "gas": 0.01438,
+          "held_petri": 4.0,
+          "held_value": 0.0,
+          "join_day": 5.61,
+          "join_petri": 197.7,
+          "kind": "Builder",
+          "label": "Builder",
+          "live": 0,
+          "net": -0.08251,
+          "net_median": -0.08251,
+          "net_p10": -0.16974,
+          "net_p90": -0.04924,
+          "owed": 0.0,
+          "planted": 110.3,
+          "plantings": 21,
+          "players": 1800,
+          "seed": 3,
+          "share_positive": 0.0117,
+          "sold": 0.01488,
+          "tide": 0.037
+        },
+        {
+          "attached": 0.0912,
+          "bought": 198.2,
+          "bounty": 0.0,
+          "claimed": 0.00627,
+          "credit": false,
+          "fed": 19.3,
+          "gas": 0.00799,
+          "held_petri": 4.9,
+          "held_value": 0.0,
+          "join_day": 6.48,
+          "join_petri": 198.2,
+          "kind": "Defender",
+          "label": "Defender",
+          "live": 0,
+          "net": -0.07537,
+          "net_median": -0.07537,
+          "net_p10": -0.15575,
+          "net_p90": -0.04398,
+          "owed": 0.0028,
+          "planted": 68.8,
+          "plantings": 12,
+          "players": 720,
+          "seed": 4,
+          "share_positive": 0.0181,
+          "sold": 0.01478,
+          "tide": 0.01003
+        },
+        {
+          "attached": 0.0925,
+          "bought": 211.7,
+          "bounty": 0.0,
+          "claimed": 0.01343,
+          "credit": false,
+          "fed": 54.4,
+          "gas": 0.00947,
+          "held_petri": 7.6,
+          "held_value": 0.0,
+          "join_day": 0.29,
+          "join_petri": 211.7,
+          "kind": "Raider",
+          "label": "Raider",
+          "live": 0,
+          "net": -0.07773,
+          "net_median": -0.07773,
+          "net_p10": -0.1321,
+          "net_p90": -0.04552,
+          "owed": 0.00075,
+          "planted": 151.2,
+          "plantings": 13,
+          "players": 900,
+          "seed": 8,
+          "share_positive": 0.0033,
+          "sold": 0.0101,
+          "tide": 0.0161
+        },
+        {
+          "attached": 0.1735,
+          "bought": 439.2,
+          "bounty": 0.0,
+          "claimed": 0.12155,
+          "credit": false,
+          "fed": 226.5,
+          "gas": 0.01489,
+          "held_petri": 26.5,
+          "held_value": 0.00187,
+          "join_day": 4.07,
+          "join_petri": 439.2,
+          "kind": "Methuselah",
+          "label": "R-pentomino player",
+          "live": 59,
+          "net": -0.01073,
+          "net_median": -0.01073,
+          "net_p10": -0.07349,
+          "net_p90": 0.10398,
+          "owed": 0.0,
+          "planted": 110.4,
+          "plantings": 24,
+          "players": 480,
+          "seed": 8,
+          "share_positive": 0.4479,
+          "sold": 0.05422,
+          "tide": 0.12347
+        },
+        {
+          "attached": 0.1219,
+          "bought": 212.3,
+          "bounty": 0.0,
+          "claimed": 0.04076,
+          "credit": false,
+          "fed": 66.9,
+          "gas": 0.01228,
+          "held_petri": 3.6,
+          "held_value": 0.0,
+          "join_day": 0.02,
+          "join_petri": 212.3,
+          "kind": "Sniper",
+          "label": "Tide sniper",
+          "live": 0,
+          "net": -0.07746,
+          "net_median": -0.07746,
+          "net_p10": -0.11637,
+          "net_p90": -0.04474,
+          "owed": 0.0,
+          "planted": 109.7,
+          "plantings": 23,
+          "players": 240,
+          "seed": 5,
+          "share_positive": 0.0458,
+          "sold": 0.01592,
+          "tide": 0.04268
+        },
+        {
+          "attached": 0.2,
+          "bought": 943.0,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": false,
+          "fed": 0.0,
+          "gas": 0.00109,
+          "held_petri": 0.0,
+          "held_value": 0.0,
+          "join_day": 0.03,
+          "join_petri": 943.0,
+          "kind": "Seller",
+          "label": "Buy and sell back",
+          "live": 0,
+          "net": -0.10518,
+          "net_median": -0.10518,
+          "net_p10": -0.10693,
+          "net_p90": -0.10339,
+          "owed": 0.0,
+          "planted": 0.0,
+          "plantings": 0,
+          "players": 300,
+          "seed": 1,
+          "share_positive": 0.0,
+          "sold": 0.09591,
+          "tide": 0.0
+        },
+        {
+          "attached": 3.8591,
+          "bought": 8889.6,
+          "bounty": 0.0,
+          "claimed": 1.81392,
+          "credit": false,
+          "fed": 2317.0,
+          "gas": 0.23267,
+          "held_petri": 0.7,
+          "held_value": 0.0,
+          "join_day": 6.88,
+          "join_petri": 8889.6,
+          "kind": "Whale",
+          "label": "Whale",
+          "live": 0,
+          "net": -1.78427,
+          "net_median": -1.78427,
+          "net_p10": -2.25861,
+          "net_p90": -1.35824,
+          "owed": 0.02435,
+          "planted": 7056.2,
+          "plantings": 446,
+          "players": 180,
+          "seed": 3,
+          "share_positive": 0.0,
+          "sold": 0.46923,
+          "tide": 1.84019
+        },
+        {
+          "attached": 0.0,
+          "bought": 118.6,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": true,
+          "fed": 133.3,
+          "gas": 0.0,
+          "held_petri": 9.1,
+          "held_value": 0.00008,
+          "join_day": 8.65,
+          "join_petri": 55.3,
+          "kind": "Guest",
+          "label": "Sponsored guest",
+          "live": 0,
+          "net": 0.00008,
+          "net_median": 0.00008,
+          "net_p10": 0.0,
+          "net_p90": 0.00124,
+          "owed": 0.0,
+          "planted": 136.2,
+          "plantings": 29,
+          "players": 780,
+          "seed": 7,
+          "share_positive": 0.5564,
+          "sold": 0.0,
+          "tide": 0.07507
+        }
+      ],
+      "guests": 780,
+      "kinds": [
+        {
+          "back_per_near": [
+            0.0386,
+            0.0758,
+            0.305
+          ],
+          "budget": 0.05,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00002,
+          "fed": 7.9,
+          "held": 0.0,
+          "kind": "Penny",
+          "label": "Penny player",
+          "net": [
+            -0.04909,
+            -0.04757,
+            -0.03496
+          ],
+          "paid": 0.05064,
+          "players": 600,
+          "plays": "joins with the 0.01 NEAR minimum (0.05 in all), keeps one block alive",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.0,
+          "tide": 0.00409,
+          "total_net_per_run": -2.7214
+        },
+        {
+          "back_per_near": [
+            0.2172,
+            0.3511,
+            0.588
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00001,
+          "fed": 174.3,
+          "held": 0.0,
+          "kind": "Builder",
+          "label": "Builder",
+          "net": [
+            -0.24823,
+            -0.20921,
+            -0.13318
+          ],
+          "paid": 0.32628,
+          "players": 1800,
+          "plays": "joins with 0.05 NEAR (0.25 in all), still lifes near home, tops up twice",
+          "share_positive": 0.0044,
+          "share_positive_cash": 0.0044,
+          "sold": 0.02432,
+          "tide": 0.09511,
+          "total_net_per_run": -35.8801
+        },
+        {
+          "back_per_near": [
+            0.2393,
+            0.4023,
+            0.6559
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00002,
+          "fed": 210.8,
+          "held": 0.0,
+          "kind": "Defender",
+          "label": "Defender",
+          "net": [
+            -0.24635,
+            -0.1889,
+            -0.11583
+          ],
+          "paid": 0.3281,
+          "players": 720,
+          "plays": "joins with 0.05 NEAR (0.25 in all), eaters and beehives near home",
+          "share_positive": 0.0111,
+          "share_positive_cash": 0.0111,
+          "sold": 0.02308,
+          "tide": 0.11333,
+          "total_net_per_run": -13.2089
+        },
+        {
+          "back_per_near": [
+            0.1231,
+            0.236,
+            0.4639
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 82.8,
+          "held": 0.0,
+          "kind": "Raider",
+          "label": "Raider",
+          "net": [
+            -0.24248,
+            -0.17947,
+            -0.1267
+          ],
+          "paid": 0.24784,
+          "players": 900,
+          "plays": "joins with 0.05 NEAR (0.25 in all), gliders and spaceships at rivals, sieges",
+          "share_positive": 0.0011,
+          "share_positive_cash": 0.0011,
+          "sold": 0.01429,
+          "tide": 0.04514,
+          "total_net_per_run": -16.326
+        },
+        {
+          "back_per_near": [
+            0.4875,
+            0.7983,
+            1.7169
+          ],
+          "budget": 0.5,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 2129.2,
+          "held": 0.0,
+          "kind": "Methuselah",
+          "label": "R-pentomino player",
+          "net": [
+            -0.5,
+            -0.07587,
+            0.39252
+          ],
+          "paid": 0.71866,
+          "players": 480,
+          "plays": "joins with 0.1 NEAR (0.5 in all), one R-pentomino an hour",
+          "share_positive": 0.3396,
+          "share_positive_cash": 0.3396,
+          "sold": 0.17127,
+          "tide": 0.62946,
+          "total_net_per_run": -6.6202
+        },
+        {
+          "back_per_near": [
+            0.3242,
+            0.4794,
+            0.7557
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 118.6,
+          "held": 0.0,
+          "kind": "Sniper",
+          "label": "Tide sniper",
+          "net": [
+            -0.12201,
+            -0.0799,
+            -0.04922
+          ],
+          "paid": 0.16963,
+          "players": 240,
+          "plays": "plants blocks only in the 3 generations before each tide, sells after every tide",
+          "share_positive": 0.0375,
+          "share_positive_cash": 0.0375,
+          "sold": 0.01679,
+          "tide": 0.06906,
+          "total_net_per_run": -1.9557
+        },
+        {
+          "back_per_near": [
+            0.4693,
+            0.4774,
+            0.4859
+          ],
+          "budget": 0.2,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 0.0,
+          "held": 0.0,
+          "kind": "Seller",
+          "label": "Buy and sell back",
+          "net": [
+            -0.10694,
+            -0.10516,
+            -0.10339
+          ],
+          "paid": 0.20109,
+          "players": 300,
+          "plays": "buys 0.2 NEAR of PETRI at join and sells it back as fast as the allowance lets it; never plants",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.09598,
+          "tide": 0.0,
+          "total_net_per_run": -3.1545
+        },
+        {
+          "back_per_near": [
+            0.404,
+            0.4962,
+            0.6013
+          ],
+          "budget": 3.0,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00006,
+          "fed": 1989.8,
+          "held": 0.0,
+          "kind": "Whale",
+          "label": "Whale",
+          "net": [
+            -2.37221,
+            -1.78875,
+            -1.37971
+          ],
+          "paid": 3.59351,
+          "players": 180,
+          "plays": "joins with 2 NEAR (3 in all), pulsars and beehives anywhere, every few generations",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.52954,
+          "tide": 1.29499,
+          "total_net_per_run": -33.0183
+        },
+        {
+          "back_per_near": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "budget": 0.0,
+          "credit": true,
+          "credit_above_grant": 0.0013,
+          "credit_end": 0.00189,
+          "fed": 23.7,
+          "held": 0.0,
+          "kind": "Guest",
+          "label": "Sponsored guest",
+          "net": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "paid": 0.0,
+          "players": 780,
+          "plays": "plays like a builder on 0.05 NEAR of credit someone else sponsored; attaches no NEAR of its own",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.0,
+          "tide": 0.01329,
+          "total_net_per_run": 0.0
+        }
+      ],
+      "money": {
+        "after_house_out": {
+          "house_into_vault": [
+            0.01114,
+            0.02046,
+            0.03038
+          ],
+          "house_share": [
+            0.00055,
+            0.00095,
+            0.00146
+          ],
+          "paid_to_players": [
+            46.8654,
+            53.1608,
+            64.2938
+          ],
+          "tides": 619.0
+        },
+        "burned": [
+          145376.0,
+          153119.0,
+          158663.0
+        ],
+        "house_out_day": 7.0,
+        "house_out_runs": 10,
+        "house_paid": [
+          2.2967,
+          2.4207,
+          2.5019
+        ],
+        "house_share": [
+          0.00738,
+          0.00776,
+          0.00791
+        ],
+        "house_share_of_inflow": [
+          0.00731,
+          0.00769,
+          0.00782
+        ],
+        "paid_from_house": [
+          0.9841,
+          1.0347,
+          1.0745
+        ],
+        "paid_to_players": [
+          131.93,
+          133.431,
+          135.9007
+        ],
+        "players_back": [
+          126.3857,
+          127.1391,
+          129.8478
+        ],
+        "players_back_share": [
+          0.5247,
+          0.53,
+          0.5387
+        ],
+        "players_gas": [
+          25.6081,
+          26.9166,
+          27.8035
+        ],
+        "players_net": [
+          -116.8994,
+          -113.2901,
+          -108.2121
+        ],
+        "players_paid": [
+          234.5978,
+          240.5528,
+          246.7472
+        ],
+        "players_to_gas": [
+          0.1092,
+          0.1118,
+          0.1133
+        ],
+        "players_to_storage": [
+          0.3194,
+          0.3236,
+          0.3277
+        ],
+        "players_to_vault": [
+          0.5596,
+          0.5645,
+          0.5704
+        ],
+        "storage": [
+          87.0797,
+          90.8736,
+          93.6549
+        ],
+        "vault_end": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "vault_in": [
+          134.8648,
+          136.5861,
+          139.179
+        ],
+        "vault_in_house": [
+          0.9981,
+          1.0488,
+          1.0879
+        ]
+      },
+      "name": "boom",
+      "net": [
+        -0.24917,
+        -0.17446,
+        -0.04742
+      ],
+      "players": 5220,
+      "round_trip": {
+        "allowance_short_days": 0.6117,
+        "back": [
+          0.0077,
+          0.0305,
+          0.4887
+        ],
+        "buy_record": 0.00113,
+        "curve": [
+          0.4887,
+          0.4887,
+          0.4887
+        ],
+        "day1_net": 0.4693,
+        "day60_net": 0.0,
+        "deposit": 0.05,
+        "net": [
+          0.0,
+          0.0111,
+          0.4693
+        ],
+        "petri": [
+          199.9,
+          204.6,
+          241.2
+        ],
+        "sell_record": 0.00097
+      },
+      "seeds": 10,
+      "share_positive": 0.0362,
+      "what": "600 outside players arrive over the first ten days, then nobody new"
+    },
+    {
+      "cohorts": [
+        {
+          "joined": "days 0-1",
+          "net": [
+            -0.24834,
+            -0.10852,
+            -0.10394
+          ],
+          "players": 345,
+          "share_positive": 0.029,
+          "tide_median": 0.06564
+        },
+        {
+          "joined": "days 2-9",
+          "net": [
+            -0.25113,
+            -0.24717,
+            -0.04657
+          ],
+          "players": 297,
+          "share_positive": 0.0337,
+          "tide_median": 0.04456
+        },
+        {
+          "joined": "days 10-29",
+          "net": [
+            -0.49709,
+            -0.24779,
+            -0.04833
+          ],
+          "players": 785,
+          "share_positive": 0.0025,
+          "tide_median": 0.02053
+        },
+        {
+          "joined": "days 30-59",
+          "net": [
+            -0.25397,
+            -0.24717,
+            -0.04773
+          ],
+          "players": 1183,
+          "share_positive": 0.0085,
+          "tide_median": 0.01502
+        }
+      ],
+      "day1": [
+        {
+          "attached": 0.0411,
+          "bought": 13.3,
+          "bounty": 0.00019,
+          "claimed": 0.0,
+          "credit": false,
+          "fed": 64.3,
+          "gas": 0.00752,
+          "held_petri": 39.3,
+          "held_value": 0.00054,
+          "join_day": 56.86,
+          "join_petri": 13.3,
+          "kind": "Penny",
+          "label": "Penny player",
+          "live": 0,
+          "net": -0.04671,
+          "net_median": -0.04671,
+          "net_p10": -0.04976,
+          "net_p90": -0.03781,
+          "owed": 0.0012,
+          "planted": 44.2,
+          "plantings": 10,
+          "players": 295,
+          "seed": 9,
+          "share_positive": 0.0034,
+          "sold": 0.0,
+          "tide": 0.0012
+        },
+        {
+          "attached": 0.2301,
+          "bought": 210.3,
+          "bounty": 0.0012,
+          "claimed": 0.01644,
+          "credit": false,
+          "fed": 340.4,
+          "gas": 0.03259,
+          "held_petri": 4.6,
+          "held_value": 0.0,
+          "join_day": 5.82,
+          "join_petri": 210.3,
+          "kind": "Builder",
+          "label": "Builder",
+          "live": 0,
+          "net": -0.22742,
+          "net_median": -0.22742,
+          "net_p10": -0.24773,
+          "net_p90": -0.09102,
+          "owed": 0.0003,
+          "planted": 396.9,
+          "plantings": 54,
+          "players": 888,
+          "seed": 6,
+          "share_positive": 0.0023,
+          "sold": 0.01737,
+          "tide": 0.0177
+        },
+        {
+          "attached": 0.2375,
+          "bought": 198.1,
+          "bounty": 0.0,
+          "claimed": 0.03339,
+          "credit": false,
+          "fed": 249.1,
+          "gas": 0.0331,
+          "held_petri": 7.5,
+          "held_value": 0.0,
+          "join_day": 29.87,
+          "join_petri": 198.1,
+          "kind": "Defender",
+          "label": "Defender",
+          "live": 0,
+          "net": -0.22694,
+          "net_median": -0.22694,
+          "net_p10": -0.24689,
+          "net_p90": -0.08635,
+          "owed": 0.0,
+          "planted": 357.9,
+          "plantings": 54,
+          "players": 351,
+          "seed": 0,
+          "share_positive": 0.0085,
+          "sold": 0.01027,
+          "tide": 0.03531
+        },
+        {
+          "attached": 0.1758,
+          "bought": 204.9,
+          "bounty": 0.00083,
+          "claimed": 0.01047,
+          "credit": false,
+          "fed": 129.5,
+          "gas": 0.0232,
+          "held_petri": 4.6,
+          "held_value": 0.0,
+          "join_day": 19.19,
+          "join_petri": 204.9,
+          "kind": "Raider",
+          "label": "Raider",
+          "live": 0,
+          "net": -0.18557,
+          "net_median": -0.18557,
+          "net_p10": -0.24628,
+          "net_p90": -0.07552,
+          "owed": 0.00214,
+          "planted": 348.5,
+          "plantings": 39,
+          "players": 445,
+          "seed": 0,
+          "share_positive": 0.0022,
+          "sold": 0.0,
+          "tide": 0.01356
+        },
+        {
+          "attached": 0.1785,
+          "bought": 424.7,
+          "bounty": 0.00029,
+          "claimed": 0.0285,
+          "credit": false,
+          "fed": 1619.0,
+          "gas": 0.0187,
+          "held_petri": 153.3,
+          "held_value": 0.00253,
+          "join_day": 26.9,
+          "join_petri": 424.7,
+          "kind": "Methuselah",
+          "label": "R-pentomino player",
+          "live": 91,
+          "net": -0.11223,
+          "net_median": -0.11223,
+          "net_p10": -0.15183,
+          "net_p90": 0.00905,
+          "owed": 0.00222,
+          "planted": 147.8,
+          "plantings": 24,
+          "players": 234,
+          "seed": 8,
+          "share_positive": 0.1154,
+          "sold": 0.05138,
+          "tide": 0.03457
+        },
+        {
+          "attached": 0.2675,
+          "bought": 214.6,
+          "bounty": 0.00082,
+          "claimed": 0.13237,
+          "credit": false,
+          "fed": 803.8,
+          "gas": 0.0499,
+          "held_petri": 39.8,
+          "held_value": 0.00304,
+          "join_day": 0.01,
+          "join_petri": 214.6,
+          "kind": "Sniper",
+          "label": "Tide sniper",
+          "live": 50,
+          "net": -0.10982,
+          "net_median": -0.10982,
+          "net_p10": -0.16167,
+          "net_p90": 0.06923,
+          "owed": 0.00469,
+          "planted": 396.8,
+          "plantings": 71,
+          "players": 120,
+          "seed": 5,
+          "share_positive": 0.1917,
+          "sold": 0.06667,
+          "tide": 0.14378
+        },
+        {
+          "attached": 0.2,
+          "bought": 948.8,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": false,
+          "fed": 0.0,
+          "gas": 0.0011,
+          "held_petri": 0.0,
+          "held_value": 0.0,
+          "join_day": 0.04,
+          "join_petri": 948.8,
+          "kind": "Seller",
+          "label": "Buy and sell back",
+          "live": 0,
+          "net": -0.10562,
+          "net_median": -0.10562,
+          "net_p10": -0.10775,
+          "net_p90": -0.10434,
+          "owed": 0.0,
+          "planted": 0.0,
+          "plantings": 0,
+          "players": 150,
+          "seed": 2,
+          "share_positive": 0.0,
+          "sold": 0.09548,
+          "tide": 0.0
+        },
+        {
+          "attached": 3.5619,
+          "bought": 9195.3,
+          "bounty": 0.00141,
+          "claimed": 0.41946,
+          "credit": false,
+          "fed": 4484.3,
+          "gas": 0.15015,
+          "held_petri": 768.9,
+          "held_value": 0.07903,
+          "join_day": 25.81,
+          "join_petri": 9195.3,
+          "kind": "Whale",
+          "label": "Whale",
+          "live": 133,
+          "net": -2.87609,
+          "net_median": -2.87609,
+          "net_p10": -2.98604,
+          "net_p90": -2.59214,
+          "owed": 0.0445,
+          "planted": 10125.0,
+          "plantings": 271,
+          "players": 86,
+          "seed": 7,
+          "share_positive": 0.0,
+          "sold": 0.29154,
+          "tide": 0.46876
+        },
+        {
+          "attached": 0.0,
+          "bought": 56.2,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": true,
+          "fed": 9.0,
+          "gas": 0.0,
+          "held_petri": 25.2,
+          "held_value": 0.00006,
+          "join_day": 39.39,
+          "join_petri": 56.2,
+          "kind": "Guest",
+          "label": "Sponsored guest",
+          "live": 0,
+          "net": 0.00006,
+          "net_median": 0.00006,
+          "net_p10": 0.0,
+          "net_p90": 0.00239,
+          "owed": 0.0,
+          "planted": 40.1,
+          "plantings": 7,
+          "players": 385,
+          "seed": 6,
+          "share_positive": 0.5299,
+          "sold": 0.0,
+          "tide": 0.00063
+        }
+      ],
+      "guests": 390,
+      "kinds": [
+        {
+          "back_per_near": [
+            0.0072,
+            0.0439,
+            0.1671
+          ],
+          "budget": 0.05,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 22.4,
+          "held": 0.0,
+          "kind": "Penny",
+          "label": "Penny player",
+          "net": [
+            -0.04982,
+            -0.04705,
+            -0.04291
+          ],
+          "paid": 0.05004,
+          "players": 300,
+          "plays": "joins with the 0.01 NEAR minimum (0.05 in all), keeps one block alive",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.0,
+          "tide": 0.0008,
+          "total_net_per_run": -1.3885
+        },
+        {
+          "back_per_near": [
+            0.0546,
+            0.1334,
+            0.3764
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 565.8,
+          "held": 0.0,
+          "kind": "Builder",
+          "label": "Builder",
+          "net": [
+            -0.24981,
+            -0.24766,
+            -0.24481
+          ],
+          "paid": 0.28439,
+          "players": 900,
+          "plays": "joins with 0.05 NEAR (0.25 in all), still lifes near home, tops up twice",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.01913,
+          "tide": 0.01917,
+          "total_net_per_run": -22.1096
+        },
+        {
+          "back_per_near": [
+            0.0545,
+            0.1395,
+            0.3703
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 630.0,
+          "held": 0.0,
+          "kind": "Defender",
+          "label": "Defender",
+          "net": [
+            -0.24962,
+            -0.24724,
+            -0.24368
+          ],
+          "paid": 0.28618,
+          "players": 360,
+          "plays": "joins with 0.05 NEAR (0.25 in all), eaters and beehives near home",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.01946,
+          "tide": 0.02202,
+          "total_net_per_run": -8.787
+        },
+        {
+          "back_per_near": [
+            0.0278,
+            0.0951,
+            0.3385
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 476.9,
+          "held": 0.0,
+          "kind": "Raider",
+          "label": "Raider",
+          "net": [
+            -0.25012,
+            -0.24744,
+            -0.23696
+          ],
+          "paid": 0.27114,
+          "players": 450,
+          "plays": "joins with 0.05 NEAR (0.25 in all), gliders and spaceships at rivals, sieges",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.01027,
+          "tide": 0.01571,
+          "total_net_per_run": -10.8895
+        },
+        {
+          "back_per_near": [
+            0.4708,
+            0.7538,
+            1.0111
+          ],
+          "budget": 0.5,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00001,
+          "fed": 16982.5,
+          "held": 0.00111,
+          "kind": "Methuselah",
+          "label": "R-pentomino player",
+          "net": [
+            -0.49907,
+            -0.49478,
+            0.02789
+          ],
+          "paid": 1.49986,
+          "players": 240,
+          "plays": "joins with 0.1 NEAR (0.5 in all), one R-pentomino an hour",
+          "share_positive": 0.1125,
+          "share_positive_cash": 0.1042,
+          "sold": 0.59557,
+          "tide": 0.5553,
+          "total_net_per_run": -7.4688
+        },
+        {
+          "back_per_near": [
+            0.4099,
+            0.5504,
+            0.8066
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 1243.0,
+          "held": 0.0,
+          "kind": "Sniper",
+          "label": "Tide sniper",
+          "net": [
+            -0.24874,
+            -0.24439,
+            -0.0805
+          ],
+          "paid": 0.46765,
+          "players": 120,
+          "plays": "plants blocks only in the 3 generations before each tide, sells after every tide",
+          "share_positive": 0.0417,
+          "share_positive_cash": 0.0417,
+          "sold": 0.07393,
+          "tide": 0.18861,
+          "total_net_per_run": -2.3005
+        },
+        {
+          "back_per_near": [
+            0.4649,
+            0.4748,
+            0.4813
+          ],
+          "budget": 0.2,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 0.0,
+          "held": 0.0,
+          "kind": "Seller",
+          "label": "Buy and sell back",
+          "net": [
+            -0.10796,
+            -0.10562,
+            -0.10434
+          ],
+          "paid": 0.20157,
+          "players": 150,
+          "plays": "buys 0.2 NEAR of PETRI at join and sells it back as fast as the allowance lets it; never plants",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.09545,
+          "tide": 0.0,
+          "total_net_per_run": -1.5898
+        },
+        {
+          "back_per_near": [
+            0.246,
+            0.3163,
+            0.4859
+          ],
+          "budget": 3.0,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00001,
+          "fed": 7471.5,
+          "held": 0.0,
+          "kind": "Whale",
+          "label": "Whale",
+          "net": [
+            -3.00073,
+            -2.99749,
+            -2.91711
+          ],
+          "paid": 4.36226,
+          "players": 90,
+          "plays": "joins with 2 NEAR (3 in all), pulsars and beehives anywhere, every few generations",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.46961,
+          "tide": 0.93653,
+          "total_net_per_run": -26.6256
+        },
+        {
+          "back_per_near": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "budget": 0.0,
+          "credit": true,
+          "credit_above_grant": 0.0026,
+          "credit_end": 0.00196,
+          "fed": 58.6,
+          "held": 0.0,
+          "kind": "Guest",
+          "label": "Sponsored guest",
+          "net": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "paid": 0.0,
+          "players": 390,
+          "plays": "plays like a builder on 0.05 NEAR of credit someone else sponsored; attaches no NEAR of its own",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.0,
+          "tide": 0.00207,
+          "total_net_per_run": 0.0
+        }
+      ],
+      "money": {
+        "after_house_out": {
+          "house_into_vault": [
+            0.01084,
+            0.02153,
+            0.0354
+          ],
+          "house_share": [
+            0.00026,
+            0.00072,
+            0.00089
+          ],
+          "paid_to_players": [
+            51.4759,
+            63.3082,
+            67.1837
+          ],
+          "tides": 1296.0
+        },
+        "burned": [
+          135653.0,
+          142314.0,
+          150664.0
+        ],
+        "house_out_day": 6.0,
+        "house_out_runs": 10,
+        "house_paid": [
+          2.2561,
+          2.2961,
+          2.3717
+        ],
+        "house_share": [
+          0.01274,
+          0.01334,
+          0.01465
+        ],
+        "house_share_of_inflow": [
+          0.0127,
+          0.01305,
+          0.01363
+        ],
+        "paid_from_house": [
+          0.9696,
+          1.0196,
+          1.0478
+        ],
+        "paid_to_players": [
+          69.9595,
+          76.4242,
+          78.389
+        ],
+        "players_back": [
+          67.2945,
+          73.9444,
+          75.6805
+        ],
+        "players_back_share": [
+          0.4632,
+          0.477,
+          0.4869
+        ],
+        "players_gas": [
+          18.4616,
+          20.2466,
+          21.03
+        ],
+        "players_net": [
+          -83.1726,
+          -81.644,
+          -78.0011
+        ],
+        "players_paid": [
+          145.2956,
+          156.0846,
+          158.0249
+        ],
+        "players_to_gas": [
+          0.1262,
+          0.1299,
+          0.1335
+        ],
+        "players_to_storage": [
+          0.3484,
+          0.3565,
+          0.3598
+        ],
+        "players_to_vault": [
+          0.507,
+          0.5132,
+          0.5246
+        ],
+        "storage": [
+          58.555,
+          63.2597,
+          63.9994
+        ],
+        "vault_end": [
+          0.1962,
+          0.3074,
+          3.8731
+        ],
+        "vault_in": [
+          77.2729,
+          80.8746,
+          82.286
+        ],
+        "vault_in_house": [
+          1.0209,
+          1.0586,
+          1.0921
+        ]
+      },
+      "name": "steady",
+      "net": [
+        -0.27138,
+        -0.24709,
+        -0.04801
+      ],
+      "players": 2610,
+      "round_trip": {
+        "allowance_short_days": 0.4467,
+        "back": [
+          0.0515,
+          0.1833,
+          0.4887
+        ],
+        "buy_record": 0.00113,
+        "curve": [
+          0.4887,
+          0.4887,
+          0.4887
+        ],
+        "day1_net": 0.4693,
+        "day60_net": 0.1389,
+        "deposit": 0.05,
+        "net": [
+          0.0321,
+          0.1639,
+          0.4693
+        ],
+        "petri": [
+          205.2,
+          221.8,
+          243.0
+        ],
+        "sell_record": 0.00097
+      },
+      "seeds": 10,
+      "share_positive": 0.0123,
+      "what": "5 new outside players a day for sixty days (300 in all)"
+    },
+    {
+      "cohorts": [
+        {
+          "joined": "days 0-1",
+          "net": [
+            -0.24875,
+            -0.14906,
+            -0.04746
+          ],
+          "players": 2610,
+          "share_positive": 0.0245,
+          "tide_median": 0.08277
+        }
+      ],
+      "day1": [
+        {
+          "attached": 0.0778,
+          "bought": 15.3,
+          "bounty": 0.0,
+          "claimed": 0.04511,
+          "credit": false,
+          "fed": 100.4,
+          "gas": 0.01594,
+          "held_petri": 33.4,
+          "held_value": 0.00246,
+          "join_day": 0.12,
+          "join_petri": 15.3,
+          "kind": "Penny",
+          "label": "Penny player",
+          "live": 0,
+          "net": -0.04448,
+          "net_median": -0.04448,
+          "net_p10": -0.04648,
+          "net_p90": -0.03036,
+          "owed": 0.00166,
+          "planted": 84.6,
+          "plantings": 22,
+          "players": 300,
+          "seed": 6,
+          "share_positive": 0.0233,
+          "sold": 0.0,
+          "tide": 0.05157
+        },
+        {
+          "attached": 0.1014,
+          "bought": 210.2,
+          "bounty": 0.0,
+          "claimed": 0.0215,
+          "credit": false,
+          "fed": 29.4,
+          "gas": 0.01059,
+          "held_petri": 4.9,
+          "held_value": 0.0,
+          "join_day": 1.14,
+          "join_petri": 210.2,
+          "kind": "Builder",
+          "label": "Builder",
+          "live": 0,
+          "net": -0.0758,
+          "net_median": -0.0758,
+          "net_p10": -0.1563,
+          "net_p90": -0.04575,
+          "owed": 0.0,
+          "planted": 83.5,
+          "plantings": 16,
+          "players": 900,
+          "seed": 1,
+          "share_positive": 0.01,
+          "sold": 0.01466,
+          "tide": 0.02342
+        },
+        {
+          "attached": 0.0883,
+          "bought": 213.3,
+          "bounty": 0.0,
+          "claimed": 0.00965,
+          "credit": false,
+          "fed": 26.9,
+          "gas": 0.00792,
+          "held_petri": 5.8,
+          "held_value": 0.0,
+          "join_day": 0.39,
+          "join_petri": 213.3,
+          "kind": "Defender",
+          "label": "Defender",
+          "live": 0,
+          "net": -0.06996,
+          "net_median": -0.06996,
+          "net_p10": -0.14751,
+          "net_p90": -0.03909,
+          "owed": 0.00071,
+          "planted": 69.3,
+          "plantings": 11,
+          "players": 360,
+          "seed": 1,
+          "share_positive": 0.0222,
+          "sold": 0.01593,
+          "tide": 0.01132
+        },
+        {
+          "attached": 0.146,
+          "bought": 212.2,
+          "bounty": 0.001,
+          "claimed": 0.07196,
+          "credit": false,
+          "fed": 202.2,
+          "gas": 0.01785,
+          "held_petri": 5.1,
+          "held_value": 0.0,
+          "join_day": 0.09,
+          "join_petri": 212.2,
+          "kind": "Raider",
+          "label": "Raider",
+          "live": 0,
+          "net": -0.07967,
+          "net_median": -0.07967,
+          "net_p10": -0.12939,
+          "net_p90": -0.04319,
+          "owed": 0.00046,
+          "planted": 297.7,
+          "plantings": 30,
+          "players": 450,
+          "seed": 0,
+          "share_positive": 0.0111,
+          "sold": 0.0108,
+          "tide": 0.07338
+        },
+        {
+          "attached": 0.1729,
+          "bought": 446.3,
+          "bounty": 0.0,
+          "claimed": 0.1411,
+          "credit": false,
+          "fed": 147.8,
+          "gas": 0.01913,
+          "held_petri": 23.6,
+          "held_value": 0.00152,
+          "join_day": 1.5,
+          "join_petri": 446.3,
+          "kind": "Methuselah",
+          "label": "R-pentomino player",
+          "live": 0,
+          "net": -0.00178,
+          "net_median": -0.00178,
+          "net_p10": -0.06794,
+          "net_p90": 0.11383,
+          "owed": 0.0,
+          "planted": 98.0,
+          "plantings": 24,
+          "players": 240,
+          "seed": 6,
+          "share_positive": 0.4958,
+          "sold": 0.04768,
+          "tide": 0.14686
+        },
+        {
+          "attached": 0.1182,
+          "bought": 214.4,
+          "bounty": 0.0,
+          "claimed": 0.02702,
+          "credit": false,
+          "fed": 68.6,
+          "gas": 0.01177,
+          "held_petri": 4.6,
+          "held_value": 0.0,
+          "join_day": 0.01,
+          "join_petri": 214.4,
+          "kind": "Sniper",
+          "label": "Tide sniper",
+          "live": 0,
+          "net": -0.08695,
+          "net_median": -0.08695,
+          "net_p10": -0.12953,
+          "net_p90": -0.06627,
+          "owed": 0.0,
+          "planted": 111.5,
+          "plantings": 22,
+          "players": 120,
+          "seed": 8,
+          "share_positive": 0.0083,
+          "sold": 0.01602,
+          "tide": 0.02894
+        },
+        {
+          "attached": 0.2,
+          "bought": 945.5,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": false,
+          "fed": 0.0,
+          "gas": 0.00111,
+          "held_petri": 0.0,
+          "held_value": 0.0,
+          "join_day": 0.02,
+          "join_petri": 945.5,
+          "kind": "Seller",
+          "label": "Buy and sell back",
+          "live": 0,
+          "net": -0.10483,
+          "net_median": -0.10483,
+          "net_p10": -0.10608,
+          "net_p90": -0.1038,
+          "owed": 0.0,
+          "planted": 0.0,
+          "plantings": 0,
+          "players": 150,
+          "seed": 9,
+          "share_positive": 0.0,
+          "sold": 0.09628,
+          "tide": 0.0
+        },
+        {
+          "attached": 3.0703,
+          "bought": 9703.8,
+          "bounty": 0.002,
+          "claimed": 0.81045,
+          "credit": false,
+          "fed": 1445.4,
+          "gas": 0.16133,
+          "held_petri": 1.1,
+          "held_value": 0.0,
+          "join_day": 0.75,
+          "join_petri": 9703.8,
+          "kind": "Whale",
+          "label": "Whale",
+          "live": 0,
+          "net": -1.58116,
+          "net_median": -1.58116,
+          "net_p10": -2.12029,
+          "net_p90": -1.17051,
+          "owed": 0.0,
+          "planted": 3013.7,
+          "plantings": 306,
+          "players": 90,
+          "seed": 6,
+          "share_positive": 0.0,
+          "sold": 0.83797,
+          "tide": 0.81237
+        },
+        {
+          "attached": 0.0,
+          "bought": 62.2,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": true,
+          "fed": 39.3,
+          "gas": 0.0,
+          "held_petri": 4.4,
+          "held_value": 0.0,
+          "join_day": 0.29,
+          "join_petri": 62.2,
+          "kind": "Guest",
+          "label": "Sponsored guest",
+          "live": 0,
+          "net": 0.0,
+          "net_median": 0.0,
+          "net_p10": 0.0,
+          "net_p90": 0.00118,
+          "owed": 0.0,
+          "planted": 71.2,
+          "plantings": 11,
+          "players": 390,
+          "seed": 8,
+          "share_positive": 0.4462,
+          "sold": 0.0,
+          "tide": 0.01103
+        }
+      ],
+      "guests": 390,
+      "kinds": [
+        {
+          "back_per_near": [
+            0.046,
+            0.0869,
+            0.3853
+          ],
+          "budget": 0.05,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00002,
+          "fed": 6.9,
+          "held": 0.0,
+          "kind": "Penny",
+          "label": "Penny player",
+          "net": [
+            -0.0493,
+            -0.0475,
+            -0.03146
+          ],
+          "paid": 0.05069,
+          "players": 300,
+          "plays": "joins with the 0.01 NEAR minimum (0.05 in all), keeps one block alive",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.0,
+          "tide": 0.0049,
+          "total_net_per_run": -1.3269
+        },
+        {
+          "back_per_near": [
+            0.2464,
+            0.42,
+            0.7038
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00002,
+          "fed": 150.2,
+          "held": 0.0,
+          "kind": "Builder",
+          "label": "Builder",
+          "net": [
+            -0.24501,
+            -0.1744,
+            -0.10349
+          ],
+          "paid": 0.319,
+          "players": 900,
+          "plays": "joins with 0.05 NEAR (0.25 in all), still lifes near home, tops up twice",
+          "share_positive": 0.0167,
+          "share_positive_cash": 0.0167,
+          "sold": 0.02273,
+          "tide": 0.11507,
+          "total_net_per_run": -15.2922
+        },
+        {
+          "back_per_near": [
+            0.278,
+            0.4673,
+            0.7881
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00005,
+          "fed": 157.4,
+          "held": 0.0,
+          "kind": "Defender",
+          "label": "Defender",
+          "net": [
+            -0.23051,
+            -0.15579,
+            -0.07584
+          ],
+          "paid": 0.31259,
+          "players": 360,
+          "plays": "joins with 0.05 NEAR (0.25 in all), eaters and beehives near home",
+          "share_positive": 0.0222,
+          "share_positive_cash": 0.0222,
+          "sold": 0.02013,
+          "tide": 0.1273,
+          "total_net_per_run": -5.4672
+        },
+        {
+          "back_per_near": [
+            0.1382,
+            0.2726,
+            0.5794
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00001,
+          "fed": 70.9,
+          "held": 0.0,
+          "kind": "Raider",
+          "label": "Raider",
+          "net": [
+            -0.22616,
+            -0.16376,
+            -0.10013
+          ],
+          "paid": 0.24505,
+          "players": 450,
+          "plays": "joins with 0.05 NEAR (0.25 in all), gliders and spaceships at rivals, sieges",
+          "share_positive": 0.0156,
+          "share_positive_cash": 0.0133,
+          "sold": 0.0132,
+          "tide": 0.05537,
+          "total_net_per_run": -7.2738
+        },
+        {
+          "back_per_near": [
+            0.4683,
+            0.7241,
+            1.1061
+          ],
+          "budget": 0.5,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 12587.3,
+          "held": 0.0,
+          "kind": "Methuselah",
+          "label": "R-pentomino player",
+          "net": [
+            -0.50025,
+            -0.4962,
+            0.02713
+          ],
+          "paid": 1.50068,
+          "players": 240,
+          "plays": "joins with 0.1 NEAR (0.5 in all), one R-pentomino an hour",
+          "share_positive": 0.1375,
+          "share_positive_cash": 0.1375,
+          "sold": 0.32537,
+          "tide": 0.69058,
+          "total_net_per_run": -7.0551
+        },
+        {
+          "back_per_near": [
+            0.2294,
+            0.3307,
+            0.5108
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00001,
+          "fed": 68.9,
+          "held": 0.0,
+          "kind": "Sniper",
+          "label": "Tide sniper",
+          "net": [
+            -0.13193,
+            -0.08732,
+            -0.06845
+          ],
+          "paid": 0.13808,
+          "players": 120,
+          "plays": "plants blocks only in the 3 generations before each tide, sells after every tide",
+          "share_positive": 0.0083,
+          "share_positive_cash": 0.0083,
+          "sold": 0.01631,
+          "tide": 0.03348,
+          "total_net_per_run": -1.1141
+        },
+        {
+          "back_per_near": [
+            0.4737,
+            0.4789,
+            0.4842
+          ],
+          "budget": 0.2,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 0.0,
+          "held": 0.0,
+          "kind": "Seller",
+          "label": "Buy and sell back",
+          "net": [
+            -0.10608,
+            -0.10482,
+            -0.1038
+          ],
+          "paid": 0.2011,
+          "players": 150,
+          "plays": "buys 0.2 NEAR of PETRI at join and sells it back as fast as the allowance lets it; never plants",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.09636,
+          "tide": 0.0,
+          "total_net_per_run": -1.5732
+        },
+        {
+          "back_per_near": [
+            0.4045,
+            0.4981,
+            0.6015
+          ],
+          "budget": 3.0,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00017,
+          "fed": 1307.9,
+          "held": 0.0,
+          "kind": "Whale",
+          "label": "Whale",
+          "net": [
+            -2.12278,
+            -1.57895,
+            -1.17199
+          ],
+          "paid": 3.15251,
+          "players": 90,
+          "plays": "joins with 2 NEAR (3 in all), pulsars and beehives anywhere, every few generations",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.49829,
+          "tide": 1.03172,
+          "total_net_per_run": -14.5331
+        },
+        {
+          "back_per_near": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "budget": 0.0,
+          "credit": true,
+          "credit_above_grant": 0.0077,
+          "credit_end": 0.00213,
+          "fed": 24.8,
+          "held": 0.0,
+          "kind": "Guest",
+          "label": "Sponsored guest",
+          "net": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "paid": 0.0,
+          "players": 390,
+          "plays": "plays like a builder on 0.05 NEAR of credit someone else sponsored; attaches no NEAR of its own",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.0,
+          "tide": 0.01587,
+          "total_net_per_run": 0.0
+        }
+      ],
+      "money": {
+        "after_house_out": {
+          "house_into_vault": [
+            0.0,
+            0.00276,
+            0.00552
+          ],
+          "house_share": [
+            0.00027,
+            0.00166,
+            0.00218
+          ],
+          "paid_to_players": [
+            3.9302,
+            4.7224,
+            5.0464
+          ],
+          "tides": 401.5
+        },
+        "burned": [
+          74642.0,
+          77353.0,
+          81112.0
+        ],
+        "house_out_day": 7.0,
+        "house_out_runs": 10,
+        "house_paid": [
+          2.1638,
+          2.2483,
+          2.3003
+        ],
+        "house_share": [
+          0.01448,
+          0.01467,
+          0.0154
+        ],
+        "house_share_of_inflow": [
+          0.01451,
+          0.01471,
+          0.01545
+        ],
+        "paid_from_house": [
+          0.938,
+          0.9662,
+          0.9964
+        ],
+        "paid_to_players": [
+          64.5679,
+          65.0719,
+          66.5736
+        ],
+        "players_back": [
+          60.9637,
+          61.8665,
+          63.6148
+        ],
+        "players_back_share": [
+          0.531,
+          0.536,
+          0.5443
+        ],
+        "players_gas": [
+          12.5395,
+          12.9861,
+          13.825
+        ],
+        "players_net": [
+          -56.1981,
+          -53.4663,
+          -51.8366
+        ],
+        "players_paid": [
+          113.0901,
+          115.2687,
+          119.8129
+        ],
+        "players_to_gas": [
+          0.1104,
+          0.1126,
+          0.1166
+        ],
+        "players_to_storage": [
+          0.3112,
+          0.3157,
+          0.3224
+        ],
+        "players_to_vault": [
+          0.5622,
+          0.5706,
+          0.5779
+        ],
+        "storage": [
+          42.0251,
+          43.3335,
+          45.3929
+        ],
+        "vault_end": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "vault_in": [
+          66.3309,
+          66.8344,
+          68.3704
+        ],
+        "vault_in_house": [
+          0.9635,
+          0.9933,
+          1.0268
+        ]
+      },
+      "name": "decline",
+      "net": [
+        -0.24875,
+        -0.14906,
+        -0.04746
+      ],
+      "players": 2610,
+      "round_trip": {
+        "allowance_short_days": 0.8267,
+        "back": [
+          0.0095,
+          0.0175,
+          0.4887
+        ],
+        "buy_record": 0.00113,
+        "curve": [
+          0.4887,
+          0.4887,
+          0.4887
+        ],
+        "day1_net": 0.4693,
+        "day60_net": 0.0,
+        "deposit": 0.05,
+        "net": [
+          0.0,
+          0.0,
+          0.4693
+        ],
+        "petri": [
+          219.6,
+          222.0,
+          238.9
+        ],
+        "sell_record": 0.00097
+      },
+      "seeds": 10,
+      "share_positive": 0.0245,
+      "what": "300 players arrive in the first two days and nobody after; each stops once its budget is spent"
+    },
+    {
+      "cohorts": [
+        {
+          "joined": "days 0-1",
+          "net": [
+            -2.12553,
+            -0.14961,
+            -0.07883
+          ],
+          "players": 270,
+          "share_positive": 0.0,
+          "tide_median": 0.04777
+        },
+        {
+          "joined": "days 2-9",
+          "net": [
+            -0.29377,
+            -0.24784,
+            -0.04967
+          ],
+          "players": 315,
+          "share_positive": 0.0063,
+          "tide_median": 0.048
+        },
+        {
+          "joined": "days 10-29",
+          "net": [
+            -0.49814,
+            -0.2481,
+            -0.04972
+          ],
+          "players": 785,
+          "share_positive": 0.0,
+          "tide_median": 0.0189
+        }
+      ],
+      "day1": [
+        {
+          "attached": 0.0419,
+          "bought": 55.1,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": false,
+          "fed": 15.8,
+          "gas": 0.00521,
+          "held_petri": 42.6,
+          "held_value": 0.00014,
+          "join_day": 18.65,
+          "join_petri": 14.4,
+          "kind": "Penny",
+          "label": "Penny player",
+          "live": 0,
+          "net": -0.04657,
+          "net_median": -0.04657,
+          "net_p10": -0.05013,
+          "net_p90": -0.03482,
+          "owed": 0.00041,
+          "planted": 35.1,
+          "plantings": 7,
+          "players": 150,
+          "seed": 3,
+          "share_positive": 0.0067,
+          "sold": 0.0,
+          "tide": 0.00041
+        },
+        {
+          "attached": 0.2184,
+          "bought": 197.5,
+          "bounty": 0.00032,
+          "claimed": 0.00848,
+          "credit": false,
+          "fed": 529.4,
+          "gas": 0.03991,
+          "held_petri": 142.7,
+          "held_value": 0.00443,
+          "join_day": 11.64,
+          "join_petri": 197.5,
+          "kind": "Builder",
+          "label": "Builder",
+          "live": 175,
+          "net": -0.22047,
+          "net_median": -0.22047,
+          "net_p10": -0.24712,
+          "net_p90": -0.08308,
+          "owed": 0.00297,
+          "planted": 331.8,
+          "plantings": 51,
+          "players": 470,
+          "seed": 6,
+          "share_positive": 0.0021,
+          "sold": 0.02167,
+          "tide": 0.01241
+        },
+        {
+          "attached": 0.2232,
+          "bought": 195.1,
+          "bounty": 0.0,
+          "claimed": 0.01342,
+          "credit": false,
+          "fed": 455.5,
+          "gas": 0.03015,
+          "held_petri": 305.9,
+          "held_value": 0.00925,
+          "join_day": 17.51,
+          "join_petri": 195.1,
+          "kind": "Defender",
+          "label": "Defender",
+          "live": 6,
+          "net": -0.23067,
+          "net_median": -0.23067,
+          "net_p10": -0.24753,
+          "net_p90": -0.08026,
+          "owed": 0.0,
+          "planted": 372.4,
+          "plantings": 50,
+          "players": 180,
+          "seed": 2,
+          "share_positive": 0.0111,
+          "sold": 0.0,
+          "tide": 0.01438
+        },
+        {
+          "attached": 0.1513,
+          "bought": 192.7,
+          "bounty": 0.0003,
+          "claimed": 0.00303,
+          "credit": false,
+          "fed": 145.2,
+          "gas": 0.02038,
+          "held_petri": 10.6,
+          "held_value": 0.0,
+          "join_day": 24.85,
+          "join_petri": 192.7,
+          "kind": "Raider",
+          "label": "Raider",
+          "live": 0,
+          "net": -0.16832,
+          "net_median": -0.16832,
+          "net_p10": -0.24573,
+          "net_p90": -0.06285,
+          "owed": 0.0,
+          "planted": 347.3,
+          "plantings": 32,
+          "players": 220,
+          "seed": 2,
+          "share_positive": 0.0045,
+          "sold": 0.0,
+          "tide": 0.00399
+        },
+        {
+          "attached": 0.1742,
+          "bought": 421.8,
+          "bounty": 0.0,
+          "claimed": 0.0386,
+          "credit": false,
+          "fed": 1617.3,
+          "gas": 0.01871,
+          "held_petri": 909.8,
+          "held_value": 0.02661,
+          "join_day": 14.32,
+          "join_petri": 421.8,
+          "kind": "Methuselah",
+          "label": "R-pentomino player",
+          "live": 179,
+          "net": -0.09827,
+          "net_median": -0.09827,
+          "net_p10": -0.15518,
+          "net_p90": 0.02971,
+          "owed": 0.00238,
+          "planted": 151.6,
+          "plantings": 24,
+          "players": 120,
+          "seed": 4,
+          "share_positive": 0.175,
+          "sold": 0.02707,
+          "tide": 0.04194
+        },
+        {
+          "attached": 0.1376,
+          "bought": 211.2,
+          "bounty": 0.001,
+          "claimed": 0.03719,
+          "credit": false,
+          "fed": 119.5,
+          "gas": 0.01733,
+          "held_petri": 4.1,
+          "held_value": 0.0,
+          "join_day": 0.02,
+          "join_petri": 211.2,
+          "kind": "Sniper",
+          "label": "Tide sniper",
+          "live": 0,
+          "net": -0.09894,
+          "net_median": -0.09894,
+          "net_p10": -0.15512,
+          "net_p90": -0.0683,
+          "owed": 0.0,
+          "planted": 147.5,
+          "plantings": 28,
+          "players": 60,
+          "seed": 1,
+          "share_positive": 0.0,
+          "sold": 0.01783,
+          "tide": 0.03911
+        },
+        {
+          "attached": 0.2,
+          "bought": 949.8,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": false,
+          "fed": 0.0,
+          "gas": 0.00111,
+          "held_petri": 0.0,
+          "held_value": 0.0,
+          "join_day": 0.01,
+          "join_petri": 949.8,
+          "kind": "Seller",
+          "label": "Buy and sell back",
+          "live": 0,
+          "net": -0.10535,
+          "net_median": -0.10535,
+          "net_p10": -0.10612,
+          "net_p90": -0.1047,
+          "owed": 0.0,
+          "planted": 0.0,
+          "plantings": 0,
+          "players": 70,
+          "seed": 2,
+          "share_positive": 0.0,
+          "sold": 0.09576,
+          "tide": 0.0
+        },
+        {
+          "attached": 3.8074,
+          "bought": 9199.3,
+          "bounty": 0.003,
+          "claimed": 1.02814,
+          "credit": false,
+          "fed": 3872.5,
+          "gas": 0.19838,
+          "held_petri": 6.7,
+          "held_value": 0.0,
+          "join_day": 14.52,
+          "join_petri": 9199.3,
+          "kind": "Whale",
+          "label": "Whale",
+          "live": 146,
+          "net": -2.59307,
+          "net_median": -2.59307,
+          "net_p10": -2.88965,
+          "net_p90": -1.69035,
+          "owed": 0.0,
+          "planted": 9576.0,
+          "plantings": 359,
+          "players": 70,
+          "seed": 8,
+          "share_positive": 0.0,
+          "sold": 0.3816,
+          "tide": 1.03102
+        },
+        {
+          "attached": 3.8041,
+          "bought": 9438.5,
+          "bounty": 0.012,
+          "claimed": 1.6416,
+          "credit": false,
+          "fed": 5030.8,
+          "gas": 0.25746,
+          "held_petri": 272.2,
+          "held_value": 0.02282,
+          "join_day": 0.81,
+          "join_petri": 9438.5,
+          "kind": "SplitWhale",
+          "label": "Split whale",
+          "live": 187,
+          "net": -1.75608,
+          "net_median": -1.75608,
+          "net_p10": -1.96324,
+          "net_p90": -1.12142,
+          "owed": 0.1489,
+          "planted": 9427.7,
+          "plantings": 421,
+          "players": 10,
+          "seed": 0,
+          "share_positive": 0.0,
+          "sold": 0.48014,
+          "tide": 1.8193
+        },
+        {
+          "attached": 2.7426,
+          "bought": 7436.4,
+          "bounty": 0.001,
+          "claimed": 1.10101,
+          "credit": false,
+          "fed": 3672.8,
+          "gas": 0.08345,
+          "held_petri": 1.3,
+          "held_value": 0.0,
+          "join_day": 0.0,
+          "join_petri": 7436.4,
+          "kind": "Locker",
+          "label": "Lattice locker",
+          "live": 0,
+          "net": -1.11378,
+          "net_median": -1.11378,
+          "net_p10": -1.46114,
+          "net_p90": -0.89529,
+          "owed": 0.12858,
+          "planted": 6403.1,
+          "plantings": 147,
+          "players": 20,
+          "seed": 5,
+          "share_positive": 0.0,
+          "sold": 0.48169,
+          "tide": 1.2315
+        },
+        {
+          "attached": 0.0,
+          "bought": 59.7,
+          "bounty": 0.0,
+          "claimed": 0.0,
+          "credit": true,
+          "fed": 61.8,
+          "gas": 0.0,
+          "held_petri": 38.6,
+          "held_value": 0.00021,
+          "join_day": 6.79,
+          "join_petri": 59.7,
+          "kind": "Guest",
+          "label": "Sponsored guest",
+          "live": 0,
+          "net": 0.00021,
+          "net_median": 0.00021,
+          "net_p10": 0.0,
+          "net_p90": 0.0019,
+          "owed": 0.0,
+          "planted": 58.7,
+          "plantings": 8,
+          "players": 190,
+          "seed": 8,
+          "share_positive": 0.6263,
+          "sold": 0.0,
+          "tide": 0.00214
+        }
+      ],
+      "guests": 190,
+      "kinds": [
+        {
+          "back_per_near": [
+            0.0066,
+            0.0269,
+            0.2133
+          ],
+          "budget": 0.05,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 21.7,
+          "held": 0.0,
+          "kind": "Penny",
+          "label": "Penny player",
+          "net": [
+            -0.05037,
+            -0.04755,
+            -0.03965
+          ],
+          "paid": 0.05033,
+          "players": 150,
+          "plays": "joins with the 0.01 NEAR minimum (0.05 in all), keeps one block alive",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.0,
+          "tide": 0.00101,
+          "total_net_per_run": -0.6999
+        },
+        {
+          "back_per_near": [
+            0.0546,
+            0.1579,
+            0.4627
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 667.8,
+          "held": 0.0,
+          "kind": "Builder",
+          "label": "Builder",
+          "net": [
+            -0.25032,
+            -0.24822,
+            -0.24501
+          ],
+          "paid": 0.29329,
+          "players": 470,
+          "plays": "joins with 0.05 NEAR (0.25 in all), still lifes near home, tops up twice",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.02208,
+          "tide": 0.02425,
+          "total_net_per_run": -11.525
+        },
+        {
+          "back_per_near": [
+            0.0603,
+            0.1821,
+            0.4704
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 739.4,
+          "held": 0.0,
+          "kind": "Defender",
+          "label": "Defender",
+          "net": [
+            -0.24959,
+            -0.2475,
+            -0.24017
+          ],
+          "paid": 0.29834,
+          "players": 180,
+          "plays": "joins with 0.05 NEAR (0.25 in all), eaters and beehives near home",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.02502,
+          "tide": 0.02739,
+          "total_net_per_run": -4.3847
+        },
+        {
+          "back_per_near": [
+            0.0293,
+            0.1207,
+            0.4169
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 536.6,
+          "held": 0.0,
+          "kind": "Raider",
+          "label": "Raider",
+          "net": [
+            -0.25002,
+            -0.24763,
+            -0.19862
+          ],
+          "paid": 0.27889,
+          "players": 220,
+          "plays": "joins with 0.05 NEAR (0.25 in all), gliders and spaceships at rivals, sieges",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.01486,
+          "tide": 0.02135,
+          "total_net_per_run": -5.225
+        },
+        {
+          "back_per_near": [
+            0.3881,
+            0.6902,
+            0.8871
+          ],
+          "budget": 0.5,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 21629.6,
+          "held": 0.0,
+          "kind": "Methuselah",
+          "label": "R-pentomino player",
+          "net": [
+            -0.50278,
+            -0.49838,
+            -0.49148
+          ],
+          "paid": 1.59751,
+          "players": 120,
+          "plays": "joins with 0.1 NEAR (0.5 in all), one R-pentomino an hour",
+          "share_positive": 0.0167,
+          "share_positive_cash": 0.0167,
+          "sold": 0.59028,
+          "tide": 0.54481,
+          "total_net_per_run": -5.5835
+        },
+        {
+          "back_per_near": [
+            0.225,
+            0.2933,
+            0.4697
+          ],
+          "budget": 0.25,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 110.1,
+          "held": 0.0,
+          "kind": "Sniper",
+          "label": "Tide sniper",
+          "net": [
+            -0.16431,
+            -0.10038,
+            -0.0693
+          ],
+          "paid": 0.15431,
+          "players": 60,
+          "plays": "plants blocks only in the 3 generations before each tide, sells after every tide",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.01651,
+          "tide": 0.03845,
+          "total_net_per_run": -0.6525
+        },
+        {
+          "back_per_near": [
+            0.4732,
+            0.4762,
+            0.4805
+          ],
+          "budget": 0.2,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 0.0,
+          "held": 0.0,
+          "kind": "Seller",
+          "label": "Buy and sell back",
+          "net": [
+            -0.10612,
+            -0.10535,
+            -0.1047
+          ],
+          "paid": 0.20117,
+          "players": 70,
+          "plays": "buys 0.2 NEAR of PETRI at join and sells it back as fast as the allowance lets it; never plants",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.09577,
+          "tide": 0.0,
+          "total_net_per_run": -0.7381
+        },
+        {
+          "back_per_near": [
+            0.3141,
+            0.4763,
+            0.6946
+          ],
+          "budget": 3.0,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 9430.2,
+          "held": 0.0,
+          "kind": "Whale",
+          "label": "Whale",
+          "net": [
+            -3.0009,
+            -2.99749,
+            -2.29665
+          ],
+          "paid": 5.38316,
+          "players": 70,
+          "plays": "joins with 2 NEAR (3 in all), pulsars and beehives anywhere, every few generations",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.58331,
+          "tide": 1.87746,
+          "total_net_per_run": -19.7753
+        },
+        {
+          "back_per_near": [
+            0.502,
+            0.648,
+            0.7344
+          ],
+          "budget": 3.0,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00006,
+          "fed": 11170.3,
+          "held": 0.0,
+          "kind": "SplitWhale",
+          "label": "Split whale",
+          "net": [
+            -2.16733,
+            -2.03961,
+            -1.78593
+          ],
+          "paid": 6.22694,
+          "players": 10,
+          "plays": "the whale's 2 NEAR (3 in all) over 10 colonies, one operator",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.53759,
+          "tide": 3.58477,
+          "total_net_per_run": -1.9999
+        },
+        {
+          "back_per_near": [
+            0.4915,
+            0.5811,
+            0.6706
+          ],
+          "budget": 2.0,
+          "credit": false,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.0,
+          "fed": 3050.8,
+          "held": 0.0,
+          "kind": "Locker",
+          "label": "Lattice locker",
+          "net": [
+            -1.46248,
+            -1.09865,
+            -0.89973
+          ],
+          "paid": 2.68371,
+          "players": 20,
+          "plays": "1.5 NEAR (2 in all) on a lattice of blocks that puts every empty cell under siege",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.49201,
+          "tide": 1.05439,
+          "total_net_per_run": -2.2865
+        },
+        {
+          "back_per_near": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "budget": 0.0,
+          "credit": true,
+          "credit_above_grant": 0.0,
+          "credit_end": 0.00166,
+          "fed": 65.9,
+          "held": 0.0,
+          "kind": "Guest",
+          "label": "Sponsored guest",
+          "net": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "paid": 0.0,
+          "players": 190,
+          "plays": "plays like a builder on 0.05 NEAR of credit someone else sponsored; attaches no NEAR of its own",
+          "share_positive": 0.0,
+          "share_positive_cash": 0.0,
+          "sold": 0.0,
+          "tide": 0.00243,
+          "total_net_per_run": 0.0
+        }
+      ],
+      "money": {
+        "after_house_out": {
+          "house_into_vault": [
+            0.00552,
+            0.01089,
+            0.02824
+          ],
+          "house_share": [
+            0.0004,
+            0.00078,
+            0.00253
+          ],
+          "paid_to_players": [
+            19.098,
+            28.6595,
+            31.6771
+          ],
+          "tides": 904.5
+        },
+        "burned": [
+          103233.0,
+          106219.0,
+          114479.0
+        ],
+        "house_out_day": 7.0,
+        "house_out_runs": 10,
+        "house_paid": [
+          2.1926,
+          2.2727,
+          2.3349
+        ],
+        "house_share": [
+          0.01607,
+          0.01707,
+          0.01758
+        ],
+        "house_share_of_inflow": [
+          0.01574,
+          0.01673,
+          0.01716
+        ],
+        "paid_from_house": [
+          0.9571,
+          1.0009,
+          1.026
+        ],
+        "paid_to_players": [
+          58.0227,
+          59.0447,
+          59.5412
+        ],
+        "players_back": [
+          56.4343,
+          57.4853,
+          58.4798
+        ],
+        "players_back_share": [
+          0.5152,
+          0.5215,
+          0.5268
+        ],
+        "players_gas": [
+          13.0196,
+          13.3191,
+          13.6348
+        ],
+        "players_net": [
+          -54.0215,
+          -52.8851,
+          -51.64
+        ],
+        "players_paid": [
+          108.3636,
+          110.5204,
+          111.6169
+        ],
+        "players_to_gas": [
+          0.1186,
+          0.1211,
+          0.1236
+        ],
+        "players_to_storage": [
+          0.3313,
+          0.3333,
+          0.3372
+        ],
+        "players_to_vault": [
+          0.5406,
+          0.5461,
+          0.5475
+        ],
+        "storage": [
+          40.0623,
+          41.0155,
+          42.0033
+        ],
+        "vault_end": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "vault_in": [
+          60.3671,
+          61.3702,
+          61.8362
+        ],
+        "vault_in_house": [
+          0.969,
+          1.0206,
+          1.0495
+        ]
+      },
+      "name": "whale siege",
+      "net": [
+        -0.49965,
+        -0.24772,
+        -0.05036
+      ],
+      "players": 1370,
+      "round_trip": {
+        "allowance_short_days": 0.52,
+        "back": [
+          0.0041,
+          0.0918,
+          0.4887
+        ],
+        "buy_record": 0.00113,
+        "curve": [
+          0.4887,
+          0.4887,
+          0.4887
+        ],
+        "day1_net": 0.4693,
+        "day60_net": 0.0,
+        "deposit": 0.05,
+        "net": [
+          0.0,
+          0.0724,
+          0.4693
+        ],
+        "petri": [
+          204.7,
+          216.9,
+          239.3
+        ],
+        "sell_record": 0.00097
+      },
+      "seeds": 10,
+      "share_positive": 0.0015,
+      "what": "steady arrivals (150 over 30 days) plus three 2-NEAR whales, a 10-colony split whale and two lattice lockers from day 0"
+    },
+    {
+      "cohorts": [],
+      "day1": [],
+      "guests": 0,
+      "kinds": [],
+      "money": {
+        "after_house_out": {
+          "house_into_vault": [
+            0.0,
+            0.00921,
+            0.02108
+          ],
+          "house_share": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "paid_to_players": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "tides": 0.0
+        },
+        "burned": [
+          1246.0,
+          1394.0,
+          1490.0
+        ],
+        "house_out_day": 5.0,
+        "house_out_runs": 10,
+        "house_paid": [
+          2.1746,
+          2.2684,
+          2.41
+        ],
+        "house_share": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "house_share_of_inflow": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "paid_from_house": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "paid_to_players": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "players_back": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "players_back_share": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "players_gas": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "players_net": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "players_paid": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "players_to_gas": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "players_to_storage": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "players_to_vault": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "storage": [
+          0.8524,
+          0.878,
+          0.9276
+        ],
+        "vault_end": [
+          1.036,
+          1.0884,
+          1.1653
+        ],
+        "vault_in": [
+          1.036,
+          1.0884,
+          1.1653
+        ],
+        "vault_in_house": [
+          1.036,
+          1.0884,
+          1.1653
+        ]
+      },
+      "name": "strains only",
+      "net": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "players": 0,
+      "round_trip": {
+        "allowance_short_days": 1.0,
+        "back": [
+          0.4887,
+          0.4887,
+          0.4887
+        ],
+        "buy_record": 0.00113,
+        "curve": [
+          0.4887,
+          0.4887,
+          0.4887
+        ],
+        "day1_net": 0.4693,
+        "day60_net": 0.4693,
+        "deposit": 0.05,
+        "net": [
+          0.4693,
+          0.4693,
+          0.4693
+        ],
+        "petri": [
+          243.9,
+          244.0,
+          244.1
+        ],
+        "sell_record": 0.00097
+      },
+      "seeds": 10,
+      "share_positive": 0.0,
+      "what": "the five house strains alone, with their mainnet budgets, and no outside player"
+    }
+  ],
+  "seeds": 10
+}

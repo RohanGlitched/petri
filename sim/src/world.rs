@@ -23,7 +23,7 @@
 //! contract enforces by refusing the planting.
 
 use crate::model::*;
-use petri_core::{credit_share, decay_stake, feed_per_cell, feed_sparse, licensed_cost, patterns, petri_for_near, planting_cost, royalty, sell_back, tide_split_sparse, ColonyId, Dish, EMPTY, STAKE_UNIT};
+use petri_core::{credit_share, decay_stake, feed_per_cell, feed_sparse, licensed_cost, near_for_petri, patterns, petri_for_near, planting_cost, royalty, sell_back, tide_split_sparse, wide_mul_div, ColonyId, Dish, EMPTY, STAKE_UNIT};
 use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -226,6 +226,52 @@ pub struct SlideRec {
     pub plantings: u32,
 }
 
+/// One account's books a day (5,760 generations) after it joined, for the economics report (sim/src/econ.rs). Read
+/// only: taking it changes nothing in the run.
+#[derive(Clone, Copy, Default)]
+pub struct Snap {
+    /// NEAR attached and gas paid so far (a guest's sponsored credit is not its NEAR and is not counted).
+    pub attached: u128,
+    pub gas: u128,
+    /// PETRI bought (at join and since), fed by the agar, and spent on plantings.
+    pub bought: u128,
+    pub join_units: u128,
+    pub fed: u128,
+    pub spent: u128,
+    /// Its tide shares (NEAR, or credit for a colony that never attached NEAR), and what it took out: tide NEAR
+    /// claimed, PETRI sold back, bounties.
+    pub tide: u128,
+    pub claimed: u128,
+    pub sold: u128,
+    pub bounty: u128,
+    pub owed: u128,
+    /// PETRI it holds at that moment, and what the sell-back would pay for all of it then.
+    pub held_units: u128,
+    pub held_value: u128,
+    pub plants: u32,
+    pub live: u32,
+}
+
+impl Snap {
+    pub fn add(&mut self, o: &Snap) {
+        self.attached += o.attached;
+        self.gas += o.gas;
+        self.bought += o.bought;
+        self.join_units += o.join_units;
+        self.fed += o.fed;
+        self.spent += o.spent;
+        self.tide += o.tide;
+        self.claimed += o.claimed;
+        self.sold += o.sold;
+        self.bounty += o.bounty;
+        self.owed += o.owed;
+        self.held_units += o.held_units;
+        self.held_value += o.held_value;
+        self.plants += o.plants;
+        self.live += o.live;
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Acct {
     pub kind: Option<Kind>,
@@ -304,6 +350,13 @@ pub struct Acct {
     pub spots: Vec<(i32, i32)>,
     pub lattice_len: usize,
     pub spots_done: usize,
+    // Economics report (read only): the NEAR it set out with, the NEAR it put into the vault, PETRI bought (and at
+    // join), and its books a day after joining.
+    pub budget: u128,
+    pub vault_in: u128,
+    pub bought: u128,
+    pub join_units: u128,
+    pub day1: Option<Snap>,
 }
 
 impl Acct {
@@ -393,6 +446,23 @@ pub struct DayRow {
     pub top_live_share: f64,
     pub top_live_kind: Option<Kind>,
     pub top_held_share: f64,
+    /// Economics report: NEAR that entered the vault in all and from the house strains; NEAR the vault paid to players
+    /// (tide shares in NEAR or credit, bounties, sell-backs, all cumulative) and the part of it that was the house's
+    /// NEAR, the vault being one pool whose every payout is drawn pro rata from what is in it; the house's part of the
+    /// vault now.
+    pub vault_in: u128,
+    pub vault_in_house: u128,
+    pub out_players: u128,
+    pub out_house: u128,
+    pub vault_house: u128,
+    /// A 0.05 NEAR round trip at the day's end prices: PETRI it buys (after the purchase record's storage), what the
+    /// sell-back curve alone would pay for them (sell_bps of the curve), and what the sell-back pays (the curve capped
+    /// by the vault's pro-rata share), before the sale record's storage and gas.
+    pub rt_units: u128,
+    pub rt_curve: u128,
+    pub rt_back: u128,
+    /// The sell allowance left until the next tide.
+    pub sell_left: u128,
 }
 
 /// One player's totals (summed over its colonies).
@@ -442,6 +512,13 @@ pub struct GroupOut {
     pub pact_in: u128,
     pub pact_refused: u32,
     pub pact_diverted: u32,
+    /// Economics report: the NEAR the player set out with, NEAR it put into the vault, PETRI bought, and its books a day
+    /// after it joined (summed over its colonies; `day1_n` colonies had a full first day inside the run).
+    pub budget: u128,
+    pub vault_in: u128,
+    pub bought: u128,
+    pub day1: Snap,
+    pub day1_n: usize,
 }
 
 impl GroupOut {
@@ -532,6 +609,11 @@ pub struct WorldOut {
     pub top_kind: Option<Kind>,
     pub house_to_players_petri: u128,
     pub secs: f64,
+    /// Economics report: NEAR into the vault from the house, NEAR the vault paid players and the house's pro-rata part.
+    pub vault_in_house: u128,
+    pub out_players: u128,
+    pub out_house: u128,
+    pub vault_house: u128,
 }
 
 pub struct RunOut {
@@ -678,6 +760,13 @@ pub struct World {
     pacts: Vec<(usize, usize, u64)>,
     timeline: Vec<TideRow>,
     days: Vec<DayRow>,
+    // Economics report (read only): the house's part of the vault, NEAR in from the house, NEAR paid to players and
+    // the house's part of it, the house's part of bounties not yet paid.
+    vault_h: u128,
+    vault_in_h: u128,
+    out_players: u128,
+    out_h: u128,
+    unbilled_bounty_h: u128,
 }
 
 pub struct Rng(u64);
@@ -896,6 +985,7 @@ impl World {
                         name_len,
                         bring,
                         wallet,
+                        budget: wallet,
                         credit_stop: u64::MAX,
                         cap: 420,
                         ..Default::default()
@@ -1064,6 +1154,11 @@ impl World {
             pacts: Vec::new(),
             timeline: Vec::new(),
             days: Vec::new(),
+            vault_h: 0,
+            vault_in_h: 0,
+            out_players: 0,
+            out_h: 0,
+            unbilled_bounty_h: 0,
             r,
             s,
         }
@@ -1156,14 +1251,18 @@ impl World {
         }
         let mut payouts = payouts;
         let bounty = std::mem::take(&mut self.unbilled_bounty);
+        let bounty_h = std::mem::take(&mut self.unbilled_bounty_h);
         if bounty > 0 {
             match p {
                 // A tide run by a house colony or a keeper pays no bounty: it stays in the vault.
                 _ if self.is_house_payer(p) => {
                     self.vault += bounty;
+                    self.vault_h += bounty_h;
                     self.bounties_kept += bounty;
                 }
                 Payer::Acct(i) => {
+                    self.out_players += bounty;
+                    self.out_h += bounty_h;
                     let a = &mut self.accts[i];
                     if !a.attached_flag {
                         a.won += bounty;
@@ -1224,6 +1323,60 @@ impl World {
                 self.keeper.gas += y;
                 self.keeper.calls += 1;
             }
+        }
+    }
+
+    // ---------- economics report (read only) ----------
+
+    /// The house's pro-rata part of `x` yoctoNEAR leaving the vault now.
+    fn house_part(&self, x: u128) -> u128 {
+        if self.vault == 0 || self.vault_h == 0 {
+            0
+        } else {
+            wide_mul_div(self.vault_h, x, self.vault).min(self.vault_h)
+        }
+    }
+
+    /// `near` entered the vault from account `i`.
+    fn inflow(&mut self, i: usize, near: u128) {
+        self.accts[i].vault_in += near;
+        if self.accts[i].kind() == Kind::House {
+            self.vault_h += near;
+            self.vault_in_h += near;
+        }
+    }
+
+    /// A 0.05 NEAR round trip now: (PETRI bought, the curve's sell-back for them, the sell-back paid).
+    pub fn round_trip(&self) -> (u128, u128, u128) {
+        let near = NEAR / 20 - buy_bytes(self.v6()) * BYTE;
+        let units = petri_for_near(near, self.agar, self.k);
+        let (agar, vault, out) = (self.agar - units, self.vault + near, self.outstanding() + units);
+        let curve = near_for_petri(units, agar, self.k, self.r.sell_bps);
+        let back = sell_back(units, agar, self.k, self.r.sell_bps, vault, out);
+        (units, curve, back)
+    }
+
+    /// The account's books now.
+    fn snap(&self, i: usize) -> Snap {
+        let a = &self.accts[i];
+        let units = a.balance + a.unclaimed;
+        let held_value = if units > 0 { self.sell_quote(units).saturating_sub(sell_bytes(self.v6()) * BYTE) } else { 0 };
+        Snap {
+            attached: a.attached,
+            gas: a.gas,
+            bought: a.bought,
+            join_units: a.join_units,
+            fed: a.earned,
+            spent: a.spent,
+            tide: a.tide_share,
+            claimed: a.claimed,
+            sold: a.sold,
+            bounty: a.bounty,
+            owed: a.owed,
+            held_units: units,
+            held_value,
+            plants: a.plants,
+            live: self.live.get(a.id as usize).copied().unwrap_or(0),
         }
     }
 
@@ -1460,6 +1613,16 @@ impl World {
         let storage = if total > 0 { storage } else { storage_cost.min(self.vault) };
         self.storage_vault += storage;
         self.storage_contract += (storage_cost - storage) as i128;
+        {
+            // Economics report: every NEAR out of the vault carries the house's share of the vault with it.
+            let h_total = self.house_part(total);
+            let h_bounty = self.house_part(bounty);
+            let h_storage = self.house_part(storage);
+            self.vault_h -= (h_total + h_bounty + h_storage).min(self.vault_h);
+            self.out_players += total;
+            self.out_h += h_total;
+            self.unbilled_bounty_h += h_bounty;
+        }
         self.vault -= total + bounty + storage;
         self.tides_paid += paid;
         self.tides_as_credit += as_credit;
@@ -1636,6 +1799,9 @@ impl World {
         self.agar -= units;
         self.vault += near;
         self.vault_in += near;
+        self.inflow(i, near);
+        self.accts[i].bought += units;
+        self.accts[i].join_units += units;
         self.credit_pool += cr;
         self.credit_in += cr;
         self.storage_players += storage;
@@ -1669,6 +1835,8 @@ impl World {
         self.agar -= units;
         self.vault += near;
         self.vault_in += near;
+        self.inflow(i, near);
+        self.accts[i].bought += units;
         self.credit_pool += cr;
         self.credit_in += cr;
         self.storage_players += storage;
@@ -1698,6 +1866,8 @@ impl World {
         self.agar -= units;
         self.vault += paid;
         self.vault_in += paid;
+        self.inflow(i, paid);
+        self.accts[i].bought += units;
         self.storage_players += storage;
         self.near_attached += near;
         self.accts[i].attached += near;
@@ -1869,6 +2039,7 @@ impl World {
         let (near, cr) = split_after_storage(att, cred, storage);
         self.vault += near;
         self.vault_in += near;
+        self.inflow(i, near);
         self.credit_pool += cr;
         self.credit_in += cr;
         self.storage_players += storage;
@@ -1945,6 +2116,12 @@ impl World {
         }
         self.accts[i].balance -= units;
         self.agar += units;
+        {
+            let h = self.house_part(near);
+            self.vault_h -= h;
+            self.out_players += near - storage;
+            self.out_h += wide_mul_div(h, near - storage, near);
+        }
         self.vault -= near;
         self.sell_left -= near;
         self.storage_players += storage;
@@ -2897,6 +3074,7 @@ impl World {
         let day = (self.t + 1) / gpd;
         let (top_live_share, top_live_kind) = self.top_live();
         let (held, top_held_share) = self.top_held();
+        let rt = self.round_trip();
         if self.house_out_day.is_none() && !house.is_empty() && house.iter().all(|a| if self.s.net == Net::Mainnet { a.wallet < a.floor + HOUSE_TOP_UP } else { a.credit() < HOUSE_TOP_UP }) {
             self.house_out_day = Some(day);
         }
@@ -2929,6 +3107,15 @@ impl World {
             top_live_share,
             top_live_kind,
             top_held_share,
+            vault_in: self.vault_in,
+            vault_in_house: self.vault_in_h,
+            out_players: self.out_players,
+            out_house: self.out_h,
+            vault_house: self.vault_h,
+            rt_units: rt.0,
+            rt_curve: rt.1,
+            rt_back: rt.2,
+            sell_left: self.sell_left,
         };
         self.tides_today = (0, 0);
         self.days.push(row);
@@ -2940,6 +3127,7 @@ impl World {
         let gpd = self.r.gens_per_day();
         let te = self.r.tide_every;
         let mut next_join = 0usize;
+        let mut next_snap = 0usize;
         let mut last_tides = 0u64;
         for t in 0..self.total {
             self.t = t;
@@ -2982,6 +3170,14 @@ impl World {
                 if due {
                     self.advance(Payer::Keeper);
                 }
+            }
+            // Economics report: each account's books a day after it joined (accounts are in joining order).
+            while next_snap < n && self.accts[next_snap].join_at + gpd <= t {
+                if self.accts[next_snap].joined {
+                    let sn = self.snap(next_snap);
+                    self.accts[next_snap].day1 = Some(sn);
+                }
+                next_snap += 1;
             }
             if t % gpd == gpd - 1 {
                 self.day_row();
@@ -3065,7 +3261,19 @@ impl World {
                 pact_in: 0,
                 pact_refused: 0,
                 pact_diverted: 0,
+                budget: 0,
+                vault_in: 0,
+                bought: 0,
+                day1: Snap::default(),
+                day1_n: 0,
             });
+            e.budget += a.budget;
+            e.vault_in += a.vault_in;
+            e.bought += a.bought;
+            if let Some(d) = &a.day1 {
+                e.day1.add(d);
+                e.day1_n += 1;
+            }
             e.kept_refused += a.kept_refused;
             e.kept_left += a.kept;
             e.farm_sold += a.farm_sold;
@@ -3178,6 +3386,10 @@ impl World {
                 top_kind: top.filter(|g| g.tide_share > 0).map(|g| g.kind),
                 house_to_players_petri: 0,
                 secs,
+                vault_in_house: self.vault_in_h,
+                out_players: self.out_players,
+                out_house: self.out_h,
+                vault_house: self.vault_h,
             },
             groups,
             timeline: self.timeline,

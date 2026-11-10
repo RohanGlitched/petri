@@ -11,7 +11,7 @@
 
 use super::*;
 
-const SCENARIOS: [(&str, &str); 5] = [
+pub(crate) const SCENARIOS: [(&str, &str); 5] = [
     ("boom", "600 outside players arrive over the first ten days, then nobody new"),
     ("steady", "5 new outside players a day for sixty days (300 in all)"),
     ("decline", "300 players arrive in the first two days and nobody after; each stops once its budget is spent"),
@@ -19,7 +19,7 @@ const SCENARIOS: [(&str, &str); 5] = [
     ("strains only", "the five house strains alone, with their mainnet budgets, and no outside player"),
 ];
 
-fn society_of(name: &str) -> Society {
+pub(crate) fn society_of(name: &str) -> Society {
     use Kind::*;
     match name {
         "boom" => mixed(600, 10.0),

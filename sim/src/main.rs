@@ -10,6 +10,7 @@
 //! cargo run --release -- <out_dir> all [--testnet path] [--mainnet path] [--seeds n]
 //! ```
 
+mod econ;
 mod model;
 mod sixty;
 mod world;
@@ -517,6 +518,7 @@ fn main() {
     match args.get(2).map(|s| s.as_str()) {
         Some("all") => all(&out_dir, &rt, &rm, (&tpath, &mpath), seeds),
         Some("days60") => sixty::days60(&out_dir, &rm, opt(&opts, "seeds").and_then(|s| s.parse().ok()).unwrap_or(5)),
+        Some("econ") => econ::econ(&out_dir, &rm, opt(&opts, "seeds").and_then(|s| s.parse().ok()).unwrap_or(10)),
         Some("bench") => sixty::bench(&out_dir, &rm, opt(&opts, "seasons").and_then(|s| s.parse().ok()).unwrap_or(1000)),
         Some("probe") => {
             let pat = args.get(3).cloned().unwrap_or_default();
@@ -531,7 +533,7 @@ fn main() {
                 print!("{}", out);
             }
         }
-        _ => eprintln!("usage: petri-sim <out_dir> all|days60|bench [--testnet path] [--mainnet path] [--seeds n] [--seasons n]"),
+        _ => eprintln!("usage: petri-sim <out_dir> all|days60|bench|econ [--testnet path] [--mainnet path] [--seeds n] [--seasons n]"),
     }
 }
 
