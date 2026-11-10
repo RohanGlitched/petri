@@ -1,0 +1,45 @@
+# Every Rust test on every push: petri-core (the Life engine and the economy), the dish contract, the living-slide purse
+# and its factory; and the browser engine's projection against the contract's catch-up and skip rule. The README's
+# test badge is this workflow's status.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: cargo test (core, contract, purse)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned toolchain (rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            purse -> target
+      - name: petri-core
+        run: cargo test --locked -p petri-core
+      - name: petri-contract
+        run: cargo test --locked -p petri-contract
+      - name: purse, factory and kit
+        run: cargo test --locked --manifest-path purse/Cargo.toml
+
+  projection:
+    name: Browser projection follows the skip rule
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lagged dish, the WebAssembly engine against the contract's catch-up
+        run: node scripts/projection-test.mjs
