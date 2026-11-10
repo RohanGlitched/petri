@@ -65,12 +65,22 @@ export function strainOf(account: string) {
   return ALL.find((s) => s.account === account) ?? null;
 }
 
-/** The bench: three testnet colonies the team plays from its own testnet NEAR (agents/run.mjs). None on mainnet. */
-export const BENCH_ACCOUNTS = ["petri-bench-a.testnet", "petri-bench-b.testnet", "petri-bench-c.testnet"];
+/** The bench: colonies the team plays from its own NEAR, outside the house (agents/run.mjs): three testnet colonies,
+ * and on each network the implicit account that minted and holds the v2 living slides. */
+export const BENCH_ACCOUNTS = [
+  "petri-bench-a.testnet",
+  "petri-bench-b.testnet",
+  "petri-bench-c.testnet",
+  "9e0f14b0b58c9760dd95af218cdd98a4417cd37d316e01cbff178d41ac5b7c5e",
+  "58135f2e727a40755df38f1d231aca159ea4ab138260b8d0d9419da63f999932",
+];
 
-/** Who an account plays for: the house strains, the team's bench, or an outside player. */
+/** Who an account plays for: the house strains, the team (its bench, and any account it made: every petri-*.testnet
+ * account and its sub-accounts, every *.petri-dish.near, which includes today's living-slide purses), or an outside
+ * player. A purse later sold to someone else would still count as the team's, which only ever understates outside play. */
 export function sideOf(account: string, house = false): "house" | "bench" | "player" {
   if (house || strainOf(account)) return "house";
   if (BENCH_ACCOUNTS.includes(account)) return "bench";
+  if (/(^|\.)petri-[a-z0-9-]+\.testnet$/.test(account) || account === "petri-dish.near" || account.endsWith(".petri-dish.near")) return "bench";
   return "player";
 }
