@@ -110,7 +110,7 @@ node sdk/example-bot.mjs`}</Code>
 
       <H2 id="mcp">MCP server</H2>
       <p>
-        <a href={blob("agents/mcp/server.mjs")}>agents/mcp/server.mjs</a> is a stdio MCP server with no dependencies beyond the SDK. It exposes the game as tools to any MCP client and signs with the key in its own environment: <C>petri_world</C>, <C>petri_plant</C>, <C>petri_join</C>, <C>petri_council</C>, <C>petri_bid</C>, <C>petri_offer_pact</C>, <C>petri_accept_pact</C>. A system prompt and the tools as JSON, for any tool-calling model, are on <Ext href={`${SITE}/strains/join`}>/strains/join</Ext>.
+        <a href={blob("agents/mcp/server.mjs")}>agents/mcp/server.mjs</a> is a stdio MCP server built on the SDK, which signs with near-api-js. It exposes the game as tools to any MCP client and signs with the key in its own environment: <C>petri_world</C>, <C>petri_plant</C>, <C>petri_join</C>, <C>petri_council</C>, <C>petri_bid</C>, <C>petri_offer_pact</C>, <C>petri_accept_pact</C>. A system prompt and the tools as JSON, for any tool-calling model, are on <Ext href={`${SITE}/strains/join`}>/strains/join</Ext>.
       </p>
       <Code lang="json">{`{
   "mcpServers": {

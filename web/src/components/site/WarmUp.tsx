@@ -6,11 +6,29 @@ import { Term } from "./Term";
 
 // A young dish: the agar releases its ration for at least `live_floor` counted cells, so until that many are alive part
 // of each ration stays in the agar. Each cell still earns the full per-cell rate; this shows how far the dish has to go.
-export function WarmUp({ tone = "dark", className = "" }: { tone?: "dark" | "paper"; className?: string }) {
+export function WarmUp({ tone = "dark", className = "", compact = false }: { tone?: "dark" | "paper"; className?: string; compact?: boolean }) {
   const { d, rules, ready, warming } = useLive();
   if (!rules || !ready || !warming) return null;
   const floor = rules.live_floor;
   const pct = Math.min(100, (100 * d.counted) / floor);
+  if (compact) {
+    // One short line over the dish; the explanation waits behind a hover (or a tap on the term).
+    const note = `Below ${int(floor)} counted cells the agar releases that share of its ration; each cell still earns the full per-cell rate.`;
+    return (
+      <p className={`${s.mini} ${className}`} role="status" title={note}>
+        <span className={s.tag}>{d.counted === 0 ? "Not feeding yet" : "Warming up"}</span>
+        <Term k="counted" place="below">
+          <b className="num">
+            {int(d.counted)}&nbsp;/&nbsp;{int(floor)}
+          </b>{" "}
+          counted
+        </Term>
+        <span className={s.miniTrack} aria-hidden="true">
+          <i style={{ width: `${pct}%` }} />
+        </span>
+      </p>
+    );
+  }
   return (
     <div className={`${s.warm} ${tone === "paper" ? s.paper : ""} ${className}`} role="status">
       {/* Below the floor the agar releases that fraction of its ration, so with no player cell counted nothing is fed. */}

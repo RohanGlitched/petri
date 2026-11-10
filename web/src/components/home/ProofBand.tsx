@@ -91,7 +91,7 @@ export function CtaBand() {
           <h2 id="cta-title" className="h2">Stake a few cents of NEAR, plant a colony, hold your ground.</h2>
           <p className="lede">
             {net.freePlay
-              ? "On the free-play dish the site gives you a guest account and testnet credit to start: name it, pick a stain, plant something. No wallet, no gas, about thirty seconds."
+              ? "On the free-play dish the site gives you a guest account and testnet credit to start: name it, pick a colour, plant something. No wallet, no gas, about thirty seconds."
               : "On the mainnet dish the NEAR is real: connect a NEAR wallet and stake 0.02 NEAR, or pay with USDC, ETH, SOL or BTC through NEAR Intents."}
           </p>
           <Link className="btn btn-amber" href="/dish">Start a colony</Link>

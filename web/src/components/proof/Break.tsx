@@ -2,7 +2,7 @@
 // Try to break it: each button signs, with this browser's guest key, a call the contract should refuse, and sends it
 // through the relayer as a lab attempt. The refusal comes back as a failed transaction with NEAR's own error text.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PACT_DEPOSIT, getColonyOf, getPact, getPlantDeposit, getRules, getState, type Colony } from "@/lib/chain";
 import { CONTRACT, EXPLORERS, FREE_PLAY, REPO } from "@/lib/config";
 import { currentEngine, refreshDish, useDish } from "@/lib/dish-store";
@@ -47,11 +47,18 @@ export function Break() {
   const [tally, setTally] = useState<Tally | null>(null);
   const [ready, setReady] = useState(false);
   const [making, setMaking] = useState(false);
+  /** The guest as last read, for attempts started before React re-renders (the first Try it makes the guest). */
+  const meRef = useRef<{ account: string; colony: Colony | null } | null>(null);
 
   const look = async () => {
     const g = savedGuest();
-    if (!g) return setMe(null);
-    setMe({ account: g.accountId, colony: await colonyWithRetry(g.accountId) });
+    if (!g) {
+      meRef.current = null;
+      return setMe(null);
+    }
+    const v = { account: g.accountId, colony: await colonyWithRetry(g.accountId) };
+    meRef.current = v;
+    setMe(v);
   };
   const loadTally = () =>
     fetch("/api/lab", { cache: "no-store" })
@@ -69,8 +76,9 @@ export function Break() {
   const ctx = () => {
     const e = currentEngine();
     if (!e || !dish.rules || !dish.state) throw new Error("The dish is still loading; try again in a moment.");
-    if (!me?.colony) throw new Error("Make a guest colony first.");
-    return { e, rules: dish.rules, state: dish.state, id: me.colony.id };
+    const mine = meRef.current?.colony;
+    if (!mine) throw new Error("Make a guest colony first.");
+    return { e, rules: dish.rules, state: dish.state, id: mine.id };
   };
 
   const attempts: Attempt[] = [
@@ -209,6 +217,13 @@ export function Break() {
   const fire = (a: Attempt) => async () => {
     setRes((r) => ({ ...r, [a.id]: { busy: true } }));
     try {
+      // No guest colony yet: the first Try it makes one (about twenty seconds), then sends the attempt.
+      if (!meRef.current?.colony) {
+        setRes((r) => ({ ...r, [a.id]: { busy: true, note: "Making a guest colony first (a proof of work, then a join), about twenty seconds…" } }));
+        await makeGuest(true);
+        if (!meRef.current?.colony) throw new Error("The guest colony could not be made. Try again in a moment.");
+        setRes((r) => ({ ...r, [a.id]: { busy: true } }));
+      }
       const steps = await a.build();
       // The double planting hands back its second action already signed.
       const presigned = a.id === "twice" && typeof steps === "string" && !steps.includes(" ");
@@ -224,7 +239,7 @@ export function Break() {
     }
   };
 
-  const makeGuest = async () => {
+  const makeGuest = async (quiet = false) => {
     setMaking(true);
     try {
       if (!savedGuest()) await createGuest();
@@ -234,13 +249,18 @@ export function Break() {
         if (!r.ok) throw new Error(r.error);
       }
       await look();
-      refreshDish();
+      await refreshDish();
     } catch (e) {
+      if (quiet) throw e;
       alert(e instanceof Error ? e.message : String(e));
     } finally {
       setMaking(false);
     }
   };
+
+  // Without a shared store the server's own counter restarts with each instance, so the tile counts what can be checked:
+  // the refused transactions listed on this page, every one a failed transaction on NearBlocks.
+  const refusedOnChain = tally?.shared ? tally.total : new Set([...(tally?.recent ?? []).map((x) => x.hash), ...RECORDED.map((r) => r.hash)]).size;
 
   if (ready && !FREE_PLAY) {
     return (
@@ -255,8 +275,8 @@ export function Break() {
       <dl className={s.tiles} style={{ marginBottom: 28 }}>
         <div className={s.tile}>
           <dt>Attempts refused</dt>
-          <dd className="num">{tally ? tally.total.toLocaleString("en-US") : "—"}</dd>
-          <small>{tally?.shared ? "since the lab opened, every visitor" : "on this server instance since it started"}</small>
+          <dd className="num">{tally ? refusedOnChain.toLocaleString("en-US") : "—"}</dd>
+          <small>{tally?.shared ? "since the lab opened, every visitor" : "refused on chain, each one listed below with its transaction"}</small>
         </div>
         <div className={s.tile}>
           <dt>Attempts that got through</dt>
@@ -267,7 +287,7 @@ export function Break() {
           <dt>Your guest</dt>
           <dd style={{ fontSize: 16, fontFamily: "var(--body)" }}>{me ? (me.colony ? `colony ${me.colony.id}, “${me.colony.name}”` : "no colony yet") : "none yet"}</dd>
           {(!me || !me.colony) && (
-            <button className="btn btn-amber btn-small" style={{ marginTop: 8 }} onClick={makeGuest} disabled={making}>
+            <button className="btn btn-amber btn-small" style={{ marginTop: 8 }} onClick={() => makeGuest()} disabled={making}>
               {making ? "Making it…" : "Make a guest colony"}
             </button>
           )}
@@ -280,7 +300,7 @@ export function Break() {
             <article key={a.id} className={s.card}>
               <h3>{a.title}</h3>
               <p>{a.why}</p>
-              <button className="btn btn-ghost btn-small" onClick={fire(a)} disabled={!!r?.busy || !me}>
+              <button className="btn btn-ghost btn-small" onClick={fire(a)} disabled={!!r?.busy || making}>
                 {r?.busy ? "Trying…" : "Try it"}
               </button>
               {r?.note && <div className={s.result}>{r.note}</div>}

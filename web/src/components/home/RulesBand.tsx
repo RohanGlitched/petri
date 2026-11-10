@@ -30,6 +30,10 @@ const SCENES: Scene[] = [
       { colony: 1, pattern: "glider", x: 4, y: 4 },
       { colony: 2, pattern: "blinker", x: 30, y: 6 },
       { colony: 3, pattern: "beehive", x: 12, y: 16 },
+      // Bystanders that live through the whole loop (checked with the engine), so the dish is not empty agar.
+      { colony: 2, pattern: "toad", x: 33, y: 15 },
+      { colony: 3, pattern: "block", x: 24, y: 2 },
+      { colony: 1, pattern: "loaf", x: 2, y: 15 },
     ],
     loop: 120,
   },
@@ -41,6 +45,9 @@ const SCENES: Scene[] = [
     seeds: [
       { colony: 1, pattern: "glider", x: 6, y: 5 },
       { colony: 2, pattern: "block", x: 17, y: 13 },
+      // Violet bystanders, clear of the crash: Red's count runs exactly as it would without them.
+      { colony: 3, pattern: "toad", x: 28, y: 3 },
+      { colony: 3, pattern: "block", x: 31, y: 17 },
     ],
     loop: 58,
   },
@@ -52,6 +59,9 @@ const SCENES: Scene[] = [
     seeds: [
       { colony: 1, pattern: "glider", x: 5, y: 4 },
       { colony: 2, pattern: "beehive", x: 20, y: 15 },
+      { colony: 3, pattern: "blinker", x: 34, y: 4 },
+      { colony: 3, pattern: "block", x: 3, y: 17 },
+      { colony: 2, pattern: "loaf", x: 32, y: 15 },
     ],
     loop: 72,
     buffer: true,

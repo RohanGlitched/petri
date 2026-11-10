@@ -109,6 +109,39 @@
   pointer-events: none;
 }
 /* Drawn from this browser's cache while the live dish is read. */
+/* Testnet's young dish: a small chip, not a bar; the note is behind a hover. */
+.warmMini {
+  width: auto;
+  max-width: max-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+/* Mainnet before any outside colony: the feed is waiting for one. */
+.firstChip,
+.sleepChip {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.firstChip { grid-template-columns: 1fr auto; align-items: center; }
+.firstChip p,
+.sleepChip p { margin: 0; }
+.sleepChip b { color: var(--bone); }
+.sleepTag {
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #120a05;
+  background: #c9b6e8;
+}
+.firstLine { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; color: var(--dim); }
+
 .staleChip {
   display: flex;
   align-items: center;
@@ -281,6 +314,20 @@
   box-shadow: inset 0 -3px 5px rgba(0, 0, 0, 0.4), inset 0 2px 3px rgba(255, 255, 255, 0.45);
 }
 .stainOn { box-shadow: 0 0 0 2px var(--amber) !important; }
+/* "+16": the colours folded away, one tap from the eight shown. */
+.moreStains {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 600 12px/1 var(--font-sans, inherit);
+  color: var(--dim);
+  background: rgba(243, 233, 218, 0.06);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: pointer;
+}
+.moreStains:hover { color: var(--bone); }
 .stains .stainTaken { cursor: not-allowed; box-shadow: none; }
 .stains .stainTaken i { opacity: 0.32; filter: saturate(0.5); }
 .stains .stainTaken::after {
@@ -605,6 +652,18 @@
   .hud, .warmChip, .err { left: 8px; right: 8px; max-width: calc(100% - 16px); }
   .inspect { left: 16px; right: 16px; max-width: calc(100% - 32px); }
   .stickyCta { background: none; position: static; }
+  /* Start and Plant stay at the bottom of the screen while the page scrolls under them. */
+  .stickyCta.actionBar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    margin: 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(18, 10, 5, 0) 0, rgba(18, 10, 5, 0.92) 16px);
+  }
+  .app { padding-bottom: 84px; }
   .canvas { position: relative; height: 62svh; order: 0; }
   .dock { order: 1; }
   .left { order: 2; }

@@ -260,6 +260,23 @@ function startFailure(e: unknown): string {
   return msg;
 }
 
+/** A move that failed before NEAR ran it (the network, a busy RPC, an expired signature): safe to send once more. */
+const TRANSIENT = /Failed to fetch|NetworkError|Load failed|network|timed? ?out|aborted|RPC|is busy|Could not read the chain|expired before|answered 5\d\d|answered 429|Every NEAR RPC provider failed/i;
+
+/** What the planting card says when a planting failed: the contract's own reason in plain words, never a raw panic. */
+function plantFailure(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  const said = msg.match(/Smart contract panicked: ([^"\\]+)/)?.[1]?.trim();
+  if (/behind the clock/i.test(msg)) return "The dish moved on while this was signed. Press plant again: it catches the dish up first.";
+  if (/one planting per generation/i.test(msg)) return "One planting a generation. Wait for the next one (under 15 seconds) and press plant again.";
+  if (NO_CREDIT.test(msg)) return said ? `${said[0].toUpperCase()}${said.slice(1)}.` : "Not enough credit for this planting's deposit.";
+  if (/expired before/i.test(msg)) return "The signed planting expired before it reached NEAR. Press plant again.";
+  if (TRANSIENT.test(msg)) return "NEAR's public RPC is busy and the planting did not go through, even on a second provider. Press plant again in a few seconds.";
+  if (said) return `The dish refused it: ${said}.`;
+  if (/wasm execution failed|FunctionCallError|ExecutionError|panicked/i.test(msg)) return "The dish did not take the planting this time. Retry in a few seconds.";
+  return msg;
+}
+
 /** A lab-bench name for a new colony, so Start works at once: "Night Shift 412", "Agar Watch 77". */
 const NAME_A = ["Night", "Late", "Early", "Quiet", "Second", "Warm", "Amber", "Glass", "Lamp", "Bench", "Slow", "North", "Lucky", "Small"];
 const NAME_B = ["Shift", "Bench", "Watch", "Culture", "Plate", "Lab", "Bloom", "Colony", "Sample", "Batch", "Strain", "Swab"];
@@ -379,6 +396,11 @@ export function DishStage() {
   const [joinPicked, setJoinPicked] = useState<number | null>(null);
   /** A join under way: which of its steps is running (1 to 3), and the name and stain it joins with. */
   const [joining, setJoining] = useState<{ step: number; guest: boolean; name: string; color: number } | null>(null);
+  /** While a join is under way the eight-second poll leaves the colony alone: the progress card stays until the join's
+   * own transaction returns, and the colony card then opens with the balance the join bought. */
+  const joiningRef = useRef(false);
+  /** The player has typed in the name field (so a random name never merges with what they type). */
+  const [joinTouched, setJoinTouched] = useState(false);
   /** After a join, a block is picked and pinned on open agar so the next press plants it. */
   const autoPin = useRef(false);
   /** Where "Find open agar" pinned the stamp, said in the planting card itself (never in a toast over its button). */
@@ -436,6 +458,7 @@ export function DishStage() {
       setBalance(null);
       return;
     }
+    if (joiningRef.current) return;
     try {
       const [c, b, cl, n, cr, pn] = await Promise.all([
         getColonyOf(player.accountId),
@@ -445,6 +468,7 @@ export function DishStage() {
         getCredit(player.accountId).catch(() => "0"),
         getPending(player.accountId).catch(() => "0"),
       ]);
+      if (joiningRef.current) return;
       setPendingNear(pendingYocto(pn));
       setMe(c);
       setBalance(Number(b));
@@ -759,6 +783,7 @@ export function DishStage() {
       return;
     }
     const guest = !player || player.kind === "guest";
+    joiningRef.current = true;
     // A guest sees the three steps in a progress card where the form was; a wallet sees one busy line.
     const step = (n: number, text: string) => {
       setBusy(guest ? `${n}/3 ${text}…` : `${text}…`);
@@ -792,7 +817,8 @@ export function DishStage() {
       setJustJoined(accountId);
       centredFor.current = accountId;
       setJoining({ step: 4, guest, name, color });
-      const held = await readJoined(accountId);
+      // The join bought about joinPetri; the card shows that at once and the chain's figure replaces it when read.
+      const held = await readJoined(accountId, joinPetri);
       const amount = held !== null ? petri(held, 2) : `about ${petri(joinPetri)}`;
       setDone({
         text: net.freePlay
@@ -810,11 +836,13 @@ export function DishStage() {
       markPicked();
       autoPin.current = true;
       setJoinName(labName());
+      setJoinTouched(false);
       setJoinPicked(null);
       await refreshDish();
     } catch (e) {
       setError(startFailure(e));
     } finally {
+      joiningRef.current = false;
       setBusy(null);
       setJoining(null);
     }
@@ -822,7 +850,7 @@ export function DishStage() {
 
   /** Read the colony a join just made (an optimistic read can lag a block, so a few tries), show it at once, and
    * return its PETRI balance. */
-  async function readJoined(accountId: string): Promise<number | null> {
+  async function readJoined(accountId: string, bought: number): Promise<number | null> {
     for (let i = 0; i < 8; i++) {
       const c = await getColonyOf(accountId).catch(() => null);
       if (c) {
@@ -832,7 +860,9 @@ export function DishStage() {
           getClaimable(accountId).catch(() => null),
         ]);
         setMe(c);
-        if (b !== null) setBalance(Number(b));
+        // Never a colony card that says "needs more" while the join's message says what it bought: until the chain's
+        // balance is read, the join's quote stands in for it.
+        setBalance(b !== null ? Number(b) : bought);
         if (cr !== null) setCredit(BigInt(cr));
         if (cl) setClaimable({ petri: Number(cl.petri), near: Number(cl.near) });
         setLoadedFor(accountId);
@@ -866,7 +896,16 @@ export function DishStage() {
       const trimmed = note.trim();
       const slide = licensed && custom ? custom.id : null;
       const deposit = BigInt(await getPlantDeposit(cells.length, trimmed ? new TextEncoder().encode(trimmed).length : null, slide));
-      const r = await plantCells(cells, trimmed, deposit, slide);
+      let r: { hash: string };
+      try {
+        r = await plantCells(cells, trimmed, deposit, slide);
+      } catch (e) {
+        // A guest's planting that never reached NEAR goes once more, through the next RPC provider; a wallet's is not
+        // re-sent behind its back.
+        if (isWallet || !TRANSIENT.test(e instanceof Error ? e.message : String(e))) throw e;
+        await new Promise((res) => setTimeout(res, 1200));
+        r = await plantCells(cells, trimmed, deposit, slide);
+      }
       const how = slide ? ` under specimen ${slide}'s licence` : "";
       const secsPerGen = Math.round(genMs / 1000);
       setDone({
@@ -890,7 +929,7 @@ export function DishStage() {
       await loadMe();
     } catch (e) {
       setPending(null);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(plantFailure(e));
     } finally {
       setBusy(null);
     }
@@ -1163,10 +1202,16 @@ export function DishStage() {
     focusCells(cellsOf(me.id), { colony: me.id, color: myColor });
   }
 
+  /** Open the start panel (unfolded) and bring it into view: the mainnet "be the first colony" chip's button. */
+  function openStart() {
+    setStartFolded(false);
+    requestAnimationFrame(() => document.getElementById("start-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+  }
+
   /** Copy (or, on a phone, share) a link that opens the dish on this colony. */
   async function shareColony() {
     if (!me) return;
-    const url = shareUrl(`/dish?colony=${me.id}`);
+    const url = shareUrl(`/c/${me.id}`);
     try {
       if (coarse && typeof navigator.share === "function") {
         await navigator.share({ title: `${me.name} on ${PRODUCT}`, text: `My colony on ${PRODUCT}, a memecoin that is alive.`, url });
@@ -1389,7 +1434,7 @@ export function DishStage() {
     // findMine reads the same cells; it runs once per account.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player, me, d.cells]);
-  // /dish?colony=<id>, the link "Share my colony" copies: open on that colony, pulse it and show its card.
+  // /dish?colony=<id> (where a /c/<id> share page leads): open on that colony, pulse it and show its card.
   useEffect(() => {
     const id = asked.current?.colony;
     if (!id || !d.cells || !ready || !lens.current?.view().w) return;
@@ -1530,7 +1575,7 @@ export function DishStage() {
     ) : null;
   const joinTaken = livingStains(d.colonies, d.liveCounts);
   const waitingForColony = !me && !!player && loadedFor !== player.accountId && justJoined !== player.accountId && !busy && !joining;
-  const showProgress = !me && (!!joining || (!!player && justJoined === player.accountId));
+  const showProgress = (!!joining && !(me && joining.step >= 4)) || (!me && !!player && justJoined === player.accountId);
   const showJoin = !me && !startFolded && !showProgress && !(player && loadedFor !== player.accountId);
   /** The pinned-spot line, while the stamp is still where Find open agar put it. */
   const pinned = pinNote && target && pinNote.key === stampKey ? pinNote.text : null;
@@ -1635,11 +1680,42 @@ export function DishStage() {
         <div><span><Term k="agar" place="below" align="end">Agar</Term></span><b className="num">{ready ? petri(d.agar) : stale ? petri(cache!.agar) : "…"}</b></div>
         <div className={s.hudNet}><NetTag short /></div>
       </div>
-      {ready && warming && (
-        <div ref={warmBox} className={s.warmChip}>
-          <WarmUp />
+      {ready && d.asleep ? (
+        // More than max_lag behind: the contract's next call skips ahead, so the board shown is where that call leaves it.
+        <div
+          ref={warmBox}
+          className={`${s.warmChip} ${s.sleepChip}`}
+          role="status"
+          title={`Nobody has moved on this dish for a while. The contract's next call (any move: a join, a planting, an advance) skips ${int(d.skipNext)} generations, which never run and pay no feed, then runs the last ${rules?.max_catchup ?? 120}. The board shown is where that call leaves it.`}
+        >
+          <p>
+            <span className={s.sleepTag}>Asleep</span> The next move wakes the dish and skips <b className="num">{int(d.skipNext)}</b> generations.
+          </p>
+          {!net.freePlay && d.counted === 0 && (
+            <p className={s.firstLine}>
+              The first outside colony starts the feed: be it.
+              {!me && (
+                <button type="button" className={s.linkish} onClick={openStart}>
+                  Start a colony
+                </button>
+              )}
+            </p>
+          )}
         </div>
-      )}
+      ) : ready && warming && !net.freePlay && d.counted === 0 ? (
+        <div ref={warmBox} className={`${s.warmChip} ${s.firstChip}`} role="status">
+          <p>The first outside colony starts the feed: be it.</p>
+          {!me && (
+            <button type="button" className="btn btn-amber btn-small" onClick={openStart}>
+              Start a colony
+            </button>
+          )}
+        </div>
+      ) : ready && warming ? (
+        <div ref={warmBox} className={`${s.warmChip} ${s.warmMini}`}>
+          <WarmUp compact />
+        </div>
+      ) : null}
       {stale && d.status !== "error" && (
         <div ref={warmBox} className={`${s.warmChip} ${s.staleChip}`} role="status">
           <i className={s.spin} aria-hidden="true" />
@@ -1697,7 +1773,15 @@ export function DishStage() {
               taken={joinTaken}
               freePlay={net.freePlay}
               name={joinName}
-              onName={setJoinName}
+              touched={joinTouched}
+              onName={(n) => {
+                setJoinName(n);
+                setJoinTouched(true);
+              }}
+              onRoll={() => {
+                setJoinName(labName());
+                setJoinTouched(false);
+              }}
               picked={joinPicked}
               onPick={setJoinPicked}
               error={error && !busy ? error : null}
@@ -1763,7 +1847,7 @@ export function DishStage() {
                 <em className="num">{note.length}/140</em>
               </label>
             )}
-            <div className={s.stickyCta}>
+            <div className={`${s.stickyCta} ${s.actionBar}`}>
             <button className="btn btn-amber" disabled={!me || !target || !legal || !!busy || !canAfford || plantedThisGen} onClick={plant}>
               {!me
                 ? "Start a colony to plant"
@@ -2218,6 +2302,11 @@ function JoinProgress({ step, guest, name, color }: { step: number; guest: boole
           <span>A block pinned on open agar, ready to plant</span>
         </li>
       </ol>
+      <div className={`${s.stickyCta} ${s.actionBar}`}>
+        <button className="btn btn-amber" type="button" disabled style={{ width: "100%" }}>
+          {landed ? "Reading your colony…" : `Joining… ${at} of ${steps.length}`}
+        </button>
+      </div>
     </section>
   );
 }
@@ -2233,7 +2322,9 @@ function JoinForm({
   taken,
   freePlay,
   name,
+  touched,
   onName,
+  onRoll,
   picked,
   onPick,
   error,
@@ -2249,7 +2340,10 @@ function JoinForm({
   taken: Map<number, string>;
   freePlay: boolean;
   name: string;
+  /** The player has typed in the field; until then the name is a suggestion that typing replaces. */
+  touched: boolean;
   onName: (name: string) => void;
+  onRoll: () => void;
   picked: number | null;
   onPick: (color: number) => void;
   error: string | null;
@@ -2258,6 +2352,15 @@ function JoinForm({
   const color = picked !== null && !taken.has(picked) ? picked : firstFreeStain(new Set(taken.keys()));
   const valid = name.trim().length > 0 && name.trim().length <= 24;
   const takenStains = STAINS.flatMap((st) => (taken.has(st.color) ? [{ name: st.name, owner: taken.get(st.color)! }] : []));
+  // Eight colours at first (the chosen one among them, free ones before worn ones), the rest one tap away.
+  const [allStains, setAllStains] = useState(false);
+  const shownStains = useMemo(() => {
+    const free = STAINS.filter((st) => !taken.has(st.color) && st.color !== color);
+    const worn = STAINS.filter((st) => taken.has(st.color) && st.color !== color);
+    const chosen = STAINS.filter((st) => st.color === color);
+    const pick = [...chosen, ...free, ...worn].slice(0, 7);
+    return STAINS.filter((st) => pick.includes(st));
+  }, [taken, color]);
   return (
     <section className={s.card} id="start-panel">
       <div className={s.joinHead}>
@@ -2292,8 +2395,22 @@ function JoinForm({
         <label className={s.field}>
           <span>Colony name</span>
           <span className={s.nameRow}>
-            <input value={name} onChange={(e) => onName(e.target.value)} maxLength={24} placeholder="e.g. Night Shift 412" />
-            <button type="button" className={s.dice} onClick={() => onName(labName())} aria-label="Another name" title="Another name">
+            <input
+              value={name}
+              onFocus={(e) => {
+                // The suggested name is selected, so the first key typed replaces it rather than joining it.
+                if (!touched) e.currentTarget.select();
+              }}
+              onChange={(e) => {
+                let v = e.target.value;
+                // A browser that kept the caret after the suggestion (no selection): keep only what was typed.
+                if (!touched && name && v.length > name.length && v.startsWith(name)) v = v.slice(name.length).trimStart();
+                onName(v);
+              }}
+              maxLength={24}
+              placeholder="e.g. Night Shift 412"
+            />
+            <button type="button" className={s.dice} onClick={onRoll} aria-label="Another name" title="Another name">
               <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
                 <rect x="2.5" y="2.5" width="13" height="13" rx="3.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
                 <circle cx="6.2" cy="6.2" r="1.15" fill="currentColor" />
@@ -2305,9 +2422,9 @@ function JoinForm({
         </label>
         <fieldset className={s.stains}>
           <legend>
-            <Term k="stain" place="below" align="start">Stain</Term> <em>{STAINS.find((x) => x.color === color)?.name}</em>
+            <Term k="stain" place="below" align="start">Colour</Term> <em>{STAINS.find((x) => x.color === color)?.name}</em>
           </legend>
-          {STAINS.map((st) => {
+          {(allStains ? STAINS : shownStains).map((st) => {
             const owner = taken.get(st.color);
             return (
               <label
@@ -2321,6 +2438,11 @@ function JoinForm({
               </label>
             );
           })}
+          {!allStains && STAINS.length > shownStains.length && (
+            <button type="button" className={s.moreStains} onClick={() => setAllStains(true)} aria-label={`Show all ${STAINS.length} colours`}>
+              +{STAINS.length - shownStains.length}
+            </button>
+          )}
         </fieldset>
         {takenStains.length > 0 && (
           <>
@@ -2341,7 +2463,7 @@ function JoinForm({
             {error}
           </p>
         )}
-        <div className={s.stickyCta}>
+        <div className={`${s.stickyCta} ${s.actionBar}`}>
           <button className="btn btn-amber" type="submit" disabled={!valid || busy} style={{ width: "100%" }}>
             {valid ? "Start my colony" : "Name your colony to start"}
           </button>

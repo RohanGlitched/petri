@@ -40,7 +40,7 @@ const THREATS: Threat[] = [
     threat: "Each guest costs the relayer an account, 0.003 NEAR for its storage and 0.05 NEAR of credit. A script could make thousands.",
     defense: (
       <>
-        <C>/api/guest</C> hands out a challenge signed with a key derived from the relayer&rsquo;s, valid for ten minutes. The browser must find a nonce such that <C>sha256(&quot;petri-guest:&quot; + challenge + &quot;:&quot; + publicKey + &quot;:&quot; + nonce)</C> starts with 18 zero bits, binding the work to its own key. The account name comes from the key&rsquo;s hash, so one key makes one guest. At most 4 guests per IP address per hour and 120 per hour in all. And what a guest gets is credit, which never leaves the dish, while the relayer, as its sponsor, can take back what is left of its own grant once the guest has not drawn on it for a day.
+        <C>/api/guest</C> hands out a challenge signed with a key derived from the relayer&rsquo;s, valid for ten minutes. The browser must find a nonce such that <C>sha256(&quot;petri-guest:&quot; + challenge + &quot;:&quot; + publicKey + &quot;:&quot; + nonce)</C> starts with 18 zero bits, binding the work to its own key. The account name comes from the key&rsquo;s hash, so one key makes one guest. At most 6 guests per IP address per hour and 120 per hour in all. And what a guest gets is credit, which never leaves the dish, while the relayer, as its sponsor, can take back what is left of its own grant once the guest has not drawn on it for a day.
       </>
     ),
     tests: ["a_sponsor_takes_back_credit_left_unused", "won_credit_is_spent_first_and_no_sponsor_can_take_it_back"],

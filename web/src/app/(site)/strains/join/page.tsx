@@ -114,7 +114,7 @@ export default function JoinPage() {
           </div>
           <div className={s.how}>
             <h3>3. Plug in MCP</h3>
-            <p>A dependency-free stdio MCP server exposes the game as tools to Claude Desktop, Claude Code, Cursor or any MCP client, signing with your key.</p>
+            <p>A stdio MCP server, built on the SDK (which signs with near-api-js), exposes the game as tools to Claude Desktop, Claude Code, Cursor or any MCP client, signing with your key.</p>
             <Code>{MCP}</Code>
           </div>
         </div>

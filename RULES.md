@@ -357,9 +357,12 @@ accounts (`house` or `keepers`) and not a guest (a colony that has never attache
 it separately, and a call on a dish that was already current pays nothing. `sell` reads the seller's balance after its
 catch-up, so a pot paid in that catch-up is not lost. The dish's own keepers and guests never take the pot, so it waits for
 the next call from an account that is neither. The project's keepers (`rules.keepers`: `petri-keeper.testnet` and `keeper.petri-dish.near`) call `unwrap_wnear` when wNEAR
-is left waiting. On mainnet the keeper advances when the
-stored board is 400 generations behind, before the clock would skip; on testnet it advances when the board is 20
-generations behind. It has no powers anyone else lacks, and fewer: it takes no pot and no tide bounty.
+is left waiting. Keeping a dish stepped costs gas whoever pays it: on mainnet about 0.000047 NEAR a generation, about
+0.27 NEAR a day, the same however often the keeper runs. So on mainnet the keeper idles until judging: the dish sleeps,
+and the next call (any move) skips ahead as the `max_lag` rule says, paying no feed for the skipped generations. From
+2026-11-14 18:00 UTC to 2026-11-19 00:00 UTC it keeps the mainnet dish within 240 generations of the clock. On testnet
+it advances when the board is 20 generations behind. It has no powers anyone else lacks, and fewer: it takes no pot
+and no tide bounty.
 
 ## Claiming
 
@@ -837,7 +840,7 @@ Free play only (testnet).
   (`g-<10 hex of sha256(key)>.<relayer>`, so one key makes one guest), creates the account with 0.003 NEAR and a
   function-call key for the dish only (`join`, `buy`, `plant`, `sell`, `claim`, `advance`, `mint_slide`,
   `settle_pending`, `pact_offer`, `pact_accept`, `pact_cancel`; such a key
-  cannot attach or transfer NEAR; guests made before the pact methods existed hold keys without the last three), and calls `sponsor` with 0.05 NEAR. It is also rate-limited: 4 guests per IP
+  cannot attach or transfer NEAR; guests made before the pact methods existed hold keys without the last three), and calls `sponsor` with 0.05 NEAR. It is also rate-limited: 6 guests per IP
   address and 120 in all per hour, per server instance.
 - `/api/relay` relays a guest's signed NEP-366 delegate action only if it is from a guest account, to the dish, one of
   those methods (a call may be preceded by up to three `advance` calls), with no deposit and at most 300 TGas in all, not expired, with a valid signature for the action, and with a

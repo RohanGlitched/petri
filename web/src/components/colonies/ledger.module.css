@@ -163,3 +163,6 @@
 @media (pointer: coarse), (max-width: 799px) {
   .sorts button { height: 44px; padding: 0 16px; }
 }
+
+/* "Show them": a link-styled button inside the empty state. */
+.inlineLink { border: 0; padding: 0; background: none; color: var(--amber); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

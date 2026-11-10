@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLive, petri, int, hex, near } from "@/lib/live";
-import { getBalance, getTideWinnings } from "@/lib/chain";
+import { viewShared } from "@/lib/chain";
 import { accountUrl, shortAccount } from "@/lib/config";
 import { sideOf, strainOf } from "@/lib/strains";
+import { sideOfAccount, type Side } from "@/lib/sides";
 import s from "./ledger.module.css";
 import { BenchTag, BENCH_LABEL, BENCH_TITLE } from "@/components/site/BenchTag";
 
@@ -76,13 +77,15 @@ export function Ledger() {
   const places = useMemo(() => whereabouts(d.cells, w, h), [d.cells, w, h]);
   const fedYet = !!d.state && (Number(d.state.fed) > 0 || d.pending.some((p) => p > 0));
   const [sort, setSort] = useState<Sort>("live");
+  /** Outside players first: the team's own colonies (house, bench, test accounts) are one tap away under Everyone. */
+  const [view, setView] = useState<"outside" | "all">("outside");
   const [balances, setBalances] = useState<Record<string, number>>({});
   // NEAR each colony has won at the tides, claimed or not (index = colony id - 1), for the outside-players counter.
   const [winnings, setWinnings] = useState<number[] | null>(null);
   const tides = d.state?.tides;
   useEffect(() => {
     let stop = false;
-    getTideWinnings(0, 2000).then(
+    viewShared<string[]>("tide_winnings", { from: 0, limit: 500 }).then(
       (w) => !stop && setWinnings(w.map(Number)),
       () => !stop && setWinnings((x) => x),
     );
@@ -91,16 +94,18 @@ export function Ledger() {
     };
   }, [tides, d.colonies.length]);
 
-  // Balances are one view call per colony; read them for the colonies on screen, refreshed every half minute.
+  // Balances are one view call per colony; read them for the colonies on screen, refreshed every half minute, at the
+  // block every visitor shares (through the site's cache), so a busy page does not spend the public RPC.
+  const accounts = useMemo(() => d.colonies.slice(0, 120).map((c) => c.account), [d.colonies]);
+  const accountsKey = accounts.join(",");
   useEffect(() => {
     let stop = false;
     const load = async () => {
-      const want = d.colonies.slice(0, 120);
       const out: Record<string, number> = {};
       await Promise.all(
-        want.map(async (c) => {
+        accounts.map(async (account) => {
           try {
-            out[c.account] = Number(await getBalance(c.account));
+            out[account] = Number(await viewShared<string>("ft_balance_of", { account_id: account }));
           } catch {
             /* keep the last value */
           }
@@ -108,13 +113,14 @@ export function Ledger() {
       );
       if (!stop) setBalances((b) => ({ ...b, ...out }));
     };
-    if (d.colonies.length) load();
+    if (accounts.length) load();
     const t = setInterval(load, 30_000);
     return () => {
       stop = true;
       clearInterval(t);
     };
-  }, [d.colonies]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountsKey]);
 
   const rows = useMemo(() => {
     const r = colonies.map((c) => {
@@ -136,7 +142,12 @@ export function Ledger() {
   const total = d.totalLive || 1;
   const alive = rows.filter((r) => r.live > 0);
   // The honest counters: who outside the team plays, and what the dish has paid them.
-  const outside = rows.filter((r) => sideOf(r.account, r.house) === "player");
+  const isOutside = (r: { account: string; house: boolean }) => {
+    const side = sideOfAccount(r.account, r.house);
+    return side === "outside" || side === "guest";
+  };
+  const outside = rows.filter(isOutside);
+  const shown = view === "outside" ? outside : rows;
   const outsideAlive = outside.filter((r) => r.live > 0).length;
   const outsideWon = winnings ? outside.reduce((n, r) => n + (winnings[r.id - 1] ?? 0), 0) : null;
   const teamWon = winnings ? rows.filter((r) => sideOf(r.account, r.house) !== "player").reduce((n, r) => n + (winnings[r.id - 1] ?? 0), 0) : null;
@@ -149,7 +160,7 @@ export function Ledger() {
         <div>
           <dt>Outside colonies</dt>
           <dd className="num">{ready ? int(outside.length) : "—"}</dd>
-          <p>{ready ? `${int(outsideAlive)} alive now. Not counted: the five house strains${d.colonies.some((c) => sideOf(c.account) === "bench") ? " and the team's three bench colonies" : ""}.` : "Reading the colonies…"}</p>
+          <p>{ready ? `${int(outsideAlive)} alive now. Not counted: the house strains${d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the team's bench" : ""} and the team's own test accounts. Guests count: the chain cannot tell whose browser made one.` : "Reading the colonies…"}</p>
         </div>
         <div>
           <dt>NEAR won at tides by outside players</dt>
@@ -171,7 +182,7 @@ export function Ledger() {
         </div>
       </dl>
 
-      <section className={s.share} aria-label="Share of the dish">
+      <section className={s.share} aria-label="Share of the dish" style={ready ? undefined : { minHeight: 150 }}>
         <div className={s.bar}>
           {legend.map((r) => (
             <span key={r.id} style={{ width: `${(100 * r.live) / total}%`, background: hex(r.color) }} title={`${r.name}: ${int(r.live)} cells`} />
@@ -200,6 +211,14 @@ export function Ledger() {
         </p>
       </section>
 
+      <div className={s.sorts} role="group" aria-label="Which colonies">
+        <button aria-pressed={view === "outside"} className={view === "outside" ? s.on : undefined} onClick={() => setView("outside")}>
+          Outside players{ready ? ` (${int(outside.length)})` : ""}
+        </button>
+        <button aria-pressed={view === "all"} className={view === "all" ? s.on : undefined} onClick={() => setView("all")}>
+          Everyone, the team&rsquo;s included{ready ? ` (${int(rows.length)})` : ""}
+        </button>
+      </div>
       <div className={s.sorts} role="group" aria-label="Sort colonies by">
         {(
           [
@@ -216,7 +235,7 @@ export function Ledger() {
         ))}
       </div>
 
-      <ol className={s.list}>
+      <ol className={s.list} style={ready ? undefined : { minHeight: 720 }}>
         {ready && outside.length === 0 && (
           // Every colony so far is the team's: say so first, and invite the first outside player in.
           <li className={`${s.row} ${s.pinned}`}>
@@ -224,8 +243,17 @@ export function Ledger() {
             <div className={s.who}>
               <span className={s.terrEmpty} aria-hidden="true" />
               <div>
-                <p className={s.name}>No player colonies yet. Be the first.</p>
-                <p className={s.joined}>Every colony below belongs to the team: the house strains{d.colonies.some((c) => sideOf(c.account) === "bench") ? " and the bench" : ""}.</p>
+                <p className={s.name}>No outside colonies yet. Be the first.</p>
+                <p className={s.joined}>
+                  {view === "outside" ? (
+                    <>
+                      Every colony on this dish so far is the team&rsquo;s: the house strains{d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the bench" : ""} and test accounts.{" "}
+                      <button type="button" className={s.inlineLink} onClick={() => setView("all")}>Show them</button>
+                    </>
+                  ) : (
+                    <>Every colony below belongs to the team: the house strains{d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the bench" : ""} and test accounts.</>
+                  )}
+                </p>
               </div>
             </div>
             <div className={s.pinnedCta}>
@@ -233,8 +261,9 @@ export function Ledger() {
             </div>
           </li>
         )}
-        {rows.map((r, i) => {
+        {shown.map((r, i) => {
           const ai = strainOf(r.account);
+          const side: Side = sideOfAccount(r.account, r.house);
           const preFeed = !fedYet || r.earned === 0;
           return (
             <li key={r.id} className={s.row}>
@@ -247,6 +276,11 @@ export function Ledger() {
                     {r.name}
                     {ai && <span className={s.ai}>AI, {ai.temperament.toLowerCase()}</span>}
                     <BenchTag account={r.account} />
+                    {(side === "team" || side === "guest") && (
+                      <span className="benchtag" title={side === "team" ? "An account the Petri Dish team made (a test agent, a living slide's purse or a lab account)" : "A free-play guest: a key in someone's browser, the team's own test runs included"}>
+                        {side === "team" ? "team test" : "guest"}
+                      </span>
+                    )}
                   </p>
                   <a className={s.acct} href={accountUrl(r.account)}>{shortAccount(r.account, 30)}</a>
                   <p className={s.joined}>Joined at generation {int(r.joined)}, planted {int(Number(r.cells_planted))} cells</p>

@@ -68,7 +68,7 @@ export default function Page() {
               <C>petri-core</C> (<C>core/</C>)
             </td>
             <td>
-              The rules, <C>no_std</C>: the bit-sliced Life step with owners, planting checks and sieges, the feed with reach and the floor, prices, the buy and sell-back curves, the tide split, the history chain, the board&rsquo;s compact form and hash, slide bitmaps, their SVG and their licence (<C>fits_slide</C>, <C>licensed_cost</C>, <C>royalty</C>), the named patterns. Depends only on <C>sha2</C>. 35 tests, including property tests against a reference Life.
+              The rules, <C>no_std</C>: the bit-sliced Life step with owners, planting checks and sieges, the feed with reach and the floor, prices, the buy and sell-back curves, the tide split, the history chain, the board&rsquo;s compact form and hash, slide bitmaps, their SVG and their licence (<C>fits_slide</C>, <C>licensed_cost</C>, <C>royalty</C>), the named patterns. Depends only on <C>sha2</C>. {TESTS.core} tests, including property tests against a reference Life.
             </td>
           </tr>
           <tr>

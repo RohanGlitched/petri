@@ -12,7 +12,7 @@ export const SHARED = !!(URL_ && TOKEN);
 export const UNIT = 10n ** 18n;
 /** What relaying and making guests may spend in a UTC day, in all (default 2 NEAR) and per address (0.25 NEAR). */
 export const DAILY_CAP = BigInt(process.env.PETRI_RELAY_DAILY_NEAR_MICRO ?? "2000000");
-export const DAILY_CAP_PER_IP = BigInt(process.env.PETRI_RELAY_DAILY_NEAR_MICRO_PER_IP ?? "250000");
+export const DAILY_CAP_PER_IP = BigInt(process.env.PETRI_RELAY_DAILY_NEAR_MICRO_PER_IP ?? "500000");
 /** Most refused attempts the lab relays in a day, in all and per guest. */
 export const LAB_DAILY = Number(process.env.PETRI_LAB_DAILY ?? "400");
 export const LAB_DAILY_PER_GUEST = Number(process.env.PETRI_LAB_DAILY_PER_GUEST ?? "30");
@@ -80,7 +80,7 @@ export async function overBudget(ip: string): Promise<string | null> {
   const d = day();
   const [all, mine] = await Promise.all([get(`petri:spend:${d}`), get(`petri:spend:${d}:${ip}`)]);
   if (all >= DAILY_CAP) return "The relayer has spent today's budget. Free play resumes at 00:00 UTC; a NEAR wallet works meanwhile.";
-  if (mine >= DAILY_CAP_PER_IP) return "This address has used today's share of the relayer. Try again tomorrow, or connect a NEAR wallet.";
+  if (mine >= DAILY_CAP_PER_IP) return "This network has used today's share of the free-play relayer. Watch meanwhile (press C on /dish for cinema mode, or replay the history on /verify), connect a NEAR wallet, or try again after 00:00 UTC.";
   return null;
 }
 

@@ -58,7 +58,8 @@
   font-size: clamp(12.5px, 4.1cqi, 19px);
   line-height: 1.12;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: break-word;

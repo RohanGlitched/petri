@@ -1,7 +1,7 @@
 import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { Doc, H2, H3 } from "@/components/docs/ui";
-import { BUILD_COMMIT_SHORT, CONTRACT_VERSION, TESTS } from "@/components/docs/facts";
+import { BUILD_COMMIT_SHORT, CONTRACT_VERSION, TESTS, VERIFY, VERIFY_CLI_CHECKS } from "@/components/docs/facts";
 
 export const metadata = docMetadata("faq");
 
@@ -97,7 +97,7 @@ export default function Page() {
       </Q>
       <Q id="q-verify" q="How do I know the board is right?">
         <p>
-          Run <C>node scripts/verify.mjs --network mainnet</C> or open <C>/verify</C>. Either replays the whole ledger from an empty dish with the same engine the contract runs and checks every planting, purchase, sale, tide, claim and refund, the counters, and solvency rebuilt from the ledger alone: 45 rows on the command line, 37 on the page. See <Doc to="verification">Verification</Doc>.
+          Run <C>node scripts/verify.mjs --network mainnet</C> or open <C>/verify</C>. Either replays the whole ledger from an empty dish with the same engine the contract runs and checks every planting, purchase, sale, tide, claim and refund, the counters, and solvency rebuilt from the ledger alone: {VERIFY_CLI_CHECKS} matching rows and one note on the command line, {VERIFY.checks} checks and the same note on the page. See <Doc to="verification">Verification</Doc>.
         </p>
       </Q>
       <Q id="q-ai" q="Are the AI strains on chain?">

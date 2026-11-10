@@ -225,7 +225,9 @@ export default function Cinema({ onClose, mine, focus, clean = false, fast = fal
       const bx = breath * Math.sin(t * 0.11) + breath * 0.5 * Math.sin(t * 0.047 + 1.3);
       const by = breath * Math.cos(t * 0.083 + 0.4);
       const bz = reduce.current ? 1 : 1 + 0.025 * Math.sin(t * 0.06);
-      const zoom = (Math.min(v.w, v.h) / across) * bz;
+      // Never wider than the dish on either axis: on a wide screen (16:10, 21:9) a wider shot would show the torus
+      // wrapping, the same cluster twice side by side.
+      const zoom = Math.max((Math.min(v.w, v.h) / across) * bz, v.w / world.w, v.h / world.h);
       L.centerOn((((c.x + bx) % world.w) + world.w) % world.w - 0.5, (((c.y + by) % world.h) + world.h) % world.h - 0.5, zoom);
     };
     raf = requestAnimationFrame(loop);

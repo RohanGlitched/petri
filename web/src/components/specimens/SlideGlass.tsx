@@ -26,7 +26,8 @@ export type GlassProps = {
 /** A specimen mounted the way a lab keeps one: a glass slide with a frosted label at one end, the cells under a
  * coverslip at the other. */
 export function SlideGlass({ src, id, title, colony, generation, mintedGen, count, w = 1, h = 1, size = "card", href, placeholder }: GlassProps) {
-  const label = title?.trim() || placeholder || "Untitled specimen";
+  // Numbers in a title read like the rest of the site's ("generation 33,366"); a long one wraps within two lines.
+  const label = (title?.trim() || placeholder || "Untitled specimen").replace(/\b\d{4,}\b/g, (n) => int(Number(n)));
   const body = (
     <>
       <div className={s.label}>

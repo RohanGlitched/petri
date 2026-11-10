@@ -4,7 +4,8 @@
 // refuses it. The counter and the list are every attempt anyone has made, each with its receipt.
 
 import { useEffect, useRef, useState } from "react";
-import { txUrl, accountUrl } from "@/lib/config";
+import { NETWORK, txUrl, accountUrl } from "@/lib/config";
+import { useDish } from "@/lib/dish-store";
 import { int } from "@/lib/live";
 import { type BreakAttempt, type Swarm } from "@/lib/swarm";
 import { ModelBadge } from "./Bits";
@@ -25,6 +26,11 @@ export function BreakPact({ swarm, onAttempt }: { swarm: Swarm | null; onAttempt
   const [err, setErr] = useState<string | null>(null);
   const logRef = useRef<HTMLOListElement>(null);
   const b = swarm?.breaks;
+  // Warden's living cells, from the dish in this browser (the agents' log may not carry the count); this page is
+  // about the testnet dish, so the dish store only answers when the page reads testnet.
+  const d = useDish();
+  const wardenId = NETWORK === "testnet" && b?.warden ? d.colonies.find((c) => c.account === b.warden)?.id : undefined;
+  const wardenCells = wardenId !== undefined && d.status === "ready" ? (d.liveCounts[wardenId] ?? 0) : (b?.warden_cells ?? null);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -166,7 +172,7 @@ export function BreakPact({ swarm, onAttempt }: { swarm: Swarm | null; onAttempt
           <h3>The pact</h3>
           {b?.pact ? (
             <p>
-              Pact {b.pact.id}: <a href={accountUrl(b.warden ?? "", "testnet")}>Warden</a> paid <a href={accountUrl(b.captive ?? "", "testnet")}>Captive</a> {b.pact.petri} PETRI. Until generation {int(b.pact.until)}, the contract refuses every planting of Captive&rsquo;s within {b.radius} cells of Warden&rsquo;s {b.warden_cells ?? 0} living cells. Warden renews it before it ends.
+              Pact {b.pact.id}: <a href={accountUrl(b.warden ?? "", "testnet")}>Warden</a> paid <a href={accountUrl(b.captive ?? "", "testnet")}>Captive</a> {b.pact.petri} PETRI. Until generation {int(b.pact.until)}, the contract refuses every planting of Captive&rsquo;s within {b.radius} cells of Warden&rsquo;s {wardenCells === null ? "" : `${int(wardenCells)} `}living cells. Warden renews it before it ends.
             </p>
           ) : (
             <p>Reading the pact from the agents VM…</p>

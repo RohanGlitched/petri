@@ -98,9 +98,18 @@ export function SpawnForm({ onSpawned }: { onSpawned?: () => void }) {
   }
 
   const st = result?.strain;
+  /** After a spawn the form is locked on what was sent, until "Spawn another" clears it. */
+  const locked = !!result?.ok;
+  function again() {
+    setResult(null);
+    setStep(-1);
+    setName("");
+    setPrompt("");
+  }
   return (
     <div className={s.spawnGrid}>
       <form className={s.form} onSubmit={submit} aria-describedby="guard-rules">
+        <fieldset disabled={locked} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gap: "inherit", opacity: locked ? 0.6 : 1 }}>
         <div className={s.field}>
           <label htmlFor="sp-name">Name</label>
           <input id="sp-name" className={s.input} value={name} maxLength={24} onChange={(e) => setName(e.target.value)} placeholder="Gram Stain Coccus" autoComplete="off" />
@@ -138,10 +147,17 @@ export function SpawnForm({ onSpawned }: { onSpawned?: () => void }) {
             ))}
           </div>
         </div>
+        </fieldset>
         <div className={s.actions}>
-          <button className="btn btn-amber" type="submit" disabled={!ready || busy}>
-            {busy ? `Spawning… ${secs} s` : "Spawn it on testnet"}
-          </button>
+          {locked ? (
+            <button className="btn btn-ghost" type="button" onClick={again}>
+              Spawn another
+            </button>
+          ) : (
+            <button className="btn btn-amber" type="submit" disabled={!ready || busy}>
+              {busy ? `Spawning… ${secs} s` : "Spawn it on testnet"}
+            </button>
+          )}
           <span className={s.hint}>Free: the testnet sponsor pays about 0.14 testnet NEAR. No wallet needed.</span>
         </div>
         {step >= 0 && (
@@ -172,6 +188,14 @@ export function SpawnForm({ onSpawned }: { onSpawned?: () => void }) {
           <div className={s.done} role="status">
             <p style={{ margin: "0 0 8px" }}>
               <b>{st.name}</b> is alive as <a href={accountUrl(st.account)}>{st.account}</a>, colony {st.colony}. Its first move comes within a minute or two; it is listed below.
+            </p>
+            <p className={s.doneLinks}>
+              <a className="btn btn-amber btn-small" href={`/dish?colony=${st.colony}&net=testnet`}>
+                Watch it on the dish
+              </a>
+              <a className="btn btn-ghost btn-small" href={`/c/${st.colony}`}>
+                Its share card
+              </a>
             </p>
             <p className={s.small} style={{ marginBottom: 8 }}>
               On chain: {Object.entries(st.txs).map(([k, h], i) => (

@@ -2,7 +2,7 @@ import { DocPage, docMetadata } from "@/components/docs/DocPage";
 import { C, Code } from "@/components/docs/Code";
 import { NetTabs } from "@/components/docs/NetTabs";
 import { Callout, Doc, Ext, Formula, H2, H3, Steps, Table } from "@/components/docs/ui";
-import { BUILD_COMMIT, BUILD_DIGEST, BUILD_IMAGE, CODE_HASH, CONTRACT_VERSION, NEAR_SDK, RELAUNCHED, REPO, SITE, UPGRADED } from "@/components/docs/facts";
+import { BUILD_COMMIT, BUILD_DIGEST, BUILD_IMAGE, CODE_HASH, CONTRACT_VERSION, NEAR_SDK, RELAUNCHED, REPO, SITE, UPGRADED, VERIFY, VERIFY_CLI_CHECKS, VERIFY_CLI_ROWS } from "@/components/docs/facts";
 
 export const metadata = docMetadata("verification");
 
@@ -100,7 +100,7 @@ node scripts/verify.mjs --network testnet           # petri-v6.testnet (the defa
 node scripts/verify.mjs --contract other.testnet --code-hash <base58>   # any dish, any expected hash
 node scripts/verify.mjs --dump <file>               # a snapshot the contract's replay test wrote with PETRI_DUMP`}</Code>
       <p>
-        Exit status 0 means everything matched (the full-access key is a note, not a check), 1 means at least one differed, 2 means the dish could not be read. It needs Node 20 or later. Mainnet reads go to <C>https://rpc.mainnet.fastnear.com</C> first, then <C>rpc.mainnet.near.org</C>. With <C>--dump</C> it replays a snapshot written by <C>PETRI_DUMP=&lt;file&gt; cargo test -p petri-contract replaying_the_ledger</C> instead of a live dish, and leaves out the two account rows.
+        Exit status 0 means everything matched (the full-access key is a note, not a check), 1 means at least one differed, 2 means the dish could not be read. It needs Node 20 or later. Reads go to FastNEAR first and fail over to dRPC and other keyless public providers, backing off on a 429 as its <C>Retry-After</C> asks; <C>--rpc &lt;url&gt;</C> puts a provider you choose (or several, comma-separated) first. The deprecated <C>rpc.*.near.org</C> endpoints are not used. With <C>--dump</C> it replays a snapshot written by <C>PETRI_DUMP=&lt;file&gt; cargo test -p petri-contract replaying_the_ledger</C> instead of a live dish, and leaves out the two account rows.
       </p>
       <Callout kind="note">
         <p>
@@ -109,7 +109,7 @@ node scripts/verify.mjs --dump <file>               # a snapshot the contract's 
       </Callout>
 
       <H2 id="checks">Every check</H2>
-      <p>The 45 rows <C>scripts/verify.mjs</C> prints, in order. The browser&rsquo;s <C>/verify</C> runs the same replay and shows 37 rows in its own wording (<a href="#browser">below</a>).</p>
+      <p>The {VERIFY_CLI_ROWS} rows <C>scripts/verify.mjs</C> prints, in order: {VERIFY_CLI_CHECKS} that must match and one note. The browser&rsquo;s <C>/verify</C> runs the same replay and shows {VERIFY.checks} checks and the note in its own wording (<a href="#browser">below</a>).</p>
       <Table>
         <thead>
           <tr>
@@ -357,7 +357,7 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
       </p>
       <ul>
         <li>
-          It shows 37 rows in its own wording (listed in <C>web/src/components/verify/VerifyRun.tsx</C>). Next to the CLI it has one row for every PETRI burned, and no rows of their own for the code hash, the credit pool, credit paid at tides, sales and shares paid as credit, or each colony&rsquo;s credit winnings. Its credit, NEAR owed, pending and solvency rows are recomputed from the ledger as the CLI&rsquo;s are.
+          It shows {VERIFY.checks} checks and the note in its own wording (listed in <C>web/src/components/verify/VerifyRun.tsx</C>). Next to the CLI it has one row for every PETRI burned, and no rows of their own for the code hash, the credit pool, credit paid at tides, sales and shares paid as credit, or each colony&rsquo;s credit winnings. Its credit, NEAR owed, pending and solvency rows are recomputed from the ledger as the CLI&rsquo;s are.
         </li>
         <li>The lock (full-access keys) is shown apart from the replay, as a disclosed note rather than a failed check: the team holds one key on each contract account on purpose.</li>
         <li>

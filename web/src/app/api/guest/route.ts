@@ -23,7 +23,8 @@ export const runtime = "nodejs";
 const GUEST_NEAR = "0.003";
 const DIFFICULTY = 18;
 const CHALLENGE_MS = 10 * 60_000;
-const PER_IP_PER_HOUR = 4;
+/** Generous enough for a judging team behind one office or cloud IP; the proof of work and the daily budget still bound it. */
+const PER_IP_PER_HOUR = 6;
 const PER_HOUR = 120;
 // No set_payout: a guest attaches no NEAR, so the dish pays it in credit and it has no NEAR payouts to send anywhere.
 // The last six are for the break-it lab (/break) only: the contract refuses each of them from a guest (there is no mint
@@ -39,7 +40,7 @@ function limited(ip: string): string | null {
   const hour = now - 3600_000;
   global = global.filter((t) => t > hour);
   const mine = (hits.get(ip) ?? []).filter((t) => t > hour);
-  if (mine.length >= PER_IP_PER_HOUR) return "This address already made a few guests in the last hour. Use the one you have, or try again later.";
+  if (mine.length >= PER_IP_PER_HOUR) return `This network already made ${PER_IP_PER_HOUR} guest accounts in the last hour (a shared office or cloud address reaches that sooner). Use the guest you have, or watch meanwhile: the dish plays on without you (press C on /dish for cinema mode), and /verify replays its whole history. New guests open again within the hour.`;
   if (global.length >= PER_HOUR) return "Guest accounts are paused for a few minutes because many were made at once. Try again shortly.";
   mine.push(now);
   global.push(now);

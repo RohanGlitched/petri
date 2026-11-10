@@ -318,7 +318,13 @@ export function WeekSim() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
-  if (dish.status !== "ready" || !S) return <p className="lede">Loading the live dish to start from…</p>;
+  // The space the simulation will take is held while the dish loads, so the footer does not jump when it appears.
+  if (dish.status !== "ready" || !S)
+    return (
+      <div className={s.simHold} aria-busy="true">
+        <p className="lede">Loading the live dish to start from…</p>
+      </div>
+    );
   const done = S.e.generation() - S.start;
   const days = done / 5760;
   const pts = S.points;
@@ -343,9 +349,21 @@ export function WeekSim() {
             Started from the live {net.network} dish at generation {S.start.toLocaleString("en-US")}; {done.toLocaleString("en-US")} of {WEEK.toLocaleString("en-US")} generations run with the contract&rsquo;s own rules.
           </p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="btn btn-amber" onClick={() => setRunning((r) => !r)} disabled={done >= WEEK}>
-              {running ? "Pause" : done > 0 ? "Resume" : "Run the week"}
-            </button>
+            {done >= WEEK ? (
+              <button
+                className="btn btn-amber"
+                onClick={() => {
+                  reset();
+                  setRunning(true);
+                }}
+              >
+                Run again
+              </button>
+            ) : (
+              <button className="btn btn-amber" onClick={() => setRunning((r) => !r)}>
+                {running ? "Pause" : done > 0 ? "Resume" : "Run the week"}
+              </button>
+            )}
             <button className="btn btn-ghost" onClick={() => { setRunning(false); reset(); }}>
               Start again from the live dish
             </button>

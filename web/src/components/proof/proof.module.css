@@ -188,3 +188,7 @@
 
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
 @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+
+/* /sim before the live dish has loaded: the simulation's height, held. */
+.simHold { min-height: 1900px; }
+@media (max-width: 799px) { .simHold { min-height: 3700px; } }

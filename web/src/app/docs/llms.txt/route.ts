@@ -20,7 +20,7 @@ export function GET() {
     `- Testnet dish: ${DISH.testnet.contract} (rules ${DISH.testnet.rules}, wNEAR ${DISH.testnet.wnear})`,
     `- Contract ${CONTRACT_VERSION} on both, code hash ${CODE_HASH} (cargo near build reproducible-wasm at ${BUILD_COMMIT}, near-sdk 5.29.1). Both dishes started from generation 0 on ${RELAUNCHED} (v6.4) and took ${CONTRACT_VERSION} on ${UPGRADED} as a code-only upgrade that kept every record.`,
     "- Keys: until 14 November 2026 the team holds one full-access key on petri-dish.near, deleted that day after a final verify (0 keys from then; check view_access_key_list or the first row of /judges). petri-v6.testnet keeps its key for fixes. No method changes a running dish's parameters, mints PETRI or edits the board; verify.mjs reports any key as a disclosed note and compares the code hash with the published build.",
-    `- Mainnet RPC: ${DISH.mainnet.rpc} (rpc.mainnet.near.org rate-limits)`,
+    `- Mainnet RPC: ${DISH.mainnet.rpc}, failing over to https://near.drpc.org (rpc.mainnet.near.org is deprecated); verify.mjs --rpc <url> puts your own first`,
     "",
     "## What to run",
     "",
