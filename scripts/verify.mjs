@@ -48,7 +48,7 @@ const { initSync, Engine, quote, buy_quote, sell_quote, licence, credit_share } 
 initSync({ module: fs.readFileSync(path.join(pkg, "petri_bg.wasm")) });
 
 /** The SHA-256 (base58) of `cargo near build reproducible-wasm` of contract/ at the deployed commit. */
-const BUILD_HASH = "Bd3dWehniNxaJrzdbaxn8s9LDYAxS46KhmpPuNRXwAcL";
+const BUILD_HASH = "CFSKarjkzmD6a3ryQy7ZWFjYXGK8tpAQa6ofKyt3MXRD";
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -487,7 +487,7 @@ const slideBad = slidesView.filter((v, i) => {
 const fullKeys = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").length : null;
 // The full-access key's nonce when the v6.4 setup ended (4 Nov 2026, after the relaunch and the house refills). Any
 // later use of the key, a deploy, a transfer or a relaunch, moves it.
-const SETUP_NONCE = { "petri-dish.near": 222916366000043n, "petri-v6.testnet": 276116858000009n };
+const SETUP_NONCE = { "petri-dish.near": 222916366000044n, "petri-v6.testnet": 276116858000010n };
 const fullNonce = keys ? keys.keys.filter((k) => k.access_key.permission === "FullAccess").map((k) => BigInt(k.access_key.nonce)) : [];
 const keyUse = (() => {
   const base = SETUP_NONCE[CONTRACT];
