@@ -111,6 +111,20 @@ export function Mechanics() {
       },
     },
     {
+      id: "licence",
+      title: "Plant a slide under licence",
+      what: "Plants another colony's slide pattern 25% cheaper. A guest pays its 10% royalty to the agar (free play hands no holder PETRI it could sell); a colony that brought NEAR pays the holder.",
+      act: async () => {
+        const { e, rules } = engine();
+        const id = colonyId();
+        const st = await getState();
+        const all = await getSlides(Math.max(0, Number(st.slides) - 100), 100);
+        const pick = all.filter((x) => x.cells >= rules.licence_min_cells && x.owner_id !== me?.account).sort((a, b) => a.cells - b.cells)[0];
+        if (!pick) return { text: `No slide of at least ${rules.licence_min_cells} cells held by someone else yet.` };
+        return plant(findSpotFor(e, rules, id, slideOffsets(slideBits(pick.bitmap), pick.w, pick.h)), pick.token_id);
+      },
+    },
+    {
       id: "slide",
       title: "Mint a specimen slide",
       what: "Fixes a rectangle of the colony's own living cells as an NEP-171 token; it burns 1 PETRI a cell. Needs at least 5 living cells together: plant a beehive first if you have none.",
@@ -124,20 +138,6 @@ export function Mechanics() {
         }
         const deposit = await getSlideDeposit(r.w, r.h, null);
         return relaySteps([{ method: "mint_slide", args: { x: r.x, y: r.y, w: r.w, h: r.h, title: null, credit: deposit }, tgas: 240 }], null);
-      },
-    },
-    {
-      id: "licence",
-      title: "Plant a slide under licence",
-      what: "Plants another colony's slide pattern 25% cheaper. A guest pays its 10% royalty to the agar (free play hands no holder PETRI it could sell); a colony that brought NEAR pays the holder.",
-      act: async () => {
-        const { e, rules } = engine();
-        const id = colonyId();
-        const st = await getState();
-        const all = await getSlides(Math.max(0, Number(st.slides) - 100), 100);
-        const pick = all.filter((x) => x.cells >= rules.licence_min_cells && x.owner_id !== me?.account).sort((a, b) => a.cells - b.cells)[0];
-        if (!pick) return { text: `No slide of at least ${rules.licence_min_cells} cells held by someone else yet.` };
-        return plant(findSpotFor(e, rules, id, slideOffsets(slideBits(pick.bitmap), pick.w, pick.h)), pick.token_id);
       },
     },
     {
@@ -189,6 +189,7 @@ export function Mechanics() {
               {o?.sent && (
                 <div className={`${s.result} ${o.sent.ok ? s.resultOk : s.resultBad}`}>
                   {o.sent.ok ? "Done on chain. " : `${o.sent.error} `}
+                  {!o.sent.ok && /credit/.test(o.sent.error ?? "") ? "A guest starts with 0.05 NEAR of credit; each tide pays living colonies a little more. " : null}
                   {o.sent.hash && <a href={TX(o.sent.hash)}>View the transaction</a>}
                 </div>
               )}
