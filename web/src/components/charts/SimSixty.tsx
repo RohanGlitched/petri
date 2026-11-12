@@ -122,7 +122,7 @@ export function SimSixty({ compact = false }: { compact?: boolean }) {
       )}
       <p className={`${s.what} small`}>
         Every generation stepped with petri-core, the contract&rsquo;s own Rust core. Scripted players, not a forecast.{" "}
-        <a href={`${REPO}/tree/main/sim/out-60d`}>CSV, charts, method and limits</a>.
+        <a href={`${REPO}/tree/main/sim/out-60d`}>CSV, charts and method</a>.
       </p>
     </div>
   );

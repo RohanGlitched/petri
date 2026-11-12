@@ -15,7 +15,7 @@ import { LimitsSection, RulesCta } from "@/components/rules/LimitsSection";
 export const metadata: Metadata = {
   title: "How it works",
   description:
-    "The complete rules of Petri Dish: Conway's Life with colony owners on a 128 × 128 dish kept by a NEAR contract, buying and selling PETRI with the agar, the payback price, sieges, the reach cap, hourly NEAR tides, the house, the replayable ledger and the known limits, with live numbers from the contract.",
+    "The complete rules of Petri Dish: Conway's Life with colony owners on a 128 × 128 dish kept by a NEAR contract, buying and selling PETRI with the agar, the payback price, sieges, the reach cap, hourly NEAR tides, the house, the replayable ledger and the limits and failure cases, with live numbers from the contract.",
 };
 
 export default function RulesPage() {

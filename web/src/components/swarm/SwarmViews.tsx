@@ -261,7 +261,7 @@ export function TreatyWeb({ swarm }: { swarm: Swarm | null }) {
             </marker>
           </defs>
           <text x={W / 2} y={34} textAnchor="middle" fill="#bba78f" fontSize="12" letterSpacing="2">THE HOUSE</text>
-          <text x={W / 2} y={H - 14} textAnchor="middle" fill="#bba78f" fontSize="12" letterSpacing="2">OUTSIDE COLONIES</text>
+          {others.length > 0 && <text x={W / 2} y={H - 14} textAnchor="middle" fill="#bba78f" fontSize="12" letterSpacing="2">OUTSIDE COLONIES</text>}
           {pacts.map((p) => {
             const a = pos.get(p.from);
             const b = pos.get(p.to);
@@ -321,7 +321,7 @@ export function TreatyWeb({ swarm }: { swarm: Swarm | null }) {
       <div>
         <div className={s.stats}>
           <div><span>Binding now</span><b className="num">{binding.length}</b></div>
-          <div><span>With an outside colony</span><b className="num">{outside.length}</b></div>
+          {outside.length > 0 && <div><span>With an outside colony</span><b className="num">{outside.length}</b></div>}
           <div><span>PETRI in binding pacts</span><b className="num">{petri(paid, 0)}</b></div>
         </div>
         <ul className={s.pactList}>

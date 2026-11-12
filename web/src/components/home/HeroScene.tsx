@@ -224,7 +224,7 @@ export function HeroScene() {
             <span>{net.freePlay ? "The free-play dish, read live from NEAR testnet" : "Read live from NEAR mainnet"}</span>
           </p>
           <dl className={s.stats} aria-live="polite" aria-busy={!ready}>
-            <div><dt>Living cells</dt><dd className="num">{ready ? int(d.totalLive) : skel}</dd></div>
+            {!(ready && d.totalLive === 0) && <div><dt>Living cells</dt><dd className="num">{ready ? int(d.totalLive) : skel}</dd></div>}
             {/* What the living have already been paid: a figure that only grows, never a "not yet". */}
             <div>
               <dt><Term k="fed" place="below">PETRI fed to living cells</Term></dt>

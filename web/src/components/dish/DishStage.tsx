@@ -1759,14 +1759,14 @@ export function DishStage() {
           ref={warmBox}
           className={`${s.warmChip} ${s.sleepChip}`}
           role="status"
-          title={`Nobody has moved on this dish for a while. The contract's next call (any move: a join, a planting, an advance) skips ${int(d.skipNext)} generations, which never run and pay no feed, then runs the last ${rules?.max_catchup ?? 120}. The board shown is where that call leaves it.`}
+          title={`The dish is resting. The contract's next call (any move: a join, a planting, an advance) skips ${int(d.skipNext)} generations, which never run and pay no feed, then runs the last ${rules?.max_catchup ?? 120}. The board shown is where that call leaves it.`}
         >
           <p>
             <span className={s.sleepTag}>Asleep</span> The next move wakes the dish and skips <b className="num">{int(d.skipNext)}</b> generations.
           </p>
           {!net.freePlay && d.counted === 0 && (
             <p className={s.firstLine}>
-              The first outside colony starts the feed: be it.
+              Plant a colony and the feed starts with your cells.
               {!me && (
                 <button type="button" className={s.linkish} onClick={openStart}>
                   Start a colony
@@ -1777,7 +1777,7 @@ export function DishStage() {
         </div>
       ) : ready && warming && !net.freePlay && d.counted === 0 ? (
         <div ref={warmBox} className={`${s.warmChip} ${s.firstChip}`} role="status">
-          <p>The first outside colony starts the feed: be it.</p>
+          <p>Plant a colony and the feed starts with your cells.</p>
           {!me && (
             <button type="button" className="btn btn-amber btn-small" onClick={openStart}>
               Start a colony

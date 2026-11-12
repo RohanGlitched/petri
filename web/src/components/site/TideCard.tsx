@@ -75,17 +75,17 @@ export function TideCard({ variant = "band", className = "" }: { variant?: "band
           </dd>
           <p>{rules.tide_bps / 100}% of the vault, split by what each colony earned since the last tide</p>
         </div>
+        {tides > 0 && (
         <div>
           <dt>Paid so far</dt>
           <dd className="num">
             {near(paidNear + paidCredit, 3)} <small>{unit}</small>
           </dd>
           <p>
-            {tides === 0
-              ? "No tide has run yet"
-              : `at ${int(tides)} ${tides === 1 ? "tide" : "tides"}${winners !== null ? `, to ${int(winners)} ${winners === 1 ? "colony" : "colonies"}` : ""}${paidCredit > 0 ? `; ${near(paidCredit, 3)} of it as credit to guests` : ""}`}
+            {`at ${int(tides)} ${tides === 1 ? "tide" : "tides"}${winners !== null ? `, to ${int(winners)} ${winners === 1 ? "colony" : "colonies"}` : ""}${paidCredit > 0 ? `; ${near(paidCredit, 3)} of it as credit to guests` : ""}`}
           </p>
         </div>
+        )}
       </dl>
     </section>
   );

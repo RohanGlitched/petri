@@ -282,7 +282,7 @@ export function Break() {
         </div>
         <div className={s.tile}>
           <dt>Your guest</dt>
-          <dd style={{ fontSize: 16, fontFamily: "var(--body)" }}>{me ? (me.colony ? `colony ${me.colony.id}, “${me.colony.name}”` : "no colony yet") : "none yet"}</dd>
+          <dd style={{ fontSize: 16, fontFamily: "var(--body)" }}>{me?.colony ? `colony ${me.colony.id}, “${me.colony.name}”` : "—"}</dd>
           {(!me || !me.colony) && (
             <button className="btn btn-amber btn-small" style={{ marginTop: 8 }} onClick={() => makeGuest()} disabled={making}>
               {making ? "Making it…" : "Make a guest colony"}

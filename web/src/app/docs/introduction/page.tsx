@@ -65,13 +65,13 @@ export default function Page() {
         <li>Pick a pattern (a block, a glider, a pulsar), point at open agar and click. Before you sign, the page checks the planting with petri-core exactly as the contract will: it says where it fits, refuses an illegal one, and marks a planting inside a rival&rsquo;s buffer as a siege at three times the price.</li>
         <li>Watch it live. Your cells earn PETRI every generation, up to a cap set by how much you have planted. Every 240 generations (an hour) a tide pays NEAR, or credit for a guest.</li>
         <li>
-          Open <Ext href={`${SITE}/verify`}>/verify</Ext> and replay the whole dish in your browser. Every row should say it matches. The one full-access key on each contract account is shown as a disclosed note, not a failed check (see below).
+          Open <Ext href={`${SITE}/verify`}>/verify</Ext> and replay the whole dish in your browser. Every row should say it matches. The mainnet dish shows <C>PASS Full-access keys 0</C>; the testnet dish&rsquo;s key is shown as a disclosed note, not a failed check (see below).
         </li>
       </ol>
 
       <H2 id="dishes">The two dishes</H2>
       <p>
-        The same build, {CONTRACT_VERSION}, runs on both networks. Both contract accounts report the code hash <C>{CODE_HASH}</C>, which is what <C>cargo near build reproducible-wasm</C> produces at commit <Ext href={`${REPO}/tree/${BUILD_COMMIT_SHORT}`}>{BUILD_COMMIT_SHORT}</Ext>. Both dishes were relaunched in place from generation zero on {RELAUNCHED} (on v6.4) and upgraded to {CONTRACT_VERSION} on {UPGRADED} without a restart, keeping every record, on the accounts they have run since v6: <C>petri-dish.near</C>, and <C>petri-v6.testnet</C>, which v6 started on a new account (<C>petri-v5.testnet</C> is abandoned). The rules differ only in who the house and the keeper are and which wNEAR contract is trusted.
+        The same build, {CONTRACT_VERSION}, runs on both networks. Both contract accounts report the code hash <C>{CODE_HASH}</C>, which is what <C>cargo near build reproducible-wasm</C> produces at commit <Ext href={`${REPO}/tree/${BUILD_COMMIT_SHORT}`}>{BUILD_COMMIT_SHORT}</Ext>. Both dishes were relaunched in place from generation zero on {RELAUNCHED} (on v6.4) and upgraded to {CONTRACT_VERSION} on {UPGRADED} without a restart, keeping every record, on the accounts they have run since v6: <C>petri-dish.near</C>, and <C>petri-v6.testnet</C>, which v6 started on a new account. The rules differ only in who the house and the keeper are and which wNEAR contract is trusted.
       </p>
       <Table caption="The dishes as deployed">
         <thead>
@@ -160,7 +160,7 @@ export default function Page() {
       </Table>
       <Callout kind="note">
         <p>
-          The mainnet dish, <C>petri-dish.near</C>, has no keys at all: the team deleted its only full-access key on {LOCKED.date} after a final verify (<a href={LOCKED.url}>the DeleteKey transaction</a>), so nobody can deploy other code, relaunch it or move its NEAR, and a bug found there cannot be fixed either (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The verifier prints <C>PASS Full-access keys 0</C> for it. The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there: new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger anyone can replay. New code changes the account&rsquo;s code hash, which the verifier compares with the published build on every run, and the testnet key is reported as a note, not a failed check. <Doc to="verification" hash="keys">Check the keys yourself</Doc>.
+          The mainnet dish, <C>petri-dish.near</C>, has no keys at all: the team deleted its only full-access key on {LOCKED.date} after a final verify (<a href={LOCKED.url}>the DeleteKey transaction</a>), so nobody can deploy other code, relaunch it or move its NEAR (check <C>view_access_key_list</C>, or the first row of the judge desk at playpetri.xyz/judges). The verifier prints <C>PASS Full-access keys 0</C> for it. The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there: new code plus <C>relaunch</C>, which starts the dish again from generation 0 with a fresh ledger anyone can replay. New code changes the account&rsquo;s code hash, which the verifier compares with the published build on every run, and the testnet key is reported as a note, not a failed check. <Doc to="verification" hash="keys">Check the keys yourself</Doc>.
         </p>
       </Callout>
 
@@ -217,7 +217,7 @@ export default function Page() {
         </a>
         <a className="d-card" href={docHref("simulations")}>
           <strong>Economics and simulations</strong>
-          <span>Who wins and who loses money, from the simulator.</span>
+          <span>Who wins, how the house pays in, and why owning the dish does not pay, from the simulator.</span>
         </a>
         <a className="d-card" href={docHref("living-slides")}>
           <strong>Living slides</strong>

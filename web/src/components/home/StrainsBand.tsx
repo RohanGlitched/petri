@@ -6,7 +6,7 @@ import { useLive, int, hex } from "@/lib/live";
 import { strainsOn, CLAUDE_MODEL, NEARAI_MODEL } from "@/lib/strains";
 import { useNet } from "@/lib/use-net";
 import { accountUrl } from "@/lib/config";
-import { useStrainLog, modelStatus, strainPulse } from "@/lib/strain-log";
+import { useStrainLog, strainPulse } from "@/lib/strain-log";
 import { PulseBadge } from "@/components/strains/StrainPulse";
 import s from "./bands.module.css";
 import { NetTag } from "@/components/site/NetTag";
@@ -26,7 +26,6 @@ export function StrainsBand() {
   }, [actions, STRAINS]);
   // "Around the clock" only while the strains really are moving: their newest move under six hours old.
   const pulse = useMemo(() => strainPulse(log, STRAINS.map((st) => st.account)), [log, STRAINS]);
-  const since = useMemo(() => modelStatus(actions.filter((a) => STRAINS.some((st) => st.account === a.account))).since, [actions, STRAINS]);
 
   return (
     <section id="strains" data-section="Five AI strains" className="band" aria-labelledby="strains-title">
@@ -54,13 +53,12 @@ export function StrainsBand() {
               <span>
                 {net.freePlay
                   ? "These cards read the free-play testnet dish, where the strains move at full pace."
-                  : "These cards read the mainnet dish, where the house moves at a thirty-second of the testnet pace so its NEAR lasts through judging."}
+                  : "These cards read the mainnet dish, where the house plays with real NEAR at a thirty-second of the testnet pace."}
               </span>
             </p>
             {onRules && (
               <p className={s.rulesNote}>
-                The model is offline{since !== null ? ` since generation ${int(since)}` : ""}, so right now the strains are
-                playing by their written rules. Each move on the strains page says which.
+                Right now the strains are playing by their written rules. Each move on the strains page says what chose it.
               </p>
             )}
           </div>

@@ -626,9 +626,9 @@ export class Replayer {
         label:
           lock.fullAccessKeys === 0
             ? "No full-access key: nobody can deploy other code, relaunch the dish or move its NEAR"
-            : "Disclosed: the team keeps a full-access key on this dish so a bug can be fixed; new code would change the hash above",
+            : "The testnet dish keeps its full-access key for fixes; new code would change the hash above",
         expected: `${lock.fullAccessKeys} full-access key${lock.fullAccessKeys === 1 ? "" : "s"} on chain`,
-        got: lock.fullAccessKeys === 0 ? "locked" : "disclosed",
+        got: lock.fullAccessKeys === 0 ? "locked" : "kept for fixes",
         ok: true,
       });
     }

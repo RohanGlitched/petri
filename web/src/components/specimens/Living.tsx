@@ -210,7 +210,7 @@ function LivingView({ sl, net, purse, data, error, refresh }: { sl: Slide; net: 
             <div>
               <p className={l.kicker}>
                 <i className={`${l.pulse} ${alive === 0 ? l.pulseDead : ""}`} />
-                {colonyId === null ? "Sealed, not playing yet" : alive === null ? "Reading the stored board…" : alive === 0 ? `Extinct on chain at generation ${int(d.storedGeneration)}` : `Alive on chain: ${int(alive)} living cells at generation ${int(d.storedGeneration)}`}
+                {colonyId === null ? "Sealed in its own account" : alive === null ? "Reading the stored board…" : alive === 0 ? `Extinct on chain at generation ${int(d.storedGeneration)}` : `Alive on chain: ${int(alive)} living cells at generation ${int(d.storedGeneration)}`}
               </p>
               <h2 id="lv-title" className="h2">A living slide</h2>
               <p className="lede">
@@ -240,11 +240,11 @@ function LivingView({ sl, net, purse, data, error, refresh }: { sl: Slide; net: 
                 </div>
                 <div>
                   <dt>Living cells</dt>
-                  <dd className="num">{alive === null ? "—" : int(alive)}<small>{data.colony ? `on chain; colony ${data.colony.id}, ${int(Number(data.colony.cells_planted))} cells planted${forecast !== null ? `; forecast ${int(forecast)} at gen ${int(d.generation)}` : ""}` : "not joined yet"}</small></dd>
+                  <dd className="num">{alive === null ? "—" : int(alive)}<small>{data.colony ? `on chain; colony ${data.colony.id}, ${int(Number(data.colony.cells_planted))} cells planted${forecast !== null ? `; forecast ${int(forecast)} at gen ${int(d.generation)}` : ""}` : "sealed in its own account"}</small></dd>
                 </div>
                 <div>
                   <dt>Earned by its cells</dt>
-                  <dd className="num">{petriText(earnedFeed)}<small>PETRI of feed{tides > 0n ? `, ${nearText(tides)} NEAR from tides` : ", no tide NEAR yet"}</small></dd>
+                  <dd className="num">{petriText(earnedFeed)}<small>PETRI of feed{tides > 0n ? `, ${nearText(tides)} NEAR from tides` : ""}</small></dd>
                 </div>
                 <div>
                   <dt>Royalties into it</dt>

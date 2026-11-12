@@ -32,7 +32,7 @@ export function SpecimensBand() {
               ))
             : [0, 1, 2].map((i) => (
                 <li key={i} className={s.slideBlank}>
-                  <SlideGlass src={null} placeholder={all.status === "loading" ? "Reading…" : i === 0 ? "The first slide is still blank" : "Blank slide"} />
+                  <SlideGlass src={null} placeholder={all.status === "loading" ? "Reading…" : i === 0 ? "A slide waiting for its colony" : "Blank slide"} />
                 </li>
               ))}
         </ul>

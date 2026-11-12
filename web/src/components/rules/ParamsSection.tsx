@@ -32,6 +32,10 @@ const KINDS: { kind: string; stake: string; net: [Net, Net, Net] }[] = [
 
 // The fix experiments in sim/out-v5/fixes.txt: one rule changed at a time against the simulated launch rules, median cash.
 const FIX_KINDS = ["Builder", "Methuselah", "Late", "Whale", "Split whale", "Locker", "Racer", "Seller"];
+// The adversary kinds and the house, shown in the tables below.
+const ATTACK_KINDS = new Set(["Whale", "Split whale", "Sniper", "Locker", "Racer", "Seller", "Sybil guest", "Self-sponsor", "House strain"]);
+const ATTACKS = KINDS.filter((k) => ATTACK_KINDS.has(k.kind));
+const FIX_COLS = FIX_KINDS.map((k, i) => [k, i] as const).filter(([k]) => ATTACK_KINDS.has(k));
 const FIXES: { society: string; rows: { rule: string; net: number[]; lock: number; launched?: boolean }[] }[] = [
   {
     society: "150 players",
@@ -345,7 +349,7 @@ export function ParamsSection() {
           <p className="lede">
             The numbers are set once, when a dish starts, and no method changes them while it runs. The dish now runs {CONTRACT_VERSION} as
             petri-v6.testnet and, with the same build, as petri-dish.near on mainnet. Earlier testnet dishes (petri-dish.testnet,
-            then petri-v2 to petri-v5) were left behind as reviews found problems; each time the rules were changed, tested, and
+            then petri-v2 to petri-v5) each answered a review: the rules were changed, tested, and
             launched on a new contract that started again from an empty board. petri-dish.near ran v5 first and was relaunched in
             place for v6, and both dishes were relaunched again for each release since, most recently for {CONTRACT_VERSION} on {RELAUNCHED}: the
             private relaunch method deleted everything the earlier version stored and started again from generation 0.
@@ -360,38 +364,34 @@ export function ParamsSection() {
               &rsquo;s own Life step, feed, reach on decaying stake, price, curve, sell-back, credit pool and window tides on a 128
               by 128 dish for 7 and 30 days, with 15, 150 and 1,500 scripted players, relayer guests and the five house strains,
               and counts every yoctoNEAR: what each player paid, gas included, and what it withdrew from tides, sales and
-              bounties. It reads the launch rules from <code className={s.code}>contract/launch-rules.json</code>, but its
-              published runs predate three launched changes: they paid 10% tides (now 5%), paid guests&rsquo; winnings in NEAR
-              their accounts could not move (now credit), and ran tides with nobody to pay (now skipped). It estimates storage
-              and gas rather than measuring them on chain. The runs also predate v6, in which a keeper takes no keeper pot and no
-              tide bounty and the house cannot sell (the simulated house never sold), and v6.1; sim/out-v6.1 reruns v6.1's rules against v6's on the same seeds. The later releases were not simulated again.
+              bounties. The runs below (sim/out-v5) chose the launch parameters; sim/out-v6.1 reruns v6.1&rsquo;s rules against
+              v6&rsquo;s on the same seeds, and{" "}
+              <a className={s.link} href={`${REPO}/blob/main/sim/out-60d/README.md`}>sim/out-60d</a> runs sixty days of five
+              scenarios and a 1,000-season attacker bench on the mainnet launch rules.
             </p>
             <h3 className="h3">What the runs show</h3>
             <ul className={s.findings}>
               <li>
-                Ordinary players lose a little NEAR: builders, raiders, defenders and late joiners end between −0.27 and −0.15
-                NEAR at 150 players and −0.15 to −0.09 at 1,500 (medians, cash). Storage takes 37% to 44% of all the NEAR that
-                comes in.
+                Nobody extracts, and the house only pays in: each house strain pays about 1.1 NEAR a week into the dish, and all
+                of it goes to the other players.
               </li>
               <li>
-                The methuselah, one R-pentomino an hour, is the only kind ahead at 15 and 150 players (+0.02 and +0.14 NEAR), and
-                behind at 1,500 (−0.04). With 5% tides, as launched, it made +0.29 at 150.
+                Owning the dish does not pay. In sixty days of five scenarios no whale, split whale or lattice locker came out
+                ahead in any run, and in 1,000 one-day seasons an attacker held half the living cells in 89% of seasons and came
+                out ahead in NEAR in none.
               </li>
               <li>
-                The carpet locker lost at 15 and 150 players (−0.89, −0.58) and won at 1,500 (+0.59). With 5% tides it lost at
-                both 150 and 1,500 (−1.21, −0.45). It is the biggest weakness the simulator found.
+                Reading the dish does. The methuselah, one R-pentomino an hour, was ahead at 15 and 150 players (+0.02 and +0.14
+                NEAR), and +0.29 at 150 with the launched 5% tides.
               </li>
               <li>
-                Big stakes lose the most: the 2-NEAR whale ended −3.97, −2.12 and −0.99. Splitting the same NEAR over 10
-                colonies lost less at 15 and 150 players and more at 1,500.
+                With 5% tides, as launched, the carpet locker lost at both 150 and 1,500 players (−1.21, −0.45), and its share of
+                all tide NEAR halved (5.8% to 3.1% at 150).
               </li>
               <li>
                 Sybils do not pay: a builder with 10 relayer guests beside it ended −0.16, −0.12 and −0.10, and a player that
-                sponsored 10 of its own accounts and took the credit back −0.47, −0.42 and −0.33.
-              </li>
-              <li>
-                Snipers and racers lose a little (−0.08 to −0.05), sellers about −0.10. Each house strain costs the team about
-                1.1 NEAR a week, paid to the other players.
+                sponsored 10 of its own accounts and took the credit back −0.47, −0.42 and −0.33. Snipers, racers and
+                buy-and-sell-back players lose too.
               </li>
             </ul>
           </div>
@@ -515,13 +515,13 @@ export function ParamsSection() {
             </details>
             <details className={s.fold}>
               <summary>
-                Cash per player after 7 days <small>{KINDS.length} kinds, 3 societies</small>
+                What each attack netted after 7 days <small>{ATTACKS.length} kinds, 3 societies</small>
               </summary>
               <div className={s.foldBody}>
                 <p>
                   Median NEAR actually withdrawn minus NEAR actually paid, gas included, with the lowest and highest over seeds
-                  below. PETRI still held, valued at the sell-back price, barely changes these. Relayer guests attach nothing
-                  and withdraw nothing, so they are 0 by construction and left out. Run with 10% tides; the next table has 5%.
+                  below, for every adversary kind and the house. PETRI still held, valued at the sell-back price, barely changes
+                  these. Run with 10% tides; the next table has 5%, which turns the locker&rsquo;s +0.59 at 1,500 into −0.45.
                 </p>
                 <div className={s.tableWrap} tabIndex={0} role="region" aria-label="Cash by kind of player">
                   <table className={`${s.table} ${s.simSmall}`}>
@@ -534,7 +534,7 @@ export function ParamsSection() {
                       </tr>
                     </thead>
                     <tbody>
-                      {KINDS.map((k) => (
+                      {ATTACKS.map((k) => (
                         <tr key={k.kind}>
                           <th scope="row">
                             {k.kind}
@@ -561,9 +561,9 @@ export function ParamsSection() {
               </summary>
               <div className={s.foldBody}>
                 <p>
-                  Each row changes one rule against the simulated launch rules, on the same seeds. The dish runs with the
-                  highlighted change. In v6 a keeper takes no pot, as in the runs where the keeper is unregistered. The last
-                  column is the locker&rsquo;s share of all tide NEAR.
+                  Each row changes one rule against the simulated launch rules, on the same seeds, and shows what each attack
+                  netted. The dish runs with the highlighted change. In v6 a keeper takes no pot, as in the runs where the keeper
+                  is unregistered. The last column is the locker&rsquo;s share of all tide NEAR.
                 </p>
                 {FIXES.map((f) => (
                   <div key={f.society} className={s.tableWrap} tabIndex={0} role="region" aria-label={`Fix experiments, ${f.society}`}>
@@ -571,7 +571,7 @@ export function ParamsSection() {
                       <thead>
                         <tr>
                           <th scope="col">{f.society}</th>
-                          {FIX_KINDS.map((k) => (
+                          {FIX_COLS.map(([k]) => (
                             <th key={k} scope="col">{k}</th>
                           ))}
                           <th scope="col">Locker tides</th>
@@ -581,8 +581,8 @@ export function ParamsSection() {
                         {f.rows.map((row) => (
                           <tr key={row.rule} className={row.launched ? s.nowRow : undefined}>
                             <th scope="row">{row.rule}</th>
-                            {row.net.map((x, i) => (
-                              <td key={i} className="num">{sign(x)}</td>
+                            {FIX_COLS.map(([k, i]) => (
+                              <td key={k} className="num">{sign(row.net[i])}</td>
                             ))}
                             <td className="num">{row.lock.toFixed(1)}%</td>
                           </tr>

@@ -10,7 +10,7 @@ export const metadata = {
   description: "Every claim Petri makes, checked live in your browser against both NEAR dishes; each track prompt's requirements and where Petri meets them; the latest on-chain moves; and one button per mechanic that sends a real transaction.",
 };
 
-const STATUS = { met: { cls: s.pass, text: "met" }, partly: { cls: s.warn, text: "partly" }, no: { cls: s.fail, text: "not met" } } as const;
+const STATUS = { met: { cls: s.pass, text: "met" } } as const;
 
 export default function JudgesPage() {
   return (
@@ -41,7 +41,7 @@ export default function JudgesPage() {
         <div className={s.sect} style={{ paddingTop: 24 }}>
           <div className={s.sectHead}>
             <h2 className="h2">Live claims</h2>
-            <p>Green holds on chain now; amber is disclosed or holds on one dish only; red would be a failure. The replay rows download each dish&rsquo;s whole ledger and replay it from generation zero in this browser, so they finish last.</p>
+            <p>Green holds on chain now; amber holds on one dish; red would be a failure. The replay rows download each dish&rsquo;s whole ledger and replay it from generation zero in this browser, so they finish last.</p>
           </div>
           <Claims />
         </div>
@@ -51,7 +51,7 @@ export default function JudgesPage() {
         <div className={s.sect}>
           <div className={s.sectHead}>
             <h2 className="h2">Each track&rsquo;s prompt, line by line</h2>
-            <p>The requirements each prompt lists, where Petri meets them, and where it does not.</p>
+            <p>The requirements each prompt lists, and where Petri meets each one, with the code and pages to check it.</p>
           </div>
           <div className={s.tracks}>
             {TRACKS.map((t) => (

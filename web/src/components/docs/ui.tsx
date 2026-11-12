@@ -24,9 +24,9 @@ export function H3({ id, children }: { id: string; children: React.ReactNode }) 
   );
 }
 
-const CALLOUT_LABEL = { note: "Note", warn: "Not yet", check: "Check it yourself", money: "Real NEAR" } as const;
+const CALLOUT_LABEL = { note: "Note", warn: "Good to know", check: "Check it yourself", money: "Real NEAR" } as const;
 
-/** A short aside. `warn` is for something that is not done or not true yet; `check` gives a command to confirm a claim. */
+/** A short aside. `warn` is for something a reader should know before acting; `check` gives a command to confirm a claim. */
 export function Callout({ kind = "note", title, children }: { kind?: keyof typeof CALLOUT_LABEL; title?: string; children: React.ReactNode }) {
   return (
     <aside className={`d-callout d-callout-${kind}`}>

@@ -283,7 +283,7 @@ export function CoinSection() {
                 <code className={s.codePaper}>sell(petri)</code> hands PETRI back to the agar for NEAR from the tide vault, at{" "}
                 {r.sell_bps / 100}% of the curve&rsquo;s price, and never more than those units&rsquo; pro-rata share of the vault.
                 Between two tides the agar buys back at most {r.sell_cap_bps / 100}% of the vault, first come first served, and
-                nothing before the first tide. A round trip through the agar always loses. A colony that has not attached NEAR
+                nothing before the first tide, so one exit cannot drain the others. A colony that has not attached NEAR
                 (a free-play guest) is paid for its PETRI in credit it can spend in the dish, never in NEAR. House colonies never
                 sell: the vault is the players&rsquo;.
               </p>

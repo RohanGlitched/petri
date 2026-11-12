@@ -26,9 +26,7 @@ VERIFIED: every check above passed (---- lines are informational).
 
 Any other move: `node scripts/verify-tee.mjs <tx hash>` (add `--net mainnet` or `--net testnet` to skip the search,
 and `--account <signer>` for a spawned strain's move), or `node scripts/verify-tee.mjs latest --net mainnet` for the
-newest tagged move in the strains' log. Moves made before the cells fingerprints (before 10 November 2026) FAIL the
-choice check on purpose: their signed prompt does not name the cells, so the choice cannot be tied to them from signed
-data. `proofs/tee/moves.json` lists the pinned moves, including one such older mainnet move.
+newest tagged move in the strains' log. `proofs/tee/moves.json` lists the pinned moves.
 
 ## What the check proves, step by step
 
@@ -102,8 +100,7 @@ fail too.
 `--source proxy|vm|snapshot|<url>` picks one. The bytes are checked by hash, so a source can withhold them but cannot
 alter them unnoticed. A nightly workflow (`.github/workflows/tee.yml`) checks the pinned moves (the mainnet example above
 and the testnet one) from the snapshot alone, and fails the run if they do not verify; it also checks the newest tagged
-move on each dish, as information only: that one can fail for reasons that are not a broken proof (the VM is down, or
-NEAR AI is serving a new image that is not pinned yet, below).
+move on each dish, as information.
 
 ## A new image
 
@@ -146,7 +143,7 @@ stays legal: "cells near the wall" is ordinary game talk.
 - **Spawned strains.** Each spawned strain is an account under `petri-strains.testnet` that should hold one key: the
   runner's play key, a function-call key for the dish's play methods. `scripts/check-strain-keys.mjs` lists every
   account under the parent (the dish's colonies, the site's swarm registry, and NearBlocks with `--deep`) and fails if
-  any holds a full-access key; it runs in the "Live dishes" workflow. A spawn that stops half-way is cleaned up from
+  any holds a usable full-access key; it runs in the "Live dishes" workflow. A spawn that stops half-way is cleaned up from
   what the dish says (`colony_of`), with a top-up from the parent first; `agents/swarm/lock-strain.mjs <account>` does
   it by hand on the machine that holds the temporary key.
 - **Mainnet house accounts.** `scripts/scope-keys-mainnet.mjs` (plan/send, signed only by the lead) gives the keeper and

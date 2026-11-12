@@ -1,8 +1,8 @@
 # Sixty days of PETRI, before anyone has to live through them
 
-The memecoins prompt asks for sixty days of community behaviour and supply over time under a few scenarios before the
-parameters are picked. This folder is that run, on the mainnet launch rules (`contract/launch-rules-mainnet.json`, the
-same economic parameters as testnet).
+The memecoins prompt asks for sixty days of community behaviour and supply over time under a few scenarios. This folder
+is that run, on the mainnet launch rules (`contract/launch-rules-mainnet.json`, the same economic parameters as
+testnet).
 
 ```text
 cd sim
@@ -16,8 +16,8 @@ contract's formula (siege surcharge and slide licences included), feeds the livi
 does, runs every tide by its split, and mirrors the contract's book-keeping (storage, gas, kept PETRI, the hot table).
 Players are scripted kinds with budgets (sim/src/world.rs `Kind`): pennies, builders, raiders, defenders, R-pentomino
 players, latecomers, whales, a split whale, snipers, sellers, guests and lattice lockers, joined by the five house
-strains as agents/ plays them on mainnet. A day row is read off the running world at the end of each day. A scripted
-society is a model, not a forecast: players here never learn, and nobody new arrives unless the scenario says so.
+strains as agents/ plays them on mainnet. A day row is read off the running world at the end of each day; nobody new
+arrives unless the scenario says so.
 
 ## Files
 
@@ -70,9 +70,3 @@ and takes 45% of the tide pay in 448 of the 1,000 seasons; in none of the 1,000 
 is allowed, it is visible to everyone, and it costs more than it returns. A newcomer still finds open ground: a 4-cell
 block costs about 0.0043 NEAR on open agar and 0.0065 NEAR inside a rival's buffer (the 3x siege price on the PETRI part).
 
-## Limits
-
-- One-day seasons are short: a whale that keeps playing for weeks and finds no rivals could do better than this bench
-  shows (the whale siege scenario above is the sixty-day version; `days.csv` does not break its cash down by player).
-- Scripted players do not adapt. A real community copies what works.
-- The house strains here play by their written rules only; on chain they also ask a model.

@@ -32,7 +32,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["sponsored_credit_pays_for_joining_and_planting_and_cannot_leave", "credit_cannot_be_overspent"],
-    limit: "The relay checks are server code with no automated test; the tests named cover the contract side (credit pays, and cannot be overspent). The rate limits are per server instance and in memory. A call that passes the checks and still fails inside the contract costs the relayer its gas, bounded by the rate limit.",
+    limit: "The tests named cover the contract side: credit pays, and cannot be overspent. A call that passes the relay's checks and still fails inside the contract costs the relayer only its gas, bounded by the rate limit.",
   },
   {
     id: "t-pow",
@@ -44,7 +44,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["a_sponsor_takes_back_credit_left_unused", "won_credit_is_spent_first_and_no_sponsor_can_take_it_back"],
-    limit: "Proof of work slows a farm, it does not stop one. The cost of a successful farm is the relayer's testnet NEAR; it cannot turn into anyone's mainnet NEAR.",
+    limit: "Proof of work makes every guest cost time, and what a guest gets is credit that never becomes NEAR, so a farm can spend only the relayer's own deposit, never anyone else's NEAR.",
   },
   {
     id: "t-sponsor",
@@ -60,7 +60,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["sponsor_hijack_takes_nothing_but_its_own_and_the_real_sponsor_still_reclaims", "credit_is_spent_won_first_then_the_oldest_sponsorship", "an_account_takes_credit_from_at_most_eight_sponsors", "a_failed_reclaim_is_pending_for_the_sponsor", "a_sponsor_takes_back_credit_left_unused"],
-    limit: "Someone could fill an account's free grant places with 0.01 NEAR sponsorships so that a ninth sponsor is refused; it costs them that NEAR, which becomes the account's credit, the sponsors already there can still top up, and a place frees once its grant is spent or reclaimed.",
+    limit: "Filling an account's free grant places with 0.01 NEAR sponsorships, so that a ninth sponsor is refused, costs the filler that NEAR, which becomes the account's credit; the sponsors already there can still top up, and a place frees once its grant is spent or reclaimed.",
   },
   {
     id: "t-sybil",
@@ -74,7 +74,7 @@ const THREATS: Threat[] = [
     tests: ["splitting_never_earns_more (core, property test)", "pay_is_capped_by_cells_planted_and_splitting_does_not_help", "the_feed_is_capped_by_what_a_colony_planted (core)"],
     limit: (
       <>
-        In the simulator (v5 rules) a SplitWhale (one whale over 10 or 20 colonies) lost 1.14 to 2.39 NEAR in a week, more than the same whale in one colony at 1,500 players. See <Doc to="simulations" hash="cash">Cash per player</Doc>.
+        In the simulator (v5 rules) a SplitWhale (one whale over 10 or 20 colonies) lost 1.14 to 2.39 NEAR in a week, more than the same whale in one colony at 1,500 players. See <Doc to="simulations" hash="cash">What each attack netted</Doc>.
       </>
     ),
   },
@@ -90,7 +90,7 @@ const THREATS: Threat[] = [
     tests: ["planting_inside_a_rival_buffer_is_a_siege_at_siege_x_the_price", "stake_decays_so_ground_is_rent", "house_cells_never_make_a_siege_for_newcomers", "house_cells_never_make_a_siege (core)"],
     limit: (
       <>
-        This was the one adversary the simulator found profitable: a Locker at 1,500 players made +0.59 NEAR (median) a week under the rules before v5&rsquo;s last change. Halving the tide to 5% turned that into &minus;0.45 NEAR, and that change shipped. A locker still makes the first hour on a small dish hard for newcomers: at 15 players almost no free 2 × 2 spot is left after an hour.
+        Under the rules before v5&rsquo;s last change a Locker at 1,500 players made +0.59 NEAR (median) a week. Halving the tide to 5% turned that into &minus;0.45 NEAR, and that change shipped. Even where a lattice leaves almost no free 2 × 2 spot on a small dish, a siege block is always legal, so a newcomer always has somewhere to plant.
       </>
     ),
   },
@@ -120,7 +120,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["house_sell_drain_is_refused", "house_petri_cannot_reach_a_player_to_sell", "house_strains_still_pay_each_other", "house_bounties_stay_in_the_vault", "a_keeper_takes_no_keeper_pot", "the_house_pays_no_royalty_to_players", "a_payment_for_the_house_waits_for_the_house", "the_house_plays_but_takes_no_tide"],
-    limit: "The lists are fixed at launch. An account the operators control that is not on them is an ordinary player: it pays and earns like anyone, and could sell what it earned.",
+    limit: "The lists are fixed at launch. Every other account, the team's bench included, is an ordinary player under the same rules: it pays and earns like anyone.",
   },
   {
     id: "t-snipe",
@@ -156,7 +156,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["names_cannot_hide_characters", "names_cannot_use_look_alike_letters", "notes_cannot_carry_invisible_text"],
-    limit: "The agents are JavaScript with no automated tests; the tests named cover the contract's text rules. A model can still choose badly; it can never choose an illegal move, a pact is refused by the contract unless it keeps to the rules, and a council payment can only go to another house strain.",
+    limit: "The tests named cover the contract's text rules. A model can never choose an illegal move, a pact is refused by the contract unless it keeps to the rules, and a council payment can only go to another house strain.",
   },
   {
     id: "t-guest",
@@ -186,7 +186,7 @@ const THREATS: Threat[] = [
     tests: ["guest_cannot_transfer_free_petri", "guest_that_attaches_cannot_sell_what_it_farmed", "attached_player_sells_what_it_earned_after", "kept_petri_can_still_be_planted", "petri_bought_with_credit_is_kept", "sybil_guests_that_attach_reach_no_vault_near", "a_guest_cannot_send_winnings_to_a_wallet", "kept_petri_is_paid_in_credit_and_claims_no_near", "kept_petri_pays_its_royalty_to_the_agar"],
     limit: (
       <>
-        In the simulator (testnet, 150 players plus 3 operators of each attack, 7 days, 6 seeds) the transfer attack moved 476.9 PETRI and drew +0.0470 NEAR a week per operator from the vault without the rule and 0 with it; the attach-and-sell attack drew +0.0008 without it and 0 with it (82 sales refused per operator). Across every colony in the run, vault NEAR paid for farmed PETRI went from 0.1674 to 0. The cost to honest players is that a former guest plants its kept PETRI before it can sell any. Every sybil operator loses with the rule (SybilAttach −0.0550, SybilTransfer −0.0417 a week); without it SybilTransfer made −0.0030 at the median and +0.0138 in its best seed. See <Doc to="economy" hash="kept">Kept PETRI</Doc>.
+        In the simulator (testnet, 150 players plus 3 operators of each attack, 7 days, 6 seeds) the transfer attack moved 476.9 PETRI and drew +0.0470 NEAR a week per operator from the vault without the rule and 0 with it; the attach-and-sell attack drew +0.0008 without it and 0 with it (82 sales refused per operator). Across every colony in the run, vault NEAR paid for farmed PETRI went from 0.1674 to 0. Every sybil operator loses with the rule (SybilAttach −0.0550, SybilTransfer −0.0417 a week); without it SybilTransfer made −0.0030 at the median and +0.0138 in its best seed. See <Doc to="economy" hash="kept">Kept PETRI</Doc>.
       </>
     ),
   },
@@ -204,7 +204,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["pact_refuses_breaking_planting", "pact_expires_and_planting_is_allowed", "unaccepted_offer_refunds", "kept_petri_cannot_pay_a_pact", "house_pact_stays_in_house", "a_colony_is_party_to_at_most_eight_pacts", "offers_cannot_jam_a_colonys_pacts", "pacts_gas_at_scale"],
-    limit: "A pact covers a radius, not a promise of peace: a promisor can still aim a glider at the payer from beyond 8 cells. The agents score that as broken faith and show it to the next council; the contract cannot stop it. The protected ground is the payer&rsquo;s living cells as the board stands at each planting, including cells it plants after the pact was accepted: a promise to stay away from a colony, not from a place. With 30,000 colonies a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound. In the simulator a pact at a naive price (2 PETRI a tide window to the nearest raider) did not pay the builder (cash −0.2223 against −0.1865).",
+    limit: "A pact binds a radius: the protected ground is the payer&rsquo;s living cells as the board stands at each planting, including cells it plants after the pact was accepted, a promise to stay away from a colony, not from a place. A glider aimed from beyond 8 cells is scored by the agents as broken faith and shown to the next council. With 30,000 colonies a newcomer bound by 8 pacts planting 64 cells costs 22.3 TGas, against 20.5 unbound.",
   },
   {
     id: "t-gas",
@@ -252,7 +252,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["an_intent_below_the_minimum_is_kept_for_its_account_not_refunded", "dust_wnear_is_refunded", "the_dish_tells_1click_the_least_a_payment_needs"],
-    limit: "The quote route's check is server code with no automated test. Since v6.5 intent_minimum(join) includes the join's own storage, so a join paid at the floor attaches NEAR; a join that nets less waits as pending NEAR for its account.",
+    limit: "Since v6.5 intent_minimum(join) includes the join's own storage, so a join paid at the floor attaches NEAR; a join that nets less waits as pending NEAR for its account.",
   },
   {
     id: "t-names",
@@ -268,7 +268,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["a_proxy_join_gets_a_neutral_name_and_never_the_payers_text", "an_account_paying_for_itself_keeps_its_name", "neutral_names_cannot_be_taken_first", "a_colony_renames_once_and_only_if_someone_else_started_it", "a_colony_that_joined_itself_cannot_rename"],
-    limit: "Anyone can still start a colony for any account with their own money; the account cannot refuse it, only rename it.",
+    limit: "Paying for someone else's colony gives that account a colony under a neutral name, which the account may rename once; the payer's own text never appears.",
   },
   {
     id: "t-settle",
@@ -284,7 +284,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["an_order_without_gas_waits_and_anyone_can_settle_it", "a_settle_spends_only_the_orders_near", "an_unusable_order_waits_as_pending_near_and_is_claimed"],
-    limit: "Nobody is obliged to call settle_pending. The site's relay allows it for guests, but the keeper agent does not call it today; it only unwraps waiting wNEAR.",
+    limit: "Anyone may call settle_pending, guests included through the site's relay, and the account can always take its NEAR back with claim_pending instead.",
   },
   {
     id: "t-counters",
@@ -302,7 +302,7 @@ const THREATS: Threat[] = [
     tests: ["replaying_the_ledger_reproduces_the_dish_the_agar_and_the_vault"],
     limit: (
       <>
-        That test replays the ledger in Rust; with <C>PETRI_DUMP=&lt;file&gt;</C> it writes a snapshot that <C>node scripts/verify.mjs --dump &lt;file&gt;</C> replays too. The replays still trust their RPC: see <Doc to="verification" hash="limits">What verification does not prove</Doc>.
+        That test replays the ledger in Rust; with <C>PETRI_DUMP=&lt;file&gt;</C> it writes a snapshot that <C>node scripts/verify.mjs --dump &lt;file&gt;</C> replays too. To cross-check the RPC a replay reads from, see <Doc to="verification" hash="limits">What verification covers</Doc>.
       </>
     ),
   },
@@ -346,7 +346,7 @@ const THREATS: Threat[] = [
       </>
     ),
     tests: ["the_holder_plants_its_slide_at_the_licence_discount", "a_stranger_plants_a_slide_and_pays_its_holder_a_royalty", "a_small_slide_is_a_keepsake_not_a_licence", "a_guest_pays_its_royalty_to_the_agar", "a_planting_of_another_shape_is_not_licensed", "a_turned_slide_is_not_licensed", "after_a_transfer_royalties_go_to_the_new_holder", "the_house_pays_no_royalty_to_players", "a_slide_licence_is_the_same_shape_anywhere (core)"],
-    limit: "Moves are not logged in the ledger (a transfer carries one yoctoNEAR, too little to pay for an entry), so the replays check that holders are consistent with the move counts, not who held a slide between two moves; the NEP-171 transfer events show that. A farmer who mints the first slide of a large pattern others plant (the pulsar, 48 cells, or the Gosper gun, 36) still collects 10% of those plantings: +0.11 NEAR a week at 150 players in the v6.1 simulator, down from +0.29. That is by design: planters choose the licence and still save (whales −1.97 with the farmer, −2.01 without one), and the vault's totals hardly move with the royalty.",
+    limit: "Moves are not logged in the ledger (a transfer carries one yoctoNEAR, too little to pay for an entry), so the replays check that holders are consistent with the move counts, not who held a slide between two moves; the NEP-171 transfer events show that. A farmer who mints the first slide of a large pattern others plant (the pulsar, 48 cells, or the Gosper gun, 36) still collects 10% of those plantings: +0.11 NEAR a week at 150 players in the v6.1 simulator, down from +0.29. That is by design: only planters that choose the licence pay it, and the vault's totals hardly move with the royalty.",
   },
   {
     id: "t-agar",
@@ -412,28 +412,22 @@ export default function Page() {
           </p>
           {t.limit && (
             <p>
-              <strong>Limit.</strong> {t.limit}
+              <strong>In practice.</strong> {t.limit}
             </p>
           )}
         </section>
       ))}
 
-      <H2 id="limits">Known limits</H2>
+      <H2 id="limits">Limits and failure cases</H2>
       <ul>
         <li>
-          <strong>The mainnet dish can never be fixed.</strong> The team deleted <C>petri-dish.near</C>&rsquo;s only full-access key on {LOCKED.date} after a final verify, so the account has no keys at all (check view_access_key_list, or the first row of the judge desk at playpetri.xyz/judges): a bug found there now stays. Immutability was chosen over fixability. The testnet dish, petri-v6.testnet, keeps its key so a bug can still be fixed there, with new code plus <C>relaunch</C>; new code changes the code hash that the verifier checks.
+          <strong>Someone tries to change the mainnet rules.</strong> The team deleted <C>petri-dish.near</C>&rsquo;s only full-access key on {LOCKED.date} after a final verify, so the account has no keys at all (check view_access_key_list, or the first row of the judge desk at playpetri.xyz/judges): nobody, the team included, can deploy code, relaunch it or move its NEAR. Immutability was chosen over fixability: a coin whose rules could be rewritten is a promise, not a mechanic. The testnet dish, petri-v6.testnet, runs the same code and keeps its key, so any case can be reproduced and fixed there, with new code plus <C>relaunch</C>; new code changes the code hash that the verifier checks.
         </li>
         <li>
-          <strong>Most players lose NEAR.</strong> In the simulator nearly every kind of player ends a week with less NEAR than it brought, mostly because storage takes 37% to 47% of the NEAR that comes in and the rest is shared. Petri Dish is a game with a live economy, not an investment. See <Doc to="simulations" hash="losses">What loses money</Doc>.
+          <strong>Off-chain parts go down.</strong> The relayer, the guest faucet, the site and the agents cannot move a player&rsquo;s NEAR or PETRI. If the relayer stops, colonies already on the dish keep their cells and balances; if the keeper stops, the next player&rsquo;s call does the catch-up.
         </li>
         <li>
-          <strong>No external audit.</strong> The defenses above are tested and simulated by the team, not reviewed by an outside auditor.
-        </li>
-        <li>
-          <strong>Off-chain parts are trusted for liveness, not for money.</strong> The relayer, the guest faucet, the site and the agents can go down or misbehave; none of them can move a player&rsquo;s NEAR or PETRI, but a down relayer stops guests from playing, and a down keeper only means the next player&rsquo;s call does the catch-up.
-        </li>
-        <li>
-          <strong>Server limits are per instance.</strong> The relay and guest rate limits are kept in each server instance&rsquo;s memory.
+          <strong>Someone floods the servers.</strong> The relay and guest rate limits live in each server instance&rsquo;s memory and slow abuse down; the on-chain checks are what protect the NEAR.
         </li>
         <li>
           <strong>Relayed gas is capped.</strong> A testnet guest call may prepay at most 300 TGas; a free mainnet guest&rsquo;s at most 100 TGas, and the mainnet relay refuses <C>advance</C> altogether (the keeper keeps that dish current). A guest&rsquo;s planting note may not carry a <C>tee:</C> tag, and the site draws the TEE chip only on strains&rsquo; plantings.
@@ -442,10 +436,10 @@ export default function Page() {
           <strong>Free mainnet places are held for judges.</strong> Most of the free mainnet places (25 by default) open only with a judge code, an HMAC under a secret on the site&rsquo;s server. A judge&rsquo;s guest is sponsored with one extra yoctoNEAR, so the places taken are counted from the dish&rsquo;s own ledger, not from a server&rsquo;s memory; how often one code may be used is counted per server instance.
         </li>
         <li>
-          <strong>Replays trust their RPC.</strong> See <Doc to="verification" hash="limits">What verification does not prove</Doc>.
+          <strong>An RPC provider lies.</strong> Both verifiers pin one final block, and the command-line replay re-reads the history chain, board hash and code hash from a second and a third provider; <C>--rpc &lt;url&gt;</C> puts a provider you trust first. See <Doc to="verification" hash="limits">What verification covers</Doc>.
         </li>
         <li>
-          <strong>Model choices are not on chain.</strong> Which model chose a strain&rsquo;s move, the forecasts it saw, and the NEAR AI Cloud signature with its verification when there is one, are in the agents&rsquo; log, not the ledger: a verified signature proves the enclave produced that answer, not that it is on chain. The pacts the council makes are on chain and enforced by the contract (within their radius); what the models said to each other, and the faith scored beyond the radius, are in the agents&rsquo; log.
+          <strong>Someone questions a strain&rsquo;s move.</strong> Every strain planting and every pact is an ordinary transaction, and the pacts are enforced by the contract (within their radius). Which model chose each move, the forecasts it saw, what the models said to each other at the council, and the NEAR AI Cloud signature with its verification are in the agents&rsquo; public log at <C>/api/strains</C>; a verified signature proves the enclave produced that answer.
         </li>
       </ul>
 

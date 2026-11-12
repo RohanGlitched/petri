@@ -322,7 +322,7 @@ pending                                                                  = Σ Pe
         <li>Plantings (cost and royalty) and slides spend kept PETRI first; a guest&rsquo;s sale for credit spends it too.</li>
       </ul>
       <p>
-        While a colony holds any kept PETRI it cannot sell PETRI for NEAR, send PETRI or pay PETRI into a pact. A guest cannot send PETRI at all, kept or not (it can plant, mint slides, receive PETRI and sell back for credit). While it holds any, a colony is also paid in credit, not NEAR: its tide share and bounties are credit, <C>claim</C> pays out only its PETRI and leaves its NEAR owed (no <C>Claim</C> entry is written), and a royalty it would pay out of kept PETRI goes to the agar. Once its plantings have spent its kept PETRI, everything it holds is its own, what it earns afterwards is sellable, and its NEAR is paid again. The cost is that a former guest plants before it sells.
+        While a colony holds any kept PETRI it cannot sell PETRI for NEAR, send PETRI or pay PETRI into a pact. A guest cannot send PETRI at all, kept or not (it can plant, mint slides, receive PETRI and sell back for credit). While it holds any, a colony is also paid in credit, not NEAR: its tide share and bounties are credit, <C>claim</C> pays out only its PETRI and leaves its NEAR owed (no <C>Claim</C> entry is written), and a royalty it would pay out of kept PETRI goes to the agar. Once its plantings have spent its kept PETRI, everything it holds is its own, what it earns afterwards is sellable, and its NEAR is paid again.
       </p>
       <p>
         The rule is &ldquo;none while any is held&rdquo; rather than &ldquo;sellable = balance − kept&rdquo; because balances are not in the ledger (transfers and the keeper pot are not entries), so no replay could check the second exactly. With the first every check is exact: both replays rebuild every colony&rsquo;s <C>kept</C> from the ledger entry by entry and compare it with the view, and a sale for NEAR, a claim of NEAR or a PETRI pact by a colony whose replayed <C>kept</C> is above zero is a violation. The house is exempt from the send check (its PETRI cannot leave the house anyway).
@@ -377,7 +377,7 @@ pending                                                                  = Σ Pe
         <li>A wNEAR payment cannot start a colony for a house account; it waits as pending NEAR for that account to claim.</li>
       </ul>
       <p>
-        Everything the house spends therefore goes to other players. On mainnet the strains attach their own NEAR, so it lands in the vault and is paid out at tides in real NEAR. On testnet they spend sponsored credit, which goes to the credit pool. At the time of writing (4 November 2026, block 222,940,869, minutes after the relaunch) the mainnet dish held 0.22886 NEAR in its vault, all of it from the five strains, and no tide had run yet; <C>state().vault</C> gives today&rsquo;s figure.
+        Everything the house spends therefore goes to other players. On mainnet the strains attach their own NEAR, so it lands in the vault and is paid out at tides in real NEAR. On testnet they spend sponsored credit, which goes to the credit pool. <C>state().vault</C> gives the vault today, and the judge desk reads every tide paid so far.
       </p>
 
       <H2 id="solvency">Solvency</H2>
@@ -434,7 +434,7 @@ solvent  ⇔  free ≥ owed          surplus = free − owed`}</Formula>
         </tbody>
       </Table>
       <p>
-        Storage the contract uses is real cost: in the v5 simulator, storage took 37% to 47% of the NEAR players brought, depending on how many played and for how long. That is the single largest drain on the economy, and the main reason most player kinds lose NEAR there; see <Doc to="simulations" hash="storage">Storage and the newcomer</Doc>.
+        Storage is NEAR&rsquo;s own price for the bytes a move writes, and the contract keeps it while the records exist. Those records are the ledger that lets anyone replay the whole dish from generation zero; see <Doc to="simulations" hash="storage">Storage and the newcomer</Doc>.
       </p>
 
       <H2 id="worked">A worked example</H2>

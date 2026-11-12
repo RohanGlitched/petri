@@ -12,13 +12,12 @@ export function NetLimitBody() {
   const net = useNet();
   return net.freePlay ? (
     <>
-      This dish lives on NEAR testnet. PETRI there is a real token on a real chain, but testnet NEAR and PETRI have no market, and
-      guests play with credit the site sponsors. The same contract runs with real NEAR on mainnet.
+      This dish lives on NEAR testnet and runs the same contract and rules as mainnet, free to play. Guests play with credit
+      the site sponsors, which they can spend in the dish but never withdraw, so free play never reaches NEAR.
     </>
   ) : (
     <>
-      This dish lives on NEAR mainnet. The NEAR is real and so is PETRI, but nothing about the game guarantees PETRI a price. There
-      are no guests here; free play runs the same contract on testnet.
+      This dish lives on NEAR mainnet, with real NEAR and real PETRI, under the same contract that runs free play on testnet.
     </>
   );
 }

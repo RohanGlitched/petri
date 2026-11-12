@@ -18,11 +18,11 @@ export function useStrainPulse() {
 
 export function PulseBadge({ pulse, className }: { pulse: ReturnType<typeof strainPulse>; className?: string }) {
   if (!pulse) return null;
-  const when = pulse.ageMs === null ? "no moves logged yet" : `last move ${agoText(pulse.ageMs)}`;
+  const when = pulse.ageMs === null ? "" : ` · last move ${agoText(pulse.ageMs)}`;
   return (
     <span className={`pulse-badge ${pulse.active ? "is-live" : "is-resting"} ${className ?? ""}`} role="status">
       <i aria-hidden="true" />
-      {pulse.active ? "Playing now" : "Resting"} · {when}
+      {pulse.active ? "Playing now" : "Resting"}{when}
     </span>
   );
 }

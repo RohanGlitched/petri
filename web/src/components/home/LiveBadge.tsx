@@ -50,9 +50,11 @@ export function LiveBadge() {
       {ready ? (
         <>
           <span className={`${s.liveFact} num`}>generation {int(p.generation)}</span>
-          <span className={`${s.liveFact} ${s.liveMinor} num`}>
-            {int(p.live)} living {p.live === 1 ? "cell" : "cells"}
-          </span>
+          {p.live > 0 && (
+            <span className={`${s.liveFact} ${s.liveMinor} num`}>
+              {int(p.live)} living {p.live === 1 ? "cell" : "cells"}
+            </span>
+          )}
         </>
       ) : null}
       <a className={s.liveGo} href="/dish?net=mainnet">

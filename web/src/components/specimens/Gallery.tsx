@@ -113,9 +113,9 @@ export function Gallery() {
         </ul>
       ) : rows.length === 0 ? (
         <div className={s.state} role="status">
-          <h2>No specimens yet</h2>
+          <h2>The slide box is open</h2>
           <p>
-            Nobody has fixed a slide on this dish{ready ? "" : " yet"}. Any colony with living cells can make the first: frame a patch of
+            Any colony with living cells can make the first specimen on this dish: frame a patch of
             your own cells on the dish, give it a title, and the contract mints it.
           </p>
           <Link className="btn btn-amber" href="/dish?tool=fossil">Make the first specimen</Link>

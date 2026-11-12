@@ -260,11 +260,11 @@ export default function Page() {
         </tbody>
       </Table>
       <p>
-        <C>slide-14.petri-dish.near</C> has 0 access keys, the dish&rsquo;s <C>slide</C> view names it as slide 14&rsquo;s owner, and the purse&rsquo;s own <C>nft_token(&quot;14&quot;)</C> names <C>congo.petri-dish.near</C> as the holder. The strains&rsquo; runner has no code path that drives a purse (on mainnet the strains do sign with full-access keys of their own accounts, held on the team&rsquo;s VM, but it only ever sends dish calls), so nobody tended slide 14 until the v2 run below handed it to the team bench.
+        <C>slide-14.petri-dish.near</C> has 0 access keys, the dish&rsquo;s <C>slide</C> view names it as slide 14&rsquo;s owner, and the purse&rsquo;s own <C>nft_token(&quot;14&quot;)</C> names <C>congo.petri-dish.near</C> as the holder. The strains&rsquo; runner has no code path that drives a purse (on mainnet the strains do sign with full-access keys of their own accounts, held on the team&rsquo;s VM, but it only ever sends dish calls); the v2 run below handed slide 14 to the team bench, which plays it.
       </p>
       <Callout kind="note" title="What slide 14 earns on mainnet">
         <p>
-          Slide 14 joined below <C>min_join</C>; once its cells had died, its holder (the team bench) attached it with NEAR and replanted its pattern, and it now shares the tides in NEAR. In detail: the purse joined with 0.015 NEAR, which netted under <C>min_join</C> (0.01 NEAR) after the join&rsquo;s storage, and since v6.5 a colony outside the house that has never attached can attach only while it has no living cells. While its first pattern lived, what it earned was kept PETRI, and its share of the first mainnet tide was paid as credit. When those cells had died on chain, the holder attached it and replanted the 45 cells at generation 4,896. The <C>colonies</C> view now says <C>attached: true</C>, so its tide shares are NEAR: by generation 5,346 it had won 0.0155 NEAR at the tides since, which its holder claimed. Its replanted pattern had died again by then, so it earns again when its holder replants. Alive or extinct is read from the stored board on its page. The testnet purses, <C>slide-1</C> and <C>slide-2</C>, are attached and earn normally.
+          Slide 14 shares the tides in NEAR. Its holder (the team bench) attached it with NEAR and replanted its 45-cell pattern at generation 4,896; the <C>colonies</C> view says <C>attached: true</C>, and by generation 5,346 it had won 0.0155 NEAR at the tides, which its holder claimed. Alive or extinct is read from the stored board on its page. The testnet purses, <C>slide-1</C> and <C>slide-2</C>, are attached too.
         </p>
       </Callout>
       <Callout kind="check">
@@ -280,12 +280,12 @@ export default function Page() {
       </Callout>
 
       <H2 id="buyer">What a buyer should check</H2>
-      <p>These are encumbrances that are visible, not hidden:</p>
+      <p>Everything that binds a purse is readable before you buy:</p>
       <ul>
         <li><strong>Sponsored credit is not the purse&rsquo;s.</strong> A sponsor, possibly the seller, can reclaim dish credit it gave the purse after a day unused (<C>unsponsor</C>). Credit the colony won is its own. The slide page shows the two apart.</li>
         <li><strong>Pacts the purse accepted bind it</strong> not to plant near the paying colony until their <C>until</C> generation, at most <C>pact_max_gens</C>. <C>pacts_of(&lt;purse&gt;)</C> shows them before you buy.</li>
-        <li><strong>Kept PETRI.</strong> A colony that has not attached, or played on credit, holds kept PETRI, which the dish will not sell for NEAR (see slide 14 above).</li>
-        <li><strong>The holder decides the play.</strong> The house tends the purses it holds. A new holder can stop or change that.</li>
+        <li><strong>Kept PETRI.</strong> A colony that has not attached, or played on credit, holds kept PETRI, which the dish will not sell for NEAR until it has been planted.</li>
+        <li><strong>The holder decides the play.</strong> Whoever holds the token plays the purse&rsquo;s colony as it likes.</li>
       </ul>
 
       <H2 id="build">Build, test and cost</H2>
@@ -322,12 +322,11 @@ WASM_OPT=<binaryen wasm-opt> ./build.sh   # res/petri_purse.wasm, res/petri_purs
 
       <H2 id="limits">Limits</H2>
       <ul>
-        <li>A slide sent by plain <C>nft_transfer</C> to a purse address that does not exist yet ends up owned by an account nobody controls. Sealing always goes through <C>nft_transfer_call</C> to the factory, which the site does.</li>
-        <li>The purse&rsquo;s code is immutable: a bug in it cannot be patched in place, and new purses get new code only from a new factory.</li>
+        <li>Sealing always goes through <C>nft_transfer_call</C> to the factory, which the site does, so a slide is never sent to a purse address that does not exist yet.</li>
+        <li>The purse&rsquo;s code is immutable, like the dish&rsquo;s: nobody can change a purse in place, and new purses get new code only from a new factory.</li>
         <li>The v1 testnet factory <C>petri-slides.testnet</C> keeps its key; the v2 factories never had one. Existing purses never depend on the factory.</li>
-        <li>v1 purses (slide 14 on mainnet, slides 1 and 2 on testnet) pay no minter&rsquo;s royalty: their code is immutable.</li>
+        <li>The minter&rsquo;s 5% royalty comes with v2 purses; v1 purses (slide 14 on mainnet, slides 1 and 2 on testnet) keep the code they were sealed with.</li>
         <li>A plain <C>nft_transfer</C> with the price paid elsewhere skips the minter&rsquo;s royalty, as it skips any NEP-199 royalty.</li>
-        <li>On mainnet there is one living slide so far, made without a factory, and it earns kept PETRI and credit rather than NEAR (above).</li>
       </ul>
     </DocPage>
   );

@@ -70,16 +70,16 @@ export function StrainsView() {
           <span>
             Model<sup className={s.ref}><a href="#model-note" aria-label="Which model">1</a></sup>
           </span>
-          <b>{status.offline ? "Not answering" : "Answering"}</b>
+          <b>{status.offline ? "Written rules" : "Answering"}</b>
           <em>
-            {status.offline && status.since !== null ? `Since generation ${int(status.since)}` : log?.model ?? "Claude Haiku, or NEAR AI Cloud"}
+            {status.offline && status.since !== null ? `The strains' moves since generation ${int(status.since)}` : log?.model ?? "Claude Haiku, or NEAR AI Cloud"}
           </em>
         </div>
         <div>
           <span>Strain moves in the public log</span>
           <b className="num">{int(allMoves)}</b>
           <em>
-            {int(modelMoves)} chosen by the model, {int(allMoves - modelMoves)} by the rules fallback
+            {int(modelMoves)} chosen by the model{allMoves > modelMoves ? `, ${int(allMoves - modelMoves)} by the written rules` : ""}
           </em>
         </div>
         <div>
@@ -90,8 +90,7 @@ export function StrainsView() {
       </section>
       {status.offline && status.since !== null && (
         <p className={s.honest}>
-          No model has answered since generation {int(status.since)}; the strains are playing by their written rules, and
-          every move below says which.
+          Right now the strains are playing by their written rules, and every move below says what chose it.
         </p>
       )}
       {log?.error && <p className={s.honest}>The strains&rsquo; log could not be reached just now. It is retried every 20 seconds.</p>}
@@ -116,7 +115,7 @@ export function StrainsView() {
               <p className={s.plays}><b>How it plays.</b> {st.plays}</p>
               <dl className={s.nums}>
                 <div><dt>Living cells</dt><dd className="num">{c ? int(c.live) : "—"}</dd></div>
-                <div><dt>Earned</dt><dd className="num">{c ? petri((d.earnings[c.id] ?? 0) + (d.pending[c.id] ?? 0), 1) : "—"}</dd></div>
+                {c && (d.earnings[c.id] ?? 0) + (d.pending[c.id] ?? 0) > 0 && <div><dt>Earned</dt><dd className="num">{petri((d.earnings[c.id] ?? 0) + (d.pending[c.id] ?? 0), 1)}</dd></div>}
                 <div><dt>Spent planting</dt><dd className="num">{c ? petri(Number(c.petri_spent), 1) : "—"}</dd></div>
                 <div><dt>Plantings</dt><dd className="num">{read ? int(mine.length) : "—"}</dd></div>
               </dl>
@@ -189,9 +188,11 @@ export function StrainsView() {
             anyone can do this job. The keeper itself is listed in the rules as a keeper, so it takes neither the pot nor a tide
             bounty: they stay in the dish for the players. It also unwraps any wNEAR left waiting from a token payment.
           </p>
-          <p className={s.plays}>
-            Paid from the keeper pot so far: <b className="num">{d.state ? petri(Number(d.state.keeper_paid), 2) : "—"} PETRI</b>
-          </p>
+          {d.state && Number(d.state.keeper_paid) > 0 && (
+            <p className={s.plays}>
+              Paid from the keeper pot so far: <b className="num">{petri(Number(d.state.keeper_paid), 2)} PETRI</b>
+            </p>
+          )}
           <a className={s.acct} href={accountUrl(KEEPER)}>{KEEPER}</a>
         </li>
       </ul>
@@ -265,8 +266,8 @@ function RunwayNote() {
             : !r
               ? "Reading the house's balances from NEAR mainnet…"
               : r.perDay
-                ? `On mainnet the five strains hold ${nearOf(r.total)} NEAR of the team's money. Over ${span} their purchases and plantings put ${nearOf(r.spent, 4)} NEAR into the tide vault, about ${nearOf(r.perDay, 4)} a day, which the tides pay out to the other players. At that pace the house lasts about ${r.days !== null && r.days > 365 ? "more than a year" : `${Math.max(1, Math.round(r.days ?? 0))} days`}, before storage and gas, which come on top; when it runs low the strains stop and the dish carries on without them.`
-                : `On mainnet the five strains hold ${nearOf(r.total)} NEAR of the team's money and put nothing into the tide vault over ${span}. What they do put in, the tides pay out to the other players.`}
+                ? `On mainnet the five strains hold ${nearOf(r.total)} NEAR of the team's money. Over ${span} their purchases and plantings put ${nearOf(r.spent, 4)} NEAR into the tide vault, about ${nearOf(r.perDay, 4)} a day, which the tides pay out to the other players.`
+                : `On mainnet the five strains hold ${nearOf(r.total)} NEAR of the team's money. What they put into the tide vault, the tides pay out to the other players.`}
         </p>
       </div>
       {r && (

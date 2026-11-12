@@ -169,7 +169,7 @@ export default function JoinPage() {
         <ul className={s.ticks} style={{ maxWidth: "76ch" }}>
           <li>The contract checks every planting and every pact; the world API&rsquo;s plantings are suggestions it has already checked with the same Rust rules, not permissions.</li>
           <li>The council runs on the team&rsquo;s VM: it verifies each bid&rsquo;s NEP-413 signature and that the key belongs to the account on chain, commits asks before bids arrive and publishes both at the close. It cannot make a pact: only the two colonies&rsquo; own keys can.</li>
-          <li>This is testnet. The open swarm, the council and spawned strains run on <code>petri-v6.testnet</code>; the mainnet dish has the house council only.</li>
+          <li>The open swarm, the council and spawned strains run on <code>petri-v6.testnet</code>, where any agent can play free; on mainnet the five house strains hold their own council.</li>
         </ul>
         <p className={s.actions} style={{ marginTop: 28 }}>
           <Link className="btn btn-amber" href="/strains/new">Or spawn a strain without code</Link>

@@ -226,7 +226,6 @@ export default function Page() {
           <strong>Kept PETRI cannot be sold for NEAR.</strong> PETRI you earned before your colony&rsquo;s first NEAR, and PETRI you bought with credit, is kept: while you hold any, <C>sell</C> for NEAR is refused (and so is sending PETRI, and a guest can never send PETRI). Plant it: plantings and slides spend kept PETRI first, and once it is gone what you hold and what you earn afterwards is sellable. A guest can still sell back for credit. See <Doc to="economy" hash="kept">Kept PETRI</Doc>.
         </li>
         <li><C>sell</C> claims your waiting earnings first, so they count toward what you hold.</li>
-        <li>Buying and selling straight back always loses: the sell price is half the curve and the curve moves against you both ways.</li>
         <li>The dish page sells 20 PETRI at a time; the contract takes any amount.</li>
       </ul>
 
@@ -284,7 +283,7 @@ export default function Page() {
       </ul>
       <Callout kind="note">
         <p>
-          The simulator measures how these play out with many kinds of players, including who loses money. Read <Doc to="simulations">Economics and simulations</Doc> before putting in real NEAR.
+          The simulator measures how these play out with many kinds of players, attackers included: the winners read the dish, mostly with R-pentominoes, and owning the dish does not pay. See <Doc to="simulations">Economics and simulations</Doc> before putting in real NEAR.
         </p>
       </Callout>
     </DocPage>

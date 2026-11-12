@@ -14,7 +14,7 @@ export const TOC: [string, string][] = [
   ["strategies", "Strategies"],
   ["verify", "Verification and the lock"],
   ["parameters", "Parameters and the simulator"],
-  ["limits", "Known limits"],
+  ["limits", "Limits and failure cases"],
 ];
 
 export function RulesHeader() {

@@ -257,51 +257,62 @@ export function Records() {
           )}
         </li>
 
+        {(!r || r.peak) && (
         <li>
           <h2>Biggest colony ever</h2>
           <p className={s.big}>{r?.peak ? <><span className="num">{int(r.peak.live)}</span> <small>living cells</small></> : r ? "—" : pending}</p>
           {r?.peak && <Holder c={byId.get(r.peak.id)} />}
           <p className={s.detail}>{r?.peak ? `At generation ${int(r.peak.at)}.` : "The most living cells one colony has held at once."}</p>
         </li>
+        )}
 
+        {(!r || r.biggest) && (
         <li>
           <h2>Biggest planting</h2>
           <p className={s.big}>{r?.biggest ? <><span className="num">{int(r.biggest.cells)}</span> <small>cells at once</small></> : r ? "—" : pending}</p>
           {r?.biggest && <Holder c={byId.get(r.biggest.id)} />}
           <p className={s.detail}>{r?.biggest ? `${petri(r.biggest.cost, 2)} PETRI at generation ${int(r.biggest.at)}.` : "The most cells planted in one transaction."}</p>
         </li>
+        )}
 
+        {(!r || (burner && Number(burner.petri_burned) > 0)) && (
         <li>
           <h2>Most PETRI burned</h2>
           <p className={s.big}>{burner && Number(burner.petri_burned) > 0 ? <><span className="num">{petri(Number(burner.petri_burned), 2)}</span> <small>PETRI</small></> : r ? "—" : pending}</p>
           {burner && Number(burner.petri_burned) > 0 && <Holder c={burner} />}
           <p className={s.detail}>Half of every planting and the whole price of every specimen slide burns for good. Supply only falls.</p>
         </li>
+        )}
 
+        {(!r || r.siege) && (
         <li>
           <h2>Biggest siege</h2>
-          <p className={s.big}>{r?.siege ? <><span className="num">{petri(r.siege.cost, 2)}</span> <small>PETRI</small></> : r ? <span className={s.none}>No siege yet</span> : pending}</p>
+          <p className={s.big}>{r?.siege ? <><span className="num">{petri(r.siege.cost, 2)}</span> <small>PETRI</small></> : pending}</p>
           {r?.siege && <Holder c={byId.get(r.siege.id)} />}
           <p className={s.detail}>
             {r?.siege
               ? `${int(r.siege.cells)} cells inside a rival's buffer at generation ${int(r.siege.at)}, at ${d.rules?.siege_x ?? 3} times the price. ${int(r.sieges)} ${r.sieges === 1 ? "siege" : "sieges"} in all.`
-              : "Planting within three cells of a rival costs three times as much. Nobody has paid it yet; the house never does."}
+              : "Planting within three cells of a rival costs three times as much."}
           </p>
         </li>
+        )}
 
+        {(!r || r.firstTide) && (
         <li>
           <h2>First tide</h2>
           <p className={s.big}>
-            {r?.firstTide ? <><small>generation</small> <span className="num">{int(r.firstTide.at)}</span></> : r ? <span className={s.none}>Not yet</span> : pending}
+            {r?.firstTide ? <><small>generation</small> <span className="num">{int(r.firstTide.at)}</span></> : pending}
           </p>
           {r?.firstTide && r.firstTide.by > 0 && <Holder c={byId.get(r.firstTide.by)} />}
           <p className={s.detail}>
             {r?.firstTide
               ? `Paid ${near(r.firstTide.paid, 4)} NEAR${r.firstTide.asCredit + r.firstTide.creditPaid > 0 ? ` and ${near(r.firstTide.asCredit + r.firstTide.creditPaid, 4)} as credit` : ""} to the colonies that had earned${r.firstTide.by > 0 ? "; this colony's transaction ran it" : ""}.`
-              : "A tide runs every 240 generations once some colony outside the house has earned. The first one is still to come."}
+              : "A tide runs every 240 generations and pays the vault's NEAR to the colonies that earned."}
           </p>
         </li>
+        )}
 
+        {(!r || r.pacts.accepted > 0) && (
         <li>
           <h2>Pacts made</h2>
           <p className={s.big}>{r ? <><span className="num">{int(r.pacts.accepted)}</span> <small>{r.pacts.accepted === 1 ? "pact" : "pacts"}, {petri(r.pacts.petri, r.pacts.petri % 1e6 ? 1 : 0)} PETRI</small></> : pending}</p>
@@ -315,16 +326,16 @@ export function Records() {
           <p className={s.detail}>
             {r?.pacts.biggest
               ? `The biggest, pact ${r.pacts.biggest.id}: ${petri(r.pacts.biggest.petri, 1)} PETRI for a promise to plant nowhere within ${d.rules?.pact_radius ?? 8} cells of the payer until generation ${int(r.pacts.biggest.until)}. ${int(r.pacts.offered)} offered in all.`
-              : r
-                ? `${int(r.pacts.offered)} offered so far, none accepted. A pact pays a colony PETRI for staying ${d.rules?.pact_radius ?? 8} cells clear of the payer, and the contract enforces it.`
-                : "PETRI paid for promises the contract enforces."}{" "}
+              : "PETRI paid for promises the contract enforces."}{" "}
             <Link href="/strains#council-title">See the council</Link>.
           </p>
         </li>
+        )}
 
+        {(!r || r.licence) && (
         <li>
           <h2>Richest licence</h2>
-          <p className={s.big}>{r?.licence ? <><span className="num">{petri(r.licence.royalties, 2)}</span> <small>PETRI in royalties</small></> : r ? <span className={s.none}>No licensed planting yet</span> : pending}</p>
+          <p className={s.big}>{r?.licence ? <><span className="num">{petri(r.licence.royalties, 2)}</span> <small>PETRI in royalties</small></> : pending}</p>
           {r?.licence && <Link className={s.slideLink} href={`/specimens/${encodeURIComponent(r.licence.token)}`}>Specimen {r.licence.token}</Link>}
           <p className={s.detail}>
             {r?.licence
@@ -332,7 +343,9 @@ export function Records() {
               : `A slide of at least ${d.rules?.licence_min_cells ?? 12} cells licenses its pattern: ${(d.rules?.slide_discount_bps ?? 2500) / 100}% off to plant it, and ${(d.rules?.slide_royalty_bps ?? 1000) / 100}% of that to its holder.`}
           </p>
         </li>
+        )}
 
+        {!(d.status === "ready" && kept.total === 0) && (
         <li>
           <h2>Kept in the dish</h2>
           <p className={s.big}>{d.status === "ready" || phase.kind === "done" ? <><span className="num">{petri(kept.total, 2)}</span> <small>PETRI</small></> : pending}</p>
@@ -342,8 +355,10 @@ export function Records() {
             {kept.n > 0 ? ` ${int(kept.n)} ${kept.n === 1 ? "colony" : "colonies"} outside the house ${kept.n === 1 ? "holds" : "hold"} some.` : " Counted outside the house, whose PETRI never leaves it anyway."}
           </p>
         </li>
+        )}
       </ul>
 
+      {!(d.status === "ready" && earners.length === 0) && (
       <section className={s.earners} aria-labelledby="earners-title">
         <h2 id="earners-title" className="h3">Top earners</h2>
         {earners.length > 0 ? (
@@ -358,17 +373,12 @@ export function Records() {
           </ol>
         ) : (
           <p className="muted">
-            {d.status === "ready" ? (
-              <>
-                Nobody outside the house has earned yet. <Link href="/dish">Start a colony</Link> and the top line is yours.
-              </>
-            ) : (
-              "Reading the dish…"
-            )}
+            Reading the dish…
           </p>
         )}
         <p className={s.note}>Lifetime PETRI each colony&rsquo;s cells earned, claimed or not. The house strains are never fed, so they never appear here.</p>
       </section>
+      )}
 
       <p className={s.method}>
         How this page knows: it reads every entry of the ledger from {net.contract} and replays the dish from an empty board

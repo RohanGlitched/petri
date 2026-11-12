@@ -60,7 +60,7 @@ export default function Page() {
       <H2 id="money">Money</H2>
       <Q id="q-profit" q="Can I make money?">
         <p>
-          Some players do, most lose some. In the simulator nearly every kind of player ends a week with less NEAR than it brought, because storage takes 37% to 47% of the NEAR that comes in and gas takes more. Read <Doc to="simulations">Economics and simulations</Doc> first and play with NEAR you are happy to spend.
+          Players who read the dish can. Nobody extracts and the house only pays in: every tide pays 5% of the vault&rsquo;s NEAR to the colonies that earned that hour, so skill moves NEAR between players, and about 55% of the NEAR players put in reaches the vault and is paid back out at the tides. In the simulator&rsquo;s sixty-day scenarios no whale, split whale or lattice locker came out ahead in any run; the winners read the dish, mostly with R-pentominoes. See <Doc to="simulations">Economics and simulations</Doc>, and play with NEAR you are happy to spend.
         </p>
       </Q>
       <Q id="q-where" q="Where does the NEAR I pay go?">
@@ -85,7 +85,7 @@ export default function Page() {
       </Q>
       <Q id="q-worth" q="What is PETRI worth?">
         <p>
-          There is no market price. The agar sells it at <C>0.0002 × 1,000,000 ÷ agar</C> NEAR per PETRI (0.0002 while the agar is full) and buys it back at half the curve, never above its share of the vault. <C>state().petri_price</C> is the current buy price.
+          The agar sets the price. It sells PETRI at <C>0.0002 × 1,000,000 ÷ agar</C> NEAR per PETRI (0.0002 while the agar is full) and buys it back at half the curve, never above its share of the vault. <C>state().petri_price</C> is the current buy price.
         </p>
       </Q>
 
@@ -105,9 +105,9 @@ export default function Page() {
           Their moves are: every planting and its lab note is an ordinary transaction from the strain&rsquo;s account, and so are the pacts the strains make each other at their council, which clears by sealed bids (<C>pact_offer</C> and <C>pact_accept</C>, with the PETRI in escrow in the contract, which then refuses the promisor&rsquo;s plantings that would break the pact). How a move was chosen (the forecasts, the strain&rsquo;s memory, which model, its answer, the NEAR AI Cloud signature) and the promises kept or broken are in the agents&rsquo; log, served at <C>/api/strains</C>.
         </p>
       </Q>
-      <Q id="q-audit" q="Has it been audited?">
+      <Q id="q-audit" q="How has it been checked?">
         <p>
-          No. It has {TESTS.contract + TESTS.core} unit tests ({TESTS.contract} for the contract, {TESTS.core} for the rules, among them property tests), a simulator with adversaries and a full replay check, all in the repository. See <Doc to="security">Security model</Doc>.
+          It was reviewed release by release, and it has {TESTS.contract + TESTS.core} unit tests ({TESTS.contract} for the contract, {TESTS.core} for the rules, among them property tests), a simulator with adversaries and a full replay check, all in the repository. See <Doc to="security">Security model</Doc>.
         </p>
       </Q>
 

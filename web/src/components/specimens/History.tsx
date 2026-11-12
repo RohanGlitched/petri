@@ -80,7 +80,7 @@ export function SlideHistoryBand({ id, cells }: { id: string; cells: number | nu
                   {count === null
                     ? "Reading the slide…"
                     : keepsake
-                      ? `It captured ${int(count)} cells; only a slide of ${min} or more licenses its pattern, so nobody plants under it and it earns no royalties.`
+                      ? `It captured ${int(count)} cells, a keepsake of that colony; a slide of ${min} or more cells also licenses its pattern.`
                       : `It captured ${int(count)} cells, at least the ${min} a licence needs: its exact pattern plants at ${(rules?.slide_discount_bps ?? 2500) / 100}% off, and anyone else pays its holder ${(rules?.slide_royalty_bps ?? 1000) / 100}% of that.`}
                 </p>
               </div>
@@ -105,7 +105,7 @@ export function SlideHistoryBand({ id, cells }: { id: string; cells: number | nu
                   {h.licensed.length === 0
                     ? keepsake
                       ? "None can be made: it is a keepsake."
-                      : "None yet. Plant this pattern from the button above to make the first."
+                      : "Plant this pattern from the button above to make the first."
                     : `${int(h.licensed.length - guestPlantings - own)} paid a holder${guestPlantings ? `, ${int(guestPlantings)} paid the agar` : ""}${own ? `, ${int(own)} by the holder itself, who pays no royalty` : ""}.`}
                 </p>
               </div>
@@ -116,7 +116,7 @@ export function SlideHistoryBand({ id, cells }: { id: string; cells: number | nu
                   {!view
                     ? "Reading the slide…"
                     : moves === 0
-                      ? "It has never changed hands."
+                      ? "It has stayed with its first holder."
                       : nb === "unavailable"
                         ? `It has changed hands ${int(moves)} ${moves === 1 ? "time" : "times"} (the slide counts its moves). NearBlocks did not answer, so only the holders its licensed plantings paid are named here.`
                         : nb === null

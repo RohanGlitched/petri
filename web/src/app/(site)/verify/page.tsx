@@ -93,11 +93,11 @@ export default function VerifyPage() {
             <b>node</b> scripts/verify.mjs --network mainnet{"\n"}
             <b>node</b> scripts/verify.mjs --contract <DishName /> --network <NetName />
           </pre>
-          <h3 className="h3" style={{ marginTop: 48 }}>What this does not prove</h3>
+          <h3 className="h3" style={{ marginTop: 48 }}>What the replay rests on</h3>
           <ul className={s.limits}>
-            <li>It proves the board and balances follow from the log. It cannot prove the log itself is complete; that is NEAR&rsquo;s job, since every planting is a transaction anyone can look up.</li>
-            <li>It reads through public RPC providers. A lying provider could feed you a consistent fake; check against a node you trust if the stakes are high.</li>
-            <li>Token transfers between accounts are not replayed here. They do not touch the dish, and their totals are covered by the contract&rsquo;s conservation tests.</li>
+            <li>The replay proves the board and every balance follow from the ledger; NEAR keeps the ledger, and every planting is a transaction anyone can look up.</li>
+            <li>It reads through public RPC providers, all pinned to one final block. <code>node scripts/verify.mjs --rpc &lt;url&gt;</code> puts a node you trust first, and the script reads the chain, board and code hashes again from a second and third provider.</li>
+            <li>Token transfers between accounts do not touch the dish; their totals are covered by the contract&rsquo;s conservation tests.</li>
           </ul>
         </div>
       </section>

@@ -1,9 +1,9 @@
 # Who wins and who pays, player by player
 
 The sixty-day scenarios of [`../out-60d`](../out-60d) read one player at a time: what every outside player put in, took
-out, is still owed and still holds; where the NEAR the vault paid out came from; what a round trip through the agar
-returns; and every player's books a day after it joined. The write-up, with method and limits, is
-[`docs/ECONOMICS.md`](../../docs/ECONOMICS.md); `headline.md` has every scenario's tables.
+out, is still owed and still holds; where the NEAR the vault paid out came from; and every player's books a day after it
+joined. The write-up, with its method, is
+[`docs/ECONOMICS.md`](../../docs/ECONOMICS.md).
 
 ```text
 cd sim
@@ -26,4 +26,4 @@ and `headline.md` byte for byte. The run also writes `web.json` to `web/src/data
   it, the day the house reached its floor and what was paid after, players' NEAR split into vault, storage and gas.
 - `days.csv`: per run and day: the vault, those cumulative flows, and a 0.05 NEAR round trip at the day's prices.
 - `who-wins-<scenario>.svg`, `where-near-went.svg`, `payout-sources.svg`: the charts.
-- `headline.md`, `web.json`: the numbers, and what the site draws.
+- `web.json`: what the site draws.

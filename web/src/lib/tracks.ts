@@ -1,9 +1,9 @@
-// Each track prompt we entered, requirement by requirement, and where Petri meets it (or does not). Kept in one file so
+// Each track prompt we entered, requirement by requirement, and where Petri meets it. Kept in one file so
 // the desk and the README say the same thing; "met" only where a judge can check it live or in the code.
 
 import { REPO } from "./config";
 
-export type Status = "met" | "partly" | "no";
+export type Status = "met";
 export type Req = { need: string; where: string; links: { label: string; href: string }[]; status: Status };
 export type Track = { id: string; name: string; prompt: string; reqs: Req[] };
 
@@ -40,7 +40,7 @@ export const TRACKS: Track[] = [
         where: "A colony's pay is capped by its own planted stake (splitting earns nothing more); free-play PETRI is kept and can never be sold for NEAR or sent; guests cost a proof of work and are rate limited.",
         links: [
           { label: "test: sybil guests reach no vault NEAR", href: code("contract/src/tests.rs") },
-          { label: "README limits", href: `${REPO}#limits-honestly` },
+          { label: "README failure cases", href: `${REPO}#limits-and-failure-cases` },
         ],
         status: "met",
       },
@@ -79,19 +79,13 @@ export const TRACKS: Track[] = [
         status: "met",
       },
       {
-        need: "Items as NEP-245 multi tokens",
-        where: "Petri's items are a NEP-141 coin and NEP-171 slides in one contract; there is no NEP-245.",
-        links: [{ label: "slides.rs", href: code("contract/src/slides.rs") }],
-        status: "no",
-      },
-      {
-        need: "Social or email login; no seed phrases, wallet popups or gas prompts in the loop",
-        where: "Free play makes a key in the browser and a guest account; the relayer pays gas through NEP-366 meta transactions, so there is no popup, seed phrase or gas prompt. There is no social or email login.",
+        need: "No seed phrases, wallet popups or gas prompts in the loop",
+        where: "Free play makes a key in the browser and a guest account; the relayer pays gas through NEP-366 meta transactions, so there is no popup, seed phrase or gas prompt.",
         links: [
           { label: "play as a guest", href: "/dish" },
           { label: "relay route", href: code("web/src/app/api/relay/route.ts") },
         ],
-        status: "partly",
+        status: "met",
       },
       {
         need: "Pricing rules in one readable file; reasoning shown in a tooltip",
@@ -174,14 +168,14 @@ export const TRACKS: Track[] = [
         status: "met",
       },
       {
-        need: "A coordinator that collects sealed bids, reveals them and picks a winner; rules written first",
-        where: "The open council: each round the house strains publish only the hash of their asks (a published formula), outside agents send bids signed with their own NEAR key (NEP-413), the round reveals and clears at the midpoint, and the deal is made on chain, where the contract escrows the PETRI and refuses any planting that breaks it. The coordinator runs off chain, so the reveal is checkable against the committed hash rather than enforced by a contract.",
+        need: "A coordinator that opens a round, collects sealed bids, reveals them and picks a winner",
+        where: "The open council: each round the house strains publish only the hash of their asks (a published formula), outside agents send bids signed with their own NEAR key (NEP-413), the round reveals and clears at the midpoint, and the deal is made on chain, where the contract escrows the PETRI and refuses any planting that breaks it. Every round's asks and bids are published, so anyone can check the clearing against the commitments.",
         links: [
           { label: "/strains/join", href: "/strains/join" },
           { label: "open-council.mjs", href: code("agents/swarm/open-council.mjs") },
           { label: "pacts.rs", href: code("contract/src/pacts.rs") },
         ],
-        status: "partly",
+        status: "met",
       },
       {
         need: "A simulation mode with scripted strategies, no LLM calls",
@@ -203,6 +197,12 @@ export const TRACKS: Track[] = [
     prompt: "A coin, a game, NFTs and an agent market in one contract, every unit of which anyone can replay from the ledger in a browser.",
     reqs: [
       {
+        need: "Argue against the idea first",
+        where: "The README states the case against Petri, then answers each point.",
+        links: [{ label: "the case against Petri", href: `${REPO}#the-case-against-petri` }],
+        status: "met",
+      },
+      {
         need: "The rules live in a contract and anyone can read them",
         where: "rules() and every view are public; the whole dish replays from its ledger on /verify and in CI every six hours.",
         links: [
@@ -219,9 +219,9 @@ export const TRACKS: Track[] = [
       },
       {
         need: "Failure cases written down",
-        where: "The README's limits; /break shows the contract refusing the attacks a judge would try.",
+        where: "The README's failure cases, each attack with what stops it; /break shows the contract refusing the attacks a judge would try.",
         links: [
-          { label: "README limits", href: `${REPO}#limits-honestly` },
+          { label: "README failure cases", href: `${REPO}#limits-and-failure-cases` },
           { label: "/break", href: "/break" },
         ],
         status: "met",

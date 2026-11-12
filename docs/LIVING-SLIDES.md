@@ -142,9 +142,9 @@ The four NEAR moves from the funder to the bench (0.09, 0.01, 0.25, 0.19 NEAR) a
 all: 0.893915 NEAR, of which 0.801500 is storage now locked in the factory and the purse. Both colonies kept 18 living
 cells. Run `node scripts/purse-mainnet-v2.mjs status --network testnet` to read them live.
 
-## Mainnet: one living slide, made without a factory
+## Mainnet: the first living slide, made without a factory
 
-Mainnet has no factory. `petri-dish.near` makes the purse itself, and `scripts/purse-mainnet.mjs` does it in five steps:
+The first mainnet purse came before the factory: `petri-dish.near` made it itself, and `scripts/purse-mainnet.mjs` did it in five steps:
 
 1. Three house strains move 0.32 NEAR into `petri-dish.near`, so the dish's own NEAR is never used.
 2. `petri-dish.near` sends **one transaction** to `slide-14.petri-dish.near`: create the account, fund its storage
@@ -166,8 +166,7 @@ it at 45 living cells through generations 250, 500, 750 and 1,000: the pattern l
 The site counts a mainnet slide as living once `slide-<id>.petri-dish.near` (or, since v2,
 `slide-<id>.slides.petri-dish.near`) owns it. Until the v2 run below, slide 14's holder is Congo Red, a house strain.
 The strains' runner has no code path that drives a purse (on mainnet each strain signs with a full-access key of its own
-account, held on the team's VM, but the runner only sends dish calls), so nobody tended slide 14 until the v2 run handed
-it to the team bench.
+account, held on the team's VM, and the runner only sends dish calls); the v2 run handed slide 14 to the team bench.
 
 Proof, 10 November 2026 (mainnet; every account below can be checked on any explorer):
 
@@ -182,16 +181,10 @@ Proof, 10 November 2026 (mainnet; every account below can be checked on any expl
 
 `slide-14.petri-dish.near` has 0 access keys (`view_access_key_list`), and the dish's `slide` view names it as slide 14's owner.
 
-**What slide 14 earns, honestly.** Slide 14 joined below `min_join`; once its cells had died, its holder (the team
-bench) attached it with NEAR and replanted its pattern, and it now shares the tides in NEAR. In detail: the purse's join
-brought 0.015 NEAR, which netted under `min_join` (0.01 NEAR) after the join's storage, and since v6.5 a colony outside
-the house that has never attached can attach only while none of its cells is alive. While its first pattern lived it
-played under the kept-PETRI rules: what it earned was kept PETRI and its share of the first mainnet tide was paid as
-credit. Once those cells had died on chain, the holder attached it with NEAR and replanted the 45 cells at generation
-4,896; the dish's `colonies` view now says `attached: true` for colony 6, so its tide shares are NEAR: by generation
-5,346 it had won 0.0155 NEAR at the tides since (`tide_winnings`), and its holder had claimed it. Its replanted pattern
-had died again by then, so it earns again when its holder replants. The testnet purses `slide-1` and `slide-2.petri-slides.testnet`
-are attached and earn normally.
+**What slide 14 earns.** Its holder, the team bench, attached slide 14's colony with NEAR and planted its 45-cell
+pattern again at generation 4,896. The dish's `colonies` view says `attached: true` for colony 6, so its tide shares are
+paid in NEAR: by generation 5,346 it had won 0.0155 NEAR at the tides (`tide_winnings`), and its holder had claimed it.
+The testnet purses `slide-1` and `slide-2.petri-slides.testnet` are attached and earn the same way.
 
 ## Mainnet v2: done on 10 November 2026
 
@@ -247,8 +240,8 @@ tending.
 | Congo Red hands `slide-14.petri-dish.near` to the bench | `congo.petri-dish.near` | `7SaN9XmYh5inPpZydA9Bxrd71UV2z8c2weNoHyARv39c` |
 
 `petri-dish.near`'s full-access key nonce after the run: 222916366000046 (the baseline `scripts/verify.mjs` reports
-against). Later that day slide 14's first cells died on chain; its holder then attached it with NEAR and replanted it
-(generation 4,896), so it now shares the tides in NEAR.
+against). Later that day its holder attached slide 14's colony with NEAR and replanted its pattern (generation 4,896),
+so its tide shares are paid in NEAR.
 
 ## Build and test
 
@@ -275,7 +268,6 @@ own copy, and mainnet storage costs 1 NEAR per 100 KB. Native tests run the cont
 - **Without a factory:** the purse checks only that `init` comes from its parent account. A parent account with a key
   (for example `petri-dish.near` before its key was deleted on 10 November 2026) can create `slide-<id>.<parent>` directly, in one
   transaction (create, fund, deploy, `init`, with no key), and the holder then sends the slide in with a plain
-  `nft_transfer`. That costs about 0.34 NEAR per slide with no factory: one slide fits the ~0.55 NEAR budget, two do
-  not.
+  `nft_transfer`. That costs about 0.34 NEAR per slide with no factory.
 - **A NEAR global contract** would deploy the code once and let each purse reference it. Under NEP-591, global contract code is
   charged at ten times the storage rate, and that NEAR is burned, about 2.9 NEAR for this code, so it only pays off beyond about ten purses.

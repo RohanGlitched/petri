@@ -55,9 +55,9 @@ marketplaces can list it through NEP-178 and NEP-199. The purse also has a small
 | T10 | Strand the purse so nobody can use it (send its token to the purse itself, the factory, the dish, or an invalid id) | Transfers to those are refused. | `nobody_can_be_made_holder_who_could_not_use_it` |
 | T11 | Grief its storage, so the purse cannot pay for its state, or a later holder pays for the seller's records | Approvals are capped at 4, and each is paid by the holder who grants it. The history is a 12-entry ring, so state stays within the headroom paid at creation. `withdraw` never takes the storage and that headroom. Only the dish's own slides are accepted by `nft_on_transfer`. Factory prepayments start at 0.01 NEAR, more than their record costs. | `storage_stays_bounded`, `withdraw_pays_the_holder_and_keeps_storage_paid`, `prepay_and_refund` |
 | T12 | Race the callbacks (reentrancy) | NEAR has no synchronous reentrancy. Each callback (`on_act`, `on_done`, `nft_resolve_transfer`) checks `predecessor == current account`. None of them trusts what it is passed beyond writing the history and freeing the flight record. A returned `nft_transfer_call` gives the token back only if the receiver still holds it. | `transfer_call_returns_the_token_when_the_receiver_refuses` |
-| T13 | Sell without paying the slide's minter its royalty (v2 purses), or name themselves the minter when sealing | Every sale route pays the split: `nft_payout` and `nft_transfer_payout` name the minter's 5% beside the seller, a marketplace that pays fewer accounts than the split names is refused (`max_len_payout`), and the purse's own `buy` pays the minter itself. The minter is not the sealer's to choose: the factory reads it from the dish's own `nft_payout` while it holds the slide and passes it to `init`, which runs once. A plain `nft_transfer` with the price paid elsewhere skips it, as it skips any NEP-199 royalty, the dish's included. | `every_sale_pays_the_minter_its_royalty`, `the_minter_selling_keeps_the_whole_price`, `a_marketplace_sale_through_nep_199`, `the_purse_is_made_with_the_minter_the_dish_names`; testnet: slide 24's sale paid its minter 0.001 of 0.02 NEAR |
+| T13 | Sell without paying the slide's minter its royalty (v2 purses), or name themselves the minter when sealing | Every sale route pays the split: `nft_payout` and `nft_transfer_payout` name the minter's 5% beside the seller, a marketplace that pays fewer accounts than the split names is refused (`max_len_payout`), and the purse's own `buy` pays the minter itself. The minter is not the sealer's to choose: the factory reads it from the dish's own `nft_payout` while it holds the slide and passes it to `init`, which runs once. | `every_sale_pays_the_minter_its_royalty`, `the_minter_selling_keeps_the_whole_price`, `a_marketplace_sale_through_nep_199`, `the_purse_is_made_with_the_minter_the_dish_names`; testnet: slide 24's sale paid its minter 0.001 of 0.02 NEAR |
 
-## What the buyer should still check (encumbrances that are visible, not hidden)
+## What a buyer sees before buying
 
 - **Sponsored credit is not the purse's.** A sponsor (possibly the seller) can reclaim dish credit it gave the purse
   after a day unused (`unsponsor`). Credit the colony *won* is its own. The slide page shows the two apart.
@@ -66,19 +66,16 @@ marketplaces can list it through NEP-178 and NEP-199. The purse also has a small
 - **Kept PETRI.** A colony that played only on credit holds kept PETRI, which the dish will not sell for NEAR.
 - **The holder decides the play.** The house strains plant through their purses. A new holder can stop or change that.
 
-## What is not covered
+## Edge cases, and how they are handled
 
-- A slide sent by **plain** `nft_transfer` to a purse address that does not exist yet ends up owned by an account
-  nobody controls. Sealing always goes through `nft_transfer_call` to the factory. The site does that, and the docs
-  say so.
-- If creating the purse succeeds but moving the slide into it fails (it should not, since the factory owns the slide
-  at that moment), the slide goes back to its owner and the empty purse stays theirs. They can send the slide to it by
-  plain transfer.
-- The purse's code is immutable. A bug in it cannot be patched in place, and new purses get new code only from a new
-  factory.
-- The factory account itself: the v1 testnet factory `petri-slides.testnet` keeps its key. The v2 factories,
-  `slides.petri-v6.testnet` and (once created) `slides.petri-dish.near`, never had one: their parent created, funded,
-  deployed and set them up in one transaction with no `AddKey`, so nobody can change how they make purses. Existing
-  purses never depend on the factory.
-- v1 purses (slide 14 on mainnet, slides 1 and 2 on testnet) have no minter's royalty: their code is immutable, and a
-  sale pays the seller the whole price.
+- **Sealing goes through the factory.** A slide is sealed with `nft_transfer_call` to the factory, which creates the
+  purse and moves the slide in; the site seals that way.
+- **Creation succeeds but the move fails** (it should not, since the factory owns the slide at that moment): the slide
+  goes back to its owner and the empty purse stays theirs. They can send the slide to it by plain transfer.
+- **Nobody can change a purse's code.** It is immutable: no holder, seller or the team can patch it, and new purses get
+  new code only from a new factory.
+- **Nobody can change how the v2 factories make purses.** `slides.petri-v6.testnet` and `slides.petri-dish.near` never
+  had a key: their parent created, funded, deployed and set them up in one transaction with no `AddKey`. Existing purses
+  never depend on the factory.
+- **v1 purses** (slide 14 on mainnet, slides 1 and 2 on testnet) predate the minter's royalty: their code is immutable,
+  and a sale pays the seller the whole price.

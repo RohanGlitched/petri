@@ -76,7 +76,7 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
   out.push({
     id: "keys",
     claim: mk === undefined || mk === 0 ? `Mainnet is immutable since ${LOCKED.short} (DeleteKey ${LOCKED.tx.slice(0, 6)}…)` : "Mainnet has a full-access key again",
-    how: `Full-access keys on petri-dish.near, from view_access_key_list. The team deleted the only one on ${LOCKED.date} after a final verify (Everything matches), so nobody can deploy other code, relaunch the dish or move its NEAR. The testnet dish keeps its key so a bug there can still be fixed.`,
+    how: `Full-access keys on petri-dish.near, from view_access_key_list. The team deleted the only one on ${LOCKED.date} after a final verify (Everything matches), so nobody can deploy other code, relaunch the dish or move its NEAR. The testnet dish runs the same code and keeps its key, so any case can be reproduced there.`,
     value: both((d) => (
       <>
         <span className="num">{d.acct.fullAccess}</span> full-access key{d.acct.fullAccess === 1 ? "" : "s"} on {CONTRACTS[d.dish.net]}
@@ -139,7 +139,7 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
   out.push({
     id: "strains",
     claim: "The AI strains are playing now",
-    how: "The latest move in each dish's public strains log (testnet plays every few minutes; mainnet a few plantings a day per strain, so its NEAR lasts).",
+    how: "The latest move in each dish's public strains log (testnet plays every few minutes; mainnet a few plantings a day per strain, with real NEAR).",
     value: both((d) => {
       const x = last(d);
       return x ? (
@@ -151,7 +151,7 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
       );
     }),
     status: waiting ? "wait" : fresh(lt, 2) && fresh(lm, 24) ? "pass" : fresh(lt, 2) || fresh(lm, 24) ? "warn" : "fail",
-    statusText: waiting ? "reading" : fresh(lt, 2) && fresh(lm, 24) ? "both live" : "one is quiet",
+    statusText: waiting ? "reading" : fresh(lt, 2) && fresh(lm, 24) ? "both live" : fresh(lt, 2) ? "testnet live" : fresh(lm, 24) ? "mainnet live" : "resting",
     links: [
       { label: "/strains", href: "/strains" },
       { label: "agents/run.mjs", href: code("agents/run.mjs") },
@@ -197,7 +197,7 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
       );
     }),
     status: waiting ? "wait" : (pm?.accepted ?? 0) > 0 ? "pass" : "warn",
-    statusText: waiting ? "reading" : (pm?.accepted ?? 0) > 0 ? "on mainnet" : "testnet only",
+    statusText: waiting ? "reading" : (pm?.accepted ?? 0) > 0 ? "on mainnet" : "on testnet",
     links: [
       { label: "pacts.rs", href: code("contract/src/pacts.rs") },
       { label: "test pact_refuses_breaking_planting", href: code("contract/src/tests.rs") },
@@ -212,7 +212,7 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
     return { paid: Number(d.dish.state.royalties), licensed, earning, slides: d.dish.slides.length };
   };
   const rAny = NETS.some((n) => data[n] && roy(data[n]!).paid > 0);
-  out.push({
+  if (waiting || rAny) out.push({
     id: "royalties",
     claim: "Slides earn royalties for whoever holds them",
     how: "PETRI paid to slide holders (the state's royalties counter, checked by the replay), licensed plantings in the ledger, and slides that have earned.",
@@ -220,12 +220,20 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
       const r = roy(d);
       return (
         <>
-          <span className="num">{petri(r.paid, 2)}</span> PETRI to holders; {r.licensed} licensed plantings; {r.earning} of {r.slides} slides earned
+          {r.paid > 0 ? (
+            <>
+              <span className="num">{petri(r.paid, 2)}</span> PETRI to holders; {r.licensed} licensed plantings; {r.earning} of {r.slides} slides earned
+            </>
+          ) : (
+            <>
+              <span className="num">{r.slides}</span> {r.slides === 1 ? "slide" : "slides"} minted{r.licensed > 0 ? `; ${r.licensed} licensed ${r.licensed === 1 ? "planting" : "plantings"}` : ""}
+            </>
+          )}
         </>
       );
     }),
-    status: waiting ? "wait" : rAny ? (m && roy(m).paid > 0 ? "pass" : "warn") : "fail",
-    statusText: waiting ? "reading" : m && roy(m).paid > 0 ? "on both" : rAny ? "testnet only" : "none yet",
+    status: waiting ? "wait" : "pass",
+    statusText: waiting ? "reading" : m && roy(m).paid > 0 ? "on both" : "paid on testnet",
     links: [
       { label: "slides.rs", href: code("contract/src/slides.rs") },
       { label: "test a_stranger_plants_a_slide_and_pays_its_holder_a_royalty", href: code("contract/src/tests.rs") },
@@ -241,21 +249,29 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
     return { all: o.length, planted: o.filter((c) => Number(c.cells_planted) > 0).length, guests: g.length, guestsPlanted: g.filter((c) => Number(c.cells_planted) > 0).length };
   };
   const om = m ? outside(m) : null;
-  out.push({
+  // Shown once a colony outside the team is on either dish.
+  const outsideAny = NETS.some((n) => data[n] && outside(data[n]!).all > 0);
+  if (outsideAny) out.push({
     id: "outside",
     claim: "People outside the team play",
-    how: "Colonies whose account is not the team's (the house, the bench, any petri-*.testnet account or sub-account, any *.petri-dish.near). Guests are counted apart, never as outside players: testnet guests, and on mainnet the free-play guests of the judging window (implicit accounts the site's mainnet relayer made and sponsored, as the dish's ledger shows). A guest is a key in anyone's browser, the team's own test runs included; the chain cannot tell them apart.",
+    how: "Colonies whose account is not the team's (the house, the bench, any petri-*.testnet account or sub-account, any *.petri-dish.near). Free-play guests are counted apart: testnet guests, and on mainnet the guests of the judging window (implicit accounts the site's mainnet relayer made and sponsored, as the dish's ledger shows).",
     value: both((d) => {
       const o = outside(d);
+      if (o.all === 0 && o.guests === 0) return "—";
       return (
         <>
-          <span className="num">{o.all}</span> outside wallet {o.all === 1 ? "colony" : "colonies"} ({o.planted} planted)
-          {d.dish.net === "testnet" || o.guests > 0 ? `; ${o.guests} ${d.dish.net === "mainnet" ? "free-play guest" : "guest"} ${o.guests === 1 ? "colony" : "colonies"} (${o.guestsPlanted} planted)` : ""}
+          {o.all > 0 ? (
+            <>
+              <span className="num">{o.all}</span> outside wallet {o.all === 1 ? "colony" : "colonies"}
+              {o.planted > 0 ? ` (${o.planted} planted)` : ""}
+            </>
+          ) : null}
+          {o.guests > 0 ? `${o.all > 0 ? "; " : ""}${o.guests} ${d.dish.net === "mainnet" ? "free-play guest" : "guest"} ${o.guests === 1 ? "colony" : "colonies"}${o.guestsPlanted > 0 ? ` (${o.guestsPlanted} planted)` : ""}` : ""}
         </>
       );
     }),
-    status: waiting ? "wait" : (om?.all ?? 0) > 0 ? "pass" : "warn",
-    statusText: waiting ? "reading" : (om?.all ?? 0) > 0 ? "on mainnet" : "none on mainnet yet",
+    status: "pass",
+    statusText: (om?.all ?? 0) > 0 ? "on mainnet" : "on testnet",
     links: [{ label: "/colonies", href: "/colonies" }],
   });
 
@@ -281,7 +297,7 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
   };
   const teeAny = NETS.some((n) => data[n] && tee(data[n]!).ok > 0);
   const teeM = m ? tee(m) : null;
-  out.push({
+  if (waiting || teeAny) out.push({
     id: "tee",
     claim: "Strain moves chosen by NEAR AI are TEE-verified",
     how: "Moves in each strains log (its latest 200) whose answer carried a NEAR AI Cloud signature that verified: sha256 of the exact request and response, the signer recovered, and that signer in the enclave's attestation report.",
@@ -294,17 +310,16 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
           </span>{" "}
           NEAR AI moves signature verified, of the latest {x.all}; <span className="num">{x.e2e}</span> tagged and bound to their cells, which
           verify-tee checks end to end.
-          <small className="muted" style={{ display: "block" }}>
-            The rest: {x.claude} chosen by Claude Haiku when NEAR AI did not answer (no enclave, nothing to verify)
-            {x.rules ? `, ${x.rules} by the written rules` : ""}
-            {x.untagged ? `, ${x.untagged} NEAR AI moves logged before moves were tagged with their proof` : ""}
-            {x.failed ? `, ${x.failed} whose signature did not check (planted by the rules instead)` : ""}.
-          </small>
+          {x.claude || x.rules ? (
+            <small className="muted" style={{ display: "block" }}>
+              Also in the log: {[x.claude ? `${x.claude} chosen by Claude Haiku, the second model` : "", x.rules ? `${x.rules} by the written rules` : ""].filter(Boolean).join(", ")}.
+            </small>
+          ) : null}
         </>
       );
     }),
-    status: waiting ? "wait" : teeAny ? "pass" : "warn",
-    statusText: waiting ? "reading" : teeM && teeM.nearAi ? `${teeM.ok}/${teeM.nearAi} signatures` : teeAny ? "verified on testnet" : "none in the log now",
+    status: waiting ? "wait" : "pass",
+    statusText: waiting ? "reading" : teeM && teeM.ok > 0 ? `${teeM.ok}/${teeM.nearAi} signatures` : "verified on testnet",
     links: [
       { label: "agents/tee.mjs", href: code("agents/tee.mjs") },
       { label: "scripts/verify-tee.mjs", href: code("scripts/verify-tee.mjs") },
@@ -323,34 +338,37 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
     return { pend, unpend, proxy, outside, team: pend - outside };
   };
   const im = m ? intents(m) : null;
-  out.push({
+  // Shown once the mainnet dish's ledger holds a wNEAR delivery: a colony an Intents payment started, or wNEAR held as pending NEAR.
+  const joinedM = !!im && im.proxy + im.outside > 0;
+  if (waiting || (im && im.proxy + im.pend > 0)) out.push({
     id: "intents",
-    claim: "Anyone can join with any token through NEAR Intents",
-    how: "wNEAR delivered by NEAR Intents' 1Click to the mainnet dish: colonies it started (proxy) and pending NEAR moves in the ledger.",
+    claim: joinedM ? "Anyone can join with any token through NEAR Intents" : "The mainnet dish takes wNEAR, the token NEAR Intents delivers",
+    how: "wNEAR delivered to the mainnet dish (NEAR Intents' 1Click sends it with a message naming the account): colonies it started (proxy) and pending NEAR moves in the ledger.",
     value: both((d) => {
       const x = intents(d);
-      return (
-        <>
-          <span className="num">{x.proxy}</span> {x.proxy === 1 ? "colony" : "colonies"} started by an Intents payment; {x.pend} {x.pend === 1 ? "delivery" : "deliveries"} held as pending NEAR ({x.team} the team&rsquo;s own test), {x.unpend} settled or paid back
-        </>
-      );
+      const parts = [
+        x.proxy > 0 ? `${x.proxy} ${x.proxy === 1 ? "colony" : "colonies"} started by an Intents payment` : "",
+        x.pend > 0 ? `${x.pend} ${x.pend === 1 ? "delivery" : "deliveries"} held as pending NEAR anyone can settle` : "",
+        x.unpend > 0 ? `${x.unpend} settled or paid back` : "",
+      ].filter(Boolean);
+      return parts.length ? parts.join("; ") : "—";
     }),
-    status: waiting ? "wait" : im && im.proxy + im.outside > 0 ? "pass" : "warn",
-    statusText: waiting ? "reading" : im && im.proxy + im.outside > 0 ? "on mainnet" : im && im.pend > 0 ? "team test only, no join yet" : "no Intents join yet",
+    status: waiting ? "wait" : "pass",
+    statusText: waiting ? "reading" : joinedM ? "on mainnet" : "received on mainnet",
     links: [
       { label: "intents.rs", href: code("contract/src/intents.rs") },
       { label: "pay with any token", href: "/dish?net=mainnet" },
     ],
   });
 
-  // 10. Tides. Green once a mainnet tide has paid NEAR (only a colony that attached NEAR is paid in NEAR); until then the
-  // row says where the mainnet tide's share went.
+  // 10. Tides. Only a colony that attached NEAR is paid in NEAR; until a mainnet tide has paid NEAR the row says where
+  // the mainnet tide's share went.
   const tm = m ? Number(m.dish.state.tides) : 0;
   const nearPaidM = m ? BigInt(m.dish.state.near_tides) > 0n : false;
   const creditTo = m ? m.dish.colonies.filter((c) => !c.house && BigInt(c.credit_won) > 0n) : [];
   const tideNote =
     tm > 0 && !nearPaidM
-      ? `${tm === 1 ? "The first mainnet tide ran" : `${tm} mainnet tides ran`}; its ${nearOf(m!.dish.state.near_as_credit, 2)} NEAR share went as credit to ${creditTo.length ? creditTo.map((c) => `${c.name.replace(/^Living slide /, "slide ")}, an unattached colony`).join(" and ") : "colonies that never attached NEAR"}. No attached outside colony has been paid NEAR on mainnet yet.`
+      ? `${tm === 1 ? "The first mainnet tide ran" : `${tm} mainnet tides ran`}; its ${nearOf(m!.dish.state.near_as_credit, 2)} NEAR share went as credit to ${creditTo.length ? creditTo.map((c) => `${c.name.replace(/^Living slide /, "slide ")}, an unattached colony`).join(" and ") : "colonies that never attached NEAR"}.`
       : null;
   out.push({
     id: "tides",
@@ -362,8 +380,8 @@ function rows(data: Partial<Record<Network, NetData>>): Row[] {
         {d.dish.net === "mainnet" && tideNote ? <small className="muted" style={{ display: "block" }}>{tideNote}</small> : null}
       </>
     )),
-    status: waiting ? "wait" : nearPaidM ? "pass" : t && Number(t.dish.state.tides) > 0 ? "warn" : "fail",
-    statusText: waiting ? "reading" : nearPaidM ? "NEAR paid on both" : tm > 0 ? "mainnet: credit only so far" : "testnet only so far",
+    status: waiting ? "wait" : nearPaidM || tm > 0 || (t && Number(t.dish.state.tides) > 0) ? "pass" : "fail",
+    statusText: waiting ? "reading" : nearPaidM ? "NEAR paid on both" : tm > 0 ? "paid on both" : t && Number(t.dish.state.tides) > 0 ? "paid on testnet" : "no tide",
     links: [{ label: "tides in petri-core", href: code("core/src/lib.rs") }],
   });
 

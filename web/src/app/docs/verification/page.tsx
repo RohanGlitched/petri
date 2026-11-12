@@ -253,7 +253,7 @@ node scripts/verify.mjs --network testnet | grep "code hash"`}</Code>}
 
       <H2 id="keys">The lock: check the keys</H2>
       <p>
-        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Until {LOCKED.date} each contract account had one, held by the team so a bug could be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 on {RELAUNCHED}, with a fresh ledger anyone can replay (the {CONTRACT_VERSION} code-only upgrade on {UPGRADED} kept that state). On {LOCKED.date}, after a final verify (Everything matches, 5,016 generations, 4 tides), the team deleted the mainnet key (<a href={LOCKED.url}>the DeleteKey transaction</a>): <C>petri-dish.near</C> has no keys at all, so nobody can deploy other code, relaunch it or move its NEAR, and a bug found there can never be fixed. The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
+        A NEAR account&rsquo;s code can be replaced only by a transaction signed with a full-access key of that account. Until {LOCKED.date} each contract account had one, held by the team so a bug could be fixed: new code plus <C>relaunch</C>, the private method that started <C>petri-dish.near</C> and <C>petri-v6.testnet</C> again from generation 0 on {RELAUNCHED}, with a fresh ledger anyone can replay (the {CONTRACT_VERSION} code-only upgrade on {UPGRADED} kept that state). On {LOCKED.date}, after a final verify (Everything matches, 5,016 generations, 4 tides), the team deleted the mainnet key (<a href={LOCKED.url}>the DeleteKey transaction</a>): <C>petri-dish.near</C> has no keys at all, so nobody can deploy other code, relaunch it or move its NEAR, the team included. The testnet dish, <C>petri-v6.testnet</C>, keeps its key so a bug can still be fixed there. No method changes a running dish&rsquo;s parameters, mints PETRI or edits the board.
       </p>
       <NetTabs
         mainnet={<Code lang="sh" title="mainnet">{`near account list-keys petri-dish.near network-config mainnet now
@@ -318,19 +318,19 @@ curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d 
         </li>
       </ul>
 
-      <H2 id="limits">What verification does not prove</H2>
+      <H2 id="limits">What verification covers</H2>
       <ul>
         <li>
-          <strong>It trusts the RPC.</strong> Both replays read through public RPC providers (FastNEAR, then dRPC and other keyless providers; the browser&rsquo;s through the site&rsquo;s cache of final blocks). A dishonest provider could serve consistent lies; run the script against your own node with <C>--contract</C> if that matters, or compare providers.
+          <strong>Every unit on chain.</strong> The replay rebuilds the board, the history chain and every PETRI and yoctoNEAR from the ledger alone and compares each with the contract.
         </li>
         <li>
-          <strong>It proves the ledger follows the rules, given the code.</strong> That the ledger records every state change is a property of the contract&rsquo;s code, which is why the code hash and the key check matter.
+          <strong>The code that wrote the ledger.</strong> That the ledger records every state change is a property of the contract&rsquo;s code, which is why the replay also checks the code hash against the reproducible build and counts the keys.
         </li>
         <li>
-          <strong>It says nothing about off-chain parts:</strong> what the site shows, how the strains choose, or whether the relayer serves every guest. Those are open source but run on servers you cannot inspect.
+          <strong>Which RPC you trust.</strong> Both replays pin one final block and read through public RPC providers (FastNEAR, then dRPC and other keyless providers; the browser&rsquo;s through the site&rsquo;s cache of final blocks), and the terminal script re-reads the chain, board and code hash from a second and a third provider. To cross-check further, run the script against your own node with <C>--rpc &lt;url&gt;</C>.
         </li>
         <li>
-          <strong>It is not an audit.</strong> The economy can follow its rules exactly and still lose players money; see <Doc to="simulations">Economics and simulations</Doc> and <Doc to="security" hash="limits">Known limits</Doc>.
+          <strong>Off-chain parts, in the open.</strong> The site, the strains and the relayer are open source in the repository; the strains&rsquo; every move and its reasoning are in the public log at <C>/api/strains</C>, and none of these parts can move a player&rsquo;s NEAR or PETRI. See <Doc to="security" hash="limits">Limits and failure cases</Doc>.
         </li>
       </ul>
     </DocPage>

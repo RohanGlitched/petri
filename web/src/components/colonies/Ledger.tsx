@@ -150,7 +150,9 @@ export function Ledger() {
     return side === "outside" || side === "guest";
   };
   const outside = rows.filter(isOutside);
-  const shown = view === "outside" ? outside : rows;
+  // With no colony outside the team on this dish, the list simply shows everyone.
+  const list = ready && outside.length === 0 ? "all" : view;
+  const shown = list === "outside" ? outside : rows;
   const outsideAlive = outside.filter((r) => r.live > 0).length;
   const outsideWon = winnings ? outside.reduce((n, r) => n + (winnings[r.id - 1] ?? 0), 0) : null;
   // Guests never attach NEAR, so what they win at tides is credit (it plants and buys, never leaves the dish).
@@ -162,11 +164,14 @@ export function Ledger() {
   return (
     <>
       <dl className={s.counters} aria-live="polite">
-        <div>
-          <dt>Players&rsquo; colonies alive now</dt>
-          <dd className="num">{ready ? int(outsideAlive) : "—"}</dd>
-          <p>{ready ? `Of ${int(outside.length)} started by guests and outside wallets. Not counted: the house strains${d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the team's bench" : ""} and the team's own test accounts. Guests count: the chain cannot tell whose browser made one.` : "Reading the colonies…"}</p>
-        </div>
+        {(!ready || outside.length > 0) && (
+          <div>
+            <dt>{ready && outsideAlive === 0 ? "Players’ colonies" : "Players’ colonies alive now"}</dt>
+            <dd className="num">{ready ? int(outsideAlive > 0 ? outsideAlive : outside.length) : "—"}</dd>
+            <p>{ready ? `${outsideAlive > 0 ? `Of ${int(outside.length)} started` : "Started"} by guests and outside wallets; the house strains${d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the team's bench" : ""} and the team's accounts are counted apart.` : "Reading the colonies…"}</p>
+          </div>
+        )}
+        {(outsideWon === null || outsideWon > 0 || outsideCredit > 0) && (
         <div>
           <dt>{outsideWon !== null && outsideWon === 0 && outsideCredit > 0 ? "Credit won at tides by players" : "Won at tides by players"}</dt>
           <dd className="num">
@@ -180,13 +185,16 @@ export function Ledger() {
                 }`}
           </p>
         </div>
-        <div>
-          <dt>Specimen slides minted</dt>
-          <dd className="num">{slides !== null ? int(slides) : "—"}</dd>
-          <p>
-            <Link href="/specimens">See the slide box</Link>
-          </p>
-        </div>
+        )}
+        {slides !== 0 && (
+          <div>
+            <dt>Specimen slides minted</dt>
+            <dd className="num">{slides !== null ? int(slides) : "—"}</dd>
+            <p>
+              <Link href="/specimens">See the slide box</Link>
+            </p>
+          </div>
+        )}
       </dl>
 
       <section className={s.share} aria-label="Share of the dish" style={ready ? undefined : { minHeight: 150 }}>
@@ -218,14 +226,16 @@ export function Ledger() {
         </p>
       </section>
 
-      <div className={s.sorts} role="group" aria-label="Which colonies">
-        <button aria-pressed={view === "outside"} className={view === "outside" ? s.on : undefined} onClick={() => setView("outside")}>
-          Outside players{ready ? ` (${int(outside.length)})` : ""}
-        </button>
-        <button aria-pressed={view === "all"} className={view === "all" ? s.on : undefined} onClick={() => setView("all")}>
-          Everyone, the team&rsquo;s included{ready ? ` (${int(rows.length)})` : ""}
-        </button>
-      </div>
+      {!ready || outside.length > 0 ? (
+        <div className={s.sorts} role="group" aria-label="Which colonies">
+          <button aria-pressed={list === "outside"} className={list === "outside" ? s.on : undefined} onClick={() => setView("outside")}>
+            Players{ready ? ` (${int(outside.length)})` : ""}
+          </button>
+          <button aria-pressed={list === "all"} className={list === "all" ? s.on : undefined} onClick={() => setView("all")}>
+            Everyone{ready ? ` (${int(rows.length)})` : ""}
+          </button>
+        </div>
+      ) : null}
       <div className={s.sorts} role="group" aria-label="Sort colonies by">
         {(
           [
@@ -243,31 +253,6 @@ export function Ledger() {
       </div>
 
       <ol className={s.list} style={ready ? undefined : { minHeight: 720 }}>
-        {ready && outside.length === 0 && (
-          // Every colony so far is the team's: say so first, and invite the first outside player in.
-          <li className={`${s.row} ${s.pinned}`}>
-            <span className={`num ${s.rank}`} aria-hidden="true">·</span>
-            <div className={s.who}>
-              <span className={s.terrEmpty} aria-hidden="true" />
-              <div>
-                <p className={s.name}>No outside colonies yet. Be the first.</p>
-                <p className={s.joined}>
-                  {view === "outside" ? (
-                    <>
-                      Every colony on this dish so far is the team&rsquo;s: the house strains{d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the bench" : ""} and test accounts.{" "}
-                      <button type="button" className={s.inlineLink} onClick={() => setView("all")}>Show them</button>
-                    </>
-                  ) : (
-                    <>Every colony below belongs to the team: the house strains{d.colonies.some((c) => sideOf(c.account) === "bench") ? ", the bench" : ""} and test accounts.</>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className={s.pinnedCta}>
-              <Link className="btn btn-amber btn-small" href="/dish">Start a colony on the dish</Link>
-            </div>
-          </li>
-        )}
         {shown.map((r, i) => {
           const ai = strainOf(r.account);
           const side: Side = sideOfAccount(r.account, r.house);
@@ -284,8 +269,8 @@ export function Ledger() {
                     {ai && <span className={s.ai}>AI, {ai.temperament.toLowerCase()}</span>}
                     <BenchTag account={r.account} />
                     {(side === "team" || side === "guest") && (
-                      <span className="benchtag" title={side === "team" ? "An account the Petri Dish team made (a test agent, a living slide's purse or a lab account)" : "A free-play guest: a key in someone's browser, the team's own test runs included"}>
-                        {side === "team" ? "team test" : "guest"}
+                      <span className="benchtag" title={side === "team" ? "An account the Petri Dish team made (an agent, a living slide's purse or a lab account)" : "A free-play guest: a colony started with no wallet, from a key made in the browser"}>
+                        {side === "team" ? "team" : "guest"}
                       </span>
                     )}
                   </p>
@@ -302,7 +287,7 @@ export function Ledger() {
                   <dd className={`num ${preFeed ? s.flat : r.net >= 0 ? s.pos : s.neg}`}><span className={s.sign} aria-hidden="true">{r.net >= 0 ? "+" : "−"}</span><span className="sr">{r.net >= 0 ? "plus " : "minus "}</span>{petri(Math.abs(r.net), 2)}</dd>
                   {preFeed &&
                     (sideOf(r.account, r.house) === "bench" ? (
-                      <em title={`${BENCH_TITLE} Nothing has been fed to it yet.`}>team test player</em>
+                      <em title={`${BENCH_TITLE} Nothing has been fed to it yet.`}>{BENCH_LABEL}</em>
                     ) : r.house ? (
                       <em title="A house strain: the contract never feeds it and never pays it at a tide">house</em>
                     ) : (
@@ -330,7 +315,7 @@ export function Ledger() {
         Earned includes PETRI accrued since the dish last advanced on chain. Spent planting is the full price paid; half of it
         was burned and half went back to the agar. Holding is the live token balance, which also counts PETRI bought from the agar,
         keeper shares and transfers.
-        {ready && !fedYet ? " The agar has not fed anyone yet, so Net is only what planting cost so far; it is shown in neutral until the first feed." : ""}
+        {ready && !fedYet ? " Net is shown in neutral until the agar's first feed." : ""}
       </p>
     </>
   );

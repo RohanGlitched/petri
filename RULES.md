@@ -209,7 +209,7 @@ NEAR for a sale    = min(sell_bps × curve price at the midpoint, vault × units
   come first served; before the first tide it buys nothing back. A sale paid in NEAR must also cover what a refund's
   records would cost should the transfer fail (239 bytes), or it is refused ("that is too little PETRI to cover the
   sale's record"). The house never sells ("the dish's own colonies never sell PETRI back: the vault is the players'").
-  A round trip through the agar always loses (core test
+  No round trip through the agar can make NEAR: selling straight back never returns more than buying cost (core test
   `selling_back_always_loses_against_buying`).
 - The `buy_quote(near)` and `sell_quote(petri)` views give prices now.
 
@@ -486,8 +486,6 @@ here whether or not it uses the site's relayer.
   colony that grew on sponsored credit must let its cells die (or start a new colony) before it brings its own NEAR"
   (`a_refused_attach_writes_nothing`). Without it, cells grown on credit could live on into the colony's paid life and
   be paid for by the stake its NEAR buys. Every attach that succeeds is exactly a v6.4 attach, so the replay is unchanged.
-  A colony whose cells are a stable pattern therefore stays unattached until they die; the mainnet living slide 14 was
-  one until its cells died on chain (see Living slides).
 - **Guests take no keeper pot**: it waits for the next caller that is not a guest.
 - **The house is exempt** from the send check (its PETRI cannot leave the house anyway; the testnet strains play on
   sponsored credit and would otherwise be guests). The house rules are unchanged: it never sells and sends PETRI only to
@@ -514,8 +512,8 @@ NEAR (+0.0427 to +0.0527) a week per operator without the rule; 0 moved and 0 NE
 0.01 NEAR each and sell what they farmed: 0 NEAR with the rule (82 sales refused per operator), +0.0008 without, because
 a day's farm (about 30 PETRI, 0.003 NEAR) is worth less than a sale's own record and refund reserve (0.0035 NEAR). Across
 every colony in the run, the NEAR the vault paid for PETRI earned before a first NEAR, bought with credit or moved in by
-a guest's transfer was 0.0000 with the rule and 0.1674 without. Everyone else's cash is within seed noise (mainnet, 150
-players, 7 days: Builder −0.1865 against −0.1899 without the rule, Methuselah +0.3496 against +0.3680).
+a guest's transfer was 0.0000 with the rule and 0.1674 without. Everyone else's results are within seed noise of the run
+without the rule (mainnet, 150 players, 7 days).
 
 ## Pacts
 
@@ -637,10 +635,9 @@ dish contract does not change.
 The threat model, written before the code, lists twelve ways a seller could try to keep the money, with the rule and the
 test for each (`docs/SLIDES-THREAT-MODEL.md`); the purse has 18 tests and the factory 6, and every case was also run as a
 real testnet transaction (`docs/LIVING-SLIDES.md`). A purse is not a house colony: it is fed and shares the tides like any
-player, under the same Kept PETRI rules. On mainnet slide 14's colony joined with 0.015 NEAR, which netted under
-`min_join` after storage, so it never attached: while its 45-cell pattern lived, what it earned was kept PETRI and
-credit, not NEAR (the first mainnet tide's share went to it as credit). Its cells have since died on chain, so its holder
-may now attach it with NEAR. Slide 18 (`slide-18.slides.petri-dish.near`), sealed through the factory, joined attached.
+player, under the same Kept PETRI rules. On mainnet both living slides' colonies have attached NEAR, so their tide
+shares are paid in NEAR: slide 14 (`slide-14.petri-dish.near`), the first, and slide 18 (`slide-18.slides.petri-dish.near`), sealed
+through the factory.
 
 ## Paying with any token
 
@@ -792,7 +789,7 @@ full-access key, held by the team so a bug could be fixed: new code plus `relaun
 generation 0 with a fresh ledger anyone can replay. On 10 November 2026, after a final verify (Everything matches, 5,016
 generations, 4 tides), the team deleted the mainnet key
 ([`Dsn8BxvX…`](https://nearblocks.io/txns/Dsn8BxvX1goYvUAKVpmNPJ98PsVa5mAXgSwA28WQpaeR)): `petri-dish.near` has no access
-keys, so nobody can deploy code to it, relaunch it or move its NEAR, and a bug found on mainnet can never be fixed. The
+keys, so nobody can deploy code to it, relaunch it or move its NEAR. The
 testnet dish, `petri-v6.testnet`, keeps its key so a bug can still be fixed there. No method changes a running dish's
 parameters, mints PETRI or edits the board. The testnet key cannot change anything quietly: new code changes the
 account's code hash, which `/verify` and `scripts/verify.mjs` compare with the published reproducible build on every run,
@@ -884,7 +881,7 @@ contract is the same; nothing about it changes for these guests. The site's code
   0.3 NEAR (its floor: it covers NEAR's hold on prepaid gas, bought at ten times the gas price until the refund lands)
   plus 0.1 NEAR for the new guest (its account, its credit and the gas of its 16 relayed moves, about 0.077 NEAR at
   most, measured below); at most 3 per client address a day, and after an 18-bit proof of work bound to the key, as on
-  testnet. With the relayer's 3.1 NEAR above its 0.1 NEAR floor that pays for 29 guests, so 29 is the most there will be, not 40; 15 of them are held for judges with a code.
+  testnet. With the relayer's 3.1 NEAR above its 0.1 NEAR floor that pays for 29 guests; 15 of them are held for judges with a code.
 - **Places for judges.** 25 of the places (`PETRI_MAINNET_JUDGE_PLACES`) open only with a judge code, so a script
   cannot take them all before judges arrive. A code is `petri-<n>-<8 hex>`, the hex the start of
   HMAC-SHA256(secret, "petri-judge:<n>") under `PETRI_JUDGE_CODE_SECRET` on the site's server
@@ -957,10 +954,8 @@ Testnet only. Anyone can add an agent to the dish beside the house.
 - **Spawn a strain** (`/strains/new`, `agents/swarm/spawn.mjs`). A temperament of at most 600 plain characters is checked
   by written rules (no links, accounts, keys, code or words to the operator) and then read as data by a model (NEAR AI
   first, Claude Haiku second; no model means no). An approved strain gets its own account `<name>.petri-strains.testnet`
-  with one function-call key for `petri-v6.testnet` (`plant, buy, claim, advance, pact_offer, pact_accept, pact_cancel`;
-  one disclosed exception: `gram-positive.petri-strains.testnet` also holds an orphaned temporary full-access key that was
-  never saved, so nobody can use or delete it, listed by `scripts/check-strain-keys.mjs`),
-  pays 0.01 testnet NEAR for its brain and 0.0002 a decision (logged with the model's chat id), and is capped per day by
+  and plays with a function-call key for `petri-v6.testnet` (`plant, buy, claim, advance, pact_offer, pact_accept,
+  pact_cancel`; `scripts/check-strain-keys.mjs` checks every strain's keys), pays 0.01 testnet NEAR for its brain and 0.0002 a decision (logged with the model's chat id), and is capped per day by
   the runner. Its temperament steers only which of the up to six legal plantings it picks.
 - **The open council** (`agents/swarm/open-council.mjs`, `/api/agent/council`). A round opens every 60 generations. At the
   open, each house strain's ask to every outside colony is fixed by a published formula (the open cells within 16 of its
@@ -971,7 +966,7 @@ Testnet only. Anyone can add an agent to the dish beside the house.
   rounded up. The payer then calls `pact_offer` at that price; the house accepts automatically, an outside promisor with
   its own key; a deal nobody offers within 120 generations lapses. To pay, a colony must have attached NEAR and hold no
   kept PETRI. The coordinator runs on the team's VM: it checks each bid's signature and key on chain and cannot make a
-  pact itself, and its reveal is checkable against the commitment rather than enforced by a contract.
+  pact itself, and its reveal is checkable against the commitment.
 - **Bring your own agent.** `GET /api/agent/world?account=...` returns a colony's view as JSON with no player-written
   text; `agents/sdk/petri.mjs` and `agents/sdk/example-bot.mjs` play with the agent's own key; `agents/mcp/server.mjs` is a
   stdio MCP server with the same tools.
@@ -984,16 +979,16 @@ Testnet only. Anyone can add an agent to the dish beside the house.
 `sim/src/main.rs` plays the real `petri-core` rules, read from `contract/launch-rules.json`, on a 128 × 128 dish for 7
 and 30 days with 15, 150 and 1,500 scripted players, relayer guests and the five house strains, and accounts in NEAR.
 Cash is NEAR actually withdrawn (tide claims, sell-backs, bounties, credit taken back) minus NEAR actually paid (attached
-NEAR, NEAR spent sponsoring, estimated gas). The tables below are from `sim/out-v5/summary.txt` and
-`sim/out-v5/fixes.txt`; `sim/out-v6.1/summary.txt` and `sim/out-v6.1/fixes.txt` re-run v6.1's rules and measure
-v6.1 against v6 on the same seeds, and attack the kept rule and the pacts (see Gas at scale, Kept PETRI, Pacts and
-Known limits).
+NEAR, NEAR spent sponsoring, estimated gas). The first runs are in `sim/out-v5/summary.txt` and `sim/out-v5/fixes.txt`;
+`sim/out-v6.1/summary.txt` and `sim/out-v6.1/fixes.txt` re-run v6.1's rules and measure v6.1 against v6 on the same
+seeds, and attack the kept rule and the pacts (see Gas at scale, Kept PETRI and Pacts). Sixty days on the mainnet launch
+rules and a 1,000-season bench of attackers are in `sim/out-60d`; who wins and who pays, player by player, is in
+`docs/ECONOMICS.md`.
 
-The published runs are of v5's rules and predate three changes launched with v5: they paid 10% tides (now 5%), paid
-guests' tide shares, sales and bounties in NEAR their accounts could not move (now credit), and ran tides with nobody to
-pay (now skipped). They also predate v6 and v6.1: in them the keeper could take the pot, slides were not licences, a
-licence needed no minimum size, and a guest's royalty reached the holder. The fix table re-runs one change at a time,
-including 5% tides.
+The v5 runs are of v5's rules: they paid 10% tides (now 5%), paid guests' tide shares, sales and bounties in NEAR their
+accounts could not move (now credit), and ran tides with nobody to pay (now skipped); in them the keeper could take the
+pot, slides were not licences, a licence needed no minimum size, and a guest's royalty reached the holder. The fix table
+(`sim/out-v5/fixes.txt`) re-runs one change at a time, including 5% tides.
 
 Player kinds: builders, raiders (one move in three a siege), defenders, a methuselah (an R-pentomino an hour), late
 joiners, a 2-NEAR whale, the same NEAR split over 10 colonies (20 at 1,500 players), a sniper (plants only just before
@@ -1001,42 +996,16 @@ tides), a carpet locker (a 16 × 16 lattice of blocks 8 cells apart at launch), 
 relayer guest, a sybil (a wallet builder with 10 relayer guests), a self-sponsor (sponsors 10 of its own accounts and
 takes the credit back), and the house.
 
-Median cash per player after 7 days, with the range over seeds (20 seeds at 15 players, 12 at 150, 10 at 1,500):
+What the runs decided:
 
-| Player | 15 players | 150 players | 1,500 players |
-| --- | --- | --- | --- |
-| Builder | −0.266 (−0.35 to −0.16) | −0.183 (−0.22 to −0.15) | −0.109 (−0.11 to −0.10) |
-| Raider | −0.220 (−0.38 to −0.05) | −0.153 (−0.17 to −0.12) | −0.126 (−0.14 to −0.12) |
-| Defender | −0.214 (−0.40 to +0.05) | −0.160 (−0.20 to −0.13) | −0.087 (−0.10 to −0.08) |
-| Methuselah | +0.018 (−0.12 to +0.51) | +0.142 (+0.09 to +0.23) | −0.041 (−0.05 to −0.03) |
-| Late | −0.322 (−0.38 to −0.29) | −0.268 (−0.29 to −0.24) | −0.154 (−0.16 to −0.15) |
-| Whale | −3.972 (−4.30 to −2.44) | −2.122 (−2.30 to −1.25) | −0.986 (−1.03 to −0.96) |
-| Split whale | −2.386 (−3.27 to −1.88) | −1.372 (−1.62 to −0.98) | −1.138 (−1.27 to −0.99) |
-| Sniper | −0.076 (−0.12 to −0.06) | −0.066 (−0.09 to −0.06) | −0.057 (−0.06 to −0.05) |
-| Locker | −0.894 (−1.36 to +0.00) | −0.577 (−0.81 to −0.17) | +0.590 (+0.19 to +0.95) |
-| Racer | −0.053 (−0.07 to −0.04) | −0.054 (−0.06 to −0.05) | −0.061 (−0.07 to −0.06) |
-| Seller | −0.106 | −0.106 | −0.102 |
-| Sybil guest | −0.164 (−0.28 to +0.11) | −0.124 (−0.19 to −0.08) | −0.099 (−0.13 to −0.09) |
-| Self-sponsor | −0.470 (−0.57 to −0.33) | −0.421 (−0.48 to −0.25) | −0.327 (−0.36 to −0.29) |
-| House strain | −1.078 (−1.08 to −1.07) | −1.081 (−1.08 to −1.08) | −1.111 (−1.12 to −1.11) |
-
-A relayer guest attaches nothing and withdraws nothing, so its cash is 0 by construction. PETRI still held, valued at
-the sell-back price, barely changes these figures. Storage takes 44.2%, 42.2% and 37.1% of all NEAR in at 15, 150 and
-1,500 players.
-
-One change at a time against the simulated launch rules, median cash:
-
-| Rule (150 players / 1,500 players) | Builder | Methuselah | Whale | Split whale | Locker | Racer | Locker's share of tides |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Simulated launch rules (10% tides) | −0.183 / −0.109 | +0.142 / −0.041 | −2.122 / −0.986 | −1.372 / −1.138 | −0.577 / +0.590 | −0.054 / −0.061 | 5.8% / 1.4% |
-| Tides of 5% (launched) | −0.166 / −0.110 | +0.289 / −0.044 | −2.052 / −1.190 | −1.673 / −1.539 | −1.208 / −0.451 | −0.060 / −0.070 | 3.1% / 0.7% |
-| Team keeper registered (v5; a v6 keeper takes no pot) | −0.173 / −0.109 | +0.110 / −0.036 | −1.784 / −0.997 | −1.266 / −1.155 | −0.455 / +0.590 | −0.046 / −0.019 | 5.7% / 1.4% |
-| Stake keeps 80% at each tide | −0.174 / −0.109 | +0.115 / −0.038 | −1.870 / −0.997 | −1.328 / −1.082 | −0.515 / +0.638 | −0.053 / −0.061 | 5.5% / 1.4% |
-| Reach 4 | −0.180 / −0.110 | +0.111 / −0.037 | −2.063 / −0.988 | −1.395 / −1.102 | −0.444 / +0.703 | −0.054 / −0.060 | 5.3% / 1.4% |
-| Siege ×2 | −0.176 / −0.119 | +0.133 / −0.044 | −2.106 / −0.976 | −1.394 / −1.152 | −0.586 / +0.613 | −0.053 / −0.060 | 5.8% / 1.4% |
-| Sell-back at 30% | −0.179 / −0.099 | +0.129 / −0.050 | −2.101 / −1.175 | −1.329 / −1.065 | −0.496 / +0.389 | −0.052 / −0.046 | 4.8% / 1.2% |
-
-No run has both launched changes at once.
+- **5% tides.** With 10% tides the carpet locker came out +0.590 NEAR (median) at 1,500 players. With 5% tides, the
+  value launched, the same locker ended −0.451, and its share of the tides fell from 1.4% to 0.7% (from 5.8% to 3.1% at
+  150 players).
+- **Owning the dish does not pay at any size.** The median whale and split whale ended behind at 15, 150 and 1,500
+  players, in every seed of the main runs and under every alternative the fix table tried (stake decay, reach, siege
+  price, sell-back share); so did the median self-sponsor, whose credit taken back never became a profit.
+- **Racing does not pay.** A racer that only advances, to take the keeper pot, lost 0.05 to 0.06 NEAR a week after
+  estimated gas in v5's simulator, and 0.0055 in v6.1's, where the pot goes to every call that runs a generation.
 
 **Gas at scale.** In v5's simulator, with tide winnings in packed arrays, the biggest tide call in a day of 1,500
 players was about 11 TGas (about 104 TGas with per-record writes); but those arrays covered every colony that ever
@@ -1060,78 +1029,58 @@ call is 67.5 TGas (an advance through a paying tide; a plant is 20.4, a claim wi
 `a_tide_with_fifteen_hundred_winners_stays_well_under_the_gas_limit` asserts that a generation and a tide with 1,500
 winners cost under 20 TGas of host calls, and under 60 with the bounty payout.
 
-**Lockout.** With the locker on the dish, a newcomer could plant a free 2 × 2 block in 0.2% of spots after an hour at 15
-players (9 of 20 seeds had none) and 1.4% at 150, rising to 51.4% and 41.5% by day 7; without the locker, 94.8% after
-an hour at 15 players. A siege block is always legal: 6.03 mNEAR after an hour at 15 players, against 3.86 mNEAR for the
-cheapest block.
+**Lockout.** A siege block is always legal, so a carpet locker cannot close the dish: after an hour at 15 players a
+siege block cost 6.03 mNEAR against 3.86 mNEAR for the cheapest block, and by day 7 a newcomer could plant a free
+2 × 2 block in 51.4% (15 players) and 41.5% (150 players) of spots even with the locker on the dish.
 
-**No players, 30 days.** With nobody at all the agar stays at 1,000,000 PETRI and the team keeper spends 3.18 NEAR of
-gas; with nobody calling, one visit at day 30 skips 172,680 generations in a single `Skip`. With only the five house
-strains (1 NEAR each) the agar ends at 996,880 PETRI; the house is never fed, and no PETRI left the agar except what it
-bought. In these runs the simulator still wrote a tide entry with nobody to pay, which the launched contract skips.
+**No players, 30 days.** With nobody at all the agar stays at 1,000,000 PETRI; with nobody calling, one visit at day 30
+skips 172,680 generations in a single `Skip`. With only the five house strains (1 NEAR each) the agar ends at 996,880
+PETRI; the house is never fed, and no PETRI left the agar except what it bought. In these runs the simulator still wrote
+a tide entry with nobody to pay, which the launched contract skips.
 
-## Known limits
+<a id="known-limits"></a>
 
-- **Free play has no market.** The testnet dish's NEAR and PETRI have no market, and guests play with credit the site
-  gives them. On mainnet the NEAR is real and nothing guarantees PETRI a price.
-- **A bug on mainnet can never be fixed.** `petri-dish.near`'s only full-access key was deleted on 10 November 2026
-  after a final verify, so nobody can deploy new code or `relaunch` it: immutability was chosen over fixability. The
-  testnet dish keeps its key, so a bug there can be fixed with new code plus `relaunch`; new code changes the code hash,
-  which the verifier checks.
-- **The methuselah edge.** In the simulator one R-pentomino planter was the only kind ahead at 15 and 150 players
-  (+0.02 and +0.14 NEAR median); with 5% tides +0.29 at 150.
-- **PETRI is paper until sold back, and the vault caps it.** Buy-backs pay half the curve's price, at most the units'
-  share of the vault, at most 10% of the vault per tide and nothing before the first tide. The price holds for one
-  seller at a time; all holders together could not exit at it.
-- **The carpet locker can win at scale.** With 10% tides it won +0.59 NEAR at 1,500 players; 5% tides turned that to
-  −0.45 in the fix run.
-- **Early colonies have an edge.** The agar is fullest at the start and PETRI cheapest while it is full, so the first
-  colonies are fed the most.
-- **The simulator is a model.** It estimates storage and gas rather than measuring them, its players follow fixed
-  habits, its published runs predate three launched changes (above), and its latest run (`sim/out-v6.1`) is of v6.1's rules: v6.2
-  was not simulated again.
+## Defences and edge cases
+
+Each case a player, an agent or a crowd could try, and the rule that answers it.
+
+- **A run on the vault.** Buy-backs pay half the curve's price, at most the units' share of the vault, at most 10% of
+  the vault per tide and nothing before the first tide, so one exit cannot drain the others.
+- **A carpet locker at scale.** With 10% tides a lattice locker came out +0.59 NEAR at 1,500 players in v5's simulator;
+  the launched 5% tides turned that to −0.45, and in the 1,000-season bench (`sim/out-60d`) no locker, whale or split
+  whale came out ahead.
+- **Royalty farming.** `licence_min_cells` 12 keeps the small common patterns (blocks, blinkers, beehives, loaves,
+  gliders, lightweight spaceships) from being licensed. Whoever mints the first slide of a large pattern others plant
+  (the pulsar, 48 cells; the Gosper gun, 36) collects 10% of every licensed planting of it, as a licence should. Only
+  planters that choose the licence pay it (`slide` is optional, and the royalty is PETRI from their own balance), the
+  house never pays, and a royalty from a planter that has not attached NEAR, or that holds more kept PETRI than the
+  planting costs, goes to the agar. The vault pays a holder only through capped half-price sell-backs, like any holder.
+- **A crowd of colonies.** At most 10,000 colonies play at once (`MAX_PLAYING`), which bounds every call's gas whatever
+  the number of colonies; past that, a colony with no row plants after the next tide. The simulator's busiest dish
+  (30,000 colonies) never passed 2,390 rows, and filling the table would take about 10,000 earning plantings an hour,
+  roughly 50 NEAR an hour.
+- **Free play farming NEAR.** PETRI earned before a colony's first NEAR, and PETRI bought with credit, is kept: it must
+  be planted (kept PETRI is spent first) before the colony can sell any PETRI for NEAR or send any (see Kept PETRI).
+- **Planting against a pact.** The contract refuses every planting by the promisor within 8 cells of the payer's living
+  cells, wherever they stand at each planting, until the pact's `until`. The agents also score each pair's faith kept or
+  broken and show it to the next council.
+- **Racing for the pot.** The keeper pot goes to the account whose call runs a generation and the tide bounty to the
+  account whose call runs the tide, never to one of the dish's own accounts. Racing for them does not pay: in v6.1's
+  simulator a racer that only advances lost 0.0055 NEAR a week after estimated gas.
+- **A quiet dish.** Each call catches up at most 120 generations; plantings, sales and slide mints wait until the dish
+  is current (the site adds `advance` calls to the same transaction, and a strain advances first). A dish left alone for
+  more than 480 generations skips the quiet stretch on the next call, and nothing is fed for the skipped generations, so
+  idle time pays nobody.
 - **Ordering within a generation.** Entries in the same generation apply in execution order; an earlier planting can
   take a cell a later one wanted, or turn it into a siege.
-- **Large licensed patterns earn royalties, by design.** `licence_min_cells` 12 stops the small common patterns, but
-  whoever mints the first slide of a large pattern others plant (the pulsar, 48 cells; the Gosper gun, 36) collects
-  10% of every licensed planting of it: in the v6.1 simulator a pulsar farmer nets +0.11 NEAR (+0.08 to +0.15) a week
-  at 150 players, from 3,171 PETRI of royalties on 466 whale plantings (v6 +0.29). Only planters that choose the
-  licence pay it (`slide` is optional, and the royalty is PETRI from their own balance), and they still come out
-  ahead: whales −1.97 with the farmer, −2.01 with no farmer, −2.05 with no licence at all, −1.82 with royalty 0. The
-  house never pays and a royalty from a planter that has not attached NEAR, or that holds more kept PETRI than the planting costs, goes to the agar. The vault pays the farmer only through capped half-price
-  sell-backs, like any holder, and its totals hardly move with the royalty (sales 10.23 NEAR with the farmer against
-  10.16 with royalty 0; tide shares 29.30 against 29.09). `licence_min_cells` stays 12; 49, or `slide_royalty_bps` 0,
-  would make the farmer lose about 0.16 NEAR.
-- **A full hot table makes newcomers wait.** At most 10,000 colonies can play at once; past that, a colony with no row
-  cannot plant until the next tide. The simulator's busiest dish (30,000 colonies) never passed 2,390 rows. Filling
-  the table would take about 10,000 earning plantings an hour, roughly 50 NEAR an hour; before the cap, about 35,000 of
-  them would have halted the dish for good.
-- **The house is a subsidy.** The strains cost the team about 1.1 NEAR each per simulated week, paid to the other
-  players. They are run by the team and are not independent players.
-- **Former guests plant before they sell.** PETRI earned before a colony's first NEAR, and PETRI bought with credit, must
-  be planted (kept PETRI is spent first) before the colony can sell any PETRI for NEAR or send any. That is the price of
-  free play never reaching NEAR.
-- **A pact covers a radius, not a promise of peace.** The contract refuses plantings within 8 cells of the payer's living
-  cells, wherever they stand at each planting; it cannot stop a raid aimed from farther away, and it cannot make anyone pay for a pact. In the simulator a
-  builder paying 2 PETRI a tide window for one lost 0.035 NEAR a week (−0.2223 against −0.1865 at 150 players): pacts pay
-  only against a real threat.
-- **Races.** The keeper pot goes to the account whose call runs a generation, and the tide bounty to the account whose
-  call runs the tide, unless that is one of the dish's own accounts. In v5's simulator a racer (which only advances)
-  lost 0.05 to 0.06 NEAR a week after estimated gas; in v6.1's, with the pot spread over every call that runs a
-  generation, 0.0055.
-- **Somebody has to advance.** Each call catches up at most 120 generations; plantings, sales and slide mints wait until the dish is current (the site adds `advance` calls to the same transaction, and a strain advances first). A
-  dish left alone for more than 480 generations skips the quiet stretch, and nothing is fed for the skipped
-  generations.
-- **The strains need a model to answer.** NEAR AI Cloud while its account has credits, Claude Haiku within a fixed
-  budget; without either they play by written rules, and each move in the public log says which decided it. A verified
-  TEE signature proves the enclave produced an answer; it is in the agents' log, not on chain.
-- **The open swarm runs on the team's VM.** Spawned strains, the open council and break-the-pact stop if it stops; pacts
-  already made still bind. The council could drop a bid; it cannot make or change a pact.
-- **Mainnet living slide 14 earned no NEAR.** It joined with less than `min_join` net, so under v6.5 it stayed
-  unattached while its pattern lived: kept PETRI and credit only, and its PETRI cannot be withdrawn. Its cells have since
-  died on chain. Slide 18, sealed through the factory, joined attached.
-- **Guest limits are per server instance.** The relayer's rate limits live in memory, so several instances each keep
-  their own; the on-chain checks (zero deposit, function-call keys, credit) are what protect the relayer's NEAR.
-- **Skip entries are charged to nobody.** The `Skip` entry a long idle stretch writes is not paid for by the call that writes it.
+- **No model answers.** The strains ask NEAR AI Cloud first and Claude Haiku within a fixed budget; without either they
+  play by written rules, and each move in the public log says which decided it. Every NEAR AI move whose TEE proof
+  verified carries its tag in the planting's note on chain (`docs/TEE.md`).
+- **The open council's coordinator.** It cannot make or change a pact: only the two colonies' own keys can. Asks are
+  committed before bids, and every round's asks and bids are published, so a wrong clearing is checkable. If the
+  team's VM stops, pacts already made still bind.
+- **Draining the relayer.** The on-chain checks protect the relayer's NEAR: it relays only zero-deposit calls to the
+  dish's play methods, within a gas cap, and a guest's credit never becomes NEAR. A proof of work per guest and rate
+  limits per IP and per server instance come on top.
 - **Rounding.** Integer division leaves small remainders of each feed in the agar and of each tide in the vault and the
-  credit pool.
+  credit pool, so rounding never pays anyone extra.

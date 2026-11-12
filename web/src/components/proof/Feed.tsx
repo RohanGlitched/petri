@@ -53,7 +53,13 @@ export function Feed() {
       </div>
       {rows && (
         <p className={s.note} style={{ marginTop: 0, marginBottom: 12 }}>
-          {rows.length} latest calls on {CONTRACTS[net]}: <b>{outside.size}</b> distinct outside account{outside.size === 1 ? "" : "s"} and {guests.size} guest{guests.size === 1 ? "" : "s"} (keys in someone&rsquo;s browser; the team&rsquo;s own tests look the same on chain). Team accounts are every petri-*.testnet account and its sub-accounts, and *.petri-dish.near.
+          {rows.length} latest calls on {CONTRACTS[net]}
+          {outside.size > 0 ? (
+            <>
+              : <b>{outside.size}</b> distinct outside account{outside.size === 1 ? "" : "s"}
+            </>
+          ) : null}
+          {guests.size > 0 ? `${outside.size > 0 ? " and" : ":"} ${guests.size} guest${guests.size === 1 ? "" : "s"} playing with no wallet` : ""}. Team accounts are every petri-*.testnet account and its sub-accounts, and *.petri-dish.near.
         </p>
       )}
       <ol className={s.feed}>

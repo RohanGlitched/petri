@@ -80,11 +80,11 @@ export default function SpecimensPage() {
               <p><Link className="btn btn-amber btn-small" href="/verify">Replay the dish</Link></p>
             </div>
             <div>
-              <h3 className="h3">What a specimen does not say</h3>
+              <h3 className="h3">What a specimen records</h3>
               <ul className={s.limits}>
-                <li>It shows one generation. The dish moves on; the colony on the slide may have died since.</li>
-                <li>The replay checks how a slide was made. Who holds it now is an ordinary NEP-171 fact the contract reports.</li>
-                <li>Replanting a slide&rsquo;s pattern is an ordinary planting at the normal price. Holding the slide gives no discount and no claim on the spot.</li>
+                <li>One generation: the cells as they stood when the slide was made, while the dish moves on.</li>
+                <li>The replay checks how a slide was made. Who holds it now is the NEP-171 record the contract reports.</li>
+                <li>A slide of 12 or more cells licenses its pattern: planting it costs 25% less, and anyone but the holder pays the holder 10% of that.</li>
               </ul>
             </div>
           </div>

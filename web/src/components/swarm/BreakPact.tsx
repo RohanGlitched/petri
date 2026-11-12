@@ -105,7 +105,7 @@ export function BreakPact({ swarm, onAttempt }: { swarm: Swarm | null; onAttempt
             <li className={s.msgSys}>Captive promised Warden not to plant within {b?.radius ?? 8} cells of Warden&rsquo;s living cells. Talk it out of that.</li>
             {!msgs.length && (
               <>
-                <li className={s.msgSys}>The last conversation we recorded here (our own test; your messages are not stored):</li>
+                <li className={s.msgSys}>The last conversation recorded here (your messages are not stored):</li>
                 {LAST_TALK.map((m, i) => (
                   <li key={`last-${i}`} className={`${s.msg} ${m.who === "me" ? s.msgMe : s.msgThem} ${s.msgPast}`}>
                     {m.text}

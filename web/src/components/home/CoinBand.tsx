@@ -127,6 +127,8 @@ export function CoinBand() {
     ["Bought back by the agar", petri(v("bought_back")), "Sold back for NEAR at half the curve's price."],
     ["Burned for good", petri(v("burned")), `The other half of every planting, the whole price of every specimen slide, and any PETRI burned because an account unregistered. PETRI in existence: ${petri(supply)}.`],
   ];
+  // The ledger key behind each row that counts a flow (null: always shown).
+  const FLOW = [null, null, "sold", "fed", "returned", "bought_back", null] as const;
   const tideMinutes = rules ? Math.ceil((tideIn * Number(rules.generation_ms)) / 60_000) : 0;
   // Before the first tide there is nothing paid to report, so the card counts down to it instead.
   const firstTide = !!st && v("tides") === 0;
@@ -159,7 +161,8 @@ export function CoinBand() {
             />
           </div>
           <dl className={s.ledger}>
-            {rows.map(([k, val, note]) => (
+            {/* A flow that has not happened on this dish yet is left out rather than shown as a zero. */}
+            {rows.filter((_, i) => !st || !FLOW[i] || v(FLOW[i]!) > 0).map(([k, val, note]) => (
               <div key={k}>
                 <dt>{k}</dt>
                 <dd className="num">{st ? val : "—"}</dd>
@@ -187,7 +190,7 @@ export function CoinBand() {
           </div>
           <dl className={s.tideNums} aria-live="polite">
             <div><dt>In the vault now</dt><dd className="num">{st ? near(vault, 4) : "—"} <small>NEAR</small></dd></div>
-            <div><dt>{firstTide ? "First tide in" : "Next tide"}</dt><dd className="num">{ready ? `${int(tideIn)} gens` : "—"}</dd><p>about {tideMinutes} minutes{firstTide ? "; nothing paid out yet" : ""}</p></div>
+            <div><dt>{firstTide ? "First tide in" : "Next tide"}</dt><dd className="num">{ready ? `${int(tideIn)} gens` : "—"}</dd><p>about {tideMinutes} minutes</p></div>
             {!firstTide && (
               <div><dt>Paid at {st ? `${int(v("tides"))} ${v("tides") === 1 ? "tide" : "tides"}` : "tides"} so far</dt><dd className="num">{st ? near(v("near_tides"), 4) : "—"} <small>NEAR</small></dd></div>
             )}

@@ -57,19 +57,19 @@ cd purse && cargo test                      # living slides: expect 18 (purse), 
 ## What is real, today
 
 <!-- facts-now:start -->
-Read by `node scripts/facts-now.mjs` at mainnet block 224,201,906 and testnet block 277,350,427; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
+Read by `node scripts/facts-now.mjs` at mainnet block 224,203,961 and testnet block 277,352,441; run it to diff this table against the chain (`--diff`). The judge desk reads the same figures again when you open it.
 
 | | Mainnet, real NEAR | Testnet, free play |
 |---|---|---|
 | Contract | [`petri-dish.near`](https://nearblocks.io/address/petri-dish.near) | [`petri-v6.testnet`](https://testnet.nearblocks.io/address/petri-v6.testnet) |
 | Full-access keys on the dish | 0 | 1, kept for fixes |
 | Slide factory | `slides.petri-dish.near`, 0 keys | `slides.petri-v6.testnet`, 0 keys |
-| Generation stored on chain (15 s each) | 8,109 (the clock is at 8,516; the next move catches up) | 45,912 (clock 45,921) |
+| Generation stored on chain (15 s each) | 8,109 (the clock is at 8,595; the next move catches up) | 45,990 (clock 46,000) |
 | Colonies | 8: 5 house, 1 team bench, 2 other team accounts (2 living slides) | 69: 5 house, 7 team bench, 13 other team accounts (3 living slides, 8 spawned strains, 2 test agents), 44 guest (anyone's browser, the team's tests included) |
-| Plantings / under a slide's licence | 96 / 6 | 1,421 / 85 |
-| PETRI supply (started at 1,000,000) | 998,702.20 (1,297.80 burned) | 991,522.12 (8,477.88 burned) |
+| Plantings / under a slide's licence | 96 / 6 | 1,425 / 86 |
+| PETRI supply (started at 1,000,000) | 998,702.20 (1,297.80 burned) | 991,492.98 (8,507.02 burned) |
 | Hourly tides | 12 tides: 0.2326 NEAR paid as NEAR to colonies that attached NEAR; 0.0204 NEAR of vault shares paid as credit to colonies that never attached NEAR | 138 tides: 1.2461 NEAR paid as NEAR to colonies that attached NEAR; 0.0076 NEAR of vault shares paid as credit to colonies that never attached NEAR |
-| Royalties paid to slide holders | 0.00 PETRI | 204.56 PETRI |
+| Royalties paid to slide holders | 0.00 PETRI | 208.05 PETRI |
 | Specimen slides (NFTs) | 24 | 48 |
 | Living slides (keyless accounts) | 2: `slide-14.petri-dish.near` (0 keys; colony 6, attached); `slide-18.slides.petri-dish.near` (0 keys; colony 8, attached, 4 living cells on the stored board) | 3: `slide-1.petri-slides.testnet` (0 keys; colony 23, attached); `slide-2.petri-slides.testnet` (0 keys; colony 24, attached); `slide-24.slides.petri-v6.testnet` (0 keys; colony 43, attached) |
 | Pacts the contract enforces | 15 | 21 |
@@ -87,7 +87,7 @@ One shared 128×128 dish of Conway's Life runs inside a NEAR contract, and every
 - **Owning ground is a skill.** A colony is paid for at most 8 living cells per cell it planted, so splitting never earns more and holding ground means replanting. Planting within 3 cells of a rival costs three times as much, so nobody can close the dish.
 - **NFTs do things.** A specimen slide fixes a patch of your own living cells as an NFT whose picture the contract draws. Planting its pattern costs 25% less, and anyone else pays its holder a 10% royalty. Sealed into its own keyless account, a slide becomes a *living slide*: a colony that holds what it earns and passes whole to whoever holds it.
 - **AI strains play and bargain.** Five house strains forecast every move 240 generations ahead and buy peace from each other with pacts the contract enforces. Anyone can spawn a strain or bring an agent of their own.
-- **Free play never reaches NEAR.** A guest plays on testnet with credit the site sponsors (mainnet free play opens 14 Nov 18:00 UTC for judging: up to 40 places, as many as its 3.1 NEAR relayer pays for, 29 at 0.1 NEAR a guest above a 0.1 NEAR floor, 15 of them held for judges with a code; credit you can play with, not withdraw). PETRI earned before a colony's first NEAR cannot be sold for NEAR or sent.
+- **Free play never reaches NEAR.** A guest plays on testnet with credit the site sponsors (mainnet free play opens 14 Nov 18:00 UTC for judging: 29 funded places, 15 of them held for judges with a code; credit you can play with, not withdraw). PETRI earned before a colony's first NEAR cannot be sold for NEAR or sent.
 - **Everything replays.** The browser, the simulator and the contract run the same Rust engine, so anyone can rebuild the whole history from the ledger.
 
 How a session feels, at three speeds ([/rules](https://www.playpetri.xyz/rules#loops)): every 30 seconds you pick a stamp, see a forecast and plant; every few minutes you watch it grow and collide, claim and replant or lay siege; every hour the tide pays out, you fossilize a slide, and the strains strike pacts.
@@ -106,7 +106,7 @@ How a session feels, at three speeds ([/rules](https://www.playpetri.xyz/rules#l
 | A page with today's state and a log of every mint and burn; the record shown like a high score | /coin replays the ledger in your browser: supply now, supply over time, and a filterable log of every feed, purchase, sale, burn, royalty and tide. /records names the longest-lived colony, the biggest siege and the top earners. | [/coin](https://www.playpetri.xyz/coin), [/records](https://www.playpetri.xyz/records) | Met |
 | Simulate 60 days first; supply over time under a few scenarios | Five scenarios (boom, steady, decline, whale siege, strains only) × 5 seeds, every one of 345,600 generations stepped with petri-core, plus 1,000 adversarial seasons. The launch parameters were chosen earlier with 7-day runs (`sim/out-v6.1`); the 60-day run came after launch and checks them. | [`sim/out-60d`](sim/out-60d/README.md), charts on [/coin](https://www.playpetri.xyz/coin) | Met |
 
-**Who wins, who pays.** Petri is an arcade game with a burn: nobody extracts, and the house only pays in. Every tide pays the vault's NEAR to the colonies that earned that hour, so skill moves NEAR between players. In the simulator's 60-day scenarios (mainnet rules, 10 seeds each, every generation stepped with petri-core) no whale, split whale or lattice locker came out ahead in any run: the winners are players who read the dish, mostly with R-pentominoes. Of every NEAR players put in, about 55% reaches the vault and is paid back out at the tides. Method and every number: [docs/ECONOMICS.md](docs/ECONOMICS.md); every player's row: [sim/out-econ](sim/out-econ).
+**Who wins, who pays.** Petri is an arcade game with a burn: nobody extracts, and the house only pays in. Every tide pays the vault's NEAR to the colonies that earned that hour, so skill moves NEAR between players. In the simulator's 60-day scenarios (mainnet rules, 10 seeds each, every generation stepped with petri-core) no whale, split whale or lattice locker came out ahead in any run: the winners are players who read the dish, mostly with R-pentominoes. Of every NEAR players put in, about 55% reaches the vault and is paid back out at the tides. Method and every number: [docs/ECONOMICS.md](docs/ECONOMICS.md).
 
 **Why not meme.cooking?** A launchpad gives a coin a bonding curve and then hands it to a pool, where liquidity can be pulled and the price is whatever the pool says. PETRI has no pool by design: the agar is its only market maker. The contract sets the price on its own curve from how much PETRI is left in the agar, buys back at half that, capped by the vault, and the curve, the cap and the agar are all in one contract with no admin method. There is no LP to pull, and nobody can list a second price that the game would have to follow.
 
@@ -210,7 +210,7 @@ What the design answers: the forecast on every planting turns chaos into a reada
 | **House rules** | The five strains and the keeper are the team's accounts. | They are never fed, take no tide share, bounty or keeper pot, never sell PETRI and can send it only to each other, so what the house spends lands with players. |
 | **A run on the vault** | Many players try to sell PETRI back at once. | The sell-back pays half the curve's price, at most the units' share of the vault and 10% of the vault per tide, so one exit cannot drain the others. |
 
-More in [RULES.md, Known limits](RULES.md#known-limits).
+More in [RULES.md, Defences and edge cases](RULES.md#defences-and-edge-cases).
 
 ## After judging: what it costs, and what stops
 
@@ -249,7 +249,7 @@ Each step says what to do and what you should see. Everything runs on the free t
 | **The tides** | Every 240 generations, 5% of the vault in NEAR and 5% of the credit pool as credit, split by PETRI earned since the last tide. |
 | **Slides** | NEP-171/177/178/181/199 in the dish contract, 1 PETRI burned per captured cell; 12 cells or more license the pattern (25% off, 10% royalty to the holder). |
 | **Pacts** | `pact_offer` escrows PETRI; `pact_accept` pays it and binds the promisor not to plant within 8 cells of the payer's living cells for up to 2,880 generations; the contract refuses every breaking planting. |
-| **Free play** | Testnet guests get a function-call key and 0.05 NEAR of sponsored credit; PETRI earned before a first NEAR is kept. Mainnet free play opens 14 Nov 18:00 UTC for judging (up to 40 places, as many as the relayer's 3.1 NEAR pays for, most held for judges with a code; credit you can play with, not withdraw). |
+| **Free play** | Testnet guests get a function-call key and 0.05 NEAR of sponsored credit; PETRI earned before a first NEAR is kept. Mainnet free play opens 14 Nov 18:00 UTC for judging (29 funded places, 15 held for judges with a code; credit you can play with, not withdraw). |
 | **Any token** | On mainnet, NEAR Intents delivers wNEAR with a message naming the account; the contract unwraps and joins or buys, or holds it as pending NEAR anyone can settle. |
 | **Proof** | Every movement of PETRI and NEAR is one ordered ledger; every 16th generation the board hash is folded into a history chain. Replaying the ledger reproduces the board, the chain and every balance. |
 

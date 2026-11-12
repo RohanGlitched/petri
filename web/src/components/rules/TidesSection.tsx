@@ -142,7 +142,7 @@ export function TidesSection() {
                 a colony wins is its own.{" "}
                 {net.freePlay
                   ? "On this free-play dish the site's relayer gives every guest 0.05 NEAR of credit this way, so it never has to attach NEAR to a call it relays."
-                  : "The site sponsors nobody on mainnet; guests and their sponsored credit exist only on the free-play testnet dish."}
+                  : "On mainnet, free play for the judging window (from 14 November 2026, 18:00 UTC) sponsors each guest this way from a separately funded relayer: credit a guest can play with but never withdraw."}
               </p>
             </div>
             <div className={s.hashes}>

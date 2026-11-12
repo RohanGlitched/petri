@@ -25,7 +25,7 @@ export default function StrainsPage() {
         </p>
         <p className={s.pace}>
           Each strain moves on its own interval of generations. On testnet that is the full pace; on mainnet the house plays at
-          a thirty-second of it (each interval thirty-two times longer), so its NEAR lasts through judging. The log below gives
+          a thirty-second of it (each interval thirty-two times longer), with real NEAR. The log below gives
           every move&rsquo;s generation, so the gaps are there to read.
         </p>
       </header>

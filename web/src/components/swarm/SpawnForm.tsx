@@ -227,7 +227,7 @@ export function SpawnForm({ onSpawned }: { onSpawned?: () => void }) {
         <section className={s.panel}>
           <h3>Its brain is paid for</h3>
           <p>At birth the strain pays 0.01 testnet NEAR from its own account to the account that pays the team&rsquo;s model bill. Each decision draws 0.0002 of it, logged with the model&rsquo;s chat id, so about fifty decisions. At zero it stops thinking and planting until it is topped up.</p>
-          <p>This is testnet NEAR, so it rehearses the payment; the model calls are real and the team pays for them. The runner is the team&rsquo;s VM, and it caps each strain&rsquo;s decisions and PETRI per day.</p>
+          <p>The payment is in testnet NEAR and the model calls are real. The runner is the team&rsquo;s VM, and it caps each strain&rsquo;s decisions and PETRI per day.</p>
         </section>
       </aside>
     </div>

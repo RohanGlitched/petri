@@ -136,11 +136,11 @@ export function VerifyRun() {
         <b>{allOk ? "Everything matches." : replayOk ? "The whole history matches." : "Something differs."}</b>
         <span className={s.verdictCount}>
           <span className="num">{passed}</span> of <span className="num">{total}</span> checks match
-          {lock ? (lock.got === "locked" ? <>, and the contract has no full-access key</> : <>, plus one note on the key the team keeps here</>) : null}
+          {lock ? (lock.got === "locked" ? <>, and the contract has no full-access key</> : <>, plus a row on the key this dish keeps for fixes</>) : null}
         </span>
         <span>
           {replayOk
-            ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${lock?.got === "locked" ? ` The contract has had no full-access key since ${LOCKED.date}, so this history can only grow, never be rewritten.` : lock ? " The testnet dish keeps one full-access key so a bug can be fixed; it is disclosed in the last row." : ""}`
+            ? `Your browser rebuilt every cell, every owner, every PETRI and every NEAR of the vault from the ledger alone, and arrived where the contract is. The engine itself needed ${ms} ms.${lock?.got === "locked" ? ` The contract has had no full-access key since ${LOCKED.date}, so this history can only grow, never be rewritten.` : lock ? " The testnet dish keeps one full-access key for fixes, shown in the last row." : ""}`
             : "A value below came out differently. That is either a bug or tampering, and either way it is worth reporting."}
         </span>
       </div>
