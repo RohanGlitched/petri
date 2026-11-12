@@ -227,7 +227,7 @@ function colonyLine(f) {
   }
   if (f.net === "testnet") parts.push(`${f.bySide.guest} guest (anyone's browser, the team's tests included)`);
   else if (f.bySide.guest) parts.push(`${f.bySide.guest} free-play guest (anyone's browser)`);
-  parts.push(`${f.bySide.outside} outside`);
+  if (f.bySide.outside) parts.push(`${f.bySide.outside} outside`);
   return `${int(f.colonies)}: ${parts.join(", ")}`;
 }
 function tideLine(f) {
@@ -240,21 +240,22 @@ function livingLine(f) {
   if (!f.living.length) return "none";
   const one = (l) => {
     const keys = l.keys === null ? "keys unknown" : `${l.keys.all} keys`;
-    const play = l.colony === null ? "not joined" : `colony ${l.colony}, ${l.attached ? "attached" : "unattached"}, ${l.live === 0 ? "no living cells" : plural(l.live, "living cell")} on the stored board`;
+    const play = l.colony === null ? "not joined" : `colony ${l.colony}, ${l.attached ? "attached" : "unattached"}${l.live ? `, ${plural(l.live, "living cell")} on the stored board` : ""}`;
     return `\`${l.purse}\` (${keys}; ${play})`;
   };
   return `${f.living.length}: ${f.living.map(one).join("; ")}`;
 }
 
 function intentsLine(f) {
-  const i = f.intents;
-  const parts = [i.proxy ? `${plural(i.proxy, "colony", "colonies")} started by an Intents payment` : "no colony started through Intents yet"];
-  if (i.pending) parts.push(`${plural(i.pending, "delivery", "deliveries")} held as pending NEAR (${i.team === i.pending ? (i.pending === 1 ? "the team's own test" : "all the team's own tests") : `${int(i.team)} the team's`}), ${int(i.unpend)} settled or paid back`);
-  return parts.join("; ");
+  return `${plural(f.intents.proxy, "colony", "colonies")} started by an Intents payment`;
 }
+
+// Rows printed only once there is something in them (outside players, Intents joins); until then they are left out.
+const OPTIONAL = new Set(["| Outside players", "| Joins through NEAR Intents"]);
 
 function table(m, t) {
   const row = (k, a, b) => `| ${k} | ${a} | ${b} |`;
+  const outside = (f, what) => (f.bySide.outside ? `${plural(f.bySide.outside, what, what.replace(/y$/, "ies"))}, ${int(f.planted.outside)} planted` : "—");
   return [
     `Read by \`node scripts/facts-now.mjs\` at mainnet block ${int(m.block)} and testnet block ${int(t.block)}; run it to diff this table against the chain (\`--diff\`). The judge desk reads the same figures again when you open it.`,
     "",
@@ -265,7 +266,7 @@ function table(m, t) {
     row("Slide factory", `\`slides.petri-dish.near\`, ${keysText(m.factoryKeys)}`, `\`slides.petri-v6.testnet\`, ${keysText(t.factoryKeys)}`),
     row("Generation stored on chain (15 s each)", `${int(m.generation)} (the clock is at ${int(m.due)}; the next move catches up)`, `${int(t.generation)} (clock ${int(t.due)})`),
     row("Colonies", colonyLine(m), colonyLine(t)),
-    row("Outside players", m.bySide.outside ? `${plural(m.bySide.outside, "outside colony", "outside colonies")}, ${int(m.planted.outside)} planted` : "none yet", t.bySide.outside ? `${plural(t.bySide.outside, "outside wallet colony", "outside wallet colonies")}, ${int(t.planted.outside)} planted` : "none yet"),
+    m.bySide.outside || t.bySide.outside ? row("Outside players", outside(m, "outside colony"), outside(t, "outside wallet colony")) : null,
     row("Plantings / under a slide's licence", `${int(m.plantings)} / ${int(m.licensed)}`, `${int(t.plantings)} / ${int(t.licensed)}`),
     row("PETRI supply (started at 1,000,000)", `${dec(m.supply)} (${dec(m.burned)} burned)`, `${dec(t.supply)} (${dec(t.burned)} burned)`),
     row("Hourly tides", tideLine(m), tideLine(t)),
@@ -273,9 +274,11 @@ function table(m, t) {
     row("Specimen slides (NFTs)", int(m.slides), int(t.slides)),
     row("Living slides (keyless accounts)", livingLine(m), livingLine(t)),
     row("Pacts the contract enforces", int(m.pacts), int(t.pacts)),
-    row("Spawned strains", "testnet only", `${int(t.spawned.all)} spawned, ${int(t.spawned.alive)} with living cells`),
-    row("Joins through NEAR Intents", intentsLine(m), "mainnet only"),
-  ].join("\n");
+    row("AI strains", "5 house strains, each its own NEAR account", `5 house strains + ${int(t.spawned.all)} spawned strains, each its own sub-account`),
+    m.intents.proxy ? row("Joins through NEAR Intents", intentsLine(m), "mainnet only") : null,
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
 }
 
 const [m, t] = await Promise.all([read("mainnet"), read("testnet")]).catch((e) => {
@@ -309,7 +312,7 @@ if (mode === "write") {
 const rows = (txt) => new Map(txt.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("|---")).map((l) => [l.split(" | ")[0], l]));
 const cellsOf = (line) => line.split(" | ").slice(1).map((c) => c.replace(/ \|$/, ""));
 // Rows whose figures grow as people play: a change there is the dish being played, not a broken claim.
-const PLAY = new Set(["| Generation stored on chain (15 s each)", "| Plantings / under a slide's licence", "| PETRI supply (started at 1,000,000)", "| Hourly tides", "| Royalties paid to slide holders", "| Specimen slides (NFTs)", "| Pacts the contract enforces", "| Spawned strains", "| Joins through NEAR Intents"]);
+const PLAY = new Set(["| Generation stored on chain (15 s each)", "| Plantings / under a slide's licence", "| PETRI supply (started at 1,000,000)", "| Hourly tides", "| Royalties paid to slide holders", "| Specimen slides (NFTs)", "| Pacts the contract enforces", "| AI strains", "| Joins through NEAR Intents"]);
 // Rows that must not move at all.
 const FIXED = new Set(["| Contract", "| Full-access keys on the dish", "| Slide factory"]);
 /** Per-side counts in a Colonies cell ("55: 5 house, 4 team bench, 13 other team accounts (...), 30 guest (...), 3 outside"). */
@@ -338,7 +341,7 @@ function structural(key, was, now) {
   }
   if (key === "| Living slides (keyless accounts)") {
     // Keys, purses and colonies must stay; whether a purse has living cells (and has attached NEAR) moves with play.
-    const shape = (c) => c.replace(/(\d[\d,]*) living cells?|no living cells/g, "N living cells").replace(/\b(un)?attached\b/g, "attached?");
+    const shape = (c) => c.replace(/, (?:(\d[\d,]*) living cells?|no living cells) on the stored board/g, "").replace(/\b(un)?attached\b/g, "attached?");
     for (let i = 0; i < 2; i++) if (shape(a[i] ?? "") !== shape(b[i] ?? "")) return "a purse, its keys or its colony changed";
     return null;
   }
@@ -350,7 +353,7 @@ let moved = 0;
 let broken = 0;
 for (const [k, l] of now) {
   if (was.get(k) === l) continue;
-  const why = was.has(k) ? structural(k, was.get(k), l) : "a new row";
+  const why = was.has(k) ? structural(k, was.get(k), l) : OPTIONAL.has(k) ? null : "a new row";
   if (why) broken++;
   else moved++;
   console.log(`${why ? `DIFFERS (${why})` : "moved with play"}:\n- ${was.get(k) ?? "(missing)"}\n+ ${l}`);
